@@ -22,6 +22,74 @@ if TYPE_CHECKING:
     from pandid.render.symbols import PortSeries, Symbol
     from pandid.streams import Stream
 
+    # Numbered nozzles the typed views of a literal count declare.
+    class _In1:
+        in_1: Port
+    class _In2(_In1):
+        in_2: Port
+    class _In3(_In2):
+        in_3: Port
+    class _In4(_In3):
+        in_4: Port
+    class _In5(_In4):
+        in_5: Port
+    class _In6(_In5):
+        in_6: Port
+    class _In7(_In6):
+        in_7: Port
+    class _In8(_In7):
+        in_8: Port
+    class _Out1:
+        out_1: Port
+    class _Out2(_Out1):
+        out_2: Port
+    class _Out3(_Out2):
+        out_3: Port
+    class _Out4(_Out3):
+        out_4: Port
+    class _Out5(_Out4):
+        out_5: Port
+    class _Out6(_Out5):
+        out_6: Port
+    class _Out7(_Out6):
+        out_7: Port
+    class _Out8(_Out7):
+        out_8: Port
+    class _Feed1:
+        feed_1: Port
+    class _Feed2(_Feed1):
+        feed_2: Port
+    class _Feed3(_Feed2):
+        feed_3: Port
+    class _Feed4(_Feed3):
+        feed_4: Port
+    class _Feed5(_Feed4):
+        feed_5: Port
+    class _Feed6(_Feed5):
+        feed_6: Port
+    class _Feed7(_Feed6):
+        feed_7: Port
+    class _Feed8(_Feed7):
+        feed_8: Port
+    class _Draw1:
+        draw_1: Port
+    class _Draw2(_Draw1):
+        draw_2: Port
+    class _Draw3(_Draw2):
+        draw_3: Port
+    class _Draw4(_Draw3):
+        draw_4: Port
+    class _Draw5(_Draw4):
+        draw_5: Port
+    class _Draw6(_Draw5):
+        draw_6: Port
+    class _Draw7(_Draw6):
+        draw_7: Port
+    class _Draw8(_Draw7):
+        draw_8: Port
+    class _Draw:
+        draw: Port
+
 __all__ = [
     "Unit",
     "Feed",
@@ -111,8 +179,6 @@ _LAYOUT_INPUTS = frozenset(
         "_pin_ports",
         "width",
         "height",
-        "_width",
-        "_height",
         "_length",
         "_diameter",
         "_large_end",
@@ -273,10 +339,8 @@ class Unit:
         list[tuple[str, str, str]]
             Port specs as ``(name, direction, role)``.
         """
-        for klass in cls.__mro__:
-            if "PORTS" in klass.__dict__:
-                return list(klass.__dict__["PORTS"])
-        return []
+        return list(next(klass.__dict__["PORTS"] for klass in cls.__mro__
+                         if "PORTS" in klass.__dict__))
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
@@ -623,7 +687,14 @@ class Unit:
             # A flag's coordinates place its only port by default.
             port = next(iter(self.ports)) if isinstance(self, _Boundary) else None
         # Check the port name first, even with no coordinate.
-        nozzle = self._pin_port(port) if port is not None else None
+        nozzle: str | None = None
+        if port is not None:
+            nozzle = self._canonical_port_name(port)
+            if nozzle not in self.ports:
+                raise KeyError(
+                    f"{type(self).__name__} {self.name!r} has no port {nozzle!r} to "
+                    f"pin by; available ports: {sorted(self.ports)}"
+                )
         # Record per axis which port the coordinate locates.
         for axis, value in (("x", x), ("y", y)):
             if value is None:
@@ -655,32 +726,6 @@ class Unit:
         self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
         self._mirror_stated = self._mirror_stated or mirrored is not _UNCHANGED
         return self
-
-    def _pin_port(self, port_name: str) -> str:
-        """Return the real port name for a name given to :meth:`pin`.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name or alias.
-
-        Returns
-        -------
-        str
-            Port name.
-
-        Raises
-        ------
-        KeyError
-            If the unit has no such port.
-        """
-        canonical = self._canonical_port_name(port_name)
-        if canonical not in self.ports:
-            raise KeyError(
-                f"{type(self).__name__} {self.name!r} has no port {canonical!r} to "
-                f"pin by; available ports: {sorted(self.ports)}"
-            )
-        return canonical
 
     def nozzle(self: _UnitT, port_name: str, face: str) -> _UnitT:
         """Fix the face a port is drawn on.
@@ -1232,7 +1277,7 @@ class _NormallyPositioned(Unit):
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
-        """Accept a closed position; subclasses refuse it where needed."""
+        """Accept a closed position; a subclass may refuse it."""
 
 
 class Valve(_NormallyPositioned):
@@ -1788,36 +1833,16 @@ class _MultiPortVessel(_FaceFamilies):
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, list(options))
-        self._check_face_room(port_name, face)
-
-    def _check_face_room(self, port_name: str, face: str) -> None:
-        """Refuse a second port on a zero-length face.
-
-        Parameters
-        ----------
-        port_name : str
-            Family port name.
-        face : str
-            Compass face.
-
-        Raises
-        ------
-        ValueError
-            If another family port is already on a zero-length face.
-        """
-        from pandid.render.symbols import bandless_face
-
-        sym = self._registry_symbol()
-        if sym is None:
-            return
+        # Refuse a second port on a zero-length face.
         band = sym.bands.get(face)
         if band is None or band[0] < band[1]:
             return
         others = [name for name, on in self._faces.items()
                   if on == face and name != port_name]
-        if not others:
-            return
-        raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
+        if others:
+            from pandid.render.symbols import bandless_face
+
+            raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
 
     def default_input_face(self) -> str:
         """Return the face an inlet uses when none is named.
@@ -2011,81 +2036,38 @@ class Vessel(_MultiPortVessel):
     relief: Port
     drain: Port
 
-    # A literal inputs= count or tuple of faces returns a typed view
-    # (Vessel1 to Vessel8) declaring in_1 to in_n.
+    # A literal inputs= count or tuple of faces returns a view
+    # declaring in_1 to in_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(cls, name: str, inputs: Literal[1] = 1, *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel1": ...
-
+        def __new__(cls, name: str, inputs: Literal[1] | tuple[str] = 1,
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel1: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel1": ...
-
+        def __new__(cls, name: str, inputs: Literal[2] | tuple[str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel2: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[2], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel2": ...
-
+        def __new__(cls, name: str, inputs: Literal[3] | tuple[str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel3: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel2": ...
-
+        def __new__(cls, name: str, inputs: Literal[4] | tuple[str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel4: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[3], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel3": ...
-
+        def __new__(cls, name: str, inputs: Literal[5] | tuple[str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel5: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel3": ...
-
+        def __new__(cls, name: str, inputs: Literal[6] | tuple[str, str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel6: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[4], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel4": ...
-
+        def __new__(cls, name: str, inputs: Literal[7] | tuple[str, str, str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel7: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel4": ...
-
+        def __new__(cls, name: str, inputs: Literal[8] | tuple[str, str, str, str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Vessel8: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[5], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[6], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[7], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[8], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel8": ...
-
-        @overload
-        def __new__(
-            cls, name: str, inputs: tuple[str, str, str, str, str, str, str, str], *args: Any,
-            outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any
-        ) -> "Vessel8": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Vessel": ...
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Vessel": ...
+        def __new__(cls, name: str, inputs: int | Sequence[str] = 1,
+                    *args: Any, outputs: int | Sequence[str] = 1, **kwargs: Any) -> Vessel: ...
+        def __new__(cls, name: str, inputs: int | Sequence[str] = 1,
+                    *args: Any, outputs: int | Sequence[str] = 1, **kwargs: Any) -> Vessel: ...
 
     kind = "vessel"
     PORTS = [
@@ -2127,74 +2109,14 @@ class Vessel(_MultiPortVessel):
 
 
 if TYPE_CHECKING:
-
-    class Vessel1(Vessel):
-        """Typed view declaring ``in_1``."""
-
-        in_1: Port
-
-    class Vessel2(Vessel):
-        """Typed view declaring ``in_1`` to ``in_2``."""
-
-        in_1: Port
-        in_2: Port
-
-    class Vessel3(Vessel):
-        """Typed view declaring ``in_1`` to ``in_3``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-
-    class Vessel4(Vessel):
-        """Typed view declaring ``in_1`` to ``in_4``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-
-    class Vessel5(Vessel):
-        """Typed view declaring ``in_1`` to ``in_5``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-
-    class Vessel6(Vessel):
-        """Typed view declaring ``in_1`` to ``in_6``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-
-    class Vessel7(Vessel):
-        """Typed view declaring ``in_1`` to ``in_7``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-
-    class Vessel8(Vessel):
-        """Typed view declaring ``in_1`` to ``in_8``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-        in_8: Port
+    class Vessel1(Vessel, _In1): ...
+    class Vessel2(Vessel, _In2): ...
+    class Vessel3(Vessel, _In3): ...
+    class Vessel4(Vessel, _In4): ...
+    class Vessel5(Vessel, _In5): ...
+    class Vessel6(Vessel, _In6): ...
+    class Vessel7(Vessel, _In7): ...
+    class Vessel8(Vessel, _In8): ...
 
 
 class Tank(_MultiPortVessel):
@@ -2236,80 +2158,38 @@ class Tank(_MultiPortVessel):
     relief: Port
     drain: Port
 
-    # Typed overloads, as on Vessel.
+    # A literal inputs= count or tuple of faces returns a view
+    # declaring in_1 to in_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(cls, name: str, inputs: Literal[1] = 1, *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank1": ...
-
+        def __new__(cls, name: str, inputs: Literal[1] | tuple[str] = 1,
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank1: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank1": ...
-
+        def __new__(cls, name: str, inputs: Literal[2] | tuple[str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank2: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[2], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank2": ...
-
+        def __new__(cls, name: str, inputs: Literal[3] | tuple[str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank3: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank2": ...
-
+        def __new__(cls, name: str, inputs: Literal[4] | tuple[str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank4: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[3], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank3": ...
-
+        def __new__(cls, name: str, inputs: Literal[5] | tuple[str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank5: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank3": ...
-
+        def __new__(cls, name: str, inputs: Literal[6] | tuple[str, str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank6: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[4], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank4": ...
-
+        def __new__(cls, name: str, inputs: Literal[7] | tuple[str, str, str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank7: ...
         @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank4": ...
-
+        def __new__(cls, name: str, inputs: Literal[8] | tuple[str, str, str, str, str, str, str, str],
+                    *args: Any, outputs: Literal[1] | tuple[str] = 1, **kwargs: Any) -> Tank8: ...
         @overload
-        def __new__(cls, name: str, inputs: Literal[5], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[6], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[7], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[8], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank8": ...
-
-        @overload
-        def __new__(
-            cls, name: str, inputs: tuple[str, str, str, str, str, str, str, str], *args: Any,
-            outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any
-        ) -> "Tank8": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
+        def __new__(cls, name: str, inputs: int | Sequence[str] = 1,
+                    *args: Any, outputs: int | Sequence[str] = 1, **kwargs: Any) -> Tank: ...
+        def __new__(cls, name: str, inputs: int | Sequence[str] = 1,
+                    *args: Any, outputs: int | Sequence[str] = 1, **kwargs: Any) -> Tank: ...
 
     kind = "tank"
     PORTS = [
@@ -2343,74 +2223,14 @@ class Tank(_MultiPortVessel):
 
 
 if TYPE_CHECKING:
-
-    class Tank1(Tank):
-        """Typed view declaring ``in_1``."""
-
-        in_1: Port
-
-    class Tank2(Tank):
-        """Typed view declaring ``in_1`` to ``in_2``."""
-
-        in_1: Port
-        in_2: Port
-
-    class Tank3(Tank):
-        """Typed view declaring ``in_1`` to ``in_3``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-
-    class Tank4(Tank):
-        """Typed view declaring ``in_1`` to ``in_4``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-
-    class Tank5(Tank):
-        """Typed view declaring ``in_1`` to ``in_5``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-
-    class Tank6(Tank):
-        """Typed view declaring ``in_1`` to ``in_6``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-
-    class Tank7(Tank):
-        """Typed view declaring ``in_1`` to ``in_7``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-
-    class Tank8(Tank):
-        """Typed view declaring ``in_1`` to ``in_8``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-        in_8: Port
+    class Tank1(Tank, _In1): ...
+    class Tank2(Tank, _In2): ...
+    class Tank3(Tank, _In3): ...
+    class Tank4(Tank, _In4): ...
+    class Tank5(Tank, _In5): ...
+    class Tank6(Tank, _In6): ...
+    class Tank7(Tank, _In7): ...
+    class Tank8(Tank, _In8): ...
 
 
 class Blower(_FluidMover):
@@ -3345,9 +3165,7 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     if "-" in tag:
         letters, num = tag.split("-", 1)
         return letters, num
-    i = 0
-    while i < len(tag) and not tag[i].isdigit():
-        i += 1
+    i = next((i for i, char in enumerate(tag) if char.isdigit()), len(tag))
     return tag[:i], tag[i:]
 
 
@@ -3589,24 +3407,6 @@ class Instrument(Unit):
             )
         return self._add_port(name, self.ports[member.group(1)].direction, "signal")
 
-    def _mint_port(self, name: str) -> Port | None:
-        """Return :meth:`signal_port`, or ``None`` if there is none.
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-
-        Returns
-        -------
-        Port or None
-            Existing or new port, or ``None``.
-        """
-        try:
-            return self.signal_port(name)
-        except KeyError:
-            return None
-
     def _pool_of(self, port_name: str) -> str | None:
         """Return the port's signal pool, or ``None`` outside the pools.
 
@@ -3703,9 +3503,18 @@ class Instrument(Unit):
         for name, codes in (("a", safety), ("b", variable), ("c", high), ("d", low)):
             if codes is None:
                 continue
-            written = _quadrant_codes(self.name, name, codes)
+            if isinstance(codes, str):
+                codes = (codes,) if codes else ()
+            written = [str(code).strip() for code in codes]
+            if not all(written):
+                raise ValueError(
+                    f"{self.name}: quadrant {name!r} was given an empty letter code. A "
+                    f"quadrant holds the codes written outside the symbol, e.g. "
+                    f"high='LAH'; leave the argument out to write nothing there"
+                )
             if written:
-                self.quadrants[name] = written
+                self.quadrants[name] = tuple(sorted(written, key=lambda code: next(
+                    (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
             else:
                 self.quadrants.pop(name, None)
         return self
@@ -3869,42 +3678,6 @@ class Instrument(Unit):
         self.angle = angle
         self.relation = relation
         self._invalidate_layout()
-
-
-def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
-    """Return one quadrant's letter codes in ISO 15519-2 5.2.5 order.
-
-    Parameters
-    ----------
-    where : str
-        Tag, for messages.
-    quadrant : str
-        Quadrant letter, ``"a"`` to ``"d"``.
-    codes : str or Sequence[str]
-        Letter codes; an empty string writes none.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Stripped codes, sorted A, S then Z.
-
-    Raises
-    ------
-    ValueError
-        If a code is empty.
-    """
-    if isinstance(codes, str):
-        codes = (codes,) if codes else ()
-    out = [str(code).strip() for code in codes]
-    for code in out:
-        if not code:
-            raise ValueError(
-                f"{where}: quadrant {quadrant!r} was given an empty letter code. A "
-                f"quadrant holds the codes written outside the symbol, e.g. "
-                f"high='LAH'; leave the argument out to write nothing there"
-            )
-    return tuple(sorted(out, key=lambda code: next(
-        (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
 
 
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
@@ -4178,33 +3951,6 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     return [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
-def _draw_names(n_draws: int, owner: str) -> list[str]:
-    """Return side-draw names: ``draw``, or ``draw_1`` to ``draw_n``.
-
-    Parameters
-    ----------
-    n_draws : int
-        Number of side draws.
-    owner : str
-        Class name, for messages.
-
-    Returns
-    -------
-    list[str]
-        Draw port names; empty for none.
-
-    Raises
-    ------
-    ValueError
-        If ``n_draws`` is negative.
-    """
-    if n_draws < 0:
-        raise ValueError(f"{owner} cannot take a negative number of draws, got {n_draws}")
-    if n_draws == 0:
-        return []
-    return ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
-
-
 def _stage_fractions(
     name: str,
     internals: str | None,
@@ -4332,52 +4078,37 @@ class Reactor(Unit):
     # Alias for feed_1 when there is one feed.
     feed: Port
 
-    # A literal n_feeds returns a typed view, Reactor1 to Reactor8.
+    # A literal n_feeds returns a view declaring feed_1 to feed_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Reactor1": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    **kwargs: Any) -> Reactor1: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Reactor2": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
+                    **kwargs: Any) -> Reactor2: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Reactor3": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
+                    **kwargs: Any) -> Reactor3: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Reactor4": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
+                    **kwargs: Any) -> Reactor4: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Reactor5": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
+                    **kwargs: Any) -> Reactor5: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Reactor6": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
+                    **kwargs: Any) -> Reactor6: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Reactor7": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
+                    **kwargs: Any) -> Reactor7: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Reactor8": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
+                    **kwargs: Any) -> Reactor8: ...
         @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Reactor": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Reactor": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any,
+                    **kwargs: Any) -> Reactor: ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    **kwargs: Any) -> Reactor: ...
 
     kind = "reactor"
     # __init__ adds the variant's ports.
@@ -4476,75 +4207,14 @@ class Reactor(Unit):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Reactor1(Reactor):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Reactor2(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Reactor3(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Reactor4(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Reactor5(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Reactor6(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Reactor7(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Reactor8(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
+    class Reactor1(Reactor, _Feed1): ...
+    class Reactor2(Reactor, _Feed2): ...
+    class Reactor3(Reactor, _Feed3): ...
+    class Reactor4(Reactor, _Feed4): ...
+    class Reactor5(Reactor, _Feed5): ...
+    class Reactor6(Reactor, _Feed6): ...
+    class Reactor7(Reactor, _Feed7): ...
+    class Reactor8(Reactor, _Feed8): ...
 
 
 class Separator(Unit):
@@ -4595,52 +4265,37 @@ class Separator(Unit):
     # Alias for feed_1 when there is one feed.
     feed: Port
 
-    # Typed overloads for a literal n_feeds, as on Reactor.
+    # A literal n_feeds returns a view declaring feed_1 to feed_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Separator1": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    **kwargs: Any) -> Separator1: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Separator2": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
+                    **kwargs: Any) -> Separator2: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Separator3": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
+                    **kwargs: Any) -> Separator3: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Separator4": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
+                    **kwargs: Any) -> Separator4: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Separator5": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
+                    **kwargs: Any) -> Separator5: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Separator6": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
+                    **kwargs: Any) -> Separator6: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Separator7": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
+                    **kwargs: Any) -> Separator7: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Separator8": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
+                    **kwargs: Any) -> Separator8: ...
         @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Separator": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Separator": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any,
+                    **kwargs: Any) -> Separator: ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    **kwargs: Any) -> Separator: ...
 
     kind = "separator"
     # __init__ adds the feeds, then the variant's ports.
@@ -4766,75 +4421,14 @@ class Separator(Unit):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Separator1(Separator):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Separator2(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Separator3(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Separator4(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Separator5(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Separator6(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Separator7(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Separator8(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
+    class Separator1(Separator, _Feed1): ...
+    class Separator2(Separator, _Feed2): ...
+    class Separator3(Separator, _Feed3): ...
+    class Separator4(Separator, _Feed4): ...
+    class Separator5(Separator, _Feed5): ...
+    class Separator6(Separator, _Feed6): ...
+    class Separator7(Separator, _Feed7): ...
+    class Separator8(Separator, _Feed8): ...
 
 
 #: Default drawn tray count (ISO 10628-2 2.6).
@@ -4907,105 +4501,63 @@ class Column(Unit):
     # Side draws in declaration order; ColumnDraw1 declares ``draw``.
     draws: tuple[Port, ...]
 
-    # A literal n_feeds with n_draws=0 returns Column1 to Column8;
-    # n_feeds=1 with a literal n_draws returns ColumnDraw1 to
-    # ColumnDraw8. Other counts return Column.
+    # A literal n_feeds with n_draws=0 returns a view declaring
+    # feed_1 to feed_n; n_feeds=1 with a literal n_draws returns
+    # one declaring draw_1 to draw_n, or draw for one.
     if TYPE_CHECKING:
-        # Family A: any n_feeds, n_draws=0.
         @overload
-        def __new__(
-            cls,
-            name: str,
-            n_feeds: Literal[1] = 1,
-            *args: Any,
-            n_draws: Literal[0] = 0,
-            **kwargs: Any,
-        ) -> "Column1": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column1: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column2": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column2: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column3": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column3: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column4": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column4: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column5": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column5: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column6": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column6: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column7": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column7: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column8": ...
-
-        # Family B: n_feeds=1 and a required n_draws.
+        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> Column8: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[1], **kwargs: Any
-        ) -> "ColumnDraw1": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[1], **kwargs: Any) -> ColumnDraw1: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[2], **kwargs: Any
-        ) -> "ColumnDraw2": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[2], **kwargs: Any) -> ColumnDraw2: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[3], **kwargs: Any
-        ) -> "ColumnDraw3": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[3], **kwargs: Any) -> ColumnDraw3: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[4], **kwargs: Any
-        ) -> "ColumnDraw4": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[4], **kwargs: Any) -> ColumnDraw4: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[5], **kwargs: Any
-        ) -> "ColumnDraw5": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[5], **kwargs: Any) -> ColumnDraw5: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[6], **kwargs: Any
-        ) -> "ColumnDraw6": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[6], **kwargs: Any) -> ColumnDraw6: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[7], **kwargs: Any
-        ) -> "ColumnDraw7": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[7], **kwargs: Any) -> ColumnDraw7: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[8], **kwargs: Any
-        ) -> "ColumnDraw8": ...
-
-        # Both counts above one, or computed counts.
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[8], **kwargs: Any) -> ColumnDraw8: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: int = 1, *args: Any, n_draws: int = 0, **kwargs: Any
-        ) -> "Column": ...
-        def __new__(
-            cls, name: str, n_feeds: int = 1, *args: Any, n_draws: int = 0, **kwargs: Any
-        ) -> "Column": ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    n_draws: int = 0, **kwargs: Any) -> Column: ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    n_draws: int = 0, **kwargs: Any) -> Column: ...
 
     kind = "column"
     PORTS = [
@@ -5037,7 +4589,9 @@ class Column(Unit):
         reference: str = "",
     ):
         names = _feed_names(n_feeds, "Column")
-        draw_names = _draw_names(n_draws, "Column")
+        if n_draws < 0:
+            raise ValueError(f"Column cannot take a negative number of draws, got {n_draws}")
+        draw_names = ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
         super().__init__(
             name,
             variant=variant,
@@ -5086,145 +4640,22 @@ class Column(Unit):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Column1(Column):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Column2(Column):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Column3(Column):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Column4(Column):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Column5(Column):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Column6(Column):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Column7(Column):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Column8(Column):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
-    # Typed views for Family B.
-
-    class ColumnDraw1(Column):
-        """Typed view declaring ``draw``."""
-
-        draw: Port
-
-    class ColumnDraw2(Column):
-        """Typed view declaring ``draw_1`` to ``draw_2``."""
-
-        draw_1: Port
-        draw_2: Port
-
-    class ColumnDraw3(Column):
-        """Typed view declaring ``draw_1`` to ``draw_3``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-
-    class ColumnDraw4(Column):
-        """Typed view declaring ``draw_1`` to ``draw_4``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-
-    class ColumnDraw5(Column):
-        """Typed view declaring ``draw_1`` to ``draw_5``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-
-    class ColumnDraw6(Column):
-        """Typed view declaring ``draw_1`` to ``draw_6``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-        draw_6: Port
-
-    class ColumnDraw7(Column):
-        """Typed view declaring ``draw_1`` to ``draw_7``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-        draw_6: Port
-        draw_7: Port
-
-    class ColumnDraw8(Column):
-        """Typed view declaring ``draw_1`` to ``draw_8``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-        draw_6: Port
-        draw_7: Port
-        draw_8: Port
+    class Column1(Column, _Feed1): ...
+    class Column2(Column, _Feed2): ...
+    class Column3(Column, _Feed3): ...
+    class Column4(Column, _Feed4): ...
+    class Column5(Column, _Feed5): ...
+    class Column6(Column, _Feed6): ...
+    class Column7(Column, _Feed7): ...
+    class Column8(Column, _Feed8): ...
+    class ColumnDraw1(Column, _Draw): ...
+    class ColumnDraw2(Column, _Draw2): ...
+    class ColumnDraw3(Column, _Draw3): ...
+    class ColumnDraw4(Column, _Draw4): ...
+    class ColumnDraw5(Column, _Draw5): ...
+    class ColumnDraw6(Column, _Draw6): ...
+    class ColumnDraw7(Column, _Draw7): ...
+    class ColumnDraw8(Column, _Draw8): ...
 
 
 class DistillationColumn(Column):
@@ -5236,8 +4667,7 @@ class DistillationColumn(Column):
     """
 
     PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
+        *Column.PORTS,
         ("reflux_in", "inlet", "liquid"),
         ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
@@ -5251,127 +4681,48 @@ class DistillationColumn(Column):
     reboiler_duty: Port
     condenser_duty: Port
 
-    # Typed overloads for a literal n_feeds, as on Absorber.
+    # A literal n_feeds returns a view declaring feed_1 to feed_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "DistillationColumn1": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    **kwargs: Any) -> DistillationColumn1: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn2": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
+                    **kwargs: Any) -> DistillationColumn2: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn3": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
+                    **kwargs: Any) -> DistillationColumn3: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn4": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
+                    **kwargs: Any) -> DistillationColumn4: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn5": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
+                    **kwargs: Any) -> DistillationColumn5: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn6": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
+                    **kwargs: Any) -> DistillationColumn6: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn7": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
+                    **kwargs: Any) -> DistillationColumn7: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn8": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
+                    **kwargs: Any) -> DistillationColumn8: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: int, *args: Any, **kwargs: Any
-        ) -> "DistillationColumn": ...
-        def __new__(
-            cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any
-        ) -> "DistillationColumn": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any,
+                    **kwargs: Any) -> DistillationColumn: ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    **kwargs: Any) -> DistillationColumn: ...
 
 
 if TYPE_CHECKING:
-
-    class DistillationColumn1(DistillationColumn):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class DistillationColumn2(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class DistillationColumn3(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class DistillationColumn4(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class DistillationColumn5(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class DistillationColumn6(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class DistillationColumn7(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class DistillationColumn8(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
+    class DistillationColumn1(DistillationColumn, _Feed1): ...
+    class DistillationColumn2(DistillationColumn, _Feed2): ...
+    class DistillationColumn3(DistillationColumn, _Feed3): ...
+    class DistillationColumn4(DistillationColumn, _Feed4): ...
+    class DistillationColumn5(DistillationColumn, _Feed5): ...
+    class DistillationColumn6(DistillationColumn, _Feed6): ...
+    class DistillationColumn7(DistillationColumn, _Feed7): ...
+    class DistillationColumn8(DistillationColumn, _Feed8): ...
 
 
 class Absorber(Column):
@@ -5388,123 +4739,48 @@ class Absorber(Column):
 
     COMPOSITION = {"internals": "packing", "trays": DEFAULT_TRAYS}
 
-    # A literal n_feeds returns a typed view, Absorber1 to Absorber8.
+    # A literal n_feeds returns a view declaring feed_1 to feed_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Absorber1": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    **kwargs: Any) -> Absorber1: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Absorber2": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
+                    **kwargs: Any) -> Absorber2: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Absorber3": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
+                    **kwargs: Any) -> Absorber3: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Absorber4": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
+                    **kwargs: Any) -> Absorber4: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Absorber5": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
+                    **kwargs: Any) -> Absorber5: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Absorber6": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
+                    **kwargs: Any) -> Absorber6: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Absorber7": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
+                    **kwargs: Any) -> Absorber7: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Absorber8": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
+                    **kwargs: Any) -> Absorber8: ...
         @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Absorber": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Absorber": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any,
+                    **kwargs: Any) -> Absorber: ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    **kwargs: Any) -> Absorber: ...
 
 
 if TYPE_CHECKING:
-
-    class Absorber1(Absorber):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Absorber2(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Absorber3(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Absorber4(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Absorber5(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Absorber6(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Absorber7(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Absorber8(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
+    class Absorber1(Absorber, _Feed1): ...
+    class Absorber2(Absorber, _Feed2): ...
+    class Absorber3(Absorber, _Feed3): ...
+    class Absorber4(Absorber, _Feed4): ...
+    class Absorber5(Absorber, _Feed5): ...
+    class Absorber6(Absorber, _Feed6): ...
+    class Absorber7(Absorber, _Feed7): ...
+    class Absorber8(Absorber, _Feed8): ...
 
 
 class Stripper(Column):
@@ -5515,8 +4791,7 @@ class Stripper(Column):
     """
 
     PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
+        *Column.PORTS,
         ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
     ]
@@ -5526,123 +4801,48 @@ class Stripper(Column):
     boilup_in: Port
     reboiler_duty: Port
 
-    # Typed overloads for a literal n_feeds, as on Absorber.
+    # A literal n_feeds returns a view declaring feed_1 to feed_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Stripper1": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    **kwargs: Any) -> Stripper1: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Stripper2": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
+                    **kwargs: Any) -> Stripper2: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Stripper3": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
+                    **kwargs: Any) -> Stripper3: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Stripper4": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
+                    **kwargs: Any) -> Stripper4: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Stripper5": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
+                    **kwargs: Any) -> Stripper5: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Stripper6": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
+                    **kwargs: Any) -> Stripper6: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Stripper7": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
+                    **kwargs: Any) -> Stripper7: ...
         @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Stripper8": ...
-
+        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
+                    **kwargs: Any) -> Stripper8: ...
         @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Stripper": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Stripper": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any,
+                    **kwargs: Any) -> Stripper: ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    **kwargs: Any) -> Stripper: ...
 
 
 if TYPE_CHECKING:
-
-    class Stripper1(Stripper):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Stripper2(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Stripper3(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Stripper4(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Stripper5(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Stripper6(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Stripper7(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Stripper8(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
+    class Stripper1(Stripper, _Feed1): ...
+    class Stripper2(Stripper, _Feed2): ...
+    class Stripper3(Stripper, _Feed3): ...
+    class Stripper4(Stripper, _Feed4): ...
+    class Stripper5(Stripper, _Feed5): ...
+    class Stripper6(Stripper, _Feed6): ...
+    class Stripper7(Stripper, _Feed7): ...
+    class Stripper8(Stripper, _Feed8): ...
 
 
 # Variable-port unit types
@@ -5677,52 +4877,37 @@ class Mixer(Unit):
     inlets: tuple[Port, ...]
     outlet: Port
 
-    # A literal n_inlets returns a typed view, Mixer1 to Mixer8.
+    # A literal n_inlets returns a view declaring in_1 to in_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[1], *args: Any, **kwargs: Any
-        ) -> "Mixer1": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[1], *args: Any,
+                    **kwargs: Any) -> Mixer1: ...
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[2] = 2, *args: Any, **kwargs: Any
-        ) -> "Mixer2": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[2] = 2, *args: Any,
+                    **kwargs: Any) -> Mixer2: ...
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Mixer3": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[3], *args: Any,
+                    **kwargs: Any) -> Mixer3: ...
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Mixer4": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[4], *args: Any,
+                    **kwargs: Any) -> Mixer4: ...
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Mixer5": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[5], *args: Any,
+                    **kwargs: Any) -> Mixer5: ...
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Mixer6": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[6], *args: Any,
+                    **kwargs: Any) -> Mixer6: ...
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Mixer7": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[7], *args: Any,
+                    **kwargs: Any) -> Mixer7: ...
         @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Mixer8": ...
-
+        def __new__(cls, name: str, n_inlets: Literal[8], *args: Any,
+                    **kwargs: Any) -> Mixer8: ...
         @overload
-        def __new__(cls, name: str, n_inlets: int, *args: Any, **kwargs: Any) -> "Mixer": ...
-        def __new__(cls, name: str, n_inlets: int = 2, *args: Any, **kwargs: Any) -> "Mixer": ...
+        def __new__(cls, name: str, n_inlets: int, *args: Any,
+                    **kwargs: Any) -> Mixer: ...
+        def __new__(cls, name: str, n_inlets: int = 2, *args: Any,
+                    **kwargs: Any) -> Mixer: ...
 
     kind = "mixer"
     def __init__(  # numpydoc ignore=GL08
@@ -5754,75 +4939,14 @@ class Mixer(Unit):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Mixer1(Mixer):
-        """Typed view declaring ``in_1``."""
-
-        in_1: Port
-
-    class Mixer2(Mixer):
-        """Typed view declaring ``in_1`` to ``in_2``."""
-
-        in_1: Port
-        in_2: Port
-
-    class Mixer3(Mixer):
-        """Typed view declaring ``in_1`` to ``in_3``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-
-    class Mixer4(Mixer):
-        """Typed view declaring ``in_1`` to ``in_4``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-
-    class Mixer5(Mixer):
-        """Typed view declaring ``in_1`` to ``in_5``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-
-    class Mixer6(Mixer):
-        """Typed view declaring ``in_1`` to ``in_6``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-
-    class Mixer7(Mixer):
-        """Typed view declaring ``in_1`` to ``in_7``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-
-    class Mixer8(Mixer):
-        """Typed view declaring ``in_1`` to ``in_8``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-        in_8: Port
+    class Mixer1(Mixer, _In1): ...
+    class Mixer2(Mixer, _In2): ...
+    class Mixer3(Mixer, _In3): ...
+    class Mixer4(Mixer, _In4): ...
+    class Mixer5(Mixer, _In5): ...
+    class Mixer6(Mixer, _In6): ...
+    class Mixer7(Mixer, _In7): ...
+    class Mixer8(Mixer, _In8): ...
 
 
 class Splitter(Unit):
@@ -5854,54 +4978,37 @@ class Splitter(Unit):
     # out_1 to out_n in order.
     outlets: tuple[Port, ...]
 
-    # Typed overloads for a literal n_outlets, as on Mixer.
+    # A literal n_outlets returns a view declaring out_1 to out_n.
     if TYPE_CHECKING:
-
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[1], *args: Any, **kwargs: Any
-        ) -> "Splitter1": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[1], *args: Any,
+                    **kwargs: Any) -> Splitter1: ...
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[2] = 2, *args: Any, **kwargs: Any
-        ) -> "Splitter2": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[2] = 2, *args: Any,
+                    **kwargs: Any) -> Splitter2: ...
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Splitter3": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[3], *args: Any,
+                    **kwargs: Any) -> Splitter3: ...
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Splitter4": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[4], *args: Any,
+                    **kwargs: Any) -> Splitter4: ...
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Splitter5": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[5], *args: Any,
+                    **kwargs: Any) -> Splitter5: ...
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Splitter6": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[6], *args: Any,
+                    **kwargs: Any) -> Splitter6: ...
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Splitter7": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[7], *args: Any,
+                    **kwargs: Any) -> Splitter7: ...
         @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Splitter8": ...
-
+        def __new__(cls, name: str, n_outlets: Literal[8], *args: Any,
+                    **kwargs: Any) -> Splitter8: ...
         @overload
-        def __new__(cls, name: str, n_outlets: int, *args: Any, **kwargs: Any) -> "Splitter": ...
-        def __new__(
-            cls, name: str, n_outlets: int = 2, *args: Any, **kwargs: Any
-        ) -> "Splitter": ...
+        def __new__(cls, name: str, n_outlets: int, *args: Any,
+                    **kwargs: Any) -> Splitter: ...
+        def __new__(cls, name: str, n_outlets: int = 2, *args: Any,
+                    **kwargs: Any) -> Splitter: ...
 
     kind = "splitter"
 
@@ -5934,75 +5041,14 @@ class Splitter(Unit):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Splitter1(Splitter):
-        """Typed view declaring ``out_1``."""
-
-        out_1: Port
-
-    class Splitter2(Splitter):
-        """Typed view declaring ``out_1`` to ``out_2``."""
-
-        out_1: Port
-        out_2: Port
-
-    class Splitter3(Splitter):
-        """Typed view declaring ``out_1`` to ``out_3``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-
-    class Splitter4(Splitter):
-        """Typed view declaring ``out_1`` to ``out_4``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-
-    class Splitter5(Splitter):
-        """Typed view declaring ``out_1`` to ``out_5``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-
-    class Splitter6(Splitter):
-        """Typed view declaring ``out_1`` to ``out_6``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-        out_6: Port
-
-    class Splitter7(Splitter):
-        """Typed view declaring ``out_1`` to ``out_7``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-        out_6: Port
-        out_7: Port
-
-    class Splitter8(Splitter):
-        """Typed view declaring ``out_1`` to ``out_8``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-        out_6: Port
-        out_7: Port
-        out_8: Port
+    class Splitter1(Splitter, _Out1): ...
+    class Splitter2(Splitter, _Out2): ...
+    class Splitter3(Splitter, _Out3): ...
+    class Splitter4(Splitter, _Out4): ...
+    class Splitter5(Splitter, _Out5): ...
+    class Splitter6(Splitter, _Out6): ...
+    class Splitter7(Splitter, _Out7): ...
+    class Splitter8(Splitter, _Out8): ...
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument: str) -> list[str]:
@@ -6128,10 +5174,6 @@ class Block(_FaceFamilies):
     DEFAULT_INPUT_FACE = "W"
     DEFAULT_OUTPUT_FACE = "E"
 
-    # Class defaults, read when Unit.__init__ first sets the size.
-    _width: float | None = None
-    _height: float | None = None
-
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
@@ -6193,91 +5235,34 @@ class Block(_FaceFamilies):
         self._faces[name] = face
         return port
 
-    @property
-    def width(self) -> float | None:
-        """Return the box width, or ``None`` to fit the connections.
-
-        Returns
-        -------
-        float or None
-            Width in pixels, or ``None``.
-        """
-        return self._width
-
-    @width.setter
-    def width(self, value: float | None) -> None:
-        """Set the box width.
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set an attribute, keeping the old size if the box is too small.
 
         Parameters
         ----------
-        value : float or None
-            Width in pixels, or ``None`` to fit the connections.
+        name : str
+            Attribute name.
+        value : Any
+            New value.
 
         Raises
         ------
         TypeError
-            If ``value`` is neither ``None`` nor a real number.
+            If ``width`` or ``height`` is neither ``None`` nor a real
+            number.
         ValueError
-            If ``value`` is not positive and finite, or the box is too
-            small for its connections.
+            If ``width`` or ``height`` is not positive and finite, or the
+            box is too small for its connections.
         """
-        self._resize("_width", value)
-
-    @property
-    def height(self) -> float | None:
-        """Return the box height, or ``None`` to fit the connections.
-
-        Returns
-        -------
-        float or None
-            Height in pixels, or ``None``.
-        """
-        return self._height
-
-    @height.setter
-    def height(self, value: float | None) -> None:
-        """Set the box height.
-
-        Parameters
-        ----------
-        value : float or None
-            Height in pixels, or ``None`` to fit the connections.
-
-        Raises
-        ------
-        TypeError
-            If ``value`` is neither ``None`` nor a real number.
-        ValueError
-            If ``value`` is not positive and finite, or the box is too
-            small for its connections.
-        """
-        self._resize("_height", value)
-
-    def _resize(self, attr: str, value: float | None) -> None:
-        """Set a box dimension, keeping the old one if refused.
-
-        Parameters
-        ----------
-        attr : str
-            ``"_width"`` or ``"_height"``.
-        value : float or None
-            New size, or ``None`` to fit the connections.
-
-        Raises
-        ------
-        ValueError
-            If the box is too small for its connections.
-        """
-        was = getattr(self, attr)
-        setattr(self, attr, value)
+        was = self.__dict__.get(name)
+        super().__setattr__(name, value)
         # Unit.__init__ sets the size before the connections exist.
-        if "_faces" not in self.__dict__:
-            return
-        try:
-            self._check_box()
-        except ValueError:
-            setattr(self, attr, was)
-            raise
+        if name in ("width", "height") and "_faces" in self.__dict__:
+            try:
+                self._check_box()
+            except ValueError:
+                super().__setattr__(name, was)
+                raise
 
     def pin(
         self,

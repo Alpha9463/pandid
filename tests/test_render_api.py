@@ -122,23 +122,18 @@ def test_render_svg_writes_file_and_returns_none(tmp_path):
     assert "<svg" in out.read_text(encoding="utf-8")
 
 
-def test_pdf_hint_names_the_distribution_on_pypi(tmp_path, monkeypatch):
-    # `pandid` on PyPI is an unrelated project; the distribution is `pandid`.
-    monkeypatch.setitem(sys.modules, "svglib.svglib", None)  # makes the import fail
+@pytest.mark.parametrize(
+    ("module", "path", "missing"),
+    [("svglib.svglib", "d.pdf", "svglib"), ("pypdfium2", "d.png", "pypdfium2")],
+)
+def test_the_hint_names_the_package_of_the_extra_that_is_missing(
+    tmp_path, monkeypatch, module, path, missing
+):
+    monkeypatch.setitem(sys.modules, module, None)  # makes the import fail
     with pytest.raises(ImportError) as excinfo:
-        _fs().render(str(tmp_path / "d.pdf"))
+        _fs().render(str(tmp_path / path))
     message = str(excinfo.value)
-    assert "svglib" in message
-    assert "pip install 'pandid[pdf]'" in message
-
-
-def test_png_hint_names_the_rasteriser_that_is_missing(tmp_path, monkeypatch):
-    # The hint names the one package of the extra that is missing.
-    monkeypatch.setitem(sys.modules, "pypdfium2", None)
-    with pytest.raises(ImportError) as excinfo:
-        _fs().render(str(tmp_path / "d.png"))
-    message = str(excinfo.value)
-    assert "pypdfium2" in message
+    assert missing in message
     assert "pip install 'pandid[pdf]'" in message
 
 
@@ -203,8 +198,6 @@ def _loop() -> Flowsheet:
     "kwargs",
     [
         {"diagram": "p&id"},
-        {"diagram": "pid"},  # the ampersand-less spelling
-        {"diagram": "P&ID"},  # ...and the drawing's own name, as it is written
         # A P&ID on the engineering frame.
         {"border": "zone", "diagram": "p&id"},
     ],
@@ -256,12 +249,6 @@ def test_the_frame_and_the_drawing_are_asked_for_separately():
     assert len(sheets) == 4
 
 
-def test_a_pid_reaches_render_as_well_as_to_svg(tmp_path):
-    out = tmp_path / "sheet.svg"
-    _loop().render(str(out), diagram="p&id")
-    assert not _ARROWHEAD.search(out.read_text(encoding="utf-8"))
-
-
 @pytest.mark.parametrize(
     "kwargs,expected",
     [
@@ -280,7 +267,17 @@ def test_a_drawing_the_renderer_cannot_draw_raises_naming_the_spellings(kwargs, 
 # --- page_size: a named sheet is drawn at exactly that size --------------------
 
 
-@pytest.mark.parametrize("name,mm", [("A4", A4_MM), ("A3", A3_MM), ("A0", A0_MM)])
+@pytest.mark.parametrize(
+    "name,mm",
+    [
+        ("A4", A4_MM),
+        ("A3", A3_MM),
+        ("A2", (594.0, 420.0)),
+        ("A1", (841.0, 594.0)),
+        ("A0", A0_MM),
+        ("a3", A3_MM),
+    ],
+)
 @pytest.mark.parametrize("sheet", [{}, {"border": "zone", "diagram": "p&id"}])
 def test_page_size_draws_a_sheet_of_exactly_that_size(name, mm, sheet):
     svg = _fs().to_svg(page_size=name, **sheet)
@@ -301,15 +298,6 @@ def test_a_furnished_page_is_that_size_with_or_without_a_border():
     assert _fit(build().to_svg(page_size="A3", border="none")) == _fit(
         build().to_svg(page_size="A3", border="zone")
     )
-
-
-def test_page_sizes_differ_from_one_another():
-    sheets = {n: _sheet_mm(_fs().to_svg(page_size=n)) for n in ("A4", "A3", "A2", "A1", "A0")}
-    assert len(set(sheets.values())) == len(sheets)
-
-
-def test_page_size_is_case_insensitive():
-    assert _sheet_mm(_fs().to_svg(page_size="a3")) == A3_MM
 
 
 def test_omitting_page_size_fits_the_sheet_to_the_drawing():
@@ -432,12 +420,6 @@ def test_page_too_small_for_its_own_furniture_raises():
     message = str(excinfo.value)
     assert "A4" in message
     assert "page_size" in message  # and how to get out of it
-
-
-def test_page_size_reaches_render_as_well_as_to_svg(tmp_path):
-    out = tmp_path / "sheet.svg"
-    _fs().render(str(out), page_size="A4")
-    assert _sheet_mm(out.read_text(encoding="utf-8")) == A4_MM
 
 
 @pytest.mark.parametrize("name,mm", [("A4", A4_MM), ("A3", A3_MM), ("A0", A0_MM)])

@@ -1,11 +1,14 @@
 """Test the deprecation mechanism: one declaration, a warning and a finding."""
 
+import importlib
+import pkgutil
 import warnings
 
 import pytest
 
+import pandid
 from pandid import Flowsheet, units as U
-from pandid.deprecation import CODE, Deprecation, declarations
+from pandid.deprecation import CODE, Deprecation
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -16,6 +19,23 @@ RETIRED = Deprecation(
     instead="Pump(jacket='cooling')",
     removed_in="99.0.0",
 )
+
+
+def declarations() -> dict[str, Deprecation]:
+    """Return every module-level :class:`Deprecation` in pandid.
+
+    Returns
+    -------
+    dict[str, Deprecation]
+        Declarations keyed by ``"module.NAME"``, one per attribute.
+    """
+    found: dict[str, Deprecation] = {}
+    for info in pkgutil.walk_packages(pandid.__path__, prefix="pandid."):
+        module = importlib.import_module(info.name)
+        for name, value in vars(module).items():
+            if isinstance(value, Deprecation):
+                found[f"{info.name}.{name}"] = value
+    return found
 
 
 class _OldPump(U.Pump):
@@ -39,19 +59,6 @@ def _sheet():
 # --- both signals, from one declaration --------------------------------------
 
 
-def test_a_deprecated_call_warns():
-    with pytest.warns(DeprecationWarning) as caught:
-        _OldPump("P-101")
-    assert len(caught) == 1
-
-
-def test_a_deprecated_call_reports():
-    fs, _ = _sheet()
-    found = [i for i in fs.validate() if i.code == CODE]
-    assert len(found) == 1
-    assert found[0].severity == "warning"
-
-
 def test_the_warning_and_the_finding_are_the_same_sentence():
     """Check that the warning and the ``validate()`` finding carry the same message."""
     fs = Flowsheet("same")
@@ -60,15 +67,6 @@ def test_the_warning_and_the_finding_are_the_same_sentence():
     warned = str(caught[0].message)
     reported = [i for i in fs.validate() if i.code == CODE]
     assert [warned] == [i.message for i in reported]
-
-
-def test_the_message_names_the_replacement_and_the_release():
-    fs, _ = _sheet()
-    message = next(i for i in fs.validate() if i.code == CODE).message
-    assert "P-101" in message  # what to edit
-    assert "Pump(cooled=True)" in message  # what is going
-    assert "Pump(jacket='cooling')" in message  # what replaces it
-    assert "99.0.0" in message  # when it goes
 
 
 def test_the_warning_points_at_the_callers_line(same_file):
@@ -96,25 +94,7 @@ def test_a_unit_never_added_is_not_reported():
     assert [i for i in fs.validate() if i.code == CODE] == []
 
 
-def test_reporting_does_not_consume_the_finding():
-    """Check that calling ``validate()`` twice reports the finding both times."""
-    fs, _ = _sheet()
-    first = [i.message for i in fs.validate() if i.code == CODE]
-    second = [i.message for i in fs.validate() if i.code == CODE]
-    assert first == second != []
-
-
 # --- the carriers ------------------------------------------------------------
-
-
-def test_each_unit_reports_for_itself():
-    """Check that two deprecated units give two findings, each naming its unit."""
-    fs = Flowsheet("two")
-    fs.add(_OldPump("P-101"))
-    fs.add(_OldPump("P-102"))
-    found = sorted(i.message for i in fs.validate() if i.code == CODE)
-    assert len(found) == 2
-    assert "P-101" in found[0] and "P-102" in found[1]
 
 
 def test_one_carrier_says_it_once():

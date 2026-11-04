@@ -22,7 +22,6 @@ from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import (
     _APPROXIMATIONS,
-    _JUMP_STYLES,
     HOP_DROPPED,
     _hops,
     _PART_APPROXIMATIONS,
@@ -1383,6 +1382,66 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
     assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
     assert written["04_control_loop"] == {"LAH", "LAL"}
     assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
+
+
+def _exported_codes(fs, kwargs) -> tuple:
+    """Return each exported letter code with the page box its halo paints, and the fit."""
+    from pandid.render.drawio import _TEXT_INSET
+
+    cells = _drawio_cells_from_document(fs.to_drawio(**kwargs))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+    codes = []
+    for cid, cell in cells.items():
+        if not re.fullmatch(r"q\d+", cid or ""):
+            continue
+        geometry = cell.find("mxGeometry")
+        assert geometry is not None
+        x, y = float(geometry.get("x", 0)), float(geometry.get("y", 0))
+        w, h = float(geometry.get("width", 0)), float(geometry.get("height", 0))
+        # The halo fills the cell inside draw.io's text inset.
+        inset = _TEXT_INSET
+        codes.append((cell.get("value"), (x + inset, y + inset, x + w - inset, y + h - inset)))
+    assert codes, "the sheet exports no letter code"
+    return codes, fit
+
+
+def test_a_letter_code_is_exported_clear_of_a_flange_mark():
+    """Export each letter code clear of the flange marks on its sheet."""
+    from test_halo_invariants import _flange_bars
+    from test_label_invariants import CORPUS
+
+    fs, kwargs = CORPUS["codes_beside_a_flange"]()
+    codes, fit = _exported_codes(fs, kwargs)
+    faces = [fit.box(face.box) for face in _flange_bars(fs, kwargs)]
+    hit = [text for text, box in codes for face in faces if overlaps(box, face)]
+    assert not hit, f"letter codes exported over a flange mark: {hit}"
+
+
+@pytest.mark.parametrize(
+    "sheet",
+    [
+        "a_flange_and_a_line",
+        "a_fixed_tag",
+        "another_balloon",
+        "a_closed_valve",
+        "a_pneumatic_line",
+        "a_stacked_tag",
+    ],
+)
+def test_a_letter_code_by_a_flange_mark_is_exported_clear_of_every_line_and_tag(sheet):
+    """Export a letter code by a flange mark clear of every line, hatch and tag label."""
+    from pandid.render.svg import _ink
+    from test_halo_invariants import CROWDED_CODES, _hatch_bars
+
+    fs, kwargs = CROWDED_CODES[sheet]()
+    codes, fit = _exported_codes(fs, kwargs)
+    _symbols, tags, _numbers = _drawn_boxes(
+        fs, kwargs, _drawio_cells_from_document(fs.to_drawio(**kwargs))
+    )
+    marks = [fit.box(line.box) for line in _ink(fs, "vertical")]
+    marks += [fit.box(bar) for bar in _hatch_bars(fs)] + list(tags.values())
+    hit = [text for text, box in codes for mark in marks if overlaps(box, mark)]
+    assert not hit, f"letter codes exported over a line or tag: {hit}"
 
 
 # ---------------------------------------------------------------------------
@@ -3306,7 +3365,7 @@ def test_each_marked_representative_accounts_for_every_drawio_hop(settled_galler
         )
     else:
         assert marked, f"{stem}: no run marked, so this case proves nothing"
-        assert set(jumps.values()) == {_JUMP_STYLES[style]}, (
+        assert set(jumps.values()) == {style}, (
             f"{stem}: exported as {sorted(set(jumps.values()))}, drawn as {style}"
         )
     drawn = _drawio_hops(edges)

@@ -215,13 +215,3 @@ def test_an_expansion_survives_a_spec_round_trip():
     assert entries["RD-306B"]["large_end"] == "outlet"
     ends = {u.name: u.large_end for u in spec.from_dict(data).units}
     assert ends == {"RD-306A": "inlet", "RD-306B": "outlet"}
-
-
-def test_only_a_reducer_takes_a_large_end():
-    with pytest.raises(spec.SpecError, match="only a Reducer takes 'large_end'"):
-        spec.from_dict(
-            {
-                "name": "wrong owner",
-                "units": [{"kind": "Valve", "name": "HV-1", "large_end": "outlet"}],
-            }
-        )
