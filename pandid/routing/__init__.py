@@ -302,13 +302,23 @@ class DefaultRouter:
         UserWarning
             If an end has no frame or anchor; the stream is skipped.
         """
+        from pandid.portgeom import COMPASS, resolve_port
         from pandid.render.svg import tap_lines, tap_route
+        from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
+        # The first arrowhead length of each line out of each nozzle.
+        heads: list[tuple["Stream", list[tuple[float, float]]]] = []
+        for s in fs.streams:
+            for port in (s.source, s.dest):
+                if port.owner.frame is not None:
+                    (px, py), _, face = resolve_port(port.owner, port.owner.frame, port.name)
+                    dx, dy = COMPASS[face]
+                    heads.append((s, [(px, py), (px + ARROWHEAD * dx, py + ARROWHEAD * dy)]))
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float]
         edge_penalties = defaultdict(float)
         taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
@@ -393,11 +403,15 @@ class DefaultRouter:
 
             is_recycle = getattr(stream, "is_recycle", False)
             crossing_index = crossable(stream)
+            nozzle_index = CrossingIndex()
+            for s, head in heads:
+                if s is not stream:
+                    nozzle_index.record(head)
             path = []
             if clear_stubs:
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
-                    edge_penalties, is_recycle, crossing_index,
+                    edge_penalties, is_recycle, crossing_index, nozzle_index,
                 )
             path_found = bool(path)
 
