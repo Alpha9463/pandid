@@ -114,6 +114,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Line-number plates fit their text, and draw.io tags sit on their halos
+  (#618).** A line number is measured with the face's letter widths, and one
+  beside less than half its length of line gets a leader. draw.io writes an
+  equipment tag inside the halo the sheet clears for it, not up to 8 units
+  nearer its symbol.
 - **A balloon hung from another balloon no longer sits on the line it taps
   (#619).** After the controller-hanging attempt, `route()` tries keeping it
   clear of that line, and keeps the result only if no balloon's tap leaves its
