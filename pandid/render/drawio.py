@@ -587,7 +587,9 @@ class _Tags(NamedTuple):
     Attributes
     ----------
     at : dict
-        ``id(unit)`` -> ``(side, dx, dy)``, offset from the side's spot.
+        ``id(unit)`` -> ``(side, dx, dy, near)``: the offset from the side's
+        spot, and the offset from the middle of the cell's side to the middle
+        of the tag halo's near edge, or ``None`` with no halo.
     plates : list
         Opaque boxes of tags and ``NC``/fail letters.
     codes : list
@@ -639,10 +641,16 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
             item = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols)
             tag_box = _unit_label_box(item)
             items.append(item)
-            # The side and the offset from that side's default spot.
+            # The side, the offset from its default spot, and the halo's near edge.
             side = item[4]
             base = sheet._label_place(side, x, y, w, h)
-            at[id(u)] = (side, item[0] - base[0], item[1] - base[1])
+            near = None
+            if tag_box is not None:
+                hx0, hy0, hx1, hy1 = tag_box
+                mx, my = (hx0 + hx1 - 2 * x - w) / 2, (hy0 + hy1 - 2 * y - h) / 2
+                near = {"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
+                        "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[side]
+            at[id(u)] = (side, item[0] - base[0], item[1] - base[1], near)
         if closed_marking(u, registry) == "NC":
             items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
         letters = fail_marking(u)
@@ -1089,7 +1097,8 @@ class DrawioRenderer:
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
 
-    def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
+    def _label(self, u, fit: "_Fit", tags: "_Tags",
+               wraps: bool) -> "tuple[str, list[str], tuple]":
         """Return a unit's label text, placing keys and tag offset.
 
         An instrument's tag goes inside its balloon; other tags go on
@@ -1104,6 +1113,8 @@ class DrawioRenderer:
             Drawing fit.
         tags : _Tags
             Tag placements from the tag pass.
+        wraps : bool
+            Whether draw.io wraps the label to the cell's width.
 
         Returns
         -------
@@ -1142,12 +1153,20 @@ class DrawioRenderer:
         letters = fail_marking(u)
         if letters:
             lines.append(letters)
-        side, dx, dy = tags.at.get(id(u), (
-            (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0))
+        side, dx, dy, near = tags.at.get(id(u), (
+            (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0, None))
+        offset = (fit.length(dx), fit.length(dy))
+        x0, _y0, x1, _y1 = fit.box(self._cell_box(u))
+        one_line = len(lines) == 1 and not (
+            wraps and F.text_width(lines[0], fit.length(_TAG_TYPE)) > x1 - x0 - 2 * _TEXT_INSET)
+        if near is not None and one_line:
+            # A one-line tag sits on its halo; any other label keeps draw.io's spot.
+            gx, gy = _SIDE_LABEL_GAP[side]
+            offset = (fit.length(near[0]) - gx, fit.length(near[1]) - gy)
         # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
-        ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx), fit.length(dy))
+        ) + [_drawn_type(_TAG_TYPE, fit)], offset
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
@@ -1196,8 +1215,9 @@ class DrawioRenderer:
         self._report_reshape(u, sym, approx)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
-        text, label_keys, (dx, dy) = self._label(u, fit, tags)
-        style = ";".join(["html=1", *self._shape(u, sym, fit), *label_keys, *placement]) + ";"
+        shape = self._shape(u, sym, fit)
+        text, label_keys, (dx, dy) = self._label(u, fit, tags, "whiteSpace=wrap" in shape)
+        style = ";".join(["html=1", *shape, *label_keys, *placement]) + ";"
         geometry = (f'          <mxGeometry x="{fmt(x0, 2)}" y="{fmt(y0, 2)}" '
                     f'width="{fmt(x1 - x0, 2)}" height="{fmt(y1 - y0, 2)}" as="geometry"')
         body = ([geometry + ">",
@@ -2186,6 +2206,11 @@ _BASELINE = 0.9
 
 # Inset draw.io applies on every side of a cell before its text.
 _TEXT_INSET = 2.0
+
+# Step from the middle of a cell's side to the middle of a side label's near
+# edge: the inset, and the 1 under and 5 over its text that draw.io adds.
+_SIDE_LABEL_GAP = {"top": (0.0, -_TEXT_INSET - 1), "bottom": (0.0, _TEXT_INSET + 5),
+                   "left": (-_TEXT_INSET, 0.0), "right": (_TEXT_INSET, 0.0)}
 
 # Style keys for TableBox column alignment.
 _ALIGN_KEY = {"l": f"align=left;spacingLeft={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
