@@ -5,16 +5,15 @@ import importlib.util
 import io
 import re
 import zlib
-from pathlib import Path
 
 import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.render import export
+from test_golden import GOLDEN_DIR, GOLDEN_SCENARIOS
 from test_symbol_invariants import _apply, _parse_transform as _matrix
 
-GOLDEN_DIR = Path(__file__).parent / "golden"
-GOLDENS = sorted(p.name for p in GOLDEN_DIR.glob("*.svg"))
+GOLDENS = [f"{name}.svg" for name in GOLDEN_SCENARIOS]
 
 # The whole pdf extra: a PNG is rasterised from the PDF.
 _HAS_PDF_EXTRA = all(

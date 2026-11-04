@@ -3,24 +3,10 @@ Example 18: Methanol Synthesis Loop A300, a fixed-bed recycle P&ID
 
 Make-up synthesis gas is compressed into the loop, joins the recycle,
 is heated against the converter effluent in E-301 and fired to reaction
-temperature in H-301. R-301 is a packed catalytic converter; per pass it
-turns only a few per cent of the gas, which is why the unreacted
-remainder is separated in V-301 and sent round again. The crude
-methanol leaves on level control, the loop pressure is held by the
-purge, and the purge is what stops the inerts that arrive with the
-make-up from accumulating for ever.
-
-``Reactor(internals="packing")`` is the converter: ISO item 27.8's
-crossed bed drawn into the same dished-end shell example 17's stirred
-reactor and example 20's molecular sieve are drawn from. Naming
-``internals=`` is also what leaves the **agitator out** -- a reactor is a
-stirred tank unless it says otherwise, and a packed bed says otherwise,
-so no stirrer is drawn through the catalyst.
-
-Nothing is pinned. The engine ranks, orders, places and routes the whole
-sheet, balloons included, and the recycle back to the mixing tee is what
-it has to solve: the loop is torn, laid out as a forward train and drawn
-back across the sheet as a recycle lane.
+temperature in H-301. The packed converter R-301 reacts a few per cent
+per pass; V-301 separates the crude methanol, which leaves on level
+control, and the unreacted gas is recycled, the loop pressure held on
+the purge. Nothing is pinned; the engine draws the recycle as a lane.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -53,11 +39,7 @@ def main():
     level305 = fs.add_loop("L", 305)    # separator level
 
     # --- Equipment ----------------------------------------------------
-    # internals="packing" is the catalyst bed, and it is also what says
-    # this vessel is not stirred: Reactor fits ISO item 28.1's agitator
-    # to a body the author put nothing in, and leaves it out of one they
-    # did. A stirrer drawn through a fixed bed would be a machine the
-    # plant does not have.
+    # internals="packing" draws the catalyst bed and no agitator.
     rx = fs.add(Reactor("R-301", internals="packing", width=124, height=200,
                         description="Methanol Converter"))
     fehe = fs.add(ShellAndTubeExchanger("E-301", variant="straight_tubes", width=120,
@@ -74,18 +56,11 @@ def main():
     fuel = fs.add(Feed("FGSH", header=True))
     cws = fs.add(Feed("CWSH", header=True))
     cwr = fs.add(Product("CWRH", header=True))
-    # No flue-gas flag: ``units.Furnace`` draws the process coil and the
-    # burner, and its three nozzles are the coil's two and the fuel. The
-    # stack, the air preheat and the induced-draught fan are the heater's
-    # own sheet, which is what the note at the foot of this one says.
     purge_gas = fs.add(Product("Purge to Fuel Gas", reference="P&ID-901"))
     crude = fs.add(Product("Crude Methanol", reference="P&ID-401"))
 
     # --- In-line devices ----------------------------------------------
-    # Both junctions are piping and not plant, so both are tees: one
-    # combines the make-up into the recycle, the other takes the purge
-    # off the separator's gas. A tee is drawn identically either way --
-    # it does not know which direction its branch runs.
+    # One tee joins the make-up to the recycle, the other takes the purge.
     mix = fs.add(Tee(branch="inlet"))
     purge_tee = fs.add(Tee())
 
@@ -105,11 +80,6 @@ def main():
                                 description="Crude Methanol Control Valve"))
 
     # --- Process lines ------------------------------------------------
-    # The pressure sequence is the loop's: make-up arrives at 30 barg and
-    # K-301 lifts it to the 80 barg the loop runs at; K-302 puts back
-    # only the 5 bar the circuit loses across the exchangers, the heater
-    # and the bed, which is why the recycle machine is a small one beside
-    # the make-up machine.
     fs.connect(syngas.outlet, fe301.inlet, size=300, service="SG",
                sequence=301, spec="CS")
     fs.connect(fe301.outlet, cv301.inlet)
@@ -117,9 +87,7 @@ def main():
     fs.connect(makeup_k.discharge, mix.inlet, size=200, service="SG",
                sequence=302, spec="CS")
 
-    # The cold gas goes tube side and the hot effluent shell side: the
-    # tubes are what can be pulled and cleaned, and the loop's fouling is
-    # on the effluent, which carries the wax and the carbonyls.
+    # Cold gas tube side, hot effluent shell side.
     fs.connect(mix.outlet, fehe.tube_in, size=350, service="LG", sequence=303,
                spec="CS")
     fs.connect(fehe.tube_out, heater.inlet, size=350, service="LG",
@@ -140,20 +108,13 @@ def main():
 
     loop_gas = fs.connect(sep.vapor, purge_tee.inlet, size=350, service="LG",
                           sequence=308, spec="CS")
-    # The purge leaves on the run and the recycle on the branch. A tee is
-    # drawn identically either way, so which port is which is a placement
-    # decision rather than a piping one, and this way round is what puts
-    # CV-304 beside the recycle machine instead of underneath it -- the
-    # controller's output has to reach the actuator from above, and an
-    # actuator under a compressor cannot be reached at all.
+    # The purge leaves on the run, the recycle on the branch.
     fs.connect(purge_tee.outlet, cv304.inlet, size=80, service="PG",
                sequence=309, spec="CS")
     fs.connect(cv304.outlet, purge_gas.inlet)
     fs.connect(purge_tee.branch, recycle_k.suction, size=350, service="LG",
                sequence=316, spec="CS")
-    # draw_as_recycle= is the author saying which edge closes the loop.
-    # The engine finds it on its own here, and stating it keeps the sheet
-    # saying so even if the topology around it is edited.
+    # Name the edge that closes the loop.
     fs.connect(recycle_k.discharge, mix.branch, size=350, service="LG",
                sequence=310, spec="CS", draw_as_recycle=True)
 
@@ -169,9 +130,7 @@ def main():
                sequence=313, spec="CS")
 
     # --- Loop 301: the make-up gas ------------------------------------
-    # The element's tag moves into a balloon on a short impulse line and
-    # the plate is left unlettered; FT-301 stacks on that balloon, edge to
-    # edge, reading the same element.
+    # Move the element's tag into a balloon; FT-301 stacks on it.
     fe301_b = fs.add_balloon(fe301, face="N", offset=38)
     ft301 = fs.add_instrument("FT", flow301, near=fe301_b, face="N", offset=23)
     fic301 = fs.add_instrument("FIC", flow301, near=ft301, face="N", offset=60,
@@ -180,10 +139,7 @@ def main():
     fs.connect(fic301.sig_out, cv301.actuator, kind="pneumatic")
 
     # --- Loops 302/303: converter inlet temperature onto the fuel -----
-    # The master reads the gas leaving the heater, not the bed: the bed
-    # runs 40 C hotter than its inlet and lags it by minutes, so a loop
-    # closed on the catalyst would be too slow to hold the inlet at all.
-    # TI-306 is what says how hot the bed itself is.
+    # The master reads the gas leaving the heater.
     tt302 = fs.add_instrument("TT", temp302, sensing=inlet_line, at=0.5,
                               offset=60)
     tic302 = fs.add_instrument("TIC", temp302, near=tt302, face="N", offset=70,
@@ -195,17 +151,12 @@ def main():
     ft303 = fs.add_instrument("FT", flow303, near=fe303_b, face="N", offset=23)
     fic303 = fs.add_instrument("FIC", flow303, near=ft303, face="N", offset=60,
                                variant="shared")
-    # The measurement lands on pv and the master sets sig_in: a cascade
-    # sets a setpoint, it does not stroke a valve.
+    # The measurement lands on pv, the master's setpoint on sig_in.
     fs.connect(ft303.sig_out, fic303.pv, kind="electric")
     fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
     fs.connect(fic303.sig_out, cv303.actuator, kind="pneumatic")
 
     # --- Loop 304: loop pressure, held on the purge -------------------
-    # Inerts arrive with the make-up, do not react and do not condense,
-    # so with no purge the loop pressure climbs until the machines stall.
-    # Letting the pressure open the purge is that balance drawn as one
-    # loop rather than left to an operator with a hand valve.
     pt304 = fs.add_instrument("PT", press304, sensing=loop_gas, at=0.4,
                               offset=60)
     pic304 = fs.add_instrument("PIC", press304, near=pt304, face="N", offset=70,
@@ -215,13 +166,7 @@ def main():
     fs.connect(pic304.sig_out, cv304.actuator, kind="pneumatic")
 
     # --- Loop 305: separator level on the crude draw ------------------
-    # The faceplate hangs over the valve it strokes rather than under the
-    # transmitter it reads. Under the transmitter it stood on the far side
-    # of the crude draw, so both of the loop's signals crossed that run --
-    # the measurement coming down to it and the output going back up to
-    # the actuator -- and its alarm lettering was written across the line
-    # number. Over the valve, the output drops straight onto the actuator
-    # and nothing in the loop crosses a process line at all.
+    # The controller stands over the valve it strokes.
     lt305 = fs.add_instrument("LT", level305, sensing=sep, face="E", offset=60)
     lic305 = fs.add_instrument("LIC", level305, near=cv305, face="N", offset=52,
                                variant="shared")
@@ -230,27 +175,13 @@ def main():
     fs.connect(lic305.sig_out, cv305.actuator, kind="pneumatic")
 
     # --- Bed temperature and the fuel trip ----------------------------
-    # A runaway on a copper catalyst sinters it, and the damage is
-    # permanent, so the trip reads the bed and shuts the firing. TT-307
-    # is a well of its own: a trip taking TIC-302's reading stops working
-    # the moment that loop is put on manual.
-    #
-    # face="N" and not "W": the feed nozzle sits at the vessel's vertical
-    # centre, which is also where "W" anchors a balloon with no nozzle of
-    # its own, so TI-306 landed on the feed line's own elevation and the
-    # feed had to bend around it. The top is clear on this vessel and TI-
-    # 306 has no physical side to be drawn on.
+    # Z-1 reads the bed through TT-307 and shuts the fuel.
     fs.add_instrument("TI", 306, sensing=rx, face="N", offset=60)
     tt307 = fs.add_instrument("TT", 307, sensing=rx, face="E", offset=60)
     fs.add_instrument("Z", 1, sensing=tt307, face="E", offset=44, variant="sis")
-    # Over the valve rather than under it: a valve that states a fail
-    # position writes FC beneath its tag, and a square standing there is
-    # a square with lettering across it.
     fs.add_instrument("Z", 1, acting_on=xv307, face="N", offset=34, variant="sis")
 
     # --- Sheet furniture ----------------------------------------------
-    # date= is stated rather than left blank: left blank, the renderer
-    # fills in today's.
     fs.title_block = TitleBlock(
         title="Methanol Synthesis Loop",
         subtitle="A300 Process & Instrumentation Diagram 1",

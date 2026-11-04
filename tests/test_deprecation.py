@@ -250,13 +250,18 @@ def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
     assert declarations()["pandid.layout.faces.RETIRED"] is RETIRED
 
 
-def test_the_package_declares_only_the_placement_hints_and_the_faces():
-    """Check that the package declares only the placement-hint and face deprecations."""
+def test_the_package_declares_only_the_announced_deprecations():
+    """Check that the package declares only the deprecations announced for removal in 0.1.7."""
     from pandid.flowsheet import _CONTROLLER_AT
+    from pandid.routing import _RECOVER_EXITS, _ROUTER
+    from pandid.streams import _LINE_COMPONENTS
     from pandid.units import _AT_FACE, _DEFAULT_FACES, _PLACEMENT_HINTS
 
     assert declarations() == {
         "pandid.flowsheet._CONTROLLER_AT": _CONTROLLER_AT,
+        "pandid.routing._RECOVER_EXITS": _RECOVER_EXITS,
+        "pandid.routing._ROUTER": _ROUTER,
+        "pandid.streams._LINE_COMPONENTS": _LINE_COMPONENTS,
         "pandid.units._AT_FACE": _AT_FACE,
         "pandid.units._DEFAULT_FACES": _DEFAULT_FACES,
         "pandid.units._PLACEMENT_HINTS": _PLACEMENT_HINTS,

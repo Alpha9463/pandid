@@ -1,19 +1,17 @@
-"""Test representative SVG fixtures and rendered nozzle placement."""
+"""Test representative sheets against the gallery and rendered nozzle placement."""
 
 import difflib
-import os
 import re
 from pathlib import Path
 
 import pytest
 
 from _render_cases import SCENARIOS as SCENARIOS, copy_settled_case
-from _svg_compare import normalize as _normalize
 from pandid.document import equipment_list
 from pandid.render.debug import _BOX, _PORT
+from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
-GOLDEN_DIR = Path(__file__).parent / "golden"
-UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
+GOLDEN_DIR = Path(__file__).parents[1] / "docs" / "gallery"
 
 #: Representative manual, PFD, P&ID, BFD, and automatic-layout fixtures.
 GOLDEN_SCENARIOS = (
@@ -31,19 +29,20 @@ GOLDEN_FINDINGS = {
 
 
 def _check_golden(name: str, svg: str) -> None:
-    """Compare an SVG document with its approved fixture."""
-    path = GOLDEN_DIR / f"{name}.svg"
+    """Compare an SVG document with its gallery sheet."""
     normalized = _normalize(svg)
-    if UPDATE:
-        GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
-        path.write_text(normalized, encoding="utf-8")
-        return
-    if not path.exists():
-        pytest.fail(f"no golden at {path}; regenerate with PANDID_UPDATE_GOLDEN=1", pytrace=False)
-    golden = _normalize(path.read_text(encoding="utf-8"))
+    golden = _normalize((GOLDEN_DIR / f"{name}.svg").read_text(encoding="utf-8"))
     assert golden == normalized, "".join(
         difflib.unified_diff(golden.splitlines(True), normalized.splitlines(True), n=2)
     )
+
+
+_PROVENANCE = re.compile(f"{re.escape(PROVENANCE_OPEN)}.*?{re.escape(PROVENANCE_CLOSE)}", re.S)
+
+
+def _normalize(svg: str) -> str:
+    """Empty the fenced provenance block of an SVG document."""
+    return _PROVENANCE.sub(f"{PROVENANCE_OPEN}\n{PROVENANCE_CLOSE}", svg)
 
 
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)

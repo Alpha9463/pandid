@@ -22,12 +22,6 @@ and macOS for every supported Python. A dependency that loads a system library
 at import time installs cleanly and then fails on the first export. Read the
 `pandid/render/export.py` docstring before changing that dependency list.
 
-Optionally install the commit hooks, which mirror the CI lint gates:
-
-```bash
-pip install pre-commit && pre-commit install
-```
-
 ## The gates
 
 CI (`.github/workflows/ci.yml`) runs these checks:
@@ -123,9 +117,7 @@ rewriting shared branch history after review begins.
 Geometry separates *intent* (`Pin`, written by `pin()`) from *result* (`Frame`,
 written by the layout engine), which is what makes `layout()` idempotent.
 
-`scripts/route_bench.py` times `layout()` and `route()` over the examples, which
-is where a geometry change shows up as runtime. Section 1 covers the symbol
-scripts.
+Section 1 covers the symbol scripts.
 
 ---
 
@@ -304,29 +296,12 @@ nozzles that do own a face, and equipment nozzles are never faceless.
 
 ## 3. Goldens: a changed golden means changed rendering
 
-`tests/golden/*.svg` are five representative committed SVG fixtures.
-`tests/test_golden.py` renders and compares those scenarios. The fixtures are
-source, not build output, which is why `.gitignore`'s blanket `*.svg` rule
-carries a `!tests/golden/*.svg` negation.
-
-The comparison uses `normalize` in `tests/_svg_compare.py` to sort `<defs>`
-and remove fenced renderer provenance. Geometry, visible labels and title-block
-fields compare verbatim.
-
-After an intentional rendering change:
-
-```bash
-python scripts/gallery.py
-PANDID_UPDATE_GOLDEN=1 python -m pytest tests/test_golden.py -q
-```
-
-(on Windows PowerShell: `python scripts/gallery.py; $env:PANDID_UPDATE_GOLDEN=1; python -m pytest tests/test_golden.py -q`)
-
-Then inspect `git diff tests/golden/ docs/gallery/` before committing. Explain
-every drawing change in the commit or PR description.
-
-`tests/golden/README.md` describes fixture selection and regeneration. Read it
-before changing a golden scenario.
+`tests/test_golden.py` renders five representative sheets and compares each
+with its committed `docs/gallery/<sheet>.svg`, apart from the fenced
+provenance, which names the package version. After an intentional rendering
+change, regenerate the gallery with `python scripts/gallery.py`, inspect
+`git diff docs/gallery/`, and explain every drawing change in the commit or PR
+description.
 
 ## 4. Port geometry goes through `pandid/portgeom.py`
 
@@ -350,9 +325,9 @@ them by `scripts/gallery.py`, as `docs/gallery/README.md` describes:
 python scripts/gallery.py
 ```
 
-Regenerate and review gallery images when an example or rendering change affects
-them. If you add an example, run that command and commit its two files in the
-same PR, add a section for it to
+Regenerate and review the gallery when an example or rendering change affects
+it. If you add an example, run that command and commit its SVG in the same PR,
+add a section for it to
 `docs/gallery/README.md`, and consider adding the scenario to
 `tests/test_golden.py`.
 

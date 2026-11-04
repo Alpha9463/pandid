@@ -20,7 +20,7 @@ from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import fmt, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
-                               _LABEL_CODES, _RENDER_CODES,
+                               _FIT_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
@@ -302,9 +302,6 @@ APPROXIMATED = "drawio-approximated"
 
 #: Warning code for a crossing the sheet hops and the export draws flat.
 HOP_DROPPED = "drawio-hop-dropped"
-
-# Codes this backend puts on fs.warnings.
-_EXPORT_CODES = (*_RENDER_CODES, *_LABEL_CODES, APPROXIMATED, HOP_DROPPED)
 
 
 _BALLOON_FILL = "#ffffff"
@@ -746,10 +743,11 @@ class DrawioRenderer:
                connections: "str | None" = None,
                jump_direction: str = "vertical",
                crossing_style: str = "gap",
-               show_stream_table: "bool | str" = False, **opts) -> str:
+               show_stream_table: "bool | str" = False) -> str:
         """Render the flowsheet to a draw.io document.
 
-        Replace this backend's earlier findings on ``fs.warnings``.
+        Add the render's findings to ``fs.warnings``, replacing the fit
+        findings there.
 
         Parameters
         ----------
@@ -769,8 +767,6 @@ class DrawioRenderer:
             ``"gap"``, ``"arc"`` or ``"plain"``.
         show_stream_table : bool or str, default=False
             ``True`` docks the table; ``"sheet"`` gives it a sheet.
-        **opts
-            Refused, including ``debug``.
 
         Returns
         -------
@@ -782,18 +778,11 @@ class DrawioRenderer:
         ValueError
             For a bad argument, too small a page or an unframed unit.
         """
-        from pandid.render.svg import (
-            _page, _resolve_sheet, check_render_arguments,
-            reject_unknown_options, wants_table_sheet)
+        from pandid.render.svg import _page, _resolve_sheet, wants_table_sheet
 
-        reject_unknown_options("DrawioRenderer.render()", opts)
         arrows = draws_arrowheads(diagram)
         self._findings = []
         self._loose_label = False
-        check_render_arguments(
-            fs, show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, crossing_style=crossing_style)
         table_sheet = wants_table_sheet(show_stream_table)
         if table_sheet and border is None:
             border = "zone"
@@ -860,7 +849,8 @@ class DrawioRenderer:
     def _document(self, fs, sheet, frame, body: list[str]) -> str:
         """Return the draw.io file around a sheet's cells.
 
-        Replace this backend's findings on ``fs.warnings``.
+        Add this backend's findings to ``fs.warnings``, replacing the fit
+        findings there.
 
         Parameters
         ----------
@@ -889,8 +879,9 @@ class DrawioRenderer:
                  f'pageWidth="{fmt(page_w, 2)}" pageHeight="{fmt(page_h, 2)}"')
         # A page id stable across exports.
         page = hashlib.sha256(fs.name.encode("utf-8")).hexdigest()[:16]
+        # Replace validate's fit findings with the render's.
         fs.warnings = [w for w in fs.warnings
-                       if getattr(w, "code", "") not in _EXPORT_CODES] + self._findings
+                       if getattr(w, "code", "") not in _FIT_CODES] + self._findings
         return "\n".join([
             '<?xml version="1.0" encoding="UTF-8"?>',
             f'<mxfile host="pandid" agent={_attr(generator())} type="device">',
@@ -1706,6 +1697,7 @@ class DrawioRenderer:
                           col_keys=[_ALIGN_KEY.get(align[c] if c < len(align) else "c",
                                                    "align=center;")
                                     for c in range(len(col_w))])
+        F.check_annotation_fit(obj, lambda *cell: self._findings.append(fit_issue(*cell)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar rows, at the sheet's column widths. The first

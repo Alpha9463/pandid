@@ -115,6 +115,12 @@ def test_a_tee_carries_no_tag():
     assert units.Tee("T-1").tag == ""
 
 
+def test_a_tee_refuses_a_label_position():
+    """Check that a tee, which has no tag, refuses ``label_pos=``."""
+    with pytest.raises(TypeError, match="label_pos"):
+        units.Tee("T-1", label_pos="top")
+
+
 def test_tees_share_one_name_and_are_told_apart_by_the_flowsheet():
     fs = Flowsheet("t")
     tees = [fs.add(units.Tee()) for _ in range(3)]

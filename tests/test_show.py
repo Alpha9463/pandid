@@ -161,6 +161,18 @@ def test_macos_with_a_gui_session_can_open_tkinter(monkeypatch):
     assert calls == ["withdraw", "update_idletasks", "destroy"]
 
 
+def test_a_tk_that_cannot_start_is_reported_as_no_display(monkeypatch):
+    """Report the error Tk raises when it cannot open a root window."""
+
+    def refuse() -> None:
+        """Raise as Tk does when it finds no usable ``tk.tcl``."""
+        raise RuntimeError("no usable tk.tcl")
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "tkinter", SimpleNamespace(Tk=refuse, TclError=RuntimeError))
+    assert P._no_display() == "no display (no usable tk.tcl)"
+
+
 # --- The temporary file -------------------------------------------------------
 
 

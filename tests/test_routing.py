@@ -2,6 +2,8 @@
 
 import heapq
 import re
+import warnings
+from collections.abc import Callable
 from types import SimpleNamespace
 from typing import cast
 
@@ -43,7 +45,9 @@ def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(ca
     graph = VisibilityGraph(fs)
     assert (graph.port_projs[("F", "outlet")] not in graph.nodes) is hidden
 
-    fs.route(DefaultRouter(recover_exits=recover))
+    with pytest.warns(DeprecationWarning, match="recover_exits"):
+        router = DefaultRouter(recover_exits=recover)
+    fs.route(router)
 
     assert stream.route is not None and stream.route.used_fallback is blocked
     assert feed.frame is not None and product.frame is not None and blocker.frame is not None
@@ -53,6 +57,32 @@ def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(ca
         corner,
     ]
     assert any(issue.code == "route-crosses-unit" for issue in fs.validate()) is blocked
+
+
+def test_passing_recover_exits_is_deprecated(same_file: Callable[[str], str]) -> None:
+    """Check that ``recover_exits=`` warns at the caller's line and is still kept."""
+    with pytest.warns(DeprecationWarning, match="recover_exits") as caught:
+        router = DefaultRouter(recover_exits=False)
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+    assert router.recover_exits is False
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        assert DefaultRouter().recover_exits is True
+
+
+def test_the_router_protocol_is_deprecated(same_file: Callable[[str], str]) -> None:
+    """Check that ``routing.Router`` warns at the caller's line and still gives the protocol."""
+    import pandid.routing as routing
+
+    with pytest.warns(DeprecationWarning, match=r"pandid\.routing\.Router") as imported:
+        from pandid.routing import Router
+    with pytest.warns(DeprecationWarning, match=r"pandid\.routing\.Router") as read:
+        assert routing.Router is Router
+    assert len(read) == 1
+    assert {same_file(w.filename) for w in [*imported, *read]} == {same_file(__file__)}
+    assert "route" in vars(Router)
+    with pytest.raises(AttributeError, match="no attribute 'Rooter'"):
+        getattr(routing, "Rooter")
 
 
 def test_rect_intersection():

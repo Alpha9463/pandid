@@ -99,7 +99,7 @@ def stream_path(stream: "Stream") -> list[Point]:
     from pandid.portgeom import port_point
 
     src_u, dst_u = stream.source.owner, stream.dest.owner
-    if src_u is None or dst_u is None or src_u.frame is None or dst_u.frame is None:
+    if src_u.frame is None or dst_u.frame is None:
         return []
     mid = list(stream.route.waypoints) if (stream.route and stream.route.waypoints) else []
     return ([port_point(src_u, src_u.frame, stream.source.name)] + mid
@@ -123,8 +123,7 @@ def logical_stream_path(stream: "Stream") -> list[Point]:
     """
     segments = stream._logical_segments or [stream]
     root = stream._logical_root or stream
-    owner = root.source.owner
-    fs = owner.flowsheet if owner is not None else None
+    fs = root.source.owner.flowsheet
     points: list[Point] = []
     for index, segment in enumerate(segments):
         physical = stream_path(segment)

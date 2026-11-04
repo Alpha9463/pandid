@@ -63,7 +63,6 @@ packages = ["pandid"]        # ships pandid/py.typed with it, so installers see 
 [tool.hatch.build.targets.sdist]
 exclude = [
     "tests",
-    "tests/golden/*.svg",
     # Never redistributable.
     "standards",              # purchased BSI/ISO standards (PDF)
     "professional_examples",  # third-party reference drawings (PDF)

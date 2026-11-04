@@ -239,7 +239,7 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
         unit = incoming.dest.owner
         station = next((assembly.station for assembly in fs._station_assemblies
                         if assembly.run is root and assembly.station.inlet is incoming.dest), None)
-        if station is None and (unit is None or unit.kind not in _INLINE_KINDS):
+        if station is None and unit.kind not in _INLINE_KINDS:
             raise ValueError("logical run does not reach its destination through inline devices")
         outlet = station.outlet if station is not None else unit.ports.get("outlet")
         following = outlet.stream if outlet is not None else None
