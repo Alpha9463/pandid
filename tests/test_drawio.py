@@ -2590,6 +2590,17 @@ def test_a_paged_drawing_is_fitted_onto_its_paper():
         assert -1 <= float(geo.get("y")) <= sheet.height
 
 
+def test_dock_names_the_missing_callback_rather_than_crashing_blind():
+    """Report a missing overflow callback when docking needs it."""
+    from pandid.render import furniture as F
+    from pandid.render.svg import _page
+
+    sheet = _page("A4")
+    huge = object()
+    with pytest.raises(TypeError, match="too_small"):
+        F.dock([(huge, "top-left", 10_000.0, 10_000.0)], (0.0, 0.0, 100.0, 100.0), sheet=sheet)
+
+
 def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
     """Match zone-border divisions to the SVG frame."""
     from pandid.render import furniture as F

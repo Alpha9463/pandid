@@ -3199,13 +3199,20 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
     ts_w, ts_h = F.measure_title_strip(block)
     items = [(TITLE, "bottom-right", ts_w, ts_h)]
     inner = (0.0, 0.0, table.w, table.h)
-    placed, frame, free = F.dock(items, inner, sheet=sheet)
-    if sheet is not None:
+    if sheet is None:
+        placed, frame, free = F.dock(items, inner)
+    else:
+        page = sheet
+        placed, frame, free = F.dock(
+            items, inner, sheet=page,
+            too_small=lambda need_w, need_h, culprit: _too_small(
+                page, need_w, need_h,
+                _furniture_name(culprit) if culprit else ""))
         assert free is not None
         _fx, _fy, fw, fh = free
         if table.w > fw or table.h > fh:
-            raise _too_small(sheet, sheet.width - fw + table.w,
-                             sheet.height - fh + table.h, "the stream table")
+            raise _too_small(page, page.width - fw + table.w,
+                             page.height - fh + table.h, "the stream table")
     _obj, sx, sy, sw, sh = placed[0]
     # Centre the block stack across the region a fixed page leaves.
     left, top = (0.0, 0.0) if free is None else (free[0] + (free[2] - table.w) / 2, free[1])
@@ -3300,7 +3307,14 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
     # The frame sits where a border would.
     inset = F.OUTER_MARGIN + F.ZONE_BAND
     if items:
-        placed, frame, free = F.dock(items, bounds, sheet=sheet)
+        if sheet is None:
+            placed, frame, free = F.dock(items, bounds)
+        else:
+            page = sheet
+            placed, frame, free = F.dock(
+                items, bounds, sheet=page,
+                too_small=lambda need_w, need_h, culprit: _too_small(
+                    page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
         return DiagramPlan(placed, block, bounds, frame,
                            None if free is None else _fitted(bounds, free))
     if sheet is None:
