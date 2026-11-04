@@ -223,31 +223,12 @@ def _best(unit: "Unit", frame, port_name: str, menu: list[str],
         if tuple(round(v, 3) for v in point) in taken:
             continue
         normal = face_point(unit, frame, landed)[1]
+        # Cost the Manhattan distance, plus a penalty for facing away.
+        dx, dy = target[0] - anchor[0], target[1] - anchor[1]
+        facing = dx * normal[0] + dy * normal[1] >= 0.0
+        cost = abs(dx) + abs(dy) + (0.0 if facing else 2.0 * MIN_ESCAPE)
         # Order by cost, then aim, then symbol preference.
         aim = (target[0] - centre[0]) * normal[0] + (target[1] - centre[1]) * normal[1]
-        scored.append((_cost(anchor, normal, target), -aim, rank, face))
+        scored.append((cost, -aim, rank, face))
     frame.port_faces.pop(port_name, None)
     return min(scored)[-1] if scored else None
-
-
-def _cost(anchor: tuple[float, float], normal: tuple[float, float],
-          target: tuple[float, float]) -> float:
-    """Return the Manhattan distance, plus a penalty for facing away.
-
-    Parameters
-    ----------
-    anchor : tuple[float, float]
-        Nozzle anchor.
-    normal : tuple[float, float]
-        Outward face normal.
-    target : tuple[float, float]
-        Point the port should face.
-
-    Returns
-    -------
-    float
-        Cost of the face.
-    """
-    (ax, ay), (nx, ny), (tx, ty) = anchor, normal, target
-    reach = (tx - ax) * nx + (ty - ay) * ny
-    return abs(tx - ax) + abs(ty - ay) + (0.0 if reach >= 0.0 else 2.0 * MIN_ESCAPE)

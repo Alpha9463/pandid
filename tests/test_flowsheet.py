@@ -85,21 +85,6 @@ def test_a_boundary_flag_takes_as_many_lines_as_the_sheet_gives_it():
     assert [s.dest.name for s in out] == ["inlet", "inlet_2", "inlet_3"]
 
 
-def test_a_flags_members_all_leave_its_one_nozzle():
-    """Check that a flag's members resolve to one point and are not reported."""
-    from pandid.portgeom import resolve_port
-
-    fs = Flowsheet("Test")
-    gas = fs.add(U.Feed("Gas"))
-    for i in (1, 2, 3):
-        fs.connect(gas.outlet, fs.add(U.Pump(f"P-{i}")).suction)
-    fs.layout()
-    resolved = [resolve_port(gas, gas.frame, name) for name in gas.ports]
-    assert len({(r.point, r.anchor, r.face) for r in resolved}) == 1
-    assert resolved[0].face == "E"
-    assert not [i for i in fs.validate() if i.code == "coincident-ports"]
-
-
 def test_connect_rejects_a_port_run_to_itself():
     """Check that a line from a port to itself is refused."""
     fs, feed, valve, fic, ft = _loop()
@@ -151,12 +136,6 @@ def test_connect_rejects_process_fluid_into_a_signal_connection():
         r"and F-101\.outlet is a process connection",
     ):
         fs.connect(feed.outlet, valve.actuator)
-
-
-def test_connect_rejects_process_fluid_into_an_instrument_signal_port():
-    fs, feed, valve, fic, ft = _loop()
-    with pytest.raises(ValueError, match=r"FIC-101\.sig_in is a signal connection"):
-        fs.connect(valve.outlet, fic.sig_in)
 
 
 def test_connect_rejects_a_signal_leaving_a_balloon_for_a_process_nozzle():

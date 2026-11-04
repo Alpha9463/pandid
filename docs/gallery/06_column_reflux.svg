@@ -92,29 +92,29 @@
     <path d="M 771.4754098360656,552.0 L 771.4754098360656,645.0 L 900.0,645.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 400.0,367.8 L 875.0,367.8 L 875.0,430.0 L 900.0,430.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 400.0,399.0 L 865.0,399.0 L 865.0,500.0 L 900.0,500.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <rect x="210.8" y="423.7" width="18.4" height="13.0" fill="white" />
+    <rect x="210.9" y="423.7" width="18.2" height="13.0" fill="white" />
     <text x="220.0" y="430.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
-    <rect x="460.8" y="38.5" width="18.4" height="13.0" fill="white" />
+    <rect x="460.9" y="38.5" width="18.2" height="13.0" fill="white" />
     <text x="470.0" y="45.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
-    <rect x="643.5" y="128.8" width="13.0" height="18.4" fill="white" />
+    <rect x="643.5" y="128.9" width="13.0" height="18.2" fill="white" />
     <text x="650.0" y="138.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 650.0, 138.0)">S3</text>
-    <rect x="780.7" y="118.5" width="18.4" height="13.0" fill="white" />
+    <rect x="780.7" y="118.5" width="18.2" height="13.0" fill="white" />
     <text x="789.9" y="125.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
-    <rect x="701.2" y="216.8" width="13.0" height="18.4" fill="white" />
+    <rect x="701.2" y="216.9" width="13.0" height="18.2" fill="white" />
     <text x="707.7" y="226.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 707.7, 226.0)">S5</text>
-    <rect x="804.9" y="333.5" width="18.4" height="13.0" fill="white" />
+    <rect x="805.0" y="333.5" width="18.2" height="13.0" fill="white" />
     <text x="814.1" y="340.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
-    <rect x="544.9" y="288.5" width="18.4" height="13.0" fill="white" />
+    <rect x="545.0" y="288.5" width="18.2" height="13.0" fill="white" />
     <text x="554.1" y="295.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
-    <rect x="525.8" y="574.5" width="18.4" height="13.0" fill="white" />
+    <rect x="525.9" y="574.5" width="18.2" height="13.0" fill="white" />
     <text x="535.0" y="581.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
-    <rect x="562.8" y="428.5" width="18.4" height="13.0" fill="white" />
+    <rect x="562.9" y="428.5" width="18.2" height="13.0" fill="white" />
     <text x="572.0" y="435.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
-    <rect x="823.4" y="638.5" width="24.6" height="13.0" fill="white" />
+    <rect x="823.8" y="638.5" width="23.8" height="13.0" fill="white" />
     <text x="835.7" y="645.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S10</text>
-    <rect x="625.2" y="361.3" width="24.6" height="13.0" fill="white" />
+    <rect x="625.6" y="361.3" width="23.8" height="13.0" fill="white" />
     <text x="637.5" y="367.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S11</text>
-    <rect x="620.2" y="392.5" width="24.6" height="13.0" fill="white" />
+    <rect x="620.6" y="392.5" width="23.8" height="13.0" fill="white" />
     <text x="632.5" y="399.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S12</text>
   </g>
   <g id="unit_labels">

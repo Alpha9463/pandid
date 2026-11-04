@@ -283,8 +283,8 @@ registered `(kind, variant)`, not just the ones the examples use:
 That last one is what `Symbol.stretchable` answers. A symbol that may be
 reshaped fills the box, and its ports map onto it linearly. One that may not,
 an instrument balloon being a circle because ISA-5.1 says a circle, keeps its
-aspect and is centred, and `pandid.portgeom.ink_box` is what keeps its ports on
-the drawing rather than out in the whitespace beside it. The vendored symbols
+aspect and is centred, and `pandid.portgeom` resolves its ports against the
+drawing rather than the whitespace beside it. The vendored symbols
 take the answer from the stencil's own `aspect` attribute, as section 1 above
 describes.
 
