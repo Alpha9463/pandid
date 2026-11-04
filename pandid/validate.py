@@ -597,6 +597,37 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"{'is' if piped == 1 else 'are'} piped, so the sheet asserts "
                 f"{n} connections and draws {piped}. {cure}"))
 
+    # --- material fed to one side of an exchanger and drawn from the other ---
+    # A side is a <side>_in inlet and a <side>_out outlet.
+    for u in fs.units:
+        sides = [(name[:-3], port, u.ports[name[:-3] + "_out"])
+                 for name, port in u.ports.items()
+                 if name.endswith("_in") and port.direction == "inlet"
+                 and port.role != "signal" and name[:-3] + "_out" in u.ports
+                 and u.ports[name[:-3] + "_out"].direction == "outlet"]
+        if len(sides) != 2:
+            continue
+        for (a, a_in, a_out), (b, b_in, b_out) in (sides, sides[::-1]):
+            if (a_in.stream is None or a_out.stream is not None
+                    or b_out.stream is None or b_in.stream is not None):
+                continue
+            # Name the far ends of the lines as connect() was given them.
+            entering = a_in.stream._logical_root or a_in.stream
+            leaving = b_out.stream
+            # Name a pool member by its pool, as connect() was given it.
+            source, dest = (f"{p.owner.name}.{p.owner._pool_of(p.name) or p.name}"
+                            for p in (entering.source, leaving._logical_to or leaving.dest))
+            warnings.append(Issue(
+                "warning", "exchanger-sides-crossed",
+                f"{u.name} is fed at {a_in.name} and drained at {b_out.name}, with "
+                f"nothing on {a_out.name} or {b_in.name}, so the material goes in on "
+                f"the {a} side and comes out on the {b} side. Keep it on one side, "
+                f"with the other arguments of the connect() it replaces: "
+                f"fs.connect({u.name}.{a_out.name}, {dest}) in "
+                f"place of the one from {u.name}.{b_out.name}, or "
+                f"fs.connect({source}, {u.name}.{b_in.name}) "
+                f"in place of the one to {u.name}.{a_in.name}"))
+
     # --- a counted number landing on a name already taken ---
     # Only names the counter chose are reported.
     counted: dict[str, list] = {}
