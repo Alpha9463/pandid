@@ -23,12 +23,10 @@ def settled_gallery() -> dict[str, tuple[Flowsheet, dict]]:
     -----
     Copy a case with ``copy_settled_case`` before rendering or mutating it.
     """
-    cases = {}
-    for stem in gallery.sheets():
-        fs, kwargs = gallery.flowsheet(stem)
+    cases = gallery.captures()
+    for fs, _kwargs in cases.values():
         fs.layout()
         fs.route()
-        cases[stem] = fs, kwargs
     return cases
 
 
