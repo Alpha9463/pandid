@@ -119,26 +119,6 @@ def spread(index: int, count: int, along: float, pitch: float,
     return first + span * index / (count - 1)
 
 
-def walled_faces(sym: "Symbol", role: str) -> list[str]:
-    """Return the faces a role may use whose band has length.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol to read.
-    role : str
-        Port role, such as ``"inlet"``.
-
-    Returns
-    -------
-    list[str]
-        Face names.
-    """
-    return [face for face, band in ((f, sym.bands.get(f))
-                                    for f in sym.port_faces.get(role, {}))
-            if band is None or band[0] < band[1]]
-
-
 def bandless_face(who: str, face: str, at: float, members: "list[str]",
                   sym: "Symbol") -> ValueError:
     """Return the error for several nozzles on a one-point face.
@@ -165,7 +145,9 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     """
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
-    menus = [walled_faces(sym, "inlet" if m.startswith("in_") else "outlet")
+    # Each member's faces whose band has length.
+    menus = [[f for f in sym.port_faces.get("inlet" if m.startswith("in_") else "outlet", {})
+              if (band := sym.bands.get(f)) is None or band[0] < band[1]]
              for m in members]
     offered = [f for f in menus[0] if all(f in menu for menu in menus)]
     cure = (
@@ -1637,50 +1619,6 @@ class OverlayPart:
 _STROKE = re.compile(r'stroke-width="([\d.]+)"')
 
 
-def _at_part_scale(svg: str, scale: float) -> str:
-    """Return ``svg`` with every line weight divided by ``scale``.
-
-    Parameters
-    ----------
-    svg : str
-        Part artwork.
-    scale : float
-        Scale the part is drawn at.
-
-    Returns
-    -------
-    str
-        Artwork with compensated stroke widths.
-    """
-    if math.isclose(scale, 1.0, rel_tol=1e-9):
-        return svg
-    return _STROKE.sub(
-        lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
-
-
-def _shifted_bands(body: Symbol, ox: float, oy: float
-                   ) -> "dict[str, tuple[float, float]]":
-    """Return ``body.bands`` moved by the body's offset ``(ox, oy)``.
-
-    Parameters
-    ----------
-    body : Symbol
-        Body being composed.
-    ox, oy : float
-        Offset of the body in the composed box.
-
-    Returns
-    -------
-    dict[str, tuple[float, float]]
-        Face to ``(lo, hi)`` along it.
-    """
-    if (ox, oy) == (0.0, 0.0):
-        return dict(body.bands)
-    return {face: (lo + (oy if face in ("W", "E") else ox),
-                   hi + (oy if face in ("W", "E") else ox))
-            for face, (lo, hi) in body.bands.items()}
-
-
 def _shifted_series(series: PortSeries, body: Symbol, ox: float, oy: float,
                     width: float, height: float) -> PortSeries:
     """Return ``series`` moved and rescaled onto the composed box.
@@ -1774,10 +1712,14 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         # A mirrored part starts at its rectangle's right edge.
         left = rx + ox + (sx * part.width if mirror else 0.0)
         # Compensate strokes by the geometric mean of the two scales.
+        scale = math.sqrt(abs(sx * sy))
+        if not math.isclose(scale, 1.0, rel_tol=1e-9):
+            contents = _STROKE.sub(
+                lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"',
+                contents)
         art.append(
             f'<g transform="translate({left:g},{ry + oy:g}) '
-            f'scale({-sx if mirror else sx:g},{sy:g})">'
-            f'{_at_part_scale(contents, math.sqrt(abs(sx * sy)))}</g>'
+            f'scale({-sx if mirror else sx:g},{sy:g})">{contents}</g>'
         )
 
     def shift(xy: "tuple[float, float]") -> "tuple[float, float]":
@@ -1833,7 +1775,9 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         faceless_ports=body.faceless_ports,
         port_series=tuple(_shifted_series(s, body, ox, oy, width, height)
                           for s in body.port_series),
-        bands=_shifted_bands(body, ox, oy),
+        bands={face: (lo + (oy if face in ("W", "E") else ox),
+                      hi + (oy if face in ("W", "E") else ox))
+               for face, (lo, hi) in body.bands.items()},
         label_pos=body.label_pos,
         # One definition per composition, with an id stable across
         # processes.
@@ -2196,35 +2140,12 @@ _FEEDER_Z = f'<path d="M 37.3 30 L 2.7 30 L 37.3 10 L 2.7 10" {_INK}/>'
 
 # Item 19.2 X8067: a rotary valve rotor end-on, a hub and six spokes.
 _FEEDER_HUB_R = 3.0
-_FEEDER_ROTOR_ANGLES = (0, 60, 120, 180, 240, 300)
-
-
-def _feeder_rotor(cx: float, cy: float, hub_r: float, rim_r: float) -> str:
-    """Return a hub circle and spokes from the hub to the rim.
-
-    Parameters
-    ----------
-    cx, cy : float
-        Centre.
-    hub_r, rim_r : float
-        Hub and rim radii.
-
-    Returns
-    -------
-    str
-        SVG elements.
-    """
-    spokes = "".join(
-        f'<line x1="{cx + hub_r * math.cos(math.radians(a)):g}" '
-        f'y1="{cy + hub_r * math.sin(math.radians(a)):g}" '
-        f'x2="{cx + rim_r * math.cos(math.radians(a)):g}" '
-        f'y2="{cy + rim_r * math.sin(math.radians(a)):g}" {_INK}/>'
-        for a in _FEEDER_ROTOR_ANGLES
-    )
-    return f'<circle cx="{cx:g}" cy="{cy:g}" r="{hub_r:g}" {_INK}/>' + spokes
-
-
-_FEEDER_ROTOR_MARK = _feeder_rotor(20.0, 20.0, _FEEDER_HUB_R, 20.0)
+_FEEDER_ROTOR_MARK = f'<circle cx="20" cy="20" r="{_FEEDER_HUB_R:g}" {_INK}/>' + "".join(
+    f'<line x1="{20.0 + _FEEDER_HUB_R * math.cos(math.radians(a)):g}" '
+    f'y1="{20.0 + _FEEDER_HUB_R * math.sin(math.radians(a)):g}" '
+    f'x2="{20.0 + 20.0 * math.cos(math.radians(a)):g}" '
+    f'y2="{20.0 + 20.0 * math.sin(math.radians(a)):g}" {_INK}/>'
+    for a in range(0, 360, 60))
 
 
 # ISO item 19.3 C0074, the rotary table feeder: a table, a shaft and a
