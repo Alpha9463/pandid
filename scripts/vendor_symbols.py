@@ -1089,7 +1089,7 @@ def render() -> str:
         "",
         "",
         "def register_vendored(registry):",
-        '    """Register the vendored symbols, replacing same-key defaults.',
+        '    """Register the vendored symbols.',
         "",
         '    Parameters',
         '    ----------',
@@ -1131,8 +1131,6 @@ def render() -> str:
             sid = kind if variant == "default" else f"{kind}_{variant}"
             svg = f'<g id="sym_{sid}{suffix}">{inner}</g>'
             lines += [
-                f"    # draw.io {stencil}:{shape_name} (aspect={aspect}) -> {kind}/{variant}"
-                + (" [normally closed]" if suffix else ""),
                 f"    registry.{method}({kind!r}, Symbol(",
                 f"        svg={svg!r},",
                 f"        width={w}, height={h},",
