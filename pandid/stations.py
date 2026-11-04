@@ -192,22 +192,3 @@ def member_mirror(mirrored: bool, branch_north: bool) -> bool | str:
     if mirrored:
         return "xy" if branch_north else "x"
     return "y" if branch_north else False
-
-
-def station_number(control_tag: str) -> str:
-    """Return the control tag's number, or the whole tag if none.
-
-    Parameters
-    ----------
-    control_tag : str
-        Control valve's tag, such as ``"CV-303"``.
-
-    Returns
-    -------
-    str
-        Its number, such as ``"303"``, or the whole tag.
-    """
-    from pandid.units import split_tag
-
-    _, number = split_tag(control_tag)
-    return number or control_tag

@@ -235,8 +235,6 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
         return None
     if source_face in ("E", "W"):
         preferred = start[1]
-    elif dest_face in ("E", "W"):
-        preferred = end[1]
     elif lower == float("-inf"):
         preferred = upper
     elif upper == float("inf"):

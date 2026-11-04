@@ -332,27 +332,6 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     return (offset, span, sh <= dh) if offset < span else None
 
 
-def _crowded(heads: list[tuple[float, str]], floor: float
-             ) -> tuple[float, str, str] | None:
-    """Return the tightest adjacent pair over 1 px and under ``floor``.
-
-    Parameters
-    ----------
-    heads : list[tuple[float, str]]
-        ``(position along the face, port name)`` for each arrowhead.
-    floor : float
-        Minimum pitch.
-
-    Returns
-    -------
-    tuple[float, str, str] or None
-        ``(pitch, port, port)`` of the tightest pair, or ``None``.
-    """
-    order = sorted(heads)
-    pairs = sorted((b[0] - a[0], a[1], b[1]) for a, b in zip(order, order[1:]))
-    return next((p for p in pairs if _TOL < p[0] < floor), None)
-
-
 def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     """Return the findings that need no layout, errors first.
 
@@ -882,7 +861,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 along = at.point[1] if at.face in ("E", "W") else at.point[0]
                 heads.setdefault(at.face, []).append((along, name))
             for face, on_face in heads.items():
-                tight = _crowded(on_face, MIN_NOZZLE_PITCH)
+                # Take the tightest adjacent pair over 1 px and under the pitch.
+                order = sorted(on_face)
+                pairs = sorted((b[0] - a[0], a[1], b[1]) for a, b in zip(order, order[1:]))
+                tight = next((p for p in pairs if _TOL < p[0] < MIN_NOZZLE_PITCH), None)
                 if tight is None:
                     continue
                 pitch, first, second = tight
