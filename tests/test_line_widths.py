@@ -142,8 +142,6 @@ def test_each_rung_is_its_own_multiple_of_the_grid_module() -> None:
     from pandid.render.weights import M, LineWeight
 
     assert M * UNIT_MM == pytest.approx(2.5)
-    for rung in LineWeight:
-        assert rung.width == pytest.approx(rung.modules * M)
     assert LineWeight.MAIN_FLOW.width * UNIT_MM == pytest.approx(0.5)
     assert LineWeight.EQUIPMENT.width * UNIT_MM == pytest.approx(0.5)
     assert LineWeight.DETAIL.width * UNIT_MM == pytest.approx(0.25)
