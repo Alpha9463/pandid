@@ -132,6 +132,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   body or tag blocks a balloon's nozzle so its line cannot be routed, `route()`
   turns the nozzle to a clear face unless `nozzle()` or a pin states it, and
   keeps that if no finding grows.
+- **A parallel bank draws without crossings (#458).** From four nozzles, a
+  `Mixer` or `Splitter` face grows to keep them 20 apart where the sheet draws
+  no worse for it, and the laterals from one face to a column of units turn on
+  lanes ordered so they do not cross.
 - **Automatic lines keep off units and arrowheads (#640, #661).** Where a
   sheet draws a line along a unit or across an arrowhead, `route()` tries
   routes clear of both, with each balloon that has no `face=` on a free

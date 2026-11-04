@@ -981,7 +981,7 @@ def test_a_default_mixer_is_not_a_finding():
 
 def test_overlapping_heads_are_worded_as_the_overlap_they_are():
     """Check that overlapping arrowheads are reported as an overlap, not a negative gap."""
-    fs, _ = _fed_mixer(n_inlets=4)
+    fs, _ = _fed_mixer(n_inlets=4, height=50)
     issues = _found(fs, "nozzles-crowded")
     assert len(issues) == 1
     assert "overlaps two 12px arrowheads by 0.3px" in issues[0].message

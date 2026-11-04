@@ -16,6 +16,7 @@ from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.stages import slot
 from pandid.portgeom import COMPASS, port_faces, resolve_port, unit_box
+from pandid.routing.visibility import MIN_ESCAPE
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -34,6 +35,8 @@ MARGIN = 50.0
 END_ROOM = 41.0
 #: How far a top or bottom nozzle wants its peer above or below it.
 LEAD = 40.0
+#: Least pitch of the lanes pipes run up or down a layer gap on.
+LANE_PITCH = 12.0
 #: Passes for ordering, swapping and straightening.
 SWEEPS = 12
 #: Widest band before the drawing folds.
@@ -297,8 +300,10 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     _order(layers, segs)
     _row_pins(layers)
     _rank(layers)
-    xs = _columns(layers, segs)
     _straighten(layers, segs)
+    xs = _columns(layers, segs, fs._lanes)
+    plain = _columns(layers, segs, False)
+    fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
     if not any(u.pin_ is not None and (u.pin_.x is not None or u.pin_.y is not None)
                for u in units):
         _fold(layers, segs, xs)
@@ -773,7 +778,8 @@ def _row_pins(layers: dict[int, list[_Node]]) -> None:
             layer[i] = n
 
 
-def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, float]:
+def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
+             widen: bool) -> dict[_Node, float]:
     """Return each node's left edge.
 
     Parameters
@@ -782,6 +788,8 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
         Stacks and dummies in each layer, in order.
     segs : list[_Seg]
         Pipe steps between adjacent layers.
+    widen : bool
+        Widen each gap for the lanes its laterals need.
 
     Returns
     -------
@@ -797,6 +805,8 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
     for s in segs:
         if s.link.room and s.lport is not None:
             room[s.left.layer] = max(room[s.left.layer], s.link.room + END_ROOM)
+    for k, lanes in (_lanes(segs) if widen else {}).items():
+        room[k] = max(room[k], 2 * MIN_ESCAPE + (lanes + 1) * LANE_PITCH)
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
         left[k] = x
@@ -815,6 +825,38 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
             slack = width[k] - n.w
             out[n] = left[k] + (slack if side == {1} else 0.0 if side == {-1} else slack / 2)
     return out
+
+
+def _lanes(segs: list[_Seg]) -> dict[int, int]:
+    """Return how many lanes each layer gap needs.
+
+    A pipe step between east and west nozzles at different heights runs
+    up or down its gap on a lane of its own, so a gap needs as many
+    lanes as such steps overlap at any one height.
+
+    Parameters
+    ----------
+    segs : list[_Seg]
+        Pipe steps between adjacent layers, with stacks set in height.
+
+    Returns
+    -------
+    dict[int, int]
+        Lanes needed, by the layer before the gap.
+    """
+    events: dict[int, list[tuple[float, int]]] = {}
+    for s in segs:
+        ends = []
+        for node, port in ((s.left, s.lport), (s.right, s.rport)):
+            if port is not None and _nozzle(port, node.faces.get(id(port)))[2] not in ("E", "W"):
+                break
+            ends.append(node.y + _offset(node, port)[1])
+        else:
+            if abs(ends[0] - ends[1]) > 1e-6:
+                # An end sorts before a start at the same height.
+                events.setdefault(s.left.layer, []).extend(
+                    ((min(ends), 1), (max(ends), -1)))
+    return {k: max(accumulate(step for _, step in sorted(e))) for k, e in events.items()}
 
 
 def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:

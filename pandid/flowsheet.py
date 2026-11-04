@@ -428,6 +428,41 @@ def _whole_number(value: Any, name: str) -> int:
     return int(value)
 
 
+def _copied(state: tuple) -> tuple:
+    """Return a :meth:`Flowsheet._state` with its frames, taps and routes
+    copied.
+
+    Parameters
+    ----------
+    state : tuple
+        What :meth:`Flowsheet._state` returned.
+
+    Returns
+    -------
+    tuple
+        The same state, sharing no frame, tap or route with it.
+    """
+    def geometry(g: "tuple | None") -> "tuple | None":
+        """Return geometry with its frames, taps and routes copied.
+
+        Parameters
+        ----------
+        g : tuple or None
+            What :meth:`Flowsheet._geometry` returned, or None.
+
+        Returns
+        -------
+        tuple or None
+            The copy, or None.
+        """
+        if g is None:
+            return None
+        frames, routes, converged = g
+        return ([(u, copy.deepcopy(f), copy.deepcopy(t)) for u, f, t in frames],
+                [(st, copy.deepcopy(r)) for st, r in routes], converged)
+
+    return (geometry(state[0]), geometry(state[1]), *state[2:])
+
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
 
@@ -546,6 +581,18 @@ class Flowsheet:
         self._unhung: tuple | None = None
         # Whether a layout engine is running, which routes without hanging.
         self._laying_out = False
+        # Whether layout widens gaps for lanes and the router lays
+        # crossing laterals on them, whether the last layout's lane gaps
+        # moved a unit, and whether route() has laid any lateral on one.
+        self._lanes = True
+        self._widened = False
+        self._relaned = False
+        # The sheet as drawn without grown faces or lanes where route() kept
+        # them, whether layout() has run on the sheet since, and whether
+        # route() is running.
+        self._plain_state: tuple | None = None
+        self._plain_stale = False
+        self._routing = False
         # Whether a balloon hung from a balloon keeps off the tapped line,
         # and whether any did since route() turned that on.
         self._keep_clear = False
@@ -2019,6 +2066,7 @@ class Flowsheet:
         """
         from pandid.layout import default_layout_engine
 
+        self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
         self._mounted_layout = self._exit_tight = False
         if engine is None:
@@ -2054,6 +2102,99 @@ class Flowsheet:
         could not route is turned to the cheapest clear face with which the
         routed sheet takes no tap off its line and grows no finding or
         clash.
+
+        Where a mixer's or splitter's face grows to hold its nozzles, or
+        laterals are laid on lanes, the sheet is also drawn as route() would
+        draw it without them, from its last such drawing: stock faces, no
+        lane gaps and no lanes, laid out again only where that drawing's
+        layout is stale. The grown faces and lanes are kept only if no
+        crossing, bend, fallback, finding, clash or tap off its line grows
+        by them; otherwise, and wherever lanes changed no route and no face
+        grew, the sheet is drawn without them.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.render.symbols import header_grows
+        from pandid.routing import DefaultRouter
+        from pandid.routing.lanes import _score
+
+        stale = self._layout_stale or any(u.frame is None for u in self.units)
+        # The sheet comes laid out as without grown faces or lane gaps.
+        plain_in = (not stale and not self._widened
+                    and not any(header_grows(u) for u in self.units))
+        held, held_stale = self._plain_state, self._plain_stale
+        self._plain_state, self._plain_stale, self._routing = None, False, True
+        try:
+            headers = [u for u in self.units if getattr(u, "_stock_face", False)]
+            for u in headers:
+                u._stock_face = False
+            if headers:
+                self._layout_stale = True
+            self._lanes, self._relaned = True, False
+            grown = [u for u in self.units if header_grows(u)]
+            start = self._state()
+            self._route_once(router)
+            laned = bool(grown) or self._relaned
+            if ((not (laned or self._widened) and held is None) or self._laying_out
+                    or not (router is None or type(router) is DefaultRouter)):
+                return
+            kept, judged = self._state(), _score(self)
+            # Draw the sheet without grown faces or lanes as route() would
+            # have from the last such drawing: routed again on its layout,
+            # or laid out again where that is stale or not yet drawn so.
+            self._put_state(start if held is None else held)
+            self._lanes = False
+            for u in grown:
+                u._stock_face = True
+            if stale or (held_stale if held is not None else not plain_in):
+                self.layout(self._engine)
+            self._route_once(router)
+            plain = _score(self)
+            if laned and not judged[0] - plain[0] and judged[1] <= plain[1]:
+                self._plain_state = self._state()
+                for u in grown:
+                    u._stock_face = False
+                self._put_state(kept)
+                self._lanes = True
+        finally:
+            self._routing = False
+
+    def _state(self) -> tuple:
+        """Return a copy of the geometry and the state laid out with it.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_state`.
+        """
+        return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
+                        self._mounted_layout, self._widened))
+
+    def _put_state(self, state: tuple) -> None:
+        """Put back a copy of what :meth:`_state` returned.
+
+        Parameters
+        ----------
+        state : tuple
+            What :meth:`_state` returned.
+        """
+        (geometry, self._unhung, self._free_faces, self._exit_tight,
+         self._mounted_layout, self._widened) = _copied(state)
+        self._put_geometry(geometry, keep_manual=True)
+        self._layout_stale = False
+
+    def _route_once(self, router=None) -> None:
+        """Lay out if needed, then route and place balloons once.
 
         Parameters
         ----------
@@ -2356,9 +2497,8 @@ class Flowsheet:
             found = model_issues(self, tabulates=tabulates_boundary_flows(diagram))
             self._raise_on_errors(found)
         # Lay out and route where the geometry is missing or stale.
-        if self._layout_stale or any(u.frame is None for u in self.units):
-            self.layout()
-        if self._route_stale or any(s.route is None for s in self.streams):
+        if (self._layout_stale or any(u.frame is None for u in self.units)
+                or self._route_stale or any(s.route is None for s in self.streams)):
             self.route()
         if check:
             found += geometry_issues(self, arrows=draws_arrowheads(diagram))
