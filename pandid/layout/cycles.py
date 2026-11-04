@@ -32,8 +32,6 @@ def break_cycles(fs: "Flowsheet") -> None:
     in_degree: dict["Unit", int] = {u: 0 for u in units}
 
     for s in process_streams(fs):
-        assert s.source.owner is not None
-        assert s.dest.owner is not None
         adj[s.source.owner].append(s)
         in_degree[s.dest.owner] += 1
             
@@ -64,7 +62,6 @@ def break_cycles(fs: "Flowsheet") -> None:
                 frames[-1] = (u, i + 1)
                 s = adj[u][i]
                 v = s.dest.owner
-                assert v is not None
                 if v in stack:
                     s._is_recycle = True
                 elif v not in visited:

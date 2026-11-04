@@ -104,7 +104,7 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
     ]
     fixed_peer = (
         resolve_port(owner, owner.frame, peer.name)
-        if owner is not None and owner.frame is not None
+        if owner.frame is not None
         and len(port_faces(owner, peer.name, owner.frame)) == 1
         else None
     )
@@ -180,7 +180,7 @@ def _reference(port: "Port") -> tuple[float, float] | None:
         return None
     peer = stream.dest if stream.source is port else stream.source
     owner = peer.owner
-    if owner is None or owner.frame is None:
+    if owner.frame is None:
         return None
     if len(port_faces(owner, peer.name, owner.frame)) == 1:
         return resolve_port(owner, owner.frame, peer.name).anchor

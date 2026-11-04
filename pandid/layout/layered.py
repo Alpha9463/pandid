@@ -151,7 +151,6 @@ def _face(port: Port | None) -> str | None:
     if port is None:
         return None
     unit = port.owner
-    assert unit is not None
     named = getattr(unit, "_port_faces", None) or {}
     if port.name in named:
         return str(named[port.name]).upper()
@@ -192,7 +191,6 @@ def _nozzle(port: Port, face: str | None = None) -> tuple[float, float, str]:
         Offset x, offset y and face.
     """
     unit = port.owner
-    assert unit is not None
     s = slot(unit)
     probe = Frame(x=-_shift(unit), y=0.0, w=s.w, h=s.h, orientation=s.orientation,
                   mirrored=s.mirrored, mirror_y=s.mirror_y,
@@ -218,7 +216,6 @@ def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
     """
     if port is None:
         return (node.w / 2, 0.0)
-    assert port.owner is not None
     px, py, _ = _nozzle(port, node.faces.get(id(port)))
     return (node.dx[port.owner] + px, node.dy[port.owner] + py)
 
@@ -245,7 +242,6 @@ def _around(node: _Node, port: Port | None, east: bool) -> float:
     """
     if port is None or not node.h:
         return 0.5
-    assert port.owner is not None
     _, _, face = _nozzle(port, node.faces.get(id(port)))
     x, y = _offset(node, port)
     lean = COMPASS[face][1] * (-1 if east else 1) * x / (100 * max(node.w, 1))
@@ -265,7 +261,7 @@ def _flag(port: Port | None) -> bool:
     bool
         True for a feed or product flag.
     """
-    return port is not None and port.owner is not None and port.owner.kind in ("feed", "product")
+    return port is not None and port.owner.kind in ("feed", "product")
 
 
 def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None:
