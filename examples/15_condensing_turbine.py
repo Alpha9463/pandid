@@ -37,12 +37,12 @@ from pandid import (
 def main():
     fs = Flowsheet("Condensing Turbine and Vacuum System")
 
-    hp_steam = fs.add(Feed("HP Steam", reference="PFD-700"))
+    hp_steam = fs.add(Feed("HP Steam", reference="P&ID-700"))
     s701 = fs.add(KnockoutDrum("S-701", description="HP Steam Separator"))
     gv701 = fs.add(Valve("GV-701", variant="globe",
                          description="MP Steam Isolation Valve"))
     t701 = fs.add(SteamTrap("T-701", description="HP Separator Drain Trap"))
-    condensate = fs.add(Product("Condensate Header", reference="PFD-800"))
+    condensate = fs.add(Product("Condensate Header", reference="P&ID-800"))
     tv701 = fs.add(Valve("TV-701", variant="hydraulic", fail="closed",
                          description="Turbine Trip and Throttle Valve"))
     st701 = fs.add(Turbine("ST-701", description="Condensing Steam Turbine"))
@@ -55,14 +55,14 @@ def main():
 
     p701 = fs.add(Pump("P-701A/B", description="Condensate Pump"))
     e702 = fs.add(Heater("E-702", description="LP Feedwater Heater"))
-    mp_steam = fs.add(Feed("MP Steam", reference="PFD-700"))
+    mp_steam = fs.add(Feed("MP Steam", reference="P&ID-700"))
 
     level = fs.add_loop("L", 701)
     lv701 = fs.add(ControlValve(level.tag("LV"), fail="open",
                                 description="Receiver Level Control Valve"))
     xv701 = fs.add(Valve("XV-701", variant="butterfly_pneumatic", fail="closed",
                          description="Low-Level Trip Valve"))
-    deaerator = fs.add(Product("To Deaerator", reference="PFD-800"))
+    deaerator = fs.add(Product("To Deaerator", reference="P&ID-800"))
 
     fs.connect(hp_steam.outlet, s701.feed)
     fs.connect(s701.liquid, t701.inlet)
