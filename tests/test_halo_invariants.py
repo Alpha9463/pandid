@@ -362,6 +362,23 @@ def _codes_beside_a_pneumatic_line() -> "tuple[Flowsheet, dict]":
     return fs, {"diagram": "p&id", "connections": "flanged"}
 
 
+def _codes_beside_a_stacked_tag() -> "tuple[Flowsheet, dict]":
+    """Build a flanged sheet whose codes could leave a flange only for a tag stacked with NC."""
+    fs, kwargs = CORPUS["codes_beside_a_flange"]()
+    feed, valve, prod = fs.units[:3]
+    feed.pin(port="outlet", x=300, y=200)
+    valve.pin(port="inlet", x=380, y=140)
+    prod.pin(port="inlet", x=580, y=140)
+    closed = fs.add(
+        U.Valve("HV-2", variant="butterfly", normal_position="closed", label_pos="bottom")
+    ).pin(x=260, y=80)
+    other = fs.add(U.Feed("F2")).pin(port="outlet", x=100, y=90)
+    out = fs.add(U.Product("P2")).pin(port="inlet", x=500, y=90)
+    fs.connect(other.outlet, closed.inlet)
+    fs.connect(closed.outlet, out.inlet)
+    return fs, kwargs
+
+
 def _hatch_bars(fs) -> "list[tuple[float, float, float, float]]":
     """Return the box of every pneumatic hatch stroke on a sheet."""
     from pandid.render.svg import HATCH_ALONG, HATCH_ARM, pneumatic_marks, stream_polyline
@@ -386,6 +403,7 @@ CROWDED_CODES = {
     "another_balloon": _codes_beside_another_balloon,
     "a_closed_valve": _codes_beside_a_closed_valve,
     "a_pneumatic_line": _codes_beside_a_pneumatic_line,
+    "a_stacked_tag": _codes_beside_a_stacked_tag,
 }
 
 

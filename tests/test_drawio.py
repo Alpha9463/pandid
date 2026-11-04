@@ -1419,19 +1419,30 @@ def test_a_letter_code_is_exported_clear_of_a_flange_mark():
 
 
 @pytest.mark.parametrize(
-    "sheet", ["a_flange_and_a_line", "a_fixed_tag", "another_balloon", "a_pneumatic_line"]
+    "sheet",
+    [
+        "a_flange_and_a_line",
+        "a_fixed_tag",
+        "another_balloon",
+        "a_closed_valve",
+        "a_pneumatic_line",
+        "a_stacked_tag",
+    ],
 )
-def test_a_letter_code_by_a_flange_mark_is_exported_clear_of_every_line(sheet):
-    """Export a letter code by a flange mark clear of every line and hatch."""
+def test_a_letter_code_by_a_flange_mark_is_exported_clear_of_every_line_and_tag(sheet):
+    """Export a letter code by a flange mark clear of every line, hatch and tag label."""
     from pandid.render.svg import _ink
     from test_halo_invariants import CROWDED_CODES, _hatch_bars
 
     fs, kwargs = CROWDED_CODES[sheet]()
     codes, fit = _exported_codes(fs, kwargs)
-    lines = [fit.box(line.box) for line in _ink(fs, "vertical")]
-    lines += [fit.box(bar) for bar in _hatch_bars(fs)]
-    hit = [text for text, box in codes for line in lines if overlaps(box, line)]
-    assert not hit, f"letter codes exported over a line: {hit}"
+    _symbols, tags, _numbers = _drawn_boxes(
+        fs, kwargs, _drawio_cells_from_document(fs.to_drawio(**kwargs))
+    )
+    marks = [fit.box(line.box) for line in _ink(fs, "vertical")]
+    marks += [fit.box(bar) for bar in _hatch_bars(fs)] + list(tags.values())
+    hit = [text for text, box in codes for mark in marks if overlaps(box, mark)]
+    assert not hit, f"letter codes exported over a line or tag: {hit}"
 
 
 # ---------------------------------------------------------------------------

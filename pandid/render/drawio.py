@@ -27,6 +27,7 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
                                label_findings,
                                draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
+                               quadrant_labels,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
@@ -783,6 +784,8 @@ class DrawioRenderer:
         self.registry = registry or default_registry
         # Findings put on fs.warnings at the end of render().
         self._findings: list = []
+        # Whether a side label is laid out by draw.io off the sheet's plates.
+        self._loose_label = False
 
     # --------------------------------------------------- document
 
@@ -834,6 +837,7 @@ class DrawioRenderer:
         reject_unknown_options("DrawioRenderer.render()", opts)
         arrows = draws_arrowheads(diagram)
         self._findings = []
+        self._loose_label = False
         check_render_arguments(
             fs, show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, connections=connections,
@@ -862,7 +866,11 @@ class DrawioRenderer:
                                 crossing_style))
         body.extend(self._taps(fs, fit))
         body.extend(balloons)
-        for n, code in enumerate(drawn_codes(fs, joints, jump_direction, tags.plates)):
+        # shortcut: draw.io keeps main's codes on a sheet with a stacked or wrapped
+        # side label, whose box draw.io lays out; box those labels if that is common.
+        codes = (quadrant_labels(fs, jump_direction) if self._loose_label
+                 else drawn_codes(fs, joints, jump_direction, tags.plates))
+        for n, code in enumerate(codes):
             body.extend(_quadrant_cell(f"q{n}", code, fit))
 
         return self._document(fs, sheet, frame, body)
@@ -1159,6 +1167,8 @@ class DrawioRenderer:
             # A one-line tag sits on its halo; any other label keeps draw.io's spot.
             gx, gy = _SIDE_LABEL_GAP[side]
             offset = (fit.length(near[0]) - gx, fit.length(near[1]) - gy)
+        elif lines and side in _SIDE_LABEL_GAP:
+            self._loose_label = True
         # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]

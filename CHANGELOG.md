@@ -137,8 +137,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line and no finding or clash grows.
 - **A letter code beside a balloon keeps off flange marks (#624).** On a
   flanged P&ID, an alarm or other code written over a flange mark moves to a
-  spot clear of every mark, line, symbol and label, in SVG and draw.io; with
-  no such spot it stays where it was. Nothing else on the sheet moves.
+  spot clear of every mark, line, symbol and label, if there is one, and
+  nothing else on the sheet moves. draw.io leaves the codes in place on a
+  sheet where a tag is stacked with NC or fail letters, or wraps.
 - **A refused balloon placement changes nothing (#438).** `attach()` with a
   bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
   face no longer leaves the balloon on the sheet, and `add_instrument()`
