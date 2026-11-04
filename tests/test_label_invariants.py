@@ -63,7 +63,7 @@ def _short_run() -> "tuple[Flowsheet, dict]":
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
     feed.pin(port="outlet", x=100, y=100)
-    prod.pin(port="inlet", x=116, y=100)
+    prod.pin(port="inlet", x=114, y=100)
     fs.connect(feed.outlet, prod.inlet, service="P", sequence=1, spec="A")
     return fs, {}
 
