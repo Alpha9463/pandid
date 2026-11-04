@@ -1128,8 +1128,7 @@ class Flowsheet:
             self._invalidate_layout()
             return
         if (stream.kind != "material" or stream.draw_as_recycle
-                or stream.is_recycle or unit is None
-                or unit.kind not in _INLINE_KINDS):
+                or stream.is_recycle or unit.kind not in _INLINE_KINDS):
             raise ValueError("inline position requires a material stream entering an inline device")
         if stream.dest.name != "inlet" or stream.dest.stream is not stream:
             raise ValueError("inline position requires the device inlet stream")

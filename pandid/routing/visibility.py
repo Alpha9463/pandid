@@ -282,8 +282,6 @@ class VisibilityGraph:
 
         for stream in fs.streams:
             src, dst = stream.source, stream.dest
-            if src.owner is None or dst.owner is None:
-                continue
             s_key, d_key = (src.owner.name, src.name), (dst.owner.name, dst.name)
             if s_key not in self.port_projs or d_key not in self.port_projs:
                 continue

@@ -239,8 +239,7 @@ class DefaultRouter:
         Raises
         ------
         ValueError
-            If a frame is non-finite, a port has no owner, or a face is
-            unreachable.
+            If a frame is non-finite or a face is unreachable.
         RuntimeError
             If a path search exceeds its expansion budget.
 
@@ -296,13 +295,6 @@ class DefaultRouter:
 
             src_u = stream.source.owner
             dst_u = stream.dest.owner
-            if src_u is None or dst_u is None:
-                orphan = stream.source if src_u is None else stream.dest
-                raise ValueError(
-                    f"stream {stream.name!r} cannot be routed: port "
-                    f"{orphan.name!r} belongs to no unit."
-                )
-
             if src_u.frame is None or dst_u.frame is None:
                 unplaced = src_u if src_u.frame is None else dst_u
                 warnings.warn(
