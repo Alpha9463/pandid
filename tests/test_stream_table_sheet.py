@@ -746,6 +746,21 @@ def test_the_unpaged_sheet_is_the_paged_one_with_the_cutting_left_out():
 # --- a backend cannot swallow an argument it does not know -------------------
 
 
+def test_an_entry_point_refuses_a_keyword_it_does_not_take(tmp_path: Path) -> None:
+    """Verify that every entry point refuses a keyword it does not take."""
+    fs = _sheet(streams=3)
+    for call, args in (
+        (fs.to_svg, ()),
+        (fs.to_drawio, ()),
+        (fs.render, (tmp_path / "sheet.svg",)),
+        (fs.show, ()),
+    ):
+        with pytest.raises(TypeError, match="nonsense"):
+            cast(Any, call)(*args, nonsense=True)
+    with pytest.raises(TypeError, match="debug"):
+        cast(Any, fs.to_drawio)(debug=True)
+
+
 def test_a_backend_refuses_the_keywords_it_does_not_take():
     """Verify that a backend refuses the keywords it does not take."""
     fs = _sheet(streams=3)
