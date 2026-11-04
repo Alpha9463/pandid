@@ -41,9 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draw.io hatches both take their stroke from `pandid.render.svg.HATCH_ARM`.
 - **A missed attribute lookup on a unit no longer lists its ports (#574).**
   The port list is written only when the `AttributeError` is shown.
-- **`unit-overlap` says how to clear it (#434).** It names the call that moves
-  one of the units: `attach()` with `at=`/`face=` and `offset=` for a balloon,
-  keeping its `relation=` and `angle=`, or `pin()` for any other unit.
+- **`unit-overlap` says how to clear it (#434, #583).** It names the call that
+  moves one of the units: `attach()` with `at=`/`face=` and `offset=` for a
+  balloon, keeping its `relation=` and `angle=`, or `pin()` on only the axes the
+  unit is already pinned on, or on `x=` and `y=` for a unit with no pin.
 - **A controller with no anchor is drawn beyond the valve it drives (#443).**
   A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives one
   valve's `actuator` stands 100 out on its axis, or at the nearest clear

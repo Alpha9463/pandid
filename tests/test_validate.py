@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from pandid import Condenser, Flowsheet, Pin, units as U
-from pandid.portgeom import pinned_y, port_point
+from pandid.portgeom import pin_intent, pinned_y, port_point
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
 from test_symbol_invariants import _drawing
@@ -164,6 +164,106 @@ def test_unit_overlap_does_not_offer_a_grid_pin_to_an_attached_balloon():
     assert "call .attach(<the S1 stream>, at=..., offset=...) on FT-101" in said
     assert "call .pin(x=..., y=...) on FT-101" in said
     assert "col=..." not in said
+
+
+@pytest.mark.parametrize(
+    ("pinned", "call"),
+    [
+        ({"col": 2}, "call .pin(col=...) on P-101"),
+        ({"row": 1}, "call .pin(row=...) on P-101"),
+        ({"x": 400}, "call .pin(x=...) on P-101"),
+        ({"y": 300}, "call .pin(y=...) on P-101"),
+        ({"col": 2, "y": 300}, "call .pin(col=..., y=...) on P-101"),
+        ({"col": 2, "row": 1}, "call .pin(col=..., row=...) on P-101"),
+        ({"x": 400, "y": 300}, "call .pin(x=..., y=...) on P-101"),
+        ({}, "call .pin(x=..., y=...) on P-101"),
+    ],
+    ids=["col", "row", "x", "y", "col-y", "col-row", "x-y", "none"],
+)
+def test_unit_overlap_repins_only_the_axes_a_unit_pins(pinned: dict[str, Any], call: str):
+    """Check that the suggested pin() names only the axes already pinned."""
+    fs, fv, _ = _tapped_line()
+    pump = fs.add(U.Pump("P-101"))
+    if pinned:
+        pump.pin(**pinned)
+    fs.route()
+    assert fv.frame is not None and pump.frame is not None
+    pump.frame = replace(pump.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert said.endswith(f": {call}"), said
+
+
+def _balloon_on_valve(axis: str) -> tuple[Flowsheet, U.Valve, U.Instrument]:
+    """Build a transmitter pinned on one axis where the layout draws it on the valve."""
+    fs, fv, ft = _tapped_line()
+    assert fv.frame is not None and ft.host is not None
+    if axis == "x":
+        ft.attach(ft.host, offset=5).pin(x=fv.frame.x)
+    else:
+        ft.attach(ft.host, at=1.0).pin(y=fv.frame.y)
+    fs.route()
+    return fs, fv, ft
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_unit_overlap_repins_a_balloon_only_on_its_pinned_axis(axis: str):
+    """Check that a balloon pinned on one axis is told to move that axis alone."""
+    fs, _, _ = _balloon_on_valve(axis)
+
+    said = _overlap_message(fs)
+    assert said.endswith(
+        f"FT-101 is pinned there, so move its pin clear of FV-101: call .pin({axis}=...) on FT-101"
+    ), said
+
+
+@pytest.mark.parametrize(
+    ("pinned", "advice"),
+    [
+        (
+            {"col": 1},
+            "Its col= pin does not move an attached balloon; an x= pin does: "
+            "call .pin(x=...) on FT-101",
+        ),
+        (
+            {"row": 1},
+            "Its row= pin does not move an attached balloon; a y= pin does: "
+            "call .pin(y=...) on FT-101",
+        ),
+    ],
+    ids=["col", "row"],
+)
+def test_unit_overlap_offers_a_balloon_the_axis_its_grid_pin_names(
+    pinned: dict[str, Any], advice: str
+):
+    """Check that a balloon pinned by col= or row= alone is offered that axis alone."""
+    fs, fv, ft = _tapped_line()
+    ft.pin(**pinned)
+    fs.route()
+    assert fv.frame is not None and ft.frame is not None
+    ft.frame = replace(ft.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert said.endswith(f". {advice}"), said
+
+
+def test_following_the_overlap_advice_clears_it_and_leaves_free_axes_free():
+    """Check that the suggested pin(), given a value, clears the overlap alone."""
+    fs, fv, ft = _balloon_on_valve("x")
+    assert fv.frame is not None
+    clear = fv.frame.x - 100
+    call = re.search(r"call \.pin\((.*?)\) on FT-101", _overlap_message(fs))
+    assert call is not None
+    kwargs: dict[str, Any] = {}
+    for arg in call.group(1).split(", "):
+        key, value = arg.split("=", 1)
+        assert value == "...", arg
+        kwargs[key] = clear
+    ft.pin(**kwargs)
+    fs.route()
+
+    assert _found(fs, "unit-overlap") == []
+    assert pin_intent(ft) == {"x": (None, clear)}
 
 
 def test_negative_pin_raises():

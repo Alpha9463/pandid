@@ -114,18 +114,27 @@ def _overlap_cure(a, b) -> str:
         Returns
         -------
         str
-            Call text, naming the port each axis is pinned by.
+            Call text for the axes ``u`` is pinned on, or ``x`` and
+            ``y`` when it is pinned on neither, naming the port each
+            axis is pinned by.
         """
         pin = u.pin_
-        if getattr(u, "host", None) is None and pin is not None and pin.x is None and pin.y is None:
-            return f"call .pin(col=..., row=...) on {u.name}"
-        # Name the port each axis is pinned by.
+        hosted = getattr(u, "host", None) is not None
+        # Name each pinned axis by the field that places it, x= or y= on a balloon.
+        axes = []
+        for px, grid in (("x", "col"), ("y", "row")):
+            if pin is not None and getattr(pin, px) is not None:
+                axes.append(px)
+            elif pin is not None and getattr(pin, grid) is not None:
+                axes.append(px if hosted else grid)
         ports = getattr(u, "_pin_ports", None) or {}
-        calls = ([(ports.get("x"), "x=..., y=...")] if ports.get("x") == ports.get("y")
-                 else [(ports.get("x"), "x=..."), (ports.get("y"), "y=...")])
+        calls: dict[str | None, list[str]] = {}
+        for axis in axes or ["x", "y"]:
+            calls.setdefault(ports.get(axis), []).append(f"{axis}=...")
         return " and ".join(
-            f"call .pin({'' if port is None else f'port={port!r}, '}{axes}) on {u.name}"
-            for port, axes in calls)
+            f"call .pin({'' if port is None else f'port={port!r}, '}{', '.join(args)}) "
+            f"on {u.name}"
+            for port, args in calls.items())
 
     for u, other in ((b, a), (a, b)):
         host = getattr(u, "host", None)
@@ -138,9 +147,12 @@ def _overlap_cure(a, b) -> str:
         kept = ((f", angle={u.angle!r}" if u.angle != 90.0 else "")
                 + (f", relation={u.relation!r}" if u.relation != "sensing" else ""))
         pin = u.pin_
-        grid = (f". Its col= and row= pin does not move an attached balloon; an "
-                f"x= and y= pin does: {how(u)}"
-                if pin is not None and (pin.col is not None or pin.row is not None) else "")
+        fields = [f for f in ("col", "row") if pin is not None and getattr(pin, f) is not None]
+        moves = ["x" if f == "col" else "y" for f in fields]
+        grid = (f". Its {' and '.join(f + '=' for f in fields)} pin does not move an "
+                f"attached balloon; {'an' if moves[0] == 'x' else 'a'} "
+                f"{' and '.join(m + '=' for m in moves)} pin does: {how(u)}"
+                if fields else "")
         return (f"{u.name} hangs off {host.name}, so say where on it: {key}= is "
                 f"{where}, and offset= how far it stands off (now {u.offset:g}). "
                 f"Change them on add_instrument(), or call .attach(<the {host.name} "
