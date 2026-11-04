@@ -4296,7 +4296,7 @@ class Reactor(Unit):
         description: str = "",
         reference: str = "",
     ):
-        names = _feed_names(n_feeds, "Reactor")
+        names = _feed_names(n_feeds, type(self).__name__)
         super().__init__(
             name,
             variant=variant,
@@ -4567,7 +4567,7 @@ class Separator(Unit):
         description: str = "",
         reference: str = "",
     ):
-        names = _feed_names(n_feeds, "Separator")
+        names = _feed_names(n_feeds, type(self).__name__)
         if variant in self._CHARACTERISTICS:
             raise ValueError(
                 f"{name}: {variant!r} is a characteristic, not a variant; "
@@ -4890,9 +4890,11 @@ class Column(Unit):
         description: str = "",
         reference: str = "",
     ):
-        names = _feed_names(n_feeds, "Column")
+        names = _feed_names(n_feeds, type(self).__name__)
         if n_draws < 0:
-            raise ValueError(f"Column cannot take a negative number of draws, got {n_draws}")
+            raise ValueError(
+                f"{type(self).__name__} cannot take a negative number of draws, got {n_draws}"
+            )
         draw_names = ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
         super().__init__(
             name,

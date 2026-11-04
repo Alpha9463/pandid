@@ -126,6 +126,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A `Decimal` or `Fraction` grid position is told to pass `int(value)`
   (#646).** `pin(col=Decimal(1))` used to advise `float(value)`, which `pin`
   refuses too.
+- **A refused count names the class built, and a spec refusal says "an
+  Evaporator" (#646).** A bad `n_feeds` or `n_draws` on an `Absorber` or a
+  `Cyclone` names that class, not `Column` or `Separator`.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an

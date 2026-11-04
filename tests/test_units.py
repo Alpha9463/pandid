@@ -137,6 +137,12 @@ def test_a_reactor_takes_more_than_one_charge_nozzle_and_drops_the_bare_alias():
         (lambda: U.Reactor("R", n_feeds=0), "Reactor requires at least 1 feed"),
         (lambda: U.Separator("V", n_feeds=0), "Separator requires at least 1 feed"),
         (lambda: U.Column("T", n_draws=-1), "cannot take a negative number of draws"),
+        (lambda: U.Absorber("T", n_feeds=0), "^Absorber requires at least 1 feed"),
+        (lambda: D.Cyclone("C", n_feeds=0), "^Cyclone requires at least 1 feed"),
+        (lambda: D.StirredTankReactor("R", n_feeds=0), "^StirredTankReactor requires"),
+        (lambda: U.DistillationColumn("T", n_draws=-1), "^DistillationColumn cannot take"),
+        (lambda: U.Absorber("T", n_draws=-1), "^Absorber cannot take a negative"),
+        (lambda: U.Stripper("T", n_draws=-1), "^Stripper cannot take a negative"),
         (lambda: U.Mixer("M", n_inlets=0), "at least 1 inlet"),
         (lambda: U.Splitter("S", n_outlets=0), "at least 1 outlet"),
         (
