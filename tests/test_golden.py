@@ -1,18 +1,17 @@
-"""Test representative SVG fixtures and rendered nozzle placement."""
+"""Test representative sheets against the gallery and rendered nozzle placement."""
 
-import os
+import difflib
 import re
 from pathlib import Path
 
 import pytest
 
 from _render_cases import SCENARIOS as SCENARIOS, copy_settled_case
-from _svg_compare import normalize as _normalize
 from pandid.document import equipment_list
 from pandid.render.debug import _BOX, _PORT
+from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
-GOLDEN_DIR = Path(__file__).parent / "golden"
-UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
+GOLDEN_DIR = Path(__file__).parents[1] / "docs" / "gallery"
 
 #: Representative manual, PFD, P&ID, BFD, and automatic-layout fixtures.
 GOLDEN_SCENARIOS = (
@@ -29,61 +28,40 @@ GOLDEN_FINDINGS = {
 }
 
 
-def _diff_message(name: str, golden: str, actual: str) -> str:
-    """Describe the first difference between normalized SVG documents.
+def _check_golden(name: str, svg: str) -> None:
+    """Compare an SVG document with its gallery sheet.
 
     Parameters
     ----------
     name : str
-        Golden fixture name.
-    golden : str
-        Expected normalized SVG.
-    actual : str
-        Actual normalized SVG.
+        Gallery sheet name.
+    svg : str
+        Rendered SVG document text.
+    """
+    normalized = _normalize(svg)
+    golden = _normalize((GOLDEN_DIR / f"{name}.svg").read_text(encoding="utf-8"))
+    assert golden == normalized, "".join(
+        difflib.unified_diff(golden.splitlines(True), normalized.splitlines(True), n=2)
+    )
+
+
+_PROVENANCE = re.compile(f"{re.escape(PROVENANCE_OPEN)}.*?{re.escape(PROVENANCE_CLOSE)}", re.S)
+
+
+def _normalize(svg: str) -> str:
+    """Empty the fenced provenance block of an SVG document.
+
+    Parameters
+    ----------
+    svg : str
+        SVG document.
 
     Returns
     -------
     str
-        First differing line with nearby context.
+        SVG document with only the provenance fences left.
     """
-    exp = golden.split("\n")
-    act = actual.split("\n")
-    for i, (e, a) in enumerate(zip(exp, act)):
-        if e == a:
-            continue
-        lo, hi = max(0, i - 2), min(max(len(exp), len(act)), i + 3)
-        ctx = []
-        for k in range(lo, hi):
-            ek = exp[k] if k < len(exp) else "<no line>"
-            ak = act[k] if k < len(act) else "<no line>"
-            mark = ">>" if k == i else "  "
-            ctx.append(f"{mark} [{k}] golden: {ek}")
-            ctx.append(f"{mark} [{k}] actual: {ak}")
-        return f"{name}: first mismatch at line {i} of {max(len(exp), len(act))}\n" + "\n".join(ctx)
-    return f"{name}: identical prefix but line counts differ (golden {len(exp)}, actual {len(act)})"
-
-
-def _check_golden(name: str, svg: str) -> None:
-    """Compare an SVG document with its approved fixture.
-
-    Parameters
-    ----------
-    name : str
-        Golden fixture name.
-    svg : str
-        Rendered SVG document text.
-    """
-    path = GOLDEN_DIR / f"{name}.svg"
-    normalized = _normalize(svg)
-    if UPDATE:
-        GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
-        path.write_text(normalized, encoding="utf-8")
-        return
-    if not path.exists():
-        pytest.fail(f"no golden at {path}; regenerate with PANDID_UPDATE_GOLDEN=1", pytrace=False)
-    golden = _normalize(path.read_text(encoding="utf-8"))
-    if golden != normalized:
-        pytest.fail(_diff_message(name, golden, normalized), pytrace=False)
+    return _PROVENANCE.sub(f"{PROVENANCE_OPEN}\n{PROVENANCE_CLOSE}", svg)
 
 
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
@@ -210,13 +188,7 @@ def test_the_fractionator_schedules_only_equipment_that_exists():
 
 
 def test_each_alumina_off_page_flag_has_its_partner_on_the_sheet_it_names():
-    """Pair every alumina refinery flag that names another sheet of its set.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Pair every alumina refinery flag that names another sheet of its set."""
     sheets = {}
     for n in (1, 2, 3):
         fs = SCENARIOS[f"21_alumina_refinery_{n}"][0]()

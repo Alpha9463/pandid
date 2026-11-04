@@ -1,29 +1,11 @@
 """
 Example 14: Product Storage and Road Loading A600, a tank farm
 
-Three storage vessels, the transfer system that draws them down, the
-rack that loads road tankers off it, and the vapour system that takes
-back what the loading displaces. Nothing is heated, cooled, reacted or
-separated, so the sheet is dense in line hardware the reactor-and-column
-examples never reach for: two strainer bodies, a spectacle blind, a
-compensator, both reducer bodies, two flame arrestors and a conservation
-vent.
-
-Motor spirit sits under an external floating roof, denatured ethanol
-under a fixed one and butane in a sphere. The first two are pumped to
-the rack and blended to E10 on ratio control; the third needs no pump,
-since the sphere's own pressure is above what the loading arm works at
-and ``PCV-606`` lets it down. Loading vapour is returned to the
-knock-out drum ``V-604`` rather than vented at the rack.
-
-The overfill trip is drawn as a separate system rather than as an alarm
-on the gauge, which is why the switches are ``LSHH`` and not ``LSH``.
-Each of the three vessels is filled differently and none of it is a
-default: ``TK-601``'s roof floats, so the receipt lands on the shell;
-``TK-602`` takes its ethanol over the top through an internal downcomer;
-``V-603`` fills low on the shell. Every vessel carries five nozzles and
-none is piped for all five -- a declared nozzle is offered rather than
-asserted.
+Motor spirit in a floating-roof tank and denatured ethanol in a fixed-roof
+tank are pumped to a road loading rack and blended to E10 on ratio
+control; butane in a sphere is let down by ``PCV-606``. Loading vapour
+returns to the knock-out drum ``V-604``, and an ``LSHH`` overfill trip
+closes both receipt valves.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -62,8 +44,7 @@ def main():
     )
 
     # --- Control loops ------------------------------------------------
-    # add_loop() with the number left out takes the next from
-    # loop_number_start, in the order these five lines read.
+    # Without a number, add_loop() numbers from loop_number_start.
     ms_level = fs.add_loop("L")      # L-601, TK-601 level
     eth_level = fs.add_loop("L")     # L-602, TK-602 level
     lpg_press = fs.add_loop("P")     # P-603, V-603 pressure
@@ -71,17 +52,13 @@ def main():
     blend_flow = fs.add_loop("F")    # F-605, ethanol blend ratio
 
     # --- Storage ------------------------------------------------------
-    # label_pos="center" on all three: each carries a vent, a relief or
-    # a fill on the crown that a tag written above would be written
-    # across.
+    # label_pos="center" keeps each tag off the crown's piping.
     tk601 = fs.add(Tank("TK-601", variant="floating_roof", width=190, height=140,
                         label_pos="center", description="Motor Spirit Storage Tank"))
     tk602 = fs.add(Tank("TK-602", width=180, height=150, label_pos="center",
                         description="Denatured Ethanol Storage Tank"))
     v603 = fs.add(Tank("V-603", variant="sphere", width=140, height=185,
                        label_pos="center", description="Butane Storage Sphere"))
-    # The drum stands on ISO item 26.1's channel-section legs, composed
-    # under the shell the way item 1.16 X8002 draws them.
     v604 = fs.add(Vessel("V-604", supports="leg", width=60, height=120,
                          description="Loading Vapour Knock-Out Drum"))
 
@@ -110,8 +87,7 @@ def main():
                            description="TK-601 Nozzle Compensator"))
     st601 = fs.add(Fitting("ST-601", variant="strainer_basket",
                            description="P-601 Suction Strainer"))
-    # large_end="outlet" is what makes RD-602 an expansion: the same
-    # fitting piped round the other way rather than a second symbol.
+    # large_end="outlet" makes RD-602 an expander.
     rd601 = fs.add(Reducer("RD-601", variant="eccentric",
                            description="P-601 Suction Reducer"))
     rd602 = fs.add(Reducer("RD-602", variant="concentric", large_end="outlet",
@@ -147,9 +123,7 @@ def main():
     cv604 = fs.add(ControlValve(load_flow.tag("CV"),
                                 description="Loading Rate Valve"))
     hv604 = fs.add(Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
-    # HOS and not HS: HS-601 is a well-formed instrument letter code and
-    # would tag this hose as an instrument. HOS breaks at the second
-    # letter.
+    # HOS, since HS-601 would read as an instrument tag.
     hos601 = fs.add(Fitting("HOS-601", variant="hose", description="E10 Loading Hose"))
 
     # --- In-line: the vapour system -----------------------------------
@@ -161,15 +135,11 @@ def main():
     vt601 = fs.add(Vent("VT-601", variant="breather", description="V-604 Conservation Vent"))
 
     # --- Placement ----------------------------------------------------
-    # Pinned by nozzle, not by corner: pin(port=...) asks the symbol
-    # where its own nozzle sits, so no rescaling of the artwork can
-    # leave a valve off its run.
     tk601.pin(x=360, y=215)
     tk602.pin(x=680, y=205)
     v603.pin(x=1090, y=180)
 
-    # The crown is an alternate on a fixed-roof tank and the shell is
-    # the default, so the downcomer arrangement has to be asked for.
+    # Fill TK-602 over the top, through its downcomer.
     tk602.nozzle("inlet", "N")
 
     ms_drop_x = 340.0
@@ -177,9 +147,7 @@ def main():
     ms_draw_x = 360 + port_offset(tk601, "outlet")[0]
     eth_fill_x = 680 + port_offset(tk602, "inlet")[0]
     eth_draw_x = 680 + port_offset(tk602, "outlet")[0]
-    # The sphere fills low on the west shell and draws from under its
-    # belly, so the receipt drops clear of the vessel and comes in
-    # level.
+    # The sphere fills low on its west shell and draws from its bottom.
     lpg_fill_y = 180 + port_offset(v603, "inlet")[1]
     lpg_draw_x = 1090 + port_offset(v603, "outlet")[0]
 
@@ -190,14 +158,10 @@ def main():
     xv602.pin(port="inlet", x=500, y=eth_recv_y)
     lpg_in.pin(port="outlet", x=200, y=lpg_recv_y)
 
-    # The ethanol run stands 40 lower than the geometry alone wants, so
-    # that FE-605's balloon and FT-605's stack between the run and the
-    # cascade row without either touching the other.
+    # The ethanol run leaves room for FE-605's and FT-605's balloons.
     lpg_run_y, eth_run_y, ms_run_y = 390.0, 550.0, 665.0
     lpg_drop_x = 1040.0
-    # low_row_y carries FT-604 and stands 45 clear of FE-604's own
-    # balloon, which stands clear of the meter: two balloons and an
-    # impulse line have to fit between the row and the run.
+    # low_row_y carries FT-604, 45 above FE-604's balloon.
     balloon_row_y, low_row_y, psv_run_y = 462.0, 564.0, 620.0
     cascade_y = 422.0
 
@@ -205,10 +169,7 @@ def main():
     ej601.pin(port="inlet", x=560, y=ms_run_y)
     st601.pin(port="inlet", x=605, y=ms_run_y)
     rd601.pin(port="inlet", x=665, y=ms_run_y)
-    # RD-601 is the eccentric body, so its two nozzles are not on one
-    # centreline. The pump is pinned at the *reducer's outlet*
-    # elevation, asked of the symbol, so the suction runs straight into
-    # its nozzle.
+    # Pin the pump's suction level with the eccentric reducer's outlet.
     ms_suction_y = ms_run_y + port_offset(rd601, "outlet")[1] - port_offset(rd601, "inlet")[1]
     p601.pin(port="suction", x=705, y=ms_suction_y)
     ms_disch_y = ms_suction_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
@@ -242,10 +203,8 @@ def main():
     hos601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
-    # V-604 un-mirrored puts its inlet and outlet on one centreline, so
-    # both flags sit on vap_y and the run is straight from edge to edge.
-    # HV-607 and FA-602 are walked back from the drum by their own
-    # widths, so the two gaps hold whatever the artwork measures.
+    # The vapour line runs straight on vap_y; HV-607 and FA-602 stand
+    # vap_gap apart, measured back from the drum.
     vap_y = 830.0
     drum_x, vap_gap = 1255.0, 52.0
     fa602_x = drum_x - vap_gap - port_offset(fa602, "outlet")[0]
@@ -323,13 +282,7 @@ def main():
     fs.connect(fa601.outlet, vt601.inlet)
 
     # --- Instruments --------------------------------------------------
-    # Each indicator carries its alarms as lettering in its own
-    # quadrants: high above the centre line, low below, no second
-    # balloon and no face spent.
-    #
-    # near= places the indicator under its transmitter and draws nothing
-    # between them; the 4-20 mA the gauge reads on is a line of its own,
-    # and connect() is what puts it on the paper.
+    # Each indicator stands under its transmitter and letters its alarms.
     lt601 = fs.add_instrument("LT", ms_level, sensing=tk601, face="W", offset=62)
     li601 = fs.add_instrument("LI", ms_level, near=lt601, face="S", offset=50,
                               variant="shared")
@@ -341,35 +294,23 @@ def main():
     li602.annotate(high="LAH", low="LAL")
     fs.connect(lt602.sig_out, li602.sig_in, kind="electric")
 
-    # Both switches keep literal numbers. What they initiate is Z-1,
-    # which carries the trip's number and not theirs, so declaring L-611
-    # would put a loop of exactly one balloon in fs.loops.
     lsh611 = fs.add_instrument("LSHH", 611, sensing=tk601, face="E", offset=32)
     lsh612 = fs.add_instrument("LSHH", 612, sensing=tk602, face="E", offset=40)
-    # Instrument(variant="sis") is the one symbol allowed to carry its
-    # tag more than once, so Z-1 is drawn at each of the four points it
-    # touches -- and it reads the two switches and strokes the two
-    # valves, which is sensing= against acting_on=.
+    # A "sis" square may repeat its tag: Z-1 reads both switches and
+    # closes both receipt valves.
     fs.add_instrument("Z", 1, sensing=lsh611, face="N", offset=40, variant="sis")
     fs.add_instrument("Z", 1, sensing=lsh612, face="N", offset=40, variant="sis")
-    # 46 and not 26: FC is written directly below each valve, so the
-    # square has to hang below that mark rather than on it.
+    # offset=46 hangs the square below each valve's FC mark.
     fs.add_instrument("Z", 1, acting_on=xv601, face="S", offset=46, variant="sis")
     fs.add_instrument("Z", 1, acting_on=xv602, face="S", offset=46, variant="sis")
 
-    # 50 and not 40, which stood the two balloons edge to edge: the
-    # signal between them is a line and a line needs paper to be drawn
-    # on. The same 50 the two level gauges above stand off at.
     pt603 = fs.add_instrument("PT", lpg_press, sensing=v603, face="E", offset=30)
     pi603 = fs.add_instrument("PI", lpg_press, near=pt603, face="N", offset=50,
                               variant="shared")
     pi603.annotate(high="PAH")
     fs.connect(pt603.sig_out, pi603.sig_in, kind="electric")
 
-    # The balloon over a valve is centred on the valve's own face, so
-    # the axis the cascade routes down is half the valve wide -- not the
-    # actuator's offset, which would put a 0.05 px slope in a signal
-    # line.
+    # The balloon over a valve is centred on the valve's width.
     cv604_axis = 1400 + resolve_size(cv604)[0] / 2
     cv605_axis = 1140 + resolve_size(cv605)[0] / 2
     fe604_top = blend_y - port_offset(fe604, "inlet")[1]
@@ -377,9 +318,7 @@ def main():
     fe605_top = eth_run_y - port_offset(fe605, "inlet")[1]
     cv605_top = eth_run_y - port_offset(cv605, "inlet")[1]
 
-    # Each element's tag goes in a balloon standing on its impulse line,
-    # with the transmitter's own balloon touching it above: the meter
-    # bodies carry no lettering at all, as P&ID_301 draws them.
+    # Move each element's tag into a balloon, its transmitter on top.
     fe604_b = fs.add_balloon(fe604, face="N", offset=fe604_top - low_row_y - 45)
     ft604 = fs.add_instrument("FT", load_flow, near=fe604_b, face="N", offset=23)
     fic604 = fs.add_instrument("FIC", load_flow, near=cv604, face="N", variant="shared",
@@ -388,10 +327,7 @@ def main():
     fs.connect(ft604.sig_out, fic604.sig_in, kind="electric")
     fs.connect(fic604.sig_out, cv604.actuator, kind="pneumatic")
 
-    # Ratio control, so FIC-605 takes its setpoint from FIC-604.
-    # kind="software" and not a wire: both faceplates are functions of
-    # the same DCS. The route is given by hand because the router leaves
-    # FIC-604 through its last free face instead.
+    # Ratio control: FIC-605 takes its setpoint from FIC-604.
     fe605_b = fs.add_balloon(fe605, face="N", offset=fe605_top - balloon_row_y - 45)
     ft605 = fs.add_instrument("FT", blend_flow, near=fe605_b, face="N", offset=23)
     fic605 = fs.add_instrument("FIC", blend_flow, near=cv605, face="N", variant="shared",
@@ -404,9 +340,6 @@ def main():
     fs.connect(fic605.sig_out, cv605.actuator, kind="pneumatic")
 
     # --- Sheet furniture ----------------------------------------------
-    # scale= and date= are stated rather than left blank: left blank,
-    # the renderer fills in the ratio it fitted the sheet at and today's
-    # date.
     fs.title_block = TitleBlock(
         title="Tank Farm and Loading",
         subtitle="A600 Process & Instrumentation Diagram 1",
@@ -431,8 +364,6 @@ def main():
               ("P-602", "Ethanol Blend Pump")],
         align="top-right",
     ))
-    # Unnumbered: a number in a notes box is a flag note drawn on the
-    # line it applies to, and nothing here puts a reference on a line.
     fs.add_annotation(notes([
         "Z-1: receipt shutdown on tank high-high level.",
         "LSHH-611/612 are independent of the gauging transmitters they back up.",

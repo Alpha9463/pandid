@@ -24,17 +24,6 @@ class LineWeight(enum.Enum):
     DETAIL = "detail"
 
     @property
-    def modules(self) -> float:
-        """Return this class's width as a multiple of :data:`M`.
-
-        Returns
-        -------
-        float
-            Width in grid modules.
-        """
-        return _MODULES[self]
-
-    @property
     def width(self) -> float:
         """Return this class's width in drawing units.
 
@@ -43,7 +32,7 @@ class LineWeight(enum.Enum):
         float
             Width in drawing units.
         """
-        return self.modules * M
+        return _MODULES[self] * M
 
 
 # Each class's width as a multiple of M.

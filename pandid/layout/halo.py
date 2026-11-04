@@ -106,7 +106,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     Returns
     -------
     tuple[float, float, str, list[Unit]] or None
-        None for a closed chain, a free root balloon or ownerless end.
+        None for a closed chain or a free root balloon.
     """
     from pandid.layout.attach import _rotate_ccw
     from pandid.layout.stages import is_control
@@ -130,8 +130,6 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
 
     if isinstance(node, Stream):
         src, dst = node.source.owner, node.dest.owner
-        if src is None or dst is None:
-            return None
         across = (slot(dst).col or 0) - (slot(src).col or 0)
         down = (slot(dst).row or 0) - (slot(src).row or 0)
         flow = ((1.0 if across > 0 else -1.0, 0.0) if across

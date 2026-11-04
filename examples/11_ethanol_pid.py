@@ -1,25 +1,10 @@
 """
 Example 11: Ethanol Purification A300, the P&ID of example 10's unit
 
-The same beer column, condenser, reflux drum, kettle reboiler and
-bottoms cooler as ``10_ethanol_pfd.py``, on the same fixed
-``page_size="A3"`` sheet, drawn as the piping and instrumentation
-diagram rather than the flow diagram. It is the densest sheet in the
-repo.
-
-What a P&ID adds over the PFD of the same unit: no arrowheads
-(``diagram="p&id"``); the flange pair at every equipment nozzle and
-either side of every valve (``connections="flanged"``); line numbers
-instead of stream numbers, one per valve station rather than one per
-valve; the field devices, with four control valves drawn as the
-**station** each is installed in (``fs.add_valve_station()``, see
-:mod:`pandid.stations`); eight loops, five of them closing on a real
-final control element and three of those five taking their setpoint from
-a temperature or a level rather than from the panel; the alarms lettered
-in their controllers' own quadrants instead of drawn as balloons of
-their own; each flow element's tag moved into a balloon so the venturi
-carries none; and a repeated trip square, ``Instrument(variant="sis")``
-being the one symbol allowed to carry its tag more than once.
+The unit of ``10_ethanol_pfd.py`` drawn as a P&ID on the same A3 sheet:
+flanged connections, line numbers, four control valve stations
+(``fs.add_valve_station()``), eight loops with three cascades, alarms
+lettered in their controllers, and repeated ``variant="sis"`` trips.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -45,15 +30,7 @@ from pandid.portgeom import port_offset, resolve_size
 
 
 def main():
-    """Build and render the ethanol purification P&ID.
-
-    Returns
-    -------
-    None
-        The SVG and draw.io drawings are written to the examples directory.
-    """
-    # Size and schedule are separate fields in the scheme, so nothing on
-    # the sheet reads as a second size.
+    """Build and render the ethanol purification P&ID."""
     fs = Flowsheet(
         "Ethanol Purification A300",
         line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
@@ -61,10 +38,6 @@ def main():
     )
 
     # --- Control loops ------------------------------------------------
-    # Each number is declared once here instead of typed on every
-    # balloon that carries it. Members still type their own functional
-    # letters and the handle checks the first of them, so a TT put on a
-    # flow loop raises at the line that wrote it.
     press301 = fs.add_loop("P", 301)    # tower overhead pressure
     temp302 = fs.add_loop("T", 302)     # tower top temperature, a cascade master
     flow303 = fs.add_loop("F", 303)     # reflux flow, its slave
@@ -75,11 +48,7 @@ def main():
     flow308 = fs.add_loop("F", 308)     # steam flow, its slave
 
     # --- Equipment ----------------------------------------------------
-    # label_pos="center": the overhead leaves the top centre, so a tag
-    # written above the tower would be written across that riser.
-    # Sieve trays, the same eighteen decks 10's PFD draws in the same
-    # tower: yeast and grain solids come in with the beer, so the deck
-    # is perforated and has nothing that can settle or seize.
+    # label_pos="center" keeps the tag off the overhead riser.
     col = fs.add(DistillationColumn("T-301", internals="sieve_tray", trays=18,
                                     label_pos="center", description="Beer Column"))
     cond = fs.add(ShellAndTubeExchanger("C-301", variant="straight_tubes", width=130,
@@ -91,8 +60,7 @@ def main():
     cooler = fs.add(ShellAndTubeExchanger("HX-301", variant="straight_tubes", width=130,
                                           height=40, description="Beer Bottoms Cooler"))
 
-    # header=True is one service tapped wherever the sheet wants it, so
-    # both cooling-water tie-ins carry CWSH and both returns CWRH.
+    # header=True lets several flags name the same header.
     fb_feed = fs.add(Feed("Fermentation Broth", reference="P&ID-201"))
     cws_cond = fs.add(Feed("CWSH", header=True))
     cwr_cond = fs.add(Product("CWRH", header=True))
@@ -108,19 +76,14 @@ def main():
                               description="Feed Trip Valve"))
     meter = fs.add(Fitting("FE-313", variant="rotameter",
                            description="Feed Flow Element"))
-    # loop.tag() composes without checking the first letter and cannot:
-    # a final element is not tagged from the measured variable. A
-    # primary element goes through loop.element(), which does check --
-    # see FE-303.
+    # loop.tag() names a final element, loop.element() a primary one.
     cv306 = fs.add(ControlValve(level306.tag("CV"),
                                 description="Bottoms Control Valve"))
     nrv306 = fs.add(CheckValve("NRV-306",
                                description="Bottoms Non-Return Valve"))
     hv311 = fs.add(Valve("HV-311", description="C-301 Cooling Water Block Valve"))
     hv315 = fs.add(Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
-    # No label_pos: an element's tag goes in a balloon rather than
-    # beside the symbol, so nothing is written against the venturi at
-    # all. See add_balloon() below.
+    # Each element's tag goes in a balloon; see add_balloon() below.
     fe303 = fs.add(FlowElement(flow303.element("FE"),
                                description="Reflux Flow Element"))
     fe305 = fs.add(FlowElement(flow305.element("FE"),
@@ -132,10 +95,6 @@ def main():
     t_draw.new_line_number = True
 
     # --- Placement ----------------------------------------------------
-    # Pinned by nozzle, not by corner: pin(port=...) asks the symbol
-    # where its own nozzle sits, so no rescaling of the artwork can
-    # leave a valve off its run. A boundary flag is pinned at the tip of
-    # its arrow.
     col_x, col_y = 470.0, 300.0
     col.pin(x=col_x, y=col_y)
     col_axis = col_x + resolve_size(col)[0] / 2
@@ -152,9 +111,8 @@ def main():
     cond.pin(x=cond_x, y=cond_y)
     cond_shell_in_x = cond_x + port_offset(cond, "shell_in")[0]
     cw_cond_y = cond_y + port_offset(cond, "tube_in")[1]
-    # bypass_over="reduction" stands the bypass valve over the reducer
-    # rather than where the controller's output crosses the leg.
-    # number=301 makes the members 301 and not 301-1.
+    # bypass_over="reduction" stands the bypass valve over the reducer;
+    # number=301 numbers the members 301 rather than 301-1.
     st301 = fs.add_valve_station(
         "CV-301-1", x=677.5, y=overhead_y, number=301, bypass_over="reduction",
         description="Overhead", service="AE", sequence=302, size=300, schedule=80, spec="SS")
@@ -162,16 +120,13 @@ def main():
     hv311.pin(port="inlet", x=320, y=cw_cond_y)
     cwr_cond.pin(port="inlet", x=1540, y=cw_cond_y)
 
-    # The drum's inlet is authored on more than one face; naming the top
-    # one makes the run from the condenser a straight drop.
+    # Move the drum's inlet to its top face, under the condenser.
     drum.nozzle("inlet", "N")
     drum_x = cond_x + port_offset(cond, "shell_out")[0] - port_offset(drum, "inlet")[0]
     drum.pin(x=drum_x, y=280)
     drum_draw_x = drum_x + port_offset(drum, "outlet")[0]
 
-    # The reflux station runs right to left, so it is mirrored end to
-    # end. The flow element is pinned last, outside the bypass, so it
-    # reads the reflux whichever way the station is lined up.
+    # The reflux station runs right to left; its element sits outside it.
     reflux_run_y = 440.0
     st303 = fs.add_valve_station(
         flow303.tag("CV"), x=672.5, y=reflux_run_y, mirrored=True, bypass_over="reduction",
@@ -182,9 +137,7 @@ def main():
     t_draw.pin(orientation=90)
     t_draw.pin(port="inlet", x=drum_draw_x).pin(port="branch", y=reflux_run_y)
 
-    # gap=22 tightens this station: the drum's draw is at one end, the
-    # sheet edge at the other, and FE-305 stands between the station and
-    # the boundary flag.
+    # gap=22 tightens this station.
     dist_y = 510.0
     st305 = fs.add_valve_station(
         flow305.tag("CV"), x=1147, y=dist_y, gap=22, bypass_over="reduction",
@@ -194,22 +147,16 @@ def main():
 
     reb.pin(x=700, y=580)
     steam_y = 580 + port_offset(reb, "tube_in")[1]
-    # The header steps back to 130 so FE-308 stands ahead of the
-    # station: the run behind it is the reboiler's, and the paper over
-    # it belongs to the bypass. Only this flag moves; the boundary is
-    # already ragged, the feed's own box reaching further west than
-    # either cooling-water tie-in.
+    # The steam flag stands west of the others to fit FE-308.
     steam.pin(port="outlet", x=130, y=steam_y)
     fe308.pin(port="inlet", x=150, y=steam_y)
-    # FIC-308's output crosses this station's leg, so the bypass valve
-    # moves to the far end rather than sitting under the crossing.
+    # Bypass valve at the far end, clear of FIC-308's output.
     st308 = fs.add_valve_station(
         flow308.tag("CV"), x=217.5, y=steam_y, bypass_over="downstream_isolation",
         description="Steam", service="HPS", sequence=308, size=100, schedule=80, spec="CS")
     condensate.pin(port="inlet", x=1540, y=580 + port_offset(reb, "tube_out")[1])
 
-    # mirrored="y" again: the bottoms valve's operator faces the
-    # controller standing below it.
+    # mirrored="y" faces the operator at the controller below.
     bottoms_y = 660.0
     cv306.pin(mirrored="y").pin(port="inlet", x=900, y=bottoms_y)
     nrv306.pin(port="inlet", x=1000, y=bottoms_y)
@@ -222,17 +169,12 @@ def main():
     bottoms_prod.pin(port="inlet", x=1540, y=cooled_y)
 
     # --- Process lines ------------------------------------------------
-    # A station is one line, bypass and drains included, so it is given
-    # the components its branches are numbered from.
     fs.connect(fb_feed.outlet, xv.inlet, service="FB", sequence=301, size=200,
                schedule=160, spec="SS")
     fs.connect(xv.outlet, meter.inlet)
     col_feed = fs.connect(meter.outlet, col.feed)
 
-    # A line that carries a balloon is routed by hand with via(): an
-    # attached instrument hangs off the *routed* path, so a line the
-    # router is free to re-bend takes its instrumentation elsewhere with
-    # it.
+    # Fix the route of lines that carry balloons with via().
     vapour = fs.connect(col.overhead, st301.inlet, service="AE", sequence=302,
                         size=300, schedule=80, spec="SS").via([(col_axis, overhead_y)])
     fs.connect(st301.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
@@ -248,8 +190,7 @@ def main():
 
     fs.connect(drum.outlet, t_draw.inlet, service="AE", sequence=309, size=100,
                schedule=80, spec="SS")
-    # The branch takes the reflux and the run carries on down to the
-    # distillate, so the two lines leave the tee without crossing.
+    # Reflux off the branch, distillate down the run.
     fs.connect(t_draw.branch, st303.inlet, service="AE", sequence=303, size=80,
                schedule=80, spec="SS")
     fs.connect(st303.outlet, fe303.inlet)
@@ -287,22 +228,13 @@ def main():
                schedule=40, spec="CS")
 
     # --- Feed trip and local indication -------------------------------
-    # Literal numbers here and on the three indicators below, not loop
-    # handles: each is one reading with nothing else in its group.
     fs.add_instrument("Z", 2, acting_on=xv, face="S", offset=26, variant="sis")
     fs.add_instrument("FI", 314, sensing=meter, face="S", offset=36)
-    # The line and not the tower: a unit host taps a face *midpoint*,
-    # and the tower's feed nozzle is that midpoint, so the balloon could
-    # only be reached by a diagonal.
     fs.add_instrument("PI", 315, sensing=col_feed, at=0.45, offset=58)
     fs.add_instrument("TI", 325, sensing=cw_return, at=0.3, offset=55)
 
     # --- Loop 301: tower overhead pressure ----------------------------
-    # The faceplate stands over the valve it drives, so its output drops
-    # straight onto the actuator; both balloons hang on one row, which
-    # is what makes the measurement line straight too. near= and not
-    # sensing=: a control-room faceplate reads no pressure off a valve
-    # body, and what runs down to the actuator is the connect() below.
+    # Transmitter and controller on one row, the controller over its valve.
     balloon_row_y = 45.0
     cv3011_top = overhead_y - port_offset(st301.control, "inlet")[1]
     pt301 = fs.add_instrument("PT", press301, sensing=vapour, at=0.75,
@@ -310,17 +242,11 @@ def main():
     pic301 = fs.add_instrument("PIC", press301, near=st301.control, face="N",
                                variant="shared", offset=cv3011_top - balloon_row_y)
     pic301.nozzle("sig_out", "S")
-    # The alarms are lettering in this balloon's own quadrants, high
-    # above the centre line and low below, so neither is a second
-    # instrument and neither spends a face.
     pic301.annotate(high="PAH", low="PAL")
     fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
     fs.connect(pic301.sig_out, st301.control.actuator, kind="pneumatic")
 
     # --- The high pressure trip, on a measurement of its own ----------
-    # 318 is typed rather than declared as a loop: nothing else is
-    # tagged 318, so a loop here would be one balloon the drawing does
-    # not have.
     pt318 = fs.add_instrument("PT", 318, sensing=vapour, at=0.55,
                               offset=overhead_y - balloon_row_y)
     fs.add_instrument("Z", 2, sensing=pt318, face="N", offset=40, variant="sis")
@@ -335,25 +261,19 @@ def main():
     tic302.annotate(high="TAH", low="TAL")
     fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
 
-    # The element's tag moves into a balloon on a short impulse line and
-    # the venturi is left unlettered, which is how P&ID_301 draws it.
-    # FT-303 then stacks under that balloon, edge to edge, reading the
-    # same element: near=, because nothing is drawn between two touching
-    # balloons.
+    # Move the element's tag into a balloon; FT-303 stacks on it.
     fe303_b = fs.add_balloon(fe303, face="N", offset=38)
     ft303 = fs.add_instrument("FT", flow303, near=fe303_b, face="N", offset=23)
     fic303 = fs.add_instrument("FIC", flow303, near=ft303, face="E", offset=70,
                                variant="shared")
     fic303.nozzle("sig_out", "E")   # the valve it strokes stands below and right
-    # The measurement lands on pv and the master sets sig_in: a cascade
-    # sets a setpoint, it does not stroke a valve.
+    # The measurement lands on pv, the master's setpoint on sig_in.
     fs.connect(ft303.sig_out, fic303.pv, kind="electric")
     fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
     fs.connect(fic303.sig_out, st303.control.actuator, kind="pneumatic")
 
     # --- Loops 304/305: reflux drum level onto the distillate flow ----
-    # Both faceplates stand over the valve, master above slave, so the
-    # setpoint drops one balloon and the output drops onto the actuator.
+    # Both controllers stand over the valve, master above slave.
     lt304 = fs.add_instrument("LT", level304, sensing=drum, face="E", offset=60)
     lic304_row_y = 325.0
     fic305_row_y = 417.0        # FT-305's row, so the measurement is straight
@@ -367,9 +287,6 @@ def main():
     fic305.nozzle("pv", "E")     # the element stands east, down the run
     fic305.nozzle("sig_out", "S")
     fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
-    # On the transmitter and not teed off its run, as the sheet's other
-    # two shutdown taps are: stacking two faceplates over the valve
-    # leaves that run too short to tee off.
     fs.add_instrument("Z", 1, sensing=lt304, face="S", offset=44, variant="sis")
     fe305_b = fs.add_balloon(fe305, face="N", offset=38)
     ft305 = fs.add_instrument("FT", flow305, near=fe305_b, face="N", offset=23)
@@ -384,9 +301,6 @@ def main():
                                variant="shared")
     tic307.nozzle("sig_out", "W")   # the slave it sets stands beside it
     fs.add_instrument("TI", 321, sensing=boilup, at=0.05, offset=70, angle=-90)
-    # The transmitter and not the controller: a trip reading the
-    # controller reads what it last asked the valve for, so it stops
-    # working the moment the loop is put on manual.
     fs.add_instrument("Z", 1, sensing=tt307, face="N", offset=40, variant="sis")
     fs.connect(tt307.sig_out, tic307.sig_in, kind="electric")
 
@@ -416,9 +330,6 @@ def main():
         company="PANDID",
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="1",
-        # scale= and date= are stated rather than left blank: left
-        # blank, the renderer fills in the ratio it fitted the sheet at
-        # and today's date.
         scale="NTS",
         date="30/10/25",
         drawn_by="AA", checked_by="JS", approved_by="RL",
@@ -428,8 +339,7 @@ def main():
         ],
     )
 
-    # Written out rather than generated, so the rows keep the order the
-    # issued sheet schedules them in.
+    # Equipment list written out by hand, in the issued sheet's order.
     fs.add_annotation(Annotation(
         title="EQUIPMENT LIST",
         rows=[("D-301", "Reflux Drum"),
@@ -439,15 +349,11 @@ def main():
               ("RB-301", "U-tube Kettle Reboiler")],
         align="top-right",
     ))
-    # Unnumbered: a number in a notes box is a flag note drawn on the
-    # line it applies to, and there is no flag primitive to draw one
-    # with.
     fs.add_annotation(notes([
         "Z-2: high pressure trip. PT-318 is its own measurement point.",
         "Z-1: process shutdown logic, reading three measurements.",
         "Alarms are lettered A and trips S or Z; H is drawn above L.",
     ], title="GENERAL NOTES", numbered=False, align="bottom-left"))
-    # NC is declared: a darkened valve body is not an ISA-5.1 symbol.
     fs.add_annotation(legend({
         "SS": "Stainless Steel 316L",
         "CS": "Carbon Steel A106-B",
@@ -460,13 +366,10 @@ def main():
         "NC": "Normally Closed (darkened valve body)",
     }, align="top-left"))
 
-    # connections="flanged" marks the double tick at every equipment
-    # nozzle and either side of every valve and in-line fitting.
-    # "flanged-at-nozzles" marks the nozzles alone.
+    # connections="flanged" marks a flange pair at every nozzle and valve.
     fs.render(out("ethanol_pid.svg"), page_size="A3", border="zone",
               diagram="p&id", connections="flanged")
-    # The same sheet and the same arguments, as an editable draw.io
-    # model rather than a finished drawing.
+    # The same sheet as an editable draw.io model.
     fs.render(out("ethanol_pid.drawio"), page_size="A3", border="zone",
               diagram="p&id", connections="flanged")
     print("Generated ethanol_pid.svg and ethanol_pid.drawio")

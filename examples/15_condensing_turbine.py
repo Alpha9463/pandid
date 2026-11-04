@@ -10,9 +10,7 @@ the deaerator. One MP steam header drives the ejector and heats the
 condensate. Receiver level throttles the discharge valve, and a
 low-level interlock shuts the trip valve downstream of it.
 
-Nothing is pinned. The engine ranks, orders, places and routes the
-whole sheet, balloons included; the only placements stated here are
-which face a balloon hangs off and how far out.
+Nothing is pinned; the engine places and routes the whole sheet.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -43,9 +41,6 @@ def main():
     s701 = fs.add(KnockoutDrum("S-701", description="HP Steam Separator"))
     gv701 = fs.add(Valve("GV-701", variant="globe",
                          description="MP Steam Isolation Valve"))
-    # The separator's drain leaves through a real trap (ISO 10628-2 item
-    # 24.15) rather than straight off the sheet: a trap is a device in the
-    # run and the sheet edge is a mile further on.
     t701 = fs.add(SteamTrap("T-701", description="HP Separator Drain Trap"))
     condensate = fs.add(Product("Condensate Header", reference="PFD-800"))
     tv701 = fs.add(Valve("TV-701", variant="hydraulic", fail="closed",
@@ -90,9 +85,7 @@ def main():
     fs.connect(lv701.outlet, xv701.inlet)
     fs.connect(xv701.outlet, deaerator.inlet)
 
-    # The controller hangs over the valve it strokes, so its output
-    # drops straight onto the actuator, and the interlock hangs off the
-    # controller so its own output leaves east and turns down.
+    # Controller over its valve, interlock over the controller.
     lt701 = fs.add_instrument("LT", level, sensing=v701, face="S", offset=55)
     lic701 = fs.add_instrument("LIC", level, near=lv701, face="N", offset=110,
                                variant="shared")

@@ -654,48 +654,28 @@ _STREAM_KEYS = {
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
-# Keys only some classes take, mapped to those classes. Port counts
-# come from the constructors that take them.
-_VARIABLE_PORTS = {
+# Constructor keywords only some classes take, and their readers.
+_KIND_READERS: dict[str, Callable[[Any, str], Any]] = {
+    "n_inlets": _integer, "n_outlets": _integer, "n_feeds": _integer, "n_draws": _integer,
+    "length": _number, "diameter": _number,
+    "normal_position": _text, "fail": _text, "branch": _text, "large_end": _text,
+    "header": _flag, "inputs": _faces, "outputs": _faces,
+    "feed_stages": _stages, "draw_stages": _stages,
+}
+# Each class's constructor keywords.
+_TAKES = {cls: inspect.signature(cls).parameters.keys() for cls in _CLASSES.values()}
+# Each keyword's owners: the classes that take it where no base class does.
+_KIND_OWNERS = {
     key: tuple(sorted(
         name for name, cls in _CLASSES.items()
-        if "__init__" in cls.__dict__
-        and key in inspect.signature(cls.__dict__["__init__"]).parameters
+        if key in _TAKES[cls]
+        and not any(key in _TAKES.get(base, ()) for base in cls.__mro__[1:])
     ))
-    for key in ("n_inlets", "n_outlets", "n_feeds", "n_draws")
-}
-# Conveyor dimensions, used instead of width and height.
-_KIND_SIZES = {
-    "length": ("Conveyor",),
-    "diameter": ("Conveyor",),
-}
-# Class-specific text fields.
-_KIND_TEXT = {
-    "normal_position": ("Valve", "Fitting"),
-    # Position on loss of motive power.
-    "fail": ("Valve",),
-    # Direction of a tee's branch.
-    "branch": ("Tee",),
-    # Port on a reducer's wide face.
-    "large_end": ("Reducer",),
-}
-# Connection families: a count, or one face per connection.
-_KIND_FACES = {
-    "inputs": ("Block", "Tank", "Vessel"),
-    "outputs": ("Block", "Tank", "Vessel"),
+    for key in _KIND_READERS
 }
 # Order along a face, applied with order_on after construction.
 _KIND_ORDER = {
     "port_order": ("Block", "Tank", "Vessel"),
-}
-# A header flag: a utility flag that may repeat.
-_KIND_FLAGS = {
-    "header": ("Feed", "Product"),
-}
-# Stage per feed or draw.
-_KIND_STAGES = {
-    "feed_stages": ("Column",),
-    "draw_stages": ("Column",),
 }
 # Composition keywords from each declaring class's Unit.COMPOSITION.
 _KIND_COMPOSITION: dict[str, tuple[str, ...]] = {}
@@ -703,8 +683,7 @@ for _name, _cls in _CLASSES.items():
     for _key in _cls.__dict__.get("COMPOSITION", {}):
         _KIND_COMPOSITION[_key] = tuple(sorted((*_KIND_COMPOSITION.get(_key, ()), _name)))
 # Every class-specific key a unit entry may carry beyond _UNIT_KEYS.
-_KIND_KEYS = {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT, **_KIND_FLAGS,
-              **_KIND_FACES, **_KIND_ORDER, **_KIND_COMPOSITION, **_KIND_STAGES}
+_KIND_KEYS = {**_KIND_OWNERS, **_KIND_ORDER, **_KIND_COMPOSITION}
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
@@ -914,12 +893,7 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
         (("variant",), _text),
         (("description", "reference"), _drawn),
         (("width", "height"), _number),
-        (_VARIABLE_PORTS, _integer),
-        (_KIND_SIZES, _number),
-        (_KIND_TEXT, _text),
-        (_KIND_FLAGS, _flag),
-        (_KIND_FACES, _faces),
-        (_KIND_STAGES, _stages),
+        *(((key,), read) for key, read in _KIND_READERS.items()),
     ))
     # Composition parts; the class default decides each value's type.
     for key, default in cls.COMPOSITION.items():
@@ -2151,7 +2125,7 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     _write_common(unit, entry)
     _write_composition(unit, entry)
     # One feed is the default.
-    if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _VARIABLE_PORTS["n_feeds"])
+    if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _KIND_OWNERS["n_feeds"])
             and len(getattr(unit, "feeds")) > 1):
         entry["n_feeds"] = len(getattr(unit, "feeds"))
     if isinstance(unit, unit_types.Block):

@@ -2,6 +2,8 @@
 
 import heapq
 import re
+import warnings
+from collections.abc import Callable
 from types import SimpleNamespace
 from typing import cast
 
@@ -49,7 +51,9 @@ def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(ca
     graph = VisibilityGraph(fs)
     assert (graph.port_projs[("F", "outlet")] not in graph.nodes) is hidden
 
-    fs.route(DefaultRouter(recover_exits=recover))
+    with pytest.warns(DeprecationWarning, match="recover_exits"):
+        router = DefaultRouter(recover_exits=recover)
+    fs.route(router)
 
     assert stream.route is not None and stream.route.used_fallback is blocked
     assert feed.frame is not None and product.frame is not None and blocker.frame is not None
@@ -59,6 +63,32 @@ def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(ca
         corner,
     ]
     assert any(issue.code == "route-crosses-unit" for issue in fs.validate()) is blocked
+
+
+def test_passing_recover_exits_is_deprecated(same_file: Callable[[str], str]) -> None:
+    """Check that ``recover_exits=`` warns at the caller's line and is still kept."""
+    with pytest.warns(DeprecationWarning, match="recover_exits") as caught:
+        router = DefaultRouter(recover_exits=False)
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+    assert router.recover_exits is False
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        assert DefaultRouter().recover_exits is True
+
+
+def test_the_router_protocol_is_deprecated(same_file: Callable[[str], str]) -> None:
+    """Check that ``routing.Router`` warns at the caller's line and still gives the protocol."""
+    import pandid.routing as routing
+
+    with pytest.warns(DeprecationWarning, match=r"pandid\.routing\.Router") as imported:
+        from pandid.routing import Router
+    with pytest.warns(DeprecationWarning, match=r"pandid\.routing\.Router") as read:
+        assert routing.Router is Router
+    assert len(read) == 1
+    assert {same_file(w.filename) for w in [*imported, *read]} == {same_file(__file__)}
+    assert "route" in vars(Router)
+    with pytest.raises(AttributeError, match="no attribute 'Rooter'"):
+        getattr(routing, "Rooter")
 
 
 def test_rect_intersection():
@@ -362,9 +392,7 @@ def test_find_path_names_the_endpoint_it_cannot_search_from():
         find_path(graph, node, (0.0, float("inf")))
 
 
-# ---------------------------------------------------------------------------
 # Pricing drawn crossings.
-# ---------------------------------------------------------------------------
 
 
 def test_committed_segments_merges_a_straight_run_into_one_span():
@@ -918,7 +946,4 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     assert s2.route.waypoints[1][1] == 100.0, f"the via() route moved: {s2.route.waypoints}"
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
-    assert s2_recordings[-1][1][1] == 106.0, (
-        f"s2 was recorded at its raw, pre-separation position rather than "
-        f"the one actually drawn: {s2_recordings[-1]}"
-    )
+    assert s2_recordings[-1][1][1] == 106.0, s2_recordings[-1]

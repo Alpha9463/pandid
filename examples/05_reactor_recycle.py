@@ -2,15 +2,8 @@
 Example 5: Reactor loop with recycle and purge (fully automatic)
 
 No pins and no via() waypoints: the engine lays out and routes
-everything from the topology alone. It exercises:
-
-- automatic recycle detection (the splitter -> mixer edge is torn and
-  routed as a recycle lane across the sheet),
-- a purge split (one splitter outlet leaves as product, the other
-  recycles),
-- spine straightening: the main process line (feed -> mixer ->
-  compressor -> cooler -> separator -> splitter) is aligned onto one
-  straight horizontal axis.
+everything from the topology. The splitter -> mixer recycle is routed as
+a lane across the sheet, and the main line runs on one horizontal axis.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -41,9 +34,6 @@ def main():
     purge_out = fs.connect(split.out_2, purge.inlet)
     fs.connect(split.out_1, mix.in_1, draw_as_recycle=True)
 
-    # The recycle stays inside the loop, so what crosses the sheet edge
-    # is the feed against the liquid product plus the purge that bleeds
-    # inerts off it -- a routine 10% purge fraction.
     feed_in.properties = {"Flow (kg/h)": "10000"}
     product_out.properties = {"Flow (kg/h)": "9000"}
     purge_out.properties = {"Flow (kg/h)": "1000"}

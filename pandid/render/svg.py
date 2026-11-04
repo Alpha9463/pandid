@@ -812,6 +812,9 @@ def crossings(polylines: dict, direction: str):
 
     A crossing lies strictly inside both segments. With
     ``direction="vertical"`` the vertical segment carries the mark.
+    Each yield names the marked run, its segment index, the crossed
+    run, the crossing point, and whether the segment has
+    :data:`HOP_R` either side for the mark.
 
     Parameters
     ----------
@@ -823,9 +826,7 @@ def crossings(polylines: dict, direction: str):
     Yields
     ------
     tuple
-        ``(key, seg, other, x, y, room)``: marked run, segment index,
-        crossed run, crossing point, and whether the segment has
-        :data:`HOP_R` either side for the mark.
+        ``(key, seg, other, x, y, room)`` for each crossing.
 
     Raises
     ------
@@ -2857,27 +2858,8 @@ def resolve_connections(s, default: "str | None") -> "tuple[str, str]":
     return (ends, ends) if isinstance(ends, str) else (ends[0], ends[1])
 
 
-def _fit_scale(dw: float, dh: float, free) -> float:
-    """Return the scale, at most 1, fitting a drawing into ``free``.
-
-    Parameters
-    ----------
-    dw, dh : float
-        Drawing size.
-    free : tuple[float, float, float, float]
-        Free area ``(x, y, w, h)``.
-
-    Returns
-    -------
-    float
-        Uniform scale, at most 1.
-    """
-    _, _, fw, fh = free
-    return min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
-
-
 def _fitted(inner, free) -> "tuple[float, float, float]":
-    """Return the scale and offset centring a drawing in ``free``.
+    """Return the scale, at most 1, and offset centring a drawing in ``free``.
 
     Parameters
     ----------
@@ -2894,7 +2876,7 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
     dx0, dy0, dx1, dy1 = inner
     fx, fy, fw, fh = free
     dw, dh = dx1 - dx0, dy1 - dy0
-    s = _fit_scale(dw, dh, free)
+    s = min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
     return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
 
 
@@ -2957,9 +2939,6 @@ _FIT_CODES = ("text-truncated", "text-overruns-cell")
 
 #: Finding code for a stream-table sheet with no drawing number.
 TABLE_SHEET_UNNUMBERED = "table-sheet-unnumbered"
-
-# Codes the renderer puts on fs.warnings; each render replaces them.
-_RENDER_CODES = _FIT_CODES + ("crossing-unmarked", TABLE_SHEET_UNNUMBERED)
 
 
 
@@ -3281,14 +3260,15 @@ class DiagramPlan(NamedTuple):
         Drawing bounds ``(x0, y0, x1, y1)``.
     frame : tuple[float, float, float, float]
         Drawing frame the border is ruled on.
-    free : tuple[float, float, float, float] or None
-        Region a fixed page leaves for the drawing, or ``None``.
+    fit : tuple[float, float, float] or None
+        ``(scale, offset_x, offset_y)`` fitting the drawing into the
+        region a fixed page leaves for it, or ``None``.
     """
     placed: list
     block: "TitleBlock"
     bounds: "tuple[float, float, float, float]"
     frame: "tuple[float, float, float, float]"
-    free: "tuple[float, float, float, float] | None"
+    fit: "tuple[float, float, float] | None"
 
 
 def diagram_plan(fs, sheet: "_Sheet | None", border: str,
@@ -3346,7 +3326,8 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
                 items, bounds, sheet=page,
                 too_small=lambda need_w, need_h, culprit: _too_small(
                     page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
-        return DiagramPlan(placed, block, bounds, frame, free)
+        return DiagramPlan(placed, block, bounds, frame,
+                           None if free is None else _fitted(bounds, free))
     if sheet is None:
         x0, y0, x1, y1 = bounds
         m = _PLAIN_MARGIN - inset
@@ -3358,31 +3339,7 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
         raise _too_small(sheet, 2 * _PLAIN_MARGIN, 2 * _PLAIN_MARGIN)
     return DiagramPlan([], block, bounds,
                        (inset, inset, sheet.width - 2 * inset, sheet.height - 2 * inset),
-                       (_PLAIN_MARGIN, _PLAIN_MARGIN, free_w, free_h))
-
-
-def reject_unknown_options(where: str, opts: dict) -> None:
-    """Raise if a backend was given keywords it does not take.
-
-    Parameters
-    ----------
-    where : str
-        Backend name, for the message.
-    opts : dict
-        Unrecognised keyword arguments.
-
-    Raises
-    ------
-    ValueError
-        If ``opts`` is not empty.
-    """
-    if opts:
-        raise ValueError(
-            f"{where} was given {', '.join(sorted(opts))}, which it does not "
-            f"take. A render argument this backend does not know is an "
-            f"argument it would have dropped, and a file that quietly lacks "
-            f"what was asked for is worse than a refused one."
-        )
+                       _fitted(bounds, (_PLAIN_MARGIN, _PLAIN_MARGIN, free_w, free_h)))
 
 
 def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
@@ -3472,12 +3429,11 @@ class SvgRenderer:
                show_stream_table: "bool | str" = False,
                border: "str | None" = None, diagram: "str | None" = None,
                page_size: "str | None" = None, connections: "str | None" = None,
-               debug: "bool | float" = False,
-               **opts) -> str:
+               debug: "bool | float" = False) -> str:
         """Render the flowsheet to SVG.
 
-        Render warnings replace those of any earlier render on
-        ``fs.warnings``.
+        Add the render's findings to ``fs.warnings``, replacing the
+        fit findings there.
 
         Parameters
         ----------
@@ -3501,8 +3457,6 @@ class SvgRenderer:
             ``"flanged-at-nozzles"``.
         debug : bool or float, default=False
             Draw the coordinate overlay, optionally at a grid spacing.
-        **opts
-            Any keyword here raises.
 
         Returns
         -------
@@ -3516,14 +3470,8 @@ class SvgRenderer:
             has no frame.
         """
         from pandid.render import debug as _debug
-        reject_unknown_options("SvgRenderer.render()", opts)
         grid = _debug.resolve_spacing(debug)
         table_sheet = wants_table_sheet(show_stream_table)
-        check_render_arguments(
-            fs, show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, crossing_style=crossing_style,
-            debug=debug)
         if table_sheet and border is None:
             border = "zone"
         border, diagram = _resolve_sheet(border, diagram)
@@ -3535,20 +3483,17 @@ class SvgRenderer:
 
         # 1. The sheet: furniture docked round the drawing.
         plan = diagram_plan(fs, sheet, border, bool(show_stream_table))
-        dx0, dy0, dx1, dy1 = plan.bounds
-        free = plan.free  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
         # Findings from the label passes.
         self._findings: list[Issue] = []
         furniture, canvas = self._place_furniture(
             fs, plan, border, lambda *cell: fit_issues.append(fit_issue(*cell)))
 
-        # Replace render findings from earlier renders.
+        # Replace validate's fit findings with the render's.
         render_issues = fit_issues + _crossing_issues(fs, jump_direction,
                                                       crossing_style)
         fs.warnings = [w for w in fs.warnings
-                       if getattr(w, "code", "") not in _RENDER_CODES
-                       and getattr(w, "code", "") not in _LABEL_CODES] + render_issues
+                       if getattr(w, "code", "") not in _FIT_CODES] + render_issues
 
         # 2. SVG document, with furniture behind the diagram.
         lines = ["    " + item for item in furniture]
@@ -3578,14 +3523,13 @@ class SvgRenderer:
         # The debug overlay is drawn first, under the sheet's ink.
         if grid is not None:
             drawing[:0] = _debug.overlay(
-                fs, (dx0, dy0, dx1, dy1), grid,
-                _fit_scale(dx1 - dx0, dy1 - dy0, free) if free is not None else 1.0,
+                fs, plan.bounds, grid, 1.0 if plan.fit is None else plan.fit[0],
                 plates=plates, ink=[line.box for line in ink])
 
-        if free is None:
+        if plan.fit is None:
             lines.extend(drawing)
         else:  # a fixed sheet: fit the drawing into the free region
-            s, ox, oy = _fitted((dx0, dy0, dx1, dy1), free)
+            s, ox, oy = plan.fit
             lines.append(f'  <g id="drawing" transform="translate({fmt(ox, 2)}, {fmt(oy, 2)}) '
                          f'scale({s:.6g})">')
             lines.extend(drawing)
@@ -3616,10 +3560,8 @@ class SvgRenderer:
         from pandid.document import TableBox
 
         furniture: list[str] = []
-        dx0, dy0, dx1, dy1 = plan.bounds
         # The scale cell states the fit scale on a fixed page.
-        fit = "" if plan.free is None else _scale_text(
-            _fit_scale(dx1 - dx0, dy1 - dy0, plan.free))
+        fit = "" if plan.fit is None else _scale_text(plan.fit[0])
         date = datetime.now().strftime("%Y-%m-%d")
         for obj, x, y, w, h in plan.placed:
             if obj is TITLE:
@@ -3673,8 +3615,9 @@ class SvgRenderer:
             furniture[:0] = F.zone_frame(*plan.frame)  # the border sits behind the rest
         ox, oy, ow, oh = F.sheet_rect(*plan.frame)
         OUT = F.OUTER_MARGIN
+        # Replace validate's fit findings with the render's.
         fs.warnings = ([w for w in fs.warnings
-                        if getattr(w, "code", "") not in _RENDER_CODES]
+                        if getattr(w, "code", "") not in _FIT_CODES]
                        + plan.findings + fit_issues)
         subtitle = _drawn_text(F._options(fs).sheet_subtitle)
         return _document(
@@ -3740,7 +3683,7 @@ class SvgRenderer:
         return ident("sym", body)
 
     def _defs(self, fs, arrows=True):
-        """Return the ``<defs>`` block: arrow markers and symbols.
+        """Return the ``<defs>`` block: arrow markers and symbols, each in id order.
 
         Parameters
         ----------
@@ -3755,7 +3698,7 @@ class SvgRenderer:
             SVG lines.
         """
         lines = []
-        used_colors = sorted({s.color or "black" for s in fs.streams})
+        used_colors = sorted({s.color or "black" for s in fs.streams}, key=arrow_marker_id)
         lines.append('  <defs>')
         for c in used_colors if arrows else ():
             lines.append(
@@ -3782,7 +3725,7 @@ class SvgRenderer:
             used[key] = (self._sym_id(u), sym, fold, pen, *xform)
             if sym.stretchable and _reshapes(sym, u) and fold == (1.0, 1.0):
                 stretched.add(key)
-        for key in sorted(used):
+        for key in sorted(used, key=lambda k: used[k][0]):
             sym_id, sym, fold, pen, rot, mirror_x, mirror_y = used[key]
             art = _baked(sym.svg, *fold)
             width, height = sym.width * fold[0], sym.height * fold[1]

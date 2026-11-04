@@ -151,6 +151,42 @@ def share_escape_room(
     return shared
 
 
+def _tag_halo(u: "Unit", f) -> "Rect | None":
+    """Return the box the halo behind a unit's tag blocks.
+
+    Parameters
+    ----------
+    u : Unit
+        Unit whose tag it is.
+    f : Frame
+        The unit's placed frame.
+
+    Returns
+    -------
+    Rect or None
+        The halo, or ``None`` for a flag, an untagged unit or a centred
+        tag.
+    """
+    from pandid.portgeom import tag_width
+
+    lpos = f.label_pos or "top"
+    if u.kind in ("feed", "product") or lpos not in ("top", "bottom", "left", "right") or not u.tag:
+        return None
+    label_w = tag_width(u.tag) + 2 * TAG_CLEAR
+    # Room for a valve's fail letters past its tag.
+    fail = 25.0 if getattr(u, "fail", "") else 0.0
+    if lpos == "top":
+        cx = f.x + f.w / 2
+        return Rect(cx - label_w / 2, cx + label_w / 2, f.y - 20, f.y)
+    if lpos == "bottom":
+        cx = f.x + f.w / 2
+        return Rect(cx - label_w / 2, cx + label_w / 2, f.y + f.h, f.y + f.h + 25 + fail)
+    cy = f.y + f.h / 2
+    if lpos == "left":
+        return Rect(f.x - label_w - 15, f.x, cy - 10, cy + 10)
+    return Rect(f.x + f.w, f.x + f.w + label_w + 15 + fail, cy - 10, cy + 10)
+
+
 class VisibilityGraph:
     """Graph of clear orthogonal lanes around units and tags.
 
@@ -188,7 +224,7 @@ class VisibilityGraph:
 
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
-        from pandid.portgeom import COMPASS, port_anchor, tag_width, unit_box
+        from pandid.portgeom import COMPASS, port_anchor, unit_box
 
         margin = 15.0  # clearance around unit and label obstacles
 
@@ -222,37 +258,20 @@ class VisibilityGraph:
                 self.body_obstacles.append((u, body))
 
             lpos = f.label_pos or "top"
-            # Block the halo drawn behind the tag.
-            if u.kind not in ("feed", "product") and lpos != "center" and u.tag:
-                label_w = tag_width(u.tag) + 2 * TAG_CLEAR
-                # Room for a valve's fail letters past its tag.
-                fail = 25.0 if getattr(u, "fail", "") else 0.0
+            halo = _tag_halo(u, f)
+            if halo is not None:
+                self.obstacles.append(halo)
                 if lpos == "top":
-                    cx = f.x + u_width / 2
-                    self.obstacles.append(Rect(cx - label_w / 2, cx + label_w / 2, f.y - 20, f.y))
                     y_set.add(f.y - 20.0 - margin)
                     y_set.add(f.y - 10.0)
                 elif lpos == "bottom":
-                    cx = f.x + u_width / 2
-                    self.obstacles.append(
-                        Rect(
-                            cx - label_w / 2, cx + label_w / 2,
-                            f.y + u_height, f.y + u_height + 25 + fail,
-                        )
-                    )
-                    y_set.add(f.y + u_height + 25.0 + fail + margin)
+                    y_set.add(halo.y_max + margin)
                     y_set.add(f.y + u_height + 10.0)
                 elif lpos == "left":
-                    cy = f.y + u_height / 2
-                    self.obstacles.append(Rect(f.x - label_w - 15, f.x, cy - 10, cy + 10))
-                    x_set.add(f.x - label_w - 15.0 - margin)
+                    x_set.add(halo.x_min - margin)
                     x_set.add(f.x - 5.0)
-                elif lpos == "right":
-                    cy = f.y + u_height / 2
-                    self.obstacles.append(
-                        Rect(f.x + u_width, f.x + u_width + label_w + 15 + fail, cy - 10, cy + 10)
-                    )
-                    x_set.add(f.x + u_width + label_w + 15.0 + fail + margin)
+                else:
+                    x_set.add(halo.x_max + margin)
                     x_set.add(f.x + u_width + 5.0)
 
             x_set.add(f.x - margin)
@@ -282,8 +301,6 @@ class VisibilityGraph:
 
         for stream in fs.streams:
             src, dst = stream.source, stream.dest
-            if src.owner is None or dst.owner is None:
-                continue
             s_key, d_key = (src.owner.name, src.name), (dst.owner.name, dst.name)
             if s_key not in self.port_projs or d_key not in self.port_projs:
                 continue

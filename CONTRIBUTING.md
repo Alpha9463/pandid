@@ -22,12 +22,6 @@ and macOS for every supported Python. A dependency that loads a system library
 at import time installs cleanly and then fails on the first export. Read the
 `pandid/render/export.py` docstring before changing that dependency list.
 
-Optionally install the commit hooks, which mirror the CI lint gates:
-
-```bash
-pip install pre-commit && pre-commit install
-```
-
 ## The gates
 
 CI (`.github/workflows/ci.yml`) runs these checks:
@@ -120,9 +114,7 @@ rewriting shared branch history after review begins.
 Geometry separates *intent* (`Pin`, written by `pin()`) from *result* (`Frame`,
 written by the layout engine), which is what makes `layout()` idempotent.
 
-`scripts/route_bench.py` times `layout()` and `route()` over the examples, which
-is where a geometry change shows up as runtime. Section 1 covers the symbol
-scripts.
+Section 1 covers the symbol scripts.
 
 ---
 
@@ -185,48 +177,18 @@ one, so no generated symbol carries the keyword. Do not set it by hand on one:
 change the stencil mapping, or say so in `symbols.py` if the symbol is
 hand-drawn.
 
-Only a handful of symbols are hand-drawn in `pandid/render/symbols.py`: the
-Feed/Product boundary flags, the variable-port Mixer and Splitter, the ISA-5.1
-instrument balloons, the pipe tee and the block flow diagram's box. Those are
-original primitives, not stencils, and the last two are there because the
-stencil set draws neither: it is a set of *equipment*, and neither a bare
-junction nor a box standing for a whole plant section is a piece of equipment.
-New *equipment* should come from the stencils, so the sheet stays visually
-consistent and `NOTICE` remains the whole attribution story.
+Symbols the stencils do not supply are original artwork in
+`pandid/render/symbols.py`: the boundary flags, instrument balloons, mixer,
+splitter, tee and block, and the ISO 10628-2 equipment the stencil set lacks.
+`NOTICE` says which files are under which licence.
 
-### Symbols that have to stretch
+### Symbols built to size
 
-There is a third case, and today it has two members. The generator emits one
-fixed-size `Symbol` per shape, and a fixed drawing lands in whatever box its
-unit is given: reshaped to fill it, or held to its own proportions and centred
-in it. Some artwork survives neither. Stretching a belt conveyor draws its
-rollers as ellipses; holding its proportions instead draws a short conveyor
-adrift in a long box. A symbol the user is meant to resize along *one* axis,
-leaving the rest of it alone, cannot come out of the generator at all.
-
-Such a symbol is written as a *builder* in `pandid/render/symbols.py`, taking the
-size and returning a `Symbol` drawn at it, and `SymbolRegistry.for_unit()`
-resolves it against the unit. Because the artwork is built to the size, the
-`<defs>` entry is per size and the placed box is exactly the box it was drawn
-in, so the scale factor is 1 and every rotation and mirror still works the way
-it does for a fixed symbol.
-
-It is still stencil-derived and still Apache-2.0. Adapting one means:
-
-1. write the builder in `pandid/render/symbols.py`, with a comment naming the
-   stencil file, the shape, and what was changed;
-2. name it and its file in `NOTICE` section 2. It is not an original primitive
-   and does not belong in the section 1 paragraph that lists those.
-
-The second member is not stencil-derived and is built to *fit* rather than to a
-size the author gives: the block flow diagram's box, whose connections are a
-per-face count only the unit knows, and whose box grows so a run of them keeps a
-legible pitch instead of being squeezed. It is an original primitive, so step 2
-does not apply to it; `pandid.units.Block.symbol` is where its drawing comes
-from, and `pandid.render.symbols.block_symbol` builds it.
-
-Do not reach for this to avoid vendoring. A symbol with a fixed size goes
-through `KIND_MAP` like everything else.
+`_BUILT_TO_SIZE` in `pandid/render/symbols.py` lists the symbols built for each
+unit rather than registered once: the belt and screw conveyors, the block, the
+tank and the vessel. A builder adapted from a stencil names the stencil file and
+shape in a comment and in `NOTICE` section 2. A symbol with a fixed size goes
+through `KIND_MAP`.
 
 ### Symbols composed from parts
 
@@ -331,65 +293,22 @@ nozzles that do own a face, and equipment nozzles are never faceless.
 
 ## 3. Goldens: a changed golden means changed rendering
 
-`tests/golden/*.svg` are five representative committed SVG fixtures.
-`tests/test_golden.py` renders and compares those scenarios. The fixtures are
-source, not build output, which is why `.gitignore`'s blanket `*.svg` rule
-carries a `!tests/golden/*.svg` negation.
-
-The comparison uses `normalize` in `tests/_svg_compare.py` to sort `<defs>`
-and remove fenced renderer provenance. Geometry, visible labels and title-block
-fields compare verbatim.
-
-After an intentional rendering change:
-
-```bash
-python scripts/gallery.py
-PANDID_UPDATE_GOLDEN=1 python -m pytest tests/test_golden.py -q
-```
-
-(on Windows PowerShell: `python scripts/gallery.py; $env:PANDID_UPDATE_GOLDEN=1; python -m pytest tests/test_golden.py -q`)
-
-Then inspect `git diff tests/golden/ docs/gallery/` before committing. Explain
-every drawing change in the commit or PR description.
-
-`tests/golden/README.md` describes fixture selection and regeneration. Read it
-before changing a golden scenario.
+`tests/test_golden.py` renders five representative sheets and compares each
+with its committed `docs/gallery/<sheet>.svg`, apart from the fenced
+provenance, which names the package version. After an intentional rendering
+change, regenerate the gallery with `python scripts/gallery.py`, inspect
+`git diff docs/gallery/`, and explain every drawing change in the commit or PR
+description.
 
 ## 4. Port geometry goes through `pandid/portgeom.py`
 
-Layout, routing, and rendering must never compute a port position
-independently. They all call into `pandid/portgeom.py`, the single source of truth
-for a unit's resolved size and its port coordinates.
+Layout, routing and rendering never compute a port position themselves: they
+call `pandid/portgeom.py`, whose functions take the placed box as an argument.
+If you find yourself writing `frame.x + something` to find a nozzle, use
+`portgeom` instead.
 
-The bug it prevents actually happened: the renderer forgot a mirror flip the
-router had applied, and every mirrored unit's streams drew visually detached
-from their nozzles.
-
-- `resolve_size(unit)` gives the intrinsic `(w, h)` of a unit's placed box.
-- `symbol_to_box(...)` maps a point from the symbol's own coordinates into the
-  placed box, applying mirroring **first** and then the clockwise quarter turn,
-  which is exactly the order the renderer's SVG transform composes in.
-- Ports are resolved against the rectangle inside that box the artwork actually
-  occupies: the whole of it for a symbol that may be reshaped, and the centred,
-  aspect-preserving part of it for one that may not, so a symbol drawn smaller
-  than its box keeps its nozzles on the drawing. `unit_box()` stays the full
-  placed box, since that is the space the unit occupies and what the router has
-  to route around.
-- `port_point(unit, frame, name)` is where a stream visually attaches.
-- `port_anchor(unit, frame, name)` is the routing anchor, projected onto the
-  bounding-box edge, plus the outward direction.
-- `unit_box(unit, frame)` is the true drawn bounding box the router treats as an
-  obstacle.
-
-Every one of these takes the resolved box explicitly rather than reading
-`unit.frame`, so the same code works during layout (on a `_Slot`) and afterwards
-(on a `Frame`). If you find yourself writing `frame.x + something` to find a
-nozzle, stop and use `portgeom`.
-
-The related invariant on the geometry model: `Pin` is *intent*, written only by
-`Unit.pin()` and never by the engine, and `Frame` is *result*, written only by
-the layout engine. The solver reseeds from `Pin` on every run, which is what
-makes `layout()` idempotent. Don't write coordinates back onto a `Pin`.
+`Pin` is *intent*, written only by `Unit.pin()`, and `Frame` is *result*,
+written only by the layout engine. Don't write coordinates back onto a `Pin`.
 
 ---
 

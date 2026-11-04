@@ -1,4 +1,3 @@
-import os
 import re
 import warnings
 
@@ -748,9 +747,7 @@ def test_series_membership_is_cached_and_the_cache_answers_a_wider_family():
     assert s._series_members(series) == {"out_1": 0, "out_2": 1, "out_3": 2}
 
 
-# ---------------------------------------------------------------------------
 # The families, as sequences.
-# ---------------------------------------------------------------------------
 
 
 def test_a_family_holds_the_very_ports_the_numbered_names_are_bound_to():
@@ -819,9 +816,7 @@ def test_tank_is_its_own_kind():
     assert U.Vessel("V-1").kind == "vessel"
 
 
-# ---------------------------------------------------------------------------
 # A vessel's and a tank's five nozzles
-# ---------------------------------------------------------------------------
 
 #: The five nozzles both classes offer, by the name an author writes.
 _HOLDUP_PORTS = ["inlet", "outlet", "vent", "relief", "drain"]
@@ -856,7 +851,7 @@ def test_the_three_fixed_nozzles_are_never_numbered(cls):
 
 
 @pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
-def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank]) -> None:
+def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank], same_file) -> None:
     """Each warns at the caller's line, is reported, and still answers the face."""
     from pandid import Flowsheet
 
@@ -865,9 +860,7 @@ def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank]) -
     with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
         faces = (unit.default_input_face(), unit.default_output_face())
     assert faces == unit.input_faces + unit.output_faces
-    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
-        os.path.normcase(os.path.realpath(__file__))
-    }
+    assert {same_file(w.filename) for w in caught} == {same_file(__file__)}
     found = [issue.message for issue in fs.validate() if issue.code == "deprecated"]
     assert found == [str(caught[0].message)]
 
@@ -896,16 +889,14 @@ class _TopDrawn(U.Vessel):
         return "N"
 
 
-def test_a_subclass_input_face_hook_is_honoured_and_reported() -> None:
+def test_a_subclass_input_face_hook_is_honoured_and_reported(same_file) -> None:
     """Check that an overriding input hook places the inlet and is reported at the build."""
     from pandid import Flowsheet
 
     with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
         tank = _TopFed("T-1")
     assert tank.input_faces == ("N",)
-    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
-        os.path.normcase(os.path.realpath(__file__))
-    }
+    assert {same_file(w.filename) for w in caught} == {same_file(__file__)}
     fs = Flowsheet("hooks")
     fs.add(tank)
     assert [i.code for i in fs.validate() if i.code == "deprecated"] == ["deprecated"]

@@ -7,12 +7,8 @@ bottoms are cooled in HX-301, dosed with flocculant and dewatered in
 the filter press F-301, which sends filtrate to effluent and drops its
 cake onto the belt BC-301. Example 11 draws the same unit as a P&ID.
 
-Drawn at a fixed ``page_size="A3"``, so the zone grid is a property of
-the page rather than of the drawing: a note reading "F-301 in zone C-2"
-still points at C-2 after the next revision moves it. The sheet carries
-the zone-ruled frame, a title strip with revision history, an equipment
-list, off-page connectors, a sectioned stream property table and a
-utilities summary.
+Drawn on a fixed A3 page with a zone border, title strip, equipment
+list, stream property table and utilities summary.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -36,8 +32,7 @@ from pandid.document import Revision, TableBox, TitleBlock, equipment_list
 from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 # --- Stream property table --------------------------------------------
-# Rows render in first-seen key order, so every stream carries the same
-# keys; values are drawn verbatim and an empty one renders as "-".
+# An empty value renders as "-".
 PROPERTY_ROWS = (
     "Temperature (C)", "Pressure (bar)", "Vapour Fraction", "Total Flow (kg/s)",
     "Ethanol", "Water", "CO2", "Biosolids", "Monosaccharides", "SO4", "MEG",
@@ -73,10 +68,6 @@ def main():
     floc = fs.add(Feed("Flocculant", reference="PCD-301"))
     water = fs.add(Feed("RO Water", reference="PCD-301"))
 
-    # Sieve trays: the beer arrives carrying yeast and grain solids, so
-    # the deck has to be one with no pocket to settle in and no moving
-    # part to seize -- a large-hole perforated deck. The stripper runs
-    # base-loaded, so nothing is given up in turndown for it.
     col = fs.add(DistillationColumn("T-301", internals="sieve_tray", trays=18,
                                     width=110, height=250, label_pos="center",
                                     description="Beer Column"))
@@ -85,8 +76,7 @@ def main():
                             description="T-301 Overhead Condenser"))
     drum = fs.add(Vessel("V-301", variant="horizontal", width=110,
                          height=36, description="T-301 Reflux Drum"))
-    # A Tee, not a Splitter: it draws no symbol and takes no tag, so it
-    # puts no row in the equipment list.
+    # A Tee draws no symbol and takes no tag.
     refl = fs.add(Tee())
     reb = fs.add(KettleReboiler("E-302", width=120,
                                 height=44,
@@ -94,22 +84,12 @@ def main():
     hx = fs.add(ShellAndTubeExchanger("HX-301", variant="straight_tubes", width=150,
                                       height=45,
                                       description="Beer Column Bottoms Cooling"))
-    # 72 x 153 and not 80 x 100: a stirred vessel is drawn with ISO item
-    # 20.6's motor above its crown, and the motor is a **circle** whose
-    # roundness is worked out against the shell's own 62 x 131,8 box. A
-    # box of another shape draws it as an oval, so this one keeps the
-    # artwork's proportions to a fifth of a percent. It is 1,16 times the
-    # symbol rather than the symbol itself because the two make-up
-    # nozzles carry arrowheads, and under 151 tall they run into each
-    # other.
+    # Sized in the symbol's proportions so the drive motor stays round.
     mix1 = fs.add(Reactor("M-301", n_feeds=2, width=72, height=153,
                           description="Flocculant Activation Mixer Tank"))
     mix2 = fs.add(Tank("M-302", inputs=2,
                        description="Beer Flocculant Mixer Tank"))
-    # A press makes **two products** and has a nozzle for each: the
-    # filtrate leaves ``outlet`` on the east wall and the cake leaves
-    # ``cake`` through the floor. ``wash_in`` is offered too and this
-    # sheet does not use it.
+    # Filtrate leaves through ``outlet``, cake through ``cake``.
     press = fs.add(FilterPress("F-301", width=120, height=60,
                                description="Membrane Pressure Filter Press"))
     belt = fs.add(Conveyor("BC-301", length=120,
@@ -121,28 +101,20 @@ def main():
     cake = fs.add(Product("Biomass Filter Cake", reference="PFD-501"))
 
     # --- Placement ----------------------------------------------------
-    # A tee is a 12-unit square with a port on the middle of each face
-    # it uses, so half its width is the offset from a junction to the
-    # corner it is pinned by.
-    tee_w = 12.0
+    tee_w = 12.0                                    # a tee is a 12-unit square
     col_x, col_y, col_w = 430.0, 180.0, 110.0
     col.pin(x=col_x, y=col_y)
     col_axis = col_x + col_w / 2                    # overhead / bottoms line
-    # Asked of the symbol, not measured off it: Column places its feed
-    # by a rule (n_feeds=) and has no fixed fraction to write down.
     col_feed_y = col_y + port_offset(col, "feed")[1]
     col_reflux_y = col_y + port_offset(col, "reflux_in")[1]
 
     broth.pin(x=190, y=col_feed_y)                  # flag tip meets the feed nozzle
 
-    # mirrored="y" puts the shell inlet underneath, so the overhead
-    # rises into it straight.
+    # mirrored="y" puts the shell inlet underneath.
     cond_w = 64.0
     cond.pin(x=col_axis - cond_w / 2, y=56, mirrored="y")
 
-    # orientation=90 puts the tee's run down the page and its branch
-    # west. 68/91.5 is where the horizontal drum's draw sits in its own
-    # box.
+    # orientation=90 puts the tee's run down the page, its branch west.
     drum_x, drum_y, drum_w = 700.0, 100.0, 110.0
     drum.pin(x=drum_x, y=drum_y)
     drum_draw_x = drum_x + (68 / 91.5) * drum_w      # liquid draw down the shell
@@ -156,15 +128,7 @@ def main():
     hx.pin(x=900, y=hx_y)
     hx_axis_y = hx_y + hx_h / 2                     # dewatering train runs on it
 
-    # Both make-up feeds land on M-301's west wall a nozzle pitch apart
-    # -- 16 units, against a boundary flag 50 tall -- so only one of the
-    # two flags can stand on its own nozzle. The water does, and the
-    # flocculant stands 60 clear above it and steps down into the shell.
-    #
-    # Both elevations are asked of the symbol rather than written down as
-    # a fraction of the box. A fraction is a fraction of the box *before*
-    # the drive motor grew it, and the one that used to be here put the
-    # water flag 10 units off the nozzle it feeds.
+    # The water flag stands on its nozzle, the flocculant flag 60 above.
     mix1_y = 620.0
     mix1.pin(x=560, y=mix1_y)
     # x=190 puts every flag tip on one line.
@@ -176,8 +140,7 @@ def main():
     filtrate_y = pinned_y(press, "outlet")
     cake_x = pinned_x(press, "cake")
     effluent.pin(port="inlet", x=1440, y=filtrate_y)
-    # The belt runs under the press, so the cake drops out of the floor
-    # onto its tail and is thrown off the far end.
+    # The belt runs under the press.
     belt_y = 715.0
     belt.pin(port="feed", x=cake_x, y=belt_y)
     cake.pin(port="inlet",
@@ -185,14 +148,8 @@ def main():
              y=pinned_y(belt, "discharge"))
 
     # --- Connections --------------------------------------------------
-    # Declared in stream-number order, which is the order the table
-    # reads. A number is drawn once, on the first segment declared, so
-    # each group starts with the run it belongs on.
+    # A number is drawn once, on the first segment declared with it.
     fs.connect(broth.outlet, col.feed, name="S-301")
-    # ``feeds`` and not ``feed_1``/``feed_2``: a reactor is the one class
-    # whose numbered nozzles a checker cannot resolve, because
-    # ``StirredTankReactor`` subclasses it and the overloads that would
-    # name them would hand back a type that has lost its nozzles.
     fs.connect(floc.outlet, mix1.feeds[0], name="S-303")
     fs.connect(water.outlet, mix1.feeds[1], name="S-304")
 
@@ -210,10 +167,6 @@ def main():
     fs.connect(mix1.outlet, mix2.in_2, name="S-308")
 
     fs.connect(mix2.outlet, press.inlet, name="S-309")
-    # Two products out of one machine, on the two nozzles the machine
-    # has. Teeing off the filtrate and calling one leg the cake said the
-    # solids leave in the liquid line, which is the opposite of what a
-    # press does.
     fs.connect(press.outlet, effluent.inlet, name="S-310")
     fs.connect(press.cake, belt.feed, name="S-501")
     fs.connect(belt.discharge, cake.inlet, name="S-501")
@@ -225,9 +178,6 @@ def main():
     fs.stream_table_sections = [("Ethanol", "Mass Fraction")]
 
     # --- Title strip --------------------------------------------------
-    # date= and scale= are stated rather than left blank: left blank,
-    # the renderer fills in today's date and the ratio it fitted the
-    # sheet at.
     fs.title_block = TitleBlock(
         title="Ethanol Purification",
         subtitle="A300 Process Flow Diagram 1",

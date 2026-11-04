@@ -114,32 +114,6 @@ _ALIGN = {
 }
 
 
-def _resolve_align(align, default):
-    """Return the alignment, checked against the docking positions.
-
-    Parameters
-    ----------
-    align : str or None
-        Stated alignment, or ``None`` for the default.
-    default : str
-        Alignment used when ``align`` is ``None``.
-
-    Returns
-    -------
-    str
-        Docking position.
-
-    Raises
-    ------
-    ValueError
-        If the alignment is not a docking position.
-    """
-    value = default if align is None else align
-    if value not in _ALIGN:
-        raise ValueError(f"align must be one of {sorted(_ALIGN)}, got {value!r}")
-    return value
-
-
 # TableBox column alignments: left, centre, right.
 _COL_ALIGN = {"l", "c", "r"}
 
@@ -148,7 +122,9 @@ class _Box:
     """Field checks shared by the annotation and table boxes."""
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Set a field, storing text as drawn and checking numbers.
+        """Set a field, storing text as drawn and checking numbers and alignments.
+
+        A ``None`` alignment takes the class default.
 
         Parameters
         ----------
@@ -163,7 +139,8 @@ class _Box:
             If a numeric field or ``position`` entry is a bool or not
             a real number, or a given ``position`` is not iterable.
         ValueError
-            If a numeric field or ``position`` entry is not finite.
+            If a numeric field or ``position`` entry is not finite, or
+            ``align`` or a ``col_align`` entry is not one of its choices.
         """
         where = f"{type(self).__name__}.{name}"
         if name == "rows":
@@ -178,6 +155,17 @@ class _Box:
         elif name == "position" and value is not None:
             for i, coordinate in enumerate(value):
                 check_real(coordinate, f"{where}[{i}]")
+        elif name == "align":
+            value = getattr(type(self), "align") if value is None else value
+            if value not in _ALIGN:
+                raise ValueError(f"align must be one of {sorted(_ALIGN)}, got {value!r}")
+        elif name == "col_align" and value is not None:
+            for i, a in enumerate(value):
+                if a not in _COL_ALIGN:
+                    raise ValueError(
+                        f"col_align[{i}] must be one of {sorted(_COL_ALIGN)} ('l'/'c'/'r' "
+                        f"for left/centre/right), got {a!r}"
+                    )
         super().__setattr__(name, value)
 
 
@@ -221,16 +209,6 @@ class Annotation(_Box):
     width: float | None = None
     font_size: float = 11.0
 
-    def __post_init__(self):
-        """Check the alignment.
-
-        Raises
-        ------
-        ValueError
-            If ``align`` is not a docking position.
-        """
-        self.align = _resolve_align(self.align, "top-right")
-
 
 @dataclass
 class TableBox(_Box):
@@ -271,23 +249,6 @@ class TableBox(_Box):
     margin: float = 0.0
     font_size: float = 11.0
     col_align: list[str] | None = None
-
-    def __post_init__(self):
-        """Check the alignment and column alignments.
-
-        Raises
-        ------
-        ValueError
-            If ``align`` or a ``col_align`` entry is invalid.
-        """
-        self.align = _resolve_align(self.align, "bottom-right")
-        if self.col_align is not None:
-            for i, a in enumerate(self.col_align):
-                if a not in _COL_ALIGN:
-                    raise ValueError(
-                        f"col_align[{i}] must be one of {sorted(_COL_ALIGN)} ('l'/'c'/'r' "
-                        f"for left/centre/right), got {a!r}"
-                    )
 
 
 @dataclass
@@ -444,53 +405,17 @@ _MAJOR_EQUIPMENT = frozenset({
     "thickener", "turbine", "vessel",
 })
 
-# Equipment-list description of each kind.
+# Equipment-list description of a kind whose name is not its title.
 _KIND_LABELS = {
     "block": "Process Block",
-    "blower": "Blower",
-    "boiler": "Boiler",
-    "centrifuge": "Centrifuge",
-    "column": "Column",
-    "compressor": "Compressor",
-    "conveyor": "Conveyor",
-    "cooler": "Cooler",
-    "cooling_tower": "Cooling Tower",
-    "crusher": "Crusher",
     "crushing_machine": "Crushing/Grinding Machine",
-    "dryer": "Dryer",
-    "ejector": "Ejector",
-    "evaporator": "Evaporator",
     "elevator": "Bucket Elevator",
-    "feed": "Feed",
-    "feeder": "Feeder",
-    "filter": "Filter",
     "fitting": "In-Line Fitting",
-    "flare": "Flare",
     "funnel": "Charging Funnel",
     "furnace": "Fired Heater",
-    "heater": "Heater",
     "hex": "Heat Exchanger",
-    "instrument": "Instrument",
-    "kiln": "Kiln",
-    "kneader": "Kneader",
-    "mill": "Mill",
-    "mixer": "Mixer",
-    "product": "Product",
-    "pump": "Pump",
-    "reactor": "Reactor",
-    "reducer": "Reducer",
     "screening_device": "Screen",
-    "thickener": "Thickener",
-    "separator": "Separator",
-    "splitter": "Splitter",
-    "spray_nozzle": "Spray Nozzle",
-    "stack": "Stack",
-    "tank": "Tank",
     "tee": "Pipe Tee",
-    "turbine": "Turbine",
-    "valve": "Valve",
-    "vent": "Vent",
-    "vessel": "Vessel",
 }
 
 
