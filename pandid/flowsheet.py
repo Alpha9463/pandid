@@ -560,6 +560,10 @@ class Flowsheet:
         # and whether any did since route() turned that on.
         self._keep_clear = False
         self._kept_clear = False
+        # Whether pass 1 reserves no room beside a balloon on a unit face,
+        # and whether route() is still to try that on the default layout.
+        self._tight = False
+        self._tight_due = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2029,6 +2033,7 @@ class Flowsheet:
             engine.layout(self)
         finally:
             self._laying_out = outer
+        self._tight_due = engine is default_layout_engine
         self._layout_stale = False
         self._route_stale = True
 
@@ -2041,7 +2046,11 @@ class Flowsheet:
         ``route_converged`` records whether it settled. The sheet is then
         placed again with balloons hung from balloons kept off the line
         their chain taps, and that is kept only if no tap leaves its line
-        and no finding or clash grows.
+        and no finding or clash grows. After the default layout, the sheet
+        is laid out and routed again with no room beside a balloon on a
+        unit face, and that is kept only if the sheet is smaller, no tap
+        leaves its line, and no finding, clash, crossing, bend or line
+        near a balloon grows.
 
         Parameters
         ----------
@@ -2115,6 +2124,71 @@ class Flowsheet:
             elif self._unhung is None:
                 self._unhung = prior
         self._route_stale = False
+        due, self._tight_due = self._tight_due, False
+        if attempt and due and not self._tight:
+            self._try_tight(router)
+
+    def _try_tight(self, router) -> None:
+        """Lay out and route again with no room beside a balloon on a unit face.
+
+        Keep that only if the sheet is smaller, no tap leaves its line and
+        no finding, clash, crossing, bend or line near a balloon grows;
+        else put the sheet back.
+
+        Parameters
+        ----------
+        router : DefaultRouter
+            Router the sheet was routed with.
+        """
+        from collections import Counter
+
+        from pandid.layout.attach import stream_path
+        from pandid.layout.conflicts import boxes_overlap
+        from pandid.layout.control import _flaws, _taps_off
+        from pandid.layout.quality import measure_final
+        from pandid.layout.stages import is_control
+        from pandid.portgeom import unit_box
+        from pandid.render.symbols import MIN_HEAD_CLEARANCE
+
+        def cost() -> "tuple[Counter[str], float]":
+            """Return the routed sheet's flaws and its area.
+
+            Returns
+            -------
+            tuple[Counter[str], float]
+                Flaws by kind, with crossings, bends, hard findings and
+                line runs nearer a balloon than two line widths, and area.
+            """
+            q = measure_final(self)
+            balloons = [unit_box(u, u.frame) for u in self.units
+                        if is_control(u) and u.frame is not None]
+            runs = [(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+                    for points in (stream_path(s) for s in self.streams if s.route is not None)
+                    for a, b in zip(points, points[1:])]
+            near = sum(boxes_overlap(r, box, MIN_HEAD_CLEARANCE) for r in runs for box in balloons)
+            return _flaws(self, full=True) + Counter(
+                crossings=q.crossings, bends=q.bends, hard=sum(q.hard), near=near), q.area
+
+        prior, unhung, unplaced = self._geometry(), self._unhung, self.unplaced_instruments
+        (before, area), off = cost(), _taps_off(self)
+        self._tight = True
+        try:
+            self.layout()
+            # A layout that moves no unit routes the same.
+            worse = all(u.frame == frame for u, frame, _ in prior[0] if not is_control(u))
+            if not worse:
+                self.route(router)
+                flaws, smaller = cost()
+                worse = (smaller >= area or not _taps_off(self) <= off
+                         or any(n > before[k] for k, n in flaws.items()))
+        except Exception:
+            worse = True
+        finally:
+            self._tight = False
+        if worse:
+            self._put_geometry(prior, keep_manual=False)
+            self._unhung, self.unplaced_instruments = unhung, unplaced
+            self._route_stale = self._tight_due = False
 
     def _geometry(self) -> tuple:
         """Return each unit's frame and tap, each automatic route, and

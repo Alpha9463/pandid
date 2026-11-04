@@ -55,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
 - **CI checks lint and types in one job (#624).** Ruff, mypy and pyright share
   one install, and the smoke job is gone; the test job covers what it ran.
+- **Default layouts leave no room beside a balloon on a unit face when they
+  can (#610).** `route()` lays such a sheet out and routes it again without
+  that room, and keeps the result only if it is smaller and no finding,
+  clash, crossing, bend or pipe near a balloon is added.
 
 ### Deprecated
 

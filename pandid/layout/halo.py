@@ -1,6 +1,7 @@
 """Reserve room around process units for the balloons attached to them.
 
-A balloon on a stream reserves room on both units the stream joins.
+A balloon on a stream reserves room on both units the stream joins. In a
+tight layout, a balloon on a unit face reserves none beside that face.
 """
 
 from __future__ import annotations
@@ -73,7 +74,8 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
     Parameters
     ----------
     fs : Flowsheet
-        Sheet with seeded slots, whose ranks give a stream's direction.
+        Sheet with seeded slots, whose ranks give a stream's direction,
+        and ``_tight`` set for a tight layout.
 
     Returns
     -------
@@ -86,7 +88,7 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
     for inst in fs.units:
         if not is_control(inst) or getattr(inst, "host", None) is None:
             continue
-        charge = _charge(inst)
+        charge = _charge(inst, fs._tight)
         if charge is None:
             continue
         reach, girth, face, hosts = charge
@@ -95,13 +97,15 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
     return pads
 
 
-def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
+def _charge(inst: "Unit", tight: bool = False) -> tuple[float, float, str, list["Unit"]] | None:
     """Return a chain's reach, girth, face and hosts, or None.
 
     Parameters
     ----------
     inst : Unit
         Balloon at the end of the chain.
+    tight : bool, default=False
+        Give a chain on a unit face no girth.
 
     Returns
     -------
@@ -143,6 +147,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
         nx, ny = COMPASS[getattr(root, "face", None) or "E"]
         flow = (-ny, nx)  # the face's tangent
         hosts = [node]
+        girth = 0.0 if tight else girth
 
     ux, uy = _rotate_ccw(flow[0], flow[1], float(getattr(root, "angle", 90.0)))
     face = "E" if ux >= abs(uy) else ("W" if -ux >= abs(uy) else ("N" if uy < 0 else "S"))

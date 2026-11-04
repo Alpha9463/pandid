@@ -10,8 +10,11 @@ import pytest
 from _layout_cases import build as build_biodiesel
 from pandid import Block, Feed, Flowsheet, GravitySeparator, Product, Reactor
 from pandid import devices as D, units as U
+from pandid.layout.attach import stream_path
+from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.quality import measure_final
-from pandid.portgeom import port_point, resolve_port
+from pandid.portgeom import port_point, resolve_port, unit_box
+from pandid.render.symbols import MIN_HEAD_CLEARANCE
 from pandid.geometry import Frame, Route
 from pandid.streams import Stream
 from pandid.routing.metrics import real_bends
@@ -160,6 +163,26 @@ def test_default_route_clears_the_unpinned_biodiesel_sheet() -> None:
     assert all(stream.route is not None and not stream.route.used_fallback for stream in fs.streams)
     assert not quality.hard_conflicts and not any(quality.hard)
     assert not any(issue.code == "route-crosses-unit" for issue in fs.validate())
+
+
+def test_a_tighter_layout_that_runs_a_pipe_against_a_balloon_is_not_kept() -> None:
+    """Keep the unpinned ethanol P&ID's overhead pipe clear of the balloons hung below it."""
+    fs, _ = layout_quality.build("11_ethanol_pid", True)
+    fs.route()
+
+    boxes = []
+    for unit in fs.units:
+        if unit.name in ("TT-302", "TIC-302"):
+            assert unit.frame is not None
+            boxes.append(unit_box(unit, unit.frame))
+    runs = [
+        (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+        for s in fs.streams
+        if s.name == "AE-302-300-80-SS"
+        for a, b in zip(stream_path(s), stream_path(s)[1:])
+    ]
+    assert len(boxes) == 2 and runs
+    assert not any(boxes_overlap(run, box, MIN_HEAD_CLEARANCE) for run in runs for box in boxes)
 
 
 @pytest.mark.parametrize("mirror", [None, "y", True])

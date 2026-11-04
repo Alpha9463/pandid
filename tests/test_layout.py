@@ -965,6 +965,20 @@ def test_the_drawing_and_its_balloon_halos_start_at_the_margin() -> None:
     assert (min(lefts), min(tops)) == (MARGIN, MARGIN)
 
 
+def test_a_balloon_on_a_unit_face_takes_no_room_beside_the_unit() -> None:
+    """Check that a balloon on a drum's top leaves its neighbours one column gap away."""
+    fs = Flowsheet("Side room")
+    feed, drum, product = fs.add(U.Feed("Feed")), fs.add(U.Vessel("V-1")), fs.add(U.Product("P"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, product.inlet)
+    fs.add_instrument("PT", 1, sensing=drum, face="N", offset=60)
+    fs.route()
+
+    boxes = _drawn_boxes(fs)
+    assert boxes["V-1"][0] - boxes["Feed"][2] == pytest.approx(COL_GAP)
+    assert boxes["P"][0] - boxes["V-1"][2] == pytest.approx(COL_GAP)
+
+
 def test_no_two_units_overlap_judged_by_the_boxes_they_draw() -> None:
     """Check a folded sheet of roof-fed blocks with long feed tags for overlaps."""
     fs = Flowsheet("Stacked")
