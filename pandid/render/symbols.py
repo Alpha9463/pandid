@@ -3472,7 +3472,6 @@ class SymbolRegistry:
 
         for name, reg in (("gravity", "X8031"), ("electrostatic", "X8125"),
                           ("electromagnetic", "X8126")):
-            # Pass self: default_registry is still being built.
             overlays = characteristic_overlays(name, registry=self)
             self.register("separator", compose(
                 _SEPARATING_VESSEL,
@@ -3502,7 +3501,6 @@ class SymbolRegistry:
             ("mill", drum, (("vibration", "X8054"),)),
         ):
             for name, reg in marks:
-                # Pass self: default_registry is still being built.
                 overlays = crushing_overlays(name, registry=self)
                 self.register(kind, compose(
                     body,

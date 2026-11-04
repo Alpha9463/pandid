@@ -1992,6 +1992,8 @@ class Flowsheet:
         ------
         ValueError
             If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
