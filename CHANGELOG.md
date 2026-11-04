@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Python 3.15 is supported and tested in CI** alongside 3.11, the oldest
+  supported version.
 - **Layout draws equipment as a layered graph (#564).** Equipment and
   boundary flags are set in columns by flow and nozzle faces, ordered to cut
   crossings, and lined up nozzle to nozzle. Valves, fittings and valve
