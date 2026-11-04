@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Generate SVG and PNG gallery assets from example flowsheets.
+"""Generate the SVG gallery from example flowsheets.
 
 Run ``python scripts/gallery.py`` after an example or renderer change, then
 review the generated assets. A version-only package update needs no redraw.
 """
 
-import argparse
 import contextlib
 import importlib.util
 import io
@@ -22,7 +21,10 @@ from pandid.render import export  # noqa: E402
 EXAMPLES = ROOT / "examples"
 GALLERY = ROOT / "docs" / "gallery"
 
-# Keep the smallest title-block lettering readable in gallery previews.
+# PyPI's 0.1.5 description embeds this PNG by its raw URL; keep writing it.
+PYPI_PNG = "11_ethanol_pid"
+
+# Keep the smallest title-block lettering readable in the PNG.
 WIDTH = 2400
 
 
@@ -234,36 +236,22 @@ def rasterize(svg: str, width: int = WIDTH) -> bytes:
 
 
 def main() -> None:
-    """Generate SVG assets and, unless disabled, PNG gallery previews.
+    """Write every gallery sheet as an SVG, and :data:`PYPI_PNG` as a PNG.
 
     Returns
     -------
     None
-        Assets are written to :data:`GALLERY`.
+        Sheets are written to :data:`GALLERY`.
     """
-    description = __doc__.split("\n", 1)[0] if __doc__ is not None else "Generate gallery assets"
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "--svg-only",
-        action="store_true",
-        help="rewrite the .svg sheets and leave the .png rasters alone "
-        "(they need the optional [pdf] backend)",
-    )
-    args = parser.parse_args()
-
     _pandid_is_this_checkout()
     GALLERY.mkdir(parents=True, exist_ok=True)
     for stem, (fs, kwargs) in captures().items():
         svg = fs.to_svg(**kwargs)
         (GALLERY / f"{stem}.svg").write_text(svg, encoding="utf-8")
-        if args.svg_only:
-            print(f"wrote {stem}.svg")
-            continue
-        # Rasterise the sheet just written, not the one in hand, so a PNG can
-        # never show a drawing its own SVG does not.
-        png = rasterize((GALLERY / f"{stem}.svg").read_text(encoding="utf-8"))
-        (GALLERY / f"{stem}.png").write_bytes(png)
-        print(f"wrote {stem}.svg and {stem}.png ({len(png) / 1024:.0f} KiB)")
+        print(f"wrote {stem}.svg")
+        if stem == PYPI_PNG:
+            (GALLERY / f"{stem}.png").write_bytes(rasterize(svg))
+            print(f"wrote {stem}.png")
 
 
 if __name__ == "__main__":
