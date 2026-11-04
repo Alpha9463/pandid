@@ -156,7 +156,7 @@ class _NoSuchAttribute(AttributeError):
 _PLACEMENT_HINTS = Deprecation(
     what="PLACES or LAYOUT_CONFIDENCE on a Unit subclass",
     instead="unit.nozzle(port, face) or unit.pin(orientation=..., mirrored=...)",
-    removed_in="0.1.7",
+    removed_in="0.3.0",
     note="layout now places a unit's peers by the faces its nozzles are drawn on",
 )
 
@@ -166,7 +166,7 @@ _DEFAULT_FACES = Deprecation(
     what="default_input_face() or default_output_face()",
     instead=("inputs= and outputs= to choose the faces, and input_faces and "
              "output_faces to read them"),
-    removed_in="0.1.7",
+    removed_in="0.3.0",
 )
 
 
@@ -2998,7 +2998,7 @@ _DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
 _AT_FACE = Deprecation(
     what="at='N' (a unit face)",
     instead="face='N', or face: N in a spec",
-    removed_in="0.1.7",
+    removed_in="0.3.0",
     note="at= now means only a fraction along a line",
 )
 

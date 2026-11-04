@@ -20,14 +20,14 @@ __all__ = ["DefaultRouter"]
 _ROUTER = Deprecation(
     what="pandid.routing.Router",
     instead="any object with a route(fs) method",
-    removed_in="0.1.7",
+    removed_in="0.3.0",
 )
 
 #: Deprecation of DefaultRouter(recover_exits=).
 _RECOVER_EXITS = Deprecation(
     what="DefaultRouter(recover_exits=...)",
     instead="DefaultRouter()",
-    removed_in="0.1.7",
+    removed_in="0.3.0",
     note="the router will always recover a blocked stub's exit",
 )
 

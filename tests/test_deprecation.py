@@ -251,7 +251,7 @@ def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_the_package_declares_only_the_announced_deprecations():
-    """Check that the package declares only the deprecations announced for removal in 0.1.7."""
+    """Check that the package declares only the deprecations announced for removal in 0.3.0."""
     from pandid.flowsheet import _CONTROLLER_AT
     from pandid.routing import _RECOVER_EXITS, _ROUTER
     from pandid.streams import _LINE_COMPONENTS
