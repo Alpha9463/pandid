@@ -92,8 +92,6 @@ def _reference_recursive_marks(fs: Flowsheet) -> set[int]:
     """Return the ids of the streams a recursive depth-first walk marks as back edges."""
     units = process_units(fs)
     marks: set[int] = set()
-    if not units:
-        return marks
 
     adj: dict[Unit, list[Stream]] = {u: [] for u in units}
     in_degree: dict[Unit, int] = {u: 0 for u in units}

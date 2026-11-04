@@ -252,37 +252,26 @@ def _path_segments(d: str) -> list[Segment]:
         if cmd is None:
             break
         upper = cmd.upper()
-        relative = cmd.islower()
         nargs = _PATH_CMD_ARGS[upper]
         if upper == "Z":
             segs.append((cur, start))
             cur = start
             cmd = None
             continue
-        if i + nargs > n:
-            break
+        assert cmd == upper, f"relative path command in {d!r}"
         args = [float(tokens[i + k]) for k in range(nargs)]
         i += nargs
         if upper == "A":
             rx, ry, rot, laf, sf = args[0], args[1], args[2], args[3], args[4]
             x, y = args[5], args[6]
-            if relative:
-                x, y = x + cur[0], y + cur[1]
             pts = _arc_points(cur[0], cur[1], rx, ry, rot, int(laf), int(sf), x, y)
             segs.extend(zip(pts, pts[1:]))
             cur = (x, y)
             continue
-        if upper == "H":
-            x, y = args[0] + (cur[0] if relative else 0.0), cur[1]
-        elif upper == "V":
-            x, y = cur[0], args[0] + (cur[1] if relative else 0.0)
-        else:
-            x, y = args[-2], args[-1]
-            if relative:
-                x, y = x + cur[0], y + cur[1]
+        x, y = args[-2], args[-1]
         newp = (x, y)
         if upper == "M":
-            start, cmd = newp, ("l" if relative else "L")
+            start, cmd = newp, "L"
         else:
             segs.append((cur, newp))
         cur = newp
@@ -863,11 +852,8 @@ def _placements(
         ux, uy = float(attr["x"]), float(attr["y"])
         uw, uh = float(attr["width"]), float(attr["height"])
         _, _, vw, vh = _nums(re.search(r'viewBox="([^"]+)"', defs[sym_id]).group(1))
-        if 'preserveAspectRatio="none"' in defs[sym_id]:
-            sx, sy, ox, oy = uw / vw, uh / vh, 0.0, 0.0
-        else:
-            sx = sy = min(uw / vw, uh / vh)
-            ox, oy = (uw - sx * vw) / 2, (uh - sy * vh) / 2
+        sx = sy = min(uw / vw, uh / vh)
+        ox, oy = (uw - sx * vw) / 2, (uh - sy * vh) / 2
         fit: Matrix = (sx, 0.0, 0.0, sy, ux + ox, uy + oy)
         nw, nh = natives.get(sym_id, (vw, vh))
         redraw: Matrix = (vw / nw, 0.0, 0.0, vh / nh, 0.0, 0.0)
@@ -937,8 +923,6 @@ def test_a_directional_symbols_ports_stay_on_ink_under_a_flip(entry):
     segments = _collect_segments(sym.svg)
     for mirror_x, mirror_y in ((True, False), (False, True), (True, True)):
         for name, (x, y) in sym.ports.items():
-            if (kind, name) in _SIGNAL_PORTS:
-                continue
             flipped = (sym.width - x if mirror_x else x, sym.height - y if mirror_y else y)
             d = _nearest_distance(flipped, segments)
             assert d <= GEOM_TOL, f"{kind}/{variant} {mirror_x=} {mirror_y=}: {name!r} off ink"
@@ -1007,8 +991,6 @@ def test_the_reported_column_and_reactor_meet_their_streams():
         )
         drawn = [(_apply(matrix, *a), _apply(matrix, *b)) for a, b in _collect_segments(sym.svg)]
         for name in unit.ports:
-            if (unit.kind, name) in _SIGNAL_PORTS:
-                continue
             gap = _nearest_distance(port_point(unit, frame, name), drawn)
             assert gap <= GEOM_TOL, f"{unit.name}.{name} in a {frame.w:g}x{frame.h:g} box"
 

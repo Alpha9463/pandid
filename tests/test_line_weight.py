@@ -113,8 +113,6 @@ def _viewport(use: ET.Element, symbol: ET.Element) -> Matrix:
     _, _, view_width, view_height = (float(value) for value in view_box.split())
     width = float(use.get("width", view_width))
     height = float(use.get("height", view_height))
-    if symbol.get("preserveAspectRatio") == "none":
-        return (width / view_width, 0.0, 0.0, height / view_height)
     scale = min(width / view_width, height / view_height)
     return (scale, 0.0, 0.0, scale)
 
@@ -434,9 +432,7 @@ def test_a_uniformly_resized_valve_draws_at_the_sheet_weight_exactly() -> None:
                 height=symbol.height * factor,
             )
         )
-        for group, minor, major in drawn_pens(flowsheet.to_svg()):
-            if not group.startswith("sym_valve"):
-                continue
+        for _group, minor, major in drawn_pens(flowsheet.to_svg()):
             assert minor == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)
             assert major == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)
             checked += 1

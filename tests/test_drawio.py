@@ -420,15 +420,9 @@ def test_every_instrument_connection_is_exported_as_an_edge(sample):
         # The balloon end lands on the balloon's centre.
         landed = _drawio_connection_point(inst, at[taps[f"t{n}"].get("target")], style, "entry")
         assert landed == pytest.approx(centre, abs=0.01)
-        source = taps[f"t{n}"].get("source")
-        if source is None:
-            point = taps[f"t{n}"].find('mxGeometry/mxPoint[@as="sourcePoint"]')
-            assert (float(point.get("x")), float(point.get("y"))) == pytest.approx(tap, abs=0.01)
-        else:
-            host = inst.host
-            assert _drawio_connection_point(host, at[source], style, "exit") == pytest.approx(
-                tap, abs=0.01
-            )
+        point = taps[f"t{n}"].find('mxGeometry/mxPoint[@as="sourcePoint"]')
+        assert point is not None and taps[f"t{n}"].get("source") is None
+        assert (float(point.attrib["x"]), float(point.attrib["y"])) == pytest.approx(tap, abs=0.01)
 
 
 def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
@@ -1267,9 +1261,6 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
 
     for stem in LINE_NUMBER_SHEETS:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
-        # Enclosed numbers use a separate cell, checked in test_stream_label_enclosure.py.
-        if fs.stream_labels.enclosure != "none":
-            continue
         cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         plates = _tag_pass(fs, default_registry, None, "vertical").plates
@@ -2190,8 +2181,6 @@ def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery, rendered_
     checked = []
     for stem in TABLE_REPRESENTATIVES:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
-        if not kwargs.get("show_stream_table"):
-            continue
         drawn = _svg_stream_table(rendered_gallery[stem].svg)
         table, exported = _drawio_stream_table(_gallery_cells(rendered_gallery, stem))
         assert len(exported) == len(drawn), (
@@ -2240,8 +2229,6 @@ def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(
     checked = []
     for stem in TABLE_REPRESENTATIVES:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
-        if not kwargs.get("show_stream_table"):
-            continue
         cells = _gallery_cells(rendered_gallery, stem)
         table, _drawn = _drawio_stream_table(cells)
         style = _style(table)
@@ -2588,9 +2575,7 @@ def test_each_paged_representative_lands_on_its_configured_paper(settled_gallery
             border=kwargs.get("border"),
         )
         root = ET.fromstring(doc)
-        if sheet is None:
-            assert root.find("diagram/mxGraphModel").get("page") == "0"
-            continue
+        assert sheet is not None
         for cell in root.iter("mxCell"):
             geo = cell.find("mxGeometry")
             if geo is None or cell.get("edge") == "1" or geo.get("x") is None:

@@ -391,8 +391,6 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
     measured = 0
     for rx, ry, rw, rh, size, text in _HALOED.findall(svg):
         rx, ry, rw, rh, size = (float(v) for v in (rx, ry, rw, rh, size))
-        if rh > rw:  # a number turned to run up a vertical line
-            continue
         top, bottom = (ry - vy) * px, (ry + rh - vy) * px
         # Crop inside the halo and threshold, so only this label's ink counts.
         box = (int((rx - vx) * px) + 1, int(top) + 1, int((rx + rw - vx) * px), int(bottom))
