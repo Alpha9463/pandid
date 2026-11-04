@@ -27,8 +27,8 @@ Every sheet without pins draws differently from 0.1.5.
 - `pin(row=)` orders units down their column instead of naming a grid row.
 - A balloon's side on a unit is set with `face=`; `at=` is only a position
   along a line.
-- Unit options such as `width`, `height` and `description` must be passed by
-  keyword.
+- Many unit classes, such as `Feed`, `Valve`, `Vessel` and `Block`, take
+  `width`, `height` and other options by keyword only.
 - Error messages and `validate()` findings name the call that fixes them.
 - The examples are numbered from 01 and show only the tables and boxes they
   need. The alumina refinery is drawn on three linked sheets.
@@ -40,11 +40,12 @@ These are removed in 0.3.0.
 - `at=` for a balloon's side on a unit. Use `face=`, and `controller_face=`
   for `controller_at=`.
 - `default_input_face()` and `default_output_face()` on `Tank` and `Vessel`.
-  Use `inputs=` and `outputs=`.
+  Set faces with `inputs=` and `outputs=`, and read them from `input_faces`
+  and `output_faces`.
 - `PLACES` and `LAYOUT_CONFIDENCE` on a unit class. Use `nozzle()` or
   `pin(orientation=..., mirrored=...)`.
-- `routing.Router` and `DefaultRouter(recover_exits=)`. Pass `fs.route()` any
-  object with a `route(fs)` method.
+- `routing.Router`. Pass `fs.route()` any object with a `route(fs)` method.
+- `DefaultRouter(recover_exits=)`. Use `DefaultRouter()`.
 - `Stream.line_components()`. Read the stream's `size`, `service` and other
   fields directly.
 
@@ -64,7 +65,8 @@ These are removed in 0.3.0.
 - `ControlLoop.variable`, `.number`, `.name`, `.tag()`, `.element()` and
   `.check()`. Use them on `ControlLoop.loop`.
 - `Port.state`, `Port.side`, `Unit.params` and
-  `pandid.document.location_reference`.
+  `pandid.document.location_reference`. Stream conditions stay on
+  `Stream.state`.
 - The `layout-search-*` warnings and the internal layout modules behind them.
 - The ammonia loop example, which another example already covers.
 
@@ -171,9 +173,12 @@ These are removed in 0.3.0.
 
 ### Removed
 
-- The spellings deprecated in 0.1.2: `add_instrument(on=)`,
-  `Instrument(variant="panel")` and `"aux"`, `Valve(variant="pneumatic")`, and
-  `vapor` and `liquid` on dust separators.
+- The spellings deprecated in 0.1.2:
+  - `add_instrument(on=)`: use `sensing=`, `acting_on=` or `near=`.
+  - `Instrument(variant="panel")` and `"aux"`: use `display="central"` and
+    `"subsidiary"`.
+  - `Valve(variant="pneumatic")`: use `variant="control"`.
+  - `vapor` and `liquid` on dust separators: use `overflow` and `underflow`.
 
 ### Fixed
 
