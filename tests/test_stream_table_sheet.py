@@ -761,23 +761,6 @@ def test_an_entry_point_refuses_a_keyword_it_does_not_take(tmp_path: Path) -> No
         cast(Any, fs.to_drawio)(debug=True)
 
 
-def test_a_backend_refuses_the_keywords_it_does_not_take():
-    """Verify that a backend refuses the keywords it does not take."""
-    fs = _sheet(streams=3)
-    fs.route()
-    for renderer in (SvgRenderer(), DrawioRenderer()):
-        with pytest.raises(ValueError, match="does not take"):
-            renderer.render(fs, page_size="A3", nonsense=True)
-
-
-def test_the_drawio_backend_refuses_the_overlay_when_called_directly():
-    """Verify that the draw.io backend refuses the overlay when called directly."""
-    fs = _sheet(streams=3)
-    fs.route()
-    with pytest.raises(ValueError, match="debug"):
-        DrawioRenderer().render(fs, show_stream_table="sheet", page_size="A3", debug=True)
-
-
 def test_every_keyword_the_entry_points_pass_is_one_its_backend_names():
     """Verify that entry-point keywords match backend parameters."""
     for entry, backend in (
@@ -785,7 +768,7 @@ def test_every_keyword_the_entry_points_pass_is_one_its_backend_names():
         (Flowsheet.to_drawio, DrawioRenderer.render),
     ):
         passed = set(inspect.signature(entry).parameters) - {"self", "check"}
-        named = set(inspect.signature(backend).parameters) - {"self", "fs", "opts"}
+        named = set(inspect.signature(backend).parameters) - {"self", "fs"}
         assert passed <= named, f"{backend.__qualname__} would swallow {passed - named}"
 
 

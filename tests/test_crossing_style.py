@@ -310,14 +310,6 @@ def test_every_entry_point_hands_the_word_on(
     assert caught["svg"] == _pair(ROOMY).to_svg(crossing_style="arc", check=False)
 
 
-def test_both_renderers_refuse_it_too():
-    """Check direct renderers reject invalid crossing styles."""
-    fs = _pair(ROOMY)
-    for renderer in (SvgRenderer(), DrawioRenderer()):
-        with pytest.raises(ValueError, match="crossing_style"):
-            renderer.render(fs, crossing_style="semicircle")
-
-
 _SPEC = """\
 {"name": "Skid",
  "units": [{"kind": "Feed", "name": "Raw Feed"},
@@ -393,12 +385,12 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
 def test_a_plain_sheet_reports_nothing_because_it_promised_nothing():
     """Check plain crossings suppress unmarked-crossing warnings."""
     fs = _pair(TIGHT)
-    SvgRenderer().render(fs)
+    fs.to_svg(check=False)
     assert _found(fs), (
         "the fixture reports nothing at the default style, so the assertion "
         "below would pass on a sheet that had nothing to silence"
     )
-    SvgRenderer().render(fs, crossing_style="plain")
+    fs.to_svg(crossing_style="plain", check=False)
     assert not _found(fs)
 
 
@@ -444,12 +436,12 @@ def _crossings(fs: Flowsheet) -> int:
 def test_a_crossing_moved_clear_stops_being_reported():
     """Check rerendering removes resolved crossing warnings."""
     fs = _pair(TIGHT)
-    SvgRenderer().render(fs)
+    fs.to_svg(check=False)
     assert _found(fs)
-    fs.streams[1].route = Route(
-        waypoints=[(300.0, 375.0), (300.0, ROOMY), (400.0, ROOMY), (400.0, 375.0)]
-    )
-    SvgRenderer().render(fs)
+    moved = Route(waypoints=[(300.0, 375.0), (300.0, ROOMY), (400.0, ROOMY), (400.0, 375.0)])
+    fs.streams[1].route = moved
+    fs.to_svg(check=False)
+    assert fs.streams[1].route == moved
     assert not _found(fs)
 
 

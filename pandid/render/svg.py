@@ -2947,9 +2947,6 @@ _FIT_CODES = ("text-truncated", "text-overruns-cell")
 #: Finding code for a stream-table sheet with no drawing number.
 TABLE_SHEET_UNNUMBERED = "table-sheet-unnumbered"
 
-# Codes the renderer puts on fs.warnings; each render replaces them.
-_RENDER_CODES = _FIT_CODES + ("crossing-unmarked", TABLE_SHEET_UNNUMBERED)
-
 
 
 def fit_issue(field: str, text: str, drawn: str,
@@ -3351,30 +3348,6 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
                        (_PLAIN_MARGIN, _PLAIN_MARGIN, free_w, free_h))
 
 
-def reject_unknown_options(where: str, opts: dict) -> None:
-    """Raise if a backend was given keywords it does not take.
-
-    Parameters
-    ----------
-    where : str
-        Backend name, for the message.
-    opts : dict
-        Unrecognised keyword arguments.
-
-    Raises
-    ------
-    ValueError
-        If ``opts`` is not empty.
-    """
-    if opts:
-        raise ValueError(
-            f"{where} was given {', '.join(sorted(opts))}, which it does not "
-            f"take. A render argument this backend does not know is an "
-            f"argument it would have dropped, and a file that quietly lacks "
-            f"what was asked for is worse than a refused one."
-        )
-
-
 def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
                            border: "str | None" = None,
                            diagram: "str | None" = None,
@@ -3462,12 +3435,11 @@ class SvgRenderer:
                show_stream_table: "bool | str" = False,
                border: "str | None" = None, diagram: "str | None" = None,
                page_size: "str | None" = None, connections: "str | None" = None,
-               debug: "bool | float" = False,
-               **opts) -> str:
+               debug: "bool | float" = False) -> str:
         """Render the flowsheet to SVG.
 
-        Render warnings replace those of any earlier render on
-        ``fs.warnings``.
+        Add the render's findings to ``fs.warnings``, replacing the
+        fit findings there.
 
         Parameters
         ----------
@@ -3491,8 +3463,6 @@ class SvgRenderer:
             ``"flanged-at-nozzles"``.
         debug : bool or float, default=False
             Draw the coordinate overlay, optionally at a grid spacing.
-        **opts
-            Any keyword here raises.
 
         Returns
         -------
@@ -3506,14 +3476,8 @@ class SvgRenderer:
             has no frame.
         """
         from pandid.render import debug as _debug
-        reject_unknown_options("SvgRenderer.render()", opts)
         grid = _debug.resolve_spacing(debug)
         table_sheet = wants_table_sheet(show_stream_table)
-        check_render_arguments(
-            fs, show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, crossing_style=crossing_style,
-            debug=debug)
         if table_sheet and border is None:
             border = "zone"
         border, diagram = _resolve_sheet(border, diagram)
@@ -3533,12 +3497,11 @@ class SvgRenderer:
         furniture, canvas = self._place_furniture(
             fs, plan, border, lambda *cell: fit_issues.append(fit_issue(*cell)))
 
-        # Replace render findings from earlier renders.
+        # Replace validate's fit findings with the render's.
         render_issues = fit_issues + _crossing_issues(fs, jump_direction,
                                                       crossing_style)
         fs.warnings = [w for w in fs.warnings
-                       if getattr(w, "code", "") not in _RENDER_CODES
-                       and getattr(w, "code", "") not in _LABEL_CODES] + render_issues
+                       if getattr(w, "code", "") not in _FIT_CODES] + render_issues
 
         # 2. SVG document, with furniture behind the diagram.
         lines = ["    " + item for item in furniture]
@@ -3664,8 +3627,9 @@ class SvgRenderer:
             furniture[:0] = F.zone_frame(*plan.frame)  # the border sits behind the rest
         ox, oy, ow, oh = F.sheet_rect(*plan.frame)
         OUT = F.OUTER_MARGIN
+        # Replace validate's fit findings with the render's.
         fs.warnings = ([w for w in fs.warnings
-                        if getattr(w, "code", "") not in _RENDER_CODES]
+                        if getattr(w, "code", "") not in _FIT_CODES]
                        + plan.findings + fit_issues)
         subtitle = _drawn_text(F._options(fs).sheet_subtitle)
         return _document(
