@@ -115,6 +115,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`validate()` reports a variant no symbol draws (#645).**
+  `Valve("V-1", variant="gat")` is a `variant-unknown` error naming the
+  registered variants, and the render refuses it before any layout.
 - **Numbered nozzles type-check in mypy and pyright (#646).**
   `Mixer("M", n_inlets=3).in_1` and `GasHolder("G", inputs=("N", "S"))` pass
   both checkers, and a nozzle past the count, such as `.in_4`, fails at run

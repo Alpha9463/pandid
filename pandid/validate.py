@@ -439,6 +439,13 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
               f"no ports. Register artwork for it with "
               f"default_registry.register({u.kind!r}, Symbol(...))"))
 
+    # --- a variant the symbol library has no artwork for ---
+    for u in fs.units:
+        try:
+            default_registry.get(u.kind, getattr(u, "variant", "default"))
+        except ValueError as refused:
+            errors.append(Issue("error", "variant-unknown", f"{u.name}: {refused}"))
+
     # --- a turned gravity-fixed symbol (ISO 15519-1 11.4.2) ---
     for u in fs.units:
         placed = u.frame if u.frame is not None else u.pin_
