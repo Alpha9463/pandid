@@ -307,9 +307,9 @@
       <rect x="498.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="524.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">30.93</text>
       <rect x="550.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="576.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">46.45</text>
+      <text x="576.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">40.17</text>
       <rect x="602.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="628.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">53.38</text>
+      <text x="628.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">59.66</text>
       <rect x="654.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="680.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">37.03</text>
       <rect x="706.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
@@ -321,7 +321,7 @@
       <rect x="862.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="888.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">43.45</text>
       <rect x="914.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="940.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">9.42</text>
+      <text x="940.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">3.14</text>
       <rect x="966.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="992.3" y="896.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">62.80</text>
       <rect x="1018.3" y="886.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
@@ -359,7 +359,7 @@
       <rect x="498.3" y="901.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="524.3" y="911.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">-</text>
       <rect x="550.3" y="901.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="576.3" y="911.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">20.5</text>
+      <text x="576.3" y="911.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">8.1</text>
       <rect x="602.3" y="901.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="628.3" y="911.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">99.5</text>
       <rect x="654.3" y="901.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
@@ -413,7 +413,7 @@
       <rect x="498.3" y="931.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="524.3" y="941.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.031</text>
       <rect x="550.3" y="931.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="576.3" y="941.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.150</text>
+      <text x="576.3" y="941.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.173</text>
       <rect x="602.3" y="931.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="628.3" y="941.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.005</text>
       <rect x="654.3" y="931.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
@@ -465,7 +465,7 @@
       <rect x="498.3" y="946.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="524.3" y="956.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">-</text>
       <rect x="550.3" y="946.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="576.3" y="956.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.2045</text>
+      <text x="576.3" y="956.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.0810</text>
       <rect x="602.3" y="946.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="628.3" y="956.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.9949</text>
       <rect x="654.3" y="946.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
@@ -519,7 +519,7 @@
       <rect x="550.3" y="961.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="576.3" y="971.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">-</text>
       <rect x="602.3" y="961.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="628.3" y="971.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">9.4E-05</text>
+      <text x="628.3" y="971.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">8.4E-05</text>
       <rect x="654.3" y="961.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="680.3" y="971.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">-</text>
       <rect x="706.3" y="961.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
@@ -621,7 +621,7 @@
       <rect x="498.3" y="991.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="524.3" y="1001.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.969</text>
       <rect x="550.3" y="991.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
-      <text x="576.3" y="1001.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.645</text>
+      <text x="576.3" y="1001.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">0.746</text>
       <rect x="602.3" y="991.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
       <text x="628.3" y="1001.2" font-family="sans-serif" font-size="8.0" text-anchor="middle">-</text>
       <rect x="654.3" y="991.0" width="52.0" height="15.0" fill="white" stroke="black" stroke-width="0.75"/>
