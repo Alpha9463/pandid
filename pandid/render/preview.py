@@ -138,23 +138,6 @@ def _no_display() -> str:
     return ""
 
 
-def _raster(svg: str) -> bytes:
-    """Return SVG markup as PNG bytes.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG markup.
-
-    Returns
-    -------
-    bytes
-        PNG image at the SVG's own size.
-    """
-    from pandid.render import export
-    return export.to_png(svg)
-
-
 def _fit(image: tuple[int, int], into: tuple[int, int]) -> tuple[int, int]:
     """Return an image size scaled to fit a box.
 
@@ -295,7 +278,8 @@ def preview(svg: str, *, title: str = "") -> str:
     why = _no_display()
     if not why:
         try:
-            png = _raster(svg)
+            from pandid.render import export
+            png = export.to_png(svg)
         except ImportError:
             why = "the PNG backend is not installed (pip install 'pandid[pdf]')"
         except Exception as e:

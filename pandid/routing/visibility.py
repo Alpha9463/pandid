@@ -94,32 +94,6 @@ TRAVEL: Dict[str, Tuple[int, float]] = {
 }
 
 
-def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
-    """Return a port's nominal escape distance from its anchor.
-
-    Parameters
-    ----------
-    kind : str
-        Kind of the port's unit.
-    label_pos : str or None
-        Side of the unit its tag is drawn on.
-    face : str
-        Compass face of the port.
-
-    Returns
-    -------
-    float
-        Escape distance.
-    """
-    if kind in ("feed", "product"):
-        return MIN_ESCAPE
-    if (face, label_pos) in (("N", "top"), ("S", "bottom")):
-        return 45.0
-    if (face, label_pos) in (("W", "left"), ("E", "right")):
-        return 50.0
-    return MIN_ESCAPE
-
-
 def share_escape_room(
     start: Tuple[float, float],
     start_dir: str,
@@ -291,7 +265,15 @@ class VisibilityGraph:
                 self.port_anchors[(u.name, name)] = (ax, ay)
                 self.port_dirs[(u.name, name)] = o_dir
 
-                proj_dist = escape_distance(u.kind, lpos, o_dir)
+                # Escape past a tag drawn on the port's side, except from a flag.
+                if u.kind in ("feed", "product"):
+                    proj_dist = MIN_ESCAPE
+                elif (o_dir, lpos) in (("N", "top"), ("S", "bottom")):
+                    proj_dist = 45.0
+                elif (o_dir, lpos) in (("W", "left"), ("E", "right")):
+                    proj_dist = 50.0
+                else:
+                    proj_dist = MIN_ESCAPE
                 dx, dy = COMPASS[o_dir]
                 px_proj, py_proj = ax + proj_dist * dx, ay + proj_dist * dy
                 self.port_projs[(u.name, name)] = (px_proj, py_proj)

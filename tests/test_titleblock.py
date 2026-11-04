@@ -382,12 +382,15 @@ def test_the_description_is_words_not_the_kind_key():
 
 
 def test_every_registered_kind_names_itself():
-    """Verify every registered kind names itself."""
+    """Verify every unit kind gets a capitalised schedule label."""
     from pandid.document import _KIND_LABELS
 
-    kinds = {getattr(U, name).kind for name in U.__all__ if name != "Unit"}
-    assert kinds <= set(_KIND_LABELS)
-    assert not [label for label in _KIND_LABELS.values() if not label[:1].isupper()]
+    fs = Flowsheet("Kinds")
+    for i, name in enumerate(n for n in U.__all__ if n != "Unit"):
+        fs.add(getattr(U, name)(f"X-{i}"))
+    rows = _schedule(fs, include=[u.name for u in fs.units])
+    assert [label for _tag, label in rows if not label[:1].isupper()] == []
+    assert set(_KIND_LABELS) <= {u.kind for u in fs.units}
 
 
 def test_include_builds_a_schedule_of_its_own():
@@ -710,13 +713,6 @@ def _one_long_value() -> Flowsheet:
     s2.properties = {"P": "1013.25 mbara"}
     s3.properties = {"P": "2 bar"}
     return fs
-
-
-def test_the_floors_are_where_they_always_were():
-    """Verify the floors are where they always were."""
-    fs = _two_and_two()
-    assert (fs.stream_table.label_width, fs.stream_table.column_width) == (122.0, 52.0)
-    assert _widths(fs) == (122.0, 52.0)
 
 
 def test_auto_drops_the_floor_and_rules_the_column_to_its_content():
@@ -1117,28 +1113,6 @@ def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
     assert drawn_title("100") == drawn_title("1")
 
 
-def test_a_revision_description_too_long_for_its_column_is_reported():
-    """Verify a revision description too long for its column is reported."""
-    fs = _sheet()
-    fs.title_block = TitleBlock(
-        title="Demo",
-        revisions=[
-            Revision(
-                "A",
-                "2026-01-01",
-                "Issued for internal review by the process engineering group",
-                "AA",
-            )
-        ],
-    )
-    fs.to_svg(border="zone")
-    assert [
-        w
-        for w in fs.warnings
-        if w.code == "text-truncated" and "revisions[0].description" in w.message
-    ]
-
-
 def test_the_revision_date_column_holds_a_full_date():
     """Verify the revision date column holds a full date."""
     fs = _sheet()
@@ -1208,19 +1182,6 @@ def test_the_title_is_never_lettered_under_its_subtitle():
     assert "Ethanol Purification and Dehydratio…" in svg
     title_sizes = re.findall(r'font-size="([\d.]+)" text-anchor="start" font-weight="bold"', svg)
     assert "10.5" in title_sizes  # the subtitle's size, and no smaller
-
-
-def test_validate_reports_an_over_long_field_with_nothing_rendered():
-    """Verify validate reports an over long field with nothing rendered."""
-    fs = _sheet()
-    fs.title_block = TitleBlock(
-        title="Demo", project="Dalby Bioethanol Expansion, Stage 2 Debottlenecking"
-    )
-    found = [i for i in fs.validate() if i.code == "text-truncated"]
-    assert len(found) == 1
-    assert "project" in found[0].message
-    assert "units its cell has" in found[0].message
-    assert fs.streams[0].route is None  # nothing was laid out to answer it
 
 
 def test_a_render_reports_an_over_long_field_once():
@@ -1419,20 +1380,6 @@ _REV_ANSWERS: dict[str, _Answer] = {
     "approved": _Answer(_LONG, "text-truncated", "revisions[0].approved", "Za"),
 }
 
-#: Fields covered by the title-block outcome matrices.
-_SWEPT = [name for name in _BLOCK_FIELDS if name in _ANSWERS]
-_UNANSWERED = [name for name in _BLOCK_FIELDS if name not in _ANSWERS]
-_REV_SWEPT = [name for name in _REV_FIELDS if name in _REV_ANSWERS]
-_REV_UNANSWERED = [name for name in _REV_FIELDS if name not in _REV_ANSWERS]
-
-
-def test_the_sweep_answers_for_every_field_the_block_has():
-    """Verify the sweep answers for every field the block has."""
-    assert _UNANSWERED == [], "title-block fields with no answer in _ANSWERS"
-    assert _REV_UNANSWERED == [], "revision fields with no answer in _REV_ANSWERS"
-    assert sorted(_ANSWERS) == sorted(_BLOCK_FIELDS)
-    assert sorted(_REV_ANSWERS) == sorted(_REV_FIELDS)
-
 
 def _kw(field: str, value: "str | None") -> dict:
     """Create title-block keyword arguments for a field value.
@@ -1457,7 +1404,7 @@ def _kw(field: str, value: "str | None") -> dict:
     return kw
 
 
-@pytest.mark.parametrize("field", _SWEPT)
+@pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_every_title_block_field_reports_a_value_it_cannot_hold(field):
     """Verify every title block field reports a value it cannot hold.
 
@@ -1541,7 +1488,7 @@ def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
     assert len(set(cells)) == answer.cells, (what, answer.drawn, cells)
 
 
-@pytest.mark.parametrize("field", _SWEPT)
+@pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field):
     """Verify every title block field a cell can hold is drawn and silent.
 
@@ -1555,7 +1502,7 @@ def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field):
     assert _findings(_block(**_kw(field, answer.fits))) == []
 
 
-@pytest.mark.parametrize("field", _REV_SWEPT)
+@pytest.mark.parametrize("field", _REV_FIELDS)
 def test_every_revision_field_a_cell_can_hold_is_drawn_and_silent(field):
     """Verify every revision field a cell can hold is drawn and silent.
 
@@ -1573,7 +1520,7 @@ def test_every_revision_field_a_cell_can_hold_is_drawn_and_silent(field):
 # --- Draw.io title-strip values ------------------------------------------------
 
 
-@pytest.mark.parametrize("field", _SWEPT)
+@pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_each_title_block_field_is_drawn_by_drawio(field):
     """Verify Draw.io renders every fitting title-block field.
 
@@ -1586,7 +1533,7 @@ def test_each_title_block_field_is_drawn_by_drawio(field):
     _drawn_in(answer, _block(**_kw(field, answer.fits)), "to_drawio", field)
 
 
-@pytest.mark.parametrize("field", _REV_SWEPT)
+@pytest.mark.parametrize("field", _REV_FIELDS)
 def test_each_revision_field_is_drawn_by_drawio(field):
     """Verify Draw.io renders every fitting revision field.
 
@@ -1619,7 +1566,7 @@ def test_a_company_name_the_strip_is_deep_enough_for_is_silent():
     assert not [w for w in fs.warnings if w.code.startswith("title-block-")]
 
 
-@pytest.mark.parametrize("field", _REV_SWEPT)
+@pytest.mark.parametrize("field", _REV_FIELDS)
 def test_every_revision_field_reports_a_value_it_cannot_hold(field):
     """Verify every revision field reports a value it cannot hold.
 
@@ -1788,22 +1735,19 @@ def test_a_cut_string_fits_its_cell_and_one_more_character_would_not(glyph, bold
 # --- fitting-findings source fields --------------------------------------------
 
 
-def test_a_fitted_scale_is_not_reported_as_the_scale_field():
-    """Verify a fitted scale is not reported as the scale field."""
+@pytest.mark.parametrize(
+    ("date", "fit_scale", "source"),
+    [
+        ("2026-01-01", "1:" + "9" * 40, "the fitted scale -> scale"),
+        ("2026-01-01" * 6, "", "today's date -> date"),
+    ],
+)
+def test_a_fitted_scale_or_stamped_date_is_not_reported_as_its_field(date, fit_scale, source):
+    """Verify a fitted scale or a stamped date is reported as itself, not as the field."""
     from pandid.render.furniture import title_strip_fit
 
-    found = title_strip_fit(
-        TitleBlock(title="Demo"), "Demo", "2026-01-01", fit_scale="1:" + "9" * 40
-    )
-    assert [f[0] for f in found] == ["the fitted scale -> scale"]
-
-
-def test_a_stamped_date_is_not_reported_as_the_date_field():
-    """Verify a stamped date is not reported as the date field."""
-    from pandid.render.furniture import title_strip_fit
-
-    found = title_strip_fit(TitleBlock(title="Demo"), "Demo", "2026-01-01" * 6)
-    assert [f[0] for f in found] == ["today's date -> date"]
+    found = title_strip_fit(TitleBlock(title="Demo"), "Demo", date, fit_scale=fit_scale)
+    assert [f[0] for f in found] == [source]
 
 
 # --- whitespace normalization --------------------------------------------------

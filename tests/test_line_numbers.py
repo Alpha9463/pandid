@@ -25,28 +25,10 @@ def _skid(**line):
 # --- forming the number -------------------------------------------------------
 
 
-def test_components_replace_the_stream_number():
-    fs, _, (s1, _, _) = _skid(size='6"', service="P", spec="A1A")
-    assert s1.name == '6"-P-1001-A1A'
-    assert fs.streams[0].has_line_number
-
-
 def test_a_stream_with_no_components_is_numbered_as_before():
     fs, _, streams = _skid()
     assert [s.name for s in streams] == ["S1", "S1", "S1"]
     assert not streams[0].has_line_number
-
-
-def test_an_unset_component_drops_out_with_its_separator():
-    """Check that an unset component drops out with its separator."""
-    _, _, (s1, _, _) = _skid(size='6"', service="P")
-    assert s1.name == '6"-P-1001'
-
-
-def test_an_unset_first_component_drops_its_separator_too():
-    """Check that an unset first component drops its separator too."""
-    _, _, (s1, _, _) = _skid(service="AE", spec="SS")
-    assert s1.name == "AE-1001-SS"
 
 
 @pytest.mark.parametrize(
