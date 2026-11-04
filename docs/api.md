@@ -83,9 +83,9 @@ file. SVG output has no optional dependencies.
 
 A `Unit` has a tag, a symbol `variant`, optional `width` and `height`,
 `label_pos`, `description` for the equipment list, and `reference` for boundary
-flags. Use `unit.ports["name"]`, `unit.port("name")`, or a named attribute such
-as `pump.suction`. Some classes add `n_feeds`, `n_inlets`, `n_outlets` or
-`n_draws` to create numbered ports.
+flags; pass these five by keyword. Use `unit.ports["name"]`,
+`unit.port("name")`, or a named attribute such as `pump.suction`. Some classes
+add `n_feeds`, `n_inlets`, `n_outlets` or `n_draws` to create numbered ports.
 
 A class names equipment; `variant=` selects how its base kind is drawn. For
 example, `Cyclone("S-101")` is a `Separator` with the cyclone drawing. A drawing

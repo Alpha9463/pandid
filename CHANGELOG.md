@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standoff, unless that adds a finding or a clash.
 - **The alumina refinery example draws three sheets (#622).** Its areas are
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
+- **Unit options are keyword-only (#646).** Pass `width`, `height`,
+  `label_pos`, `description` and `reference` to a unit constructor by keyword,
+  such as `Block("B-1", width=120)`; a positional value raises `TypeError`.
 
 ### Deprecated
 
