@@ -280,6 +280,182 @@ def test_row_pins_order_a_whole_stack() -> None:
     assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
 
 
+@pytest.mark.parametrize(
+    "upper, out, lower, inlet",
+    [
+        (U.HeatExchanger("A"), "shell_out", U.HeatExchanger("B"), "shell_in"),
+        (U.Feeder("A"), "discharge", U.Crusher("B"), "feed"),
+        (U.Tank("A"), "out_1", U.Tank("B").nozzle("in_1", "N"), "in_1"),
+        (U.Column("A"), "bottoms", U.Tank("B").nozzle("in_1", "N"), "in_1"),
+        (U.Separator("A"), "liquid", U.Tank("B").nozzle("in_1", "N"), "in_1"),
+    ],
+)
+def test_a_row_pin_between_two_stacking_units_holds(
+    upper: U.Unit, out: str, lower: U.Unit, inlet: str
+) -> None:
+    """Draw a unit pinned between two units whose pipe would stack them."""
+    fs = Flowsheet("Interleaved")
+    a = fs.add(upper).pin(col=0, row=0)
+    b = fs.add(lower).pin(col=0, row=2)
+    c = fs.add(Block("C")).pin(col=0, row=1)
+    fs.connect(a.ports[out], b.ports[inlet])
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None and c.frame is not None
+    assert a.frame.cy < c.frame.cy < b.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+@pytest.mark.parametrize("col", [None, 0])
+def test_a_stack_holds_where_unstacking_would_cross_lines(col: int | None) -> None:
+    """Keep a stack whose unstacking crosses lines, reporting the row pin it breaks."""
+    fs = Flowsheet("Row pins")
+    a = fs.add(Block("A", inputs=[], outputs=["S"])).pin(col=0, row=0)
+    b = fs.add(Block("B", inputs=["N"], outputs=["E"])).pin(col=col, row=2)
+    c = fs.add(Block("C", inputs=["W"], outputs=[])).pin(col=0, row=1)
+    d = fs.add(Block("D", inputs=["W"], outputs=["E"])).pin(row=3)
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.connect(b.ports["out_1"], d.ports["in_1"])
+    fs.connect(d.ports["out_1"], c.ports["in_1"])
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None
+    assert c.frame is not None and d.frame is not None
+    assert a.frame.cy < b.frame.cy < c.frame.cy
+    found = [i for i in fs.validate() if i.code == "pin-not-honored"]
+    if col is None:
+        assert b.frame.cy < d.frame.cy and not found
+    else:
+        assert found
+
+
+def test_a_stack_holds_where_unstacking_would_draw_lines_through_units() -> None:
+    """Keep a stack whose unstacking routes lines through units, reporting the row pin."""
+    fs = Flowsheet("Recovery")
+    a = fs.add(U.Column("T-101")).pin(col=0, row=0)
+    b = fs.add(U.Tank("V-101").nozzle("in_1", "N")).pin(col=0, row=2)
+    c = fs.add(U.HeatExchanger("E-101")).pin(col=0, row=1)
+    feed = fs.add(Feed("Feed")).pin(col=-1, row=0)
+    top = fs.add(Product("Distillate")).pin(col=1, row=0)
+    bottoms = fs.add(Product("Bottoms")).pin(col=1, row=2)
+    fs.connect(a.ports["bottoms"], b.ports["in_1"])
+    fs.connect(a.ports["overhead"], c.ports["tube_in"])
+    fs.connect(feed.ports["outlet"], a.ports["feed_1"])
+    fs.connect(c.ports["tube_out"], top.ports["inlet"])
+    line = fs.connect(b.ports["out_1"], bottoms.ports["inlet"])
+    valve = fs.add(D.ControlValve("FV-101"), on=line)
+    fs.add_control_loop("F", 101, measuring=line, acting_on=valve)
+    fs.route()
+
+    assert b.frame is not None and c.frame is not None
+    assert b.frame.cy < c.frame.cy
+    codes = [i.code for i in fs.validate()]
+    assert "pin-not-honored" in codes and "route-crosses-unit" not in codes
+
+
+@pytest.mark.parametrize("unstacked", [False, True])
+def test_a_second_route_redraws_a_sheet_that_tried_unstacking(unstacked: bool) -> None:
+    """Draw the same sheet on a second route() after an unstacked layout was refused or kept."""
+    fs = Flowsheet("Recovery")
+    a = fs.add(U.Column("T-101")).pin(col=0, row=0)
+    b = fs.add(U.Tank("V-101").nozzle("in_1", "N")).pin(col=0, row=2)
+    c = fs.add(U.HeatExchanger("E-101")).pin(col=0, row=1)
+    feed = fs.add(Feed("Feed")).pin(row=0)
+    top = fs.add(Product("Distillate")).pin(col=1, row=1)
+    bottoms = fs.add(Product("Bottoms")).pin(row=3)
+    fs.connect(a.ports["bottoms"], b.ports["in_1"])
+    line = fs.connect(a.ports["overhead"], c.ports["tube_in"])
+    fs.connect(feed.ports["outlet"], a.ports["feed_1"])
+    fs.connect(c.ports["tube_out"], top.ports["inlet"])
+    fs.connect(b.ports["out_1"], bottoms.ports["inlet"])
+    valve = fs.add(D.ControlValve("FV-101"), on=line)
+    fs.add_control_loop("F", 101, measuring=line, acting_on=valve)
+    if unstacked:
+        feed.pin(row=1)
+        bottoms.pin(col=-1, row=None)
+        fs.add_instrument("PI", 201, sensing=fs.streams[0])
+    fs.route()
+    fingerprint = _fingerprint(fs)
+    assert (
+        a.frame is not None
+        and b.frame is not None
+        and c.frame is not None
+        and (b.frame.cy > c.frame.cy) is unstacked
+    )
+    fs.route()
+
+    assert _fingerprint(fs) == fingerprint
+
+
+def test_saved_geometry_put_back_twice_is_unchanged_by_edits_between() -> None:
+    """Put back saved frames and routes as saved, after editing the ones put back."""
+    fs, line = _line()
+    fs.route()
+    saved = fs._geometry()
+    unit = fs.units[0]
+    assert unit.frame is not None and line.route is not None
+    x, waypoints = unit.frame.x, list(line.route.waypoints)
+    fs._put_geometry(saved, keep_manual=False)
+    assert unit.frame is not None and line.route is not None
+    unit.frame.x += 50
+    line.route.waypoints.append((0.0, 0.0))
+    fs._put_geometry(saved, keep_manual=False)
+
+    assert unit.frame is not None and line.route is not None
+    assert unit.frame.x == x and line.route.waypoints == waypoints
+
+
+def test_unstacking_is_tried_on_the_drawing_lanes_won() -> None:
+    """Keep the lanes drawing of a bank whose column a row pin would unstack."""
+    fs = Flowsheet("Recovery")
+    a = fs.add(U.Column("T-101")).pin(col=0, row=0)
+    b = fs.add(U.Tank("V-101").nozzle("in_1", "N")).pin(col=0, row=2)
+    c = fs.add(U.HeatExchanger("E-101")).pin(col=0, row=1)
+    feed = fs.add(Feed("Feed")).pin(col=-1, row=1)
+    top = fs.add(Product("Distillate"))
+    bottom = fs.add(Product("Bottoms")).pin(row=3)
+    splitter = fs.add(U.Splitter("SP-101", n_outlets=6))
+    mixer = fs.add(U.Mixer("MX-101", n_inlets=6))
+    for source, dest in [
+        (a.ports["bottoms"], b.ports["in_1"]),
+        (a.ports["overhead"], c.ports["tube_in"]),
+        (feed.ports["outlet"], a.ports["feed_1"]),
+        (c.ports["tube_out"], splitter.ports["inlet"]),
+        (mixer.ports["outlet"], top.ports["inlet"]),
+        (b.ports["out_1"], bottom.ports["inlet"]),
+    ]:
+        fs.connect(source, dest)
+    for i, (outlet, inlet) in enumerate(zip(splitter.outlets, mixer.inlets)):
+        bank = fs.add(D.ShellAndTubeExchanger(f"E-{i}"))
+        fs.connect(outlet, bank.ports["tube_in"])
+        fs.connect(bank.ports["tube_out"], inlet)
+
+    for _ in range(2):
+        fs.route()
+        assert measure_final(fs).crossings <= 1
+        assert not [i for i in fs.validate() if i.code == "lines-crowded"]
+
+
+def test_row_only_pins_hold_beside_a_column_split_by_a_row_pin() -> None:
+    """Keep two units pinned by row alone in order beside a column whose stack splits."""
+    fs = Flowsheet("Mixed pins")
+    a = fs.add(Block("A", inputs=[], outputs=["S"])).pin(col=0, row=0)
+    b = fs.add(Block("B", inputs=["N"], outputs=["E", "E"])).pin(col=0, row=2)
+    c = fs.add(Block("C")).pin(col=0, row=1)
+    d = fs.add(Block("D", inputs=["W"], outputs=[])).pin(row=3)
+    e = fs.add(Block("E", inputs=["W"], outputs=[])).pin(row=4)
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.connect(b.ports["out_1"], d.ports["in_1"])
+    fs.connect(b.ports["out_2"], e.ports["in_1"])
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None and c.frame is not None
+    assert d.frame is not None and e.frame is not None
+    assert a.frame.cy < c.frame.cy < b.frame.cy
+    assert d.frame.cy < e.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
 def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
     """Report a unit drawn in another turn or mirror than its author stated."""
     fs, line = _line()

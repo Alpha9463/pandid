@@ -301,6 +301,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Example 12 pipes the dryer's gas through `heating_in` and `vent` (#646).**
   The dried product leaves by `product` and joins the cyclone's dust ahead of
   the magnetic separator.
+- **A unit pinned to a row between two stacking units is drawn between them
+  (#596).** `route()` unstacks two units pinned to one column when another
+  unit there is pinned to a row between theirs, unless that draws the sheet
+  worse; then `validate()` still reports the pin.
 
 ## [0.1.5] - 2026-08-26
 

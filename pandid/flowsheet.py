@@ -568,6 +568,13 @@ class Flowsheet:
         # other units, and whether the last layout drew one closer.
         self._exit_clear = False
         self._exit_tight = False
+        # Whether layout leaves two units unstacked where another unit in
+        # their column is pinned to a row between theirs, whether the last
+        # layout stacked any such pair, and the stacked drawing route()
+        # held where it kept them unstacked.
+        self._split_stacks = False
+        self._stack_spans = False
+        self._stacked: tuple | None = None
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -2068,7 +2075,8 @@ class Flowsheet:
 
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
-        self._mounted_layout = self._exit_tight = False
+        self._mounted_layout = self._exit_tight = self._stack_spans = False
+        self._stacked = None
         if engine is None:
             engine = default_layout_engine
         self._engine = engine
@@ -2107,6 +2115,40 @@ class Flowsheet:
         crossing, bend, fallback, finding, clash or tap off its line grows
         by them; otherwise, and wherever lanes changed no route and no face
         grew, the sheet is drawn without them.
+
+        Last, where the drawing stacks two units in a column with another
+        unit pinned to a row between theirs, the sheet is laid out and
+        routed again with those two unstacked, kept only if no tap leaves
+        its line and no finding, clash, crossing or fallback route grows.
+        Where kept, the next route() starts from the stacked drawing.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.routing import DefaultRouter
+
+        # Start a repeated call from the stacked drawing held last time.
+        held, self._stacked = self._stacked, None
+        if held is not None and not (self._layout_stale
+                                     or any(u.frame is None for u in self.units)):
+            self._put_state(held)
+        self._route_lanes(router)
+        if (self._stack_spans and not self._laying_out
+                and (router is None or type(router) is DefaultRouter)):
+            self._unstack(router)
+
+    def _route_lanes(self, router=None) -> None:
+        """Route the sheet, with lanes and grown faces where they draw no
+        worse.
 
         Parameters
         ----------
@@ -2165,6 +2207,53 @@ class Flowsheet:
         finally:
             self._routing = False
 
+    def _unstack(self, router=None) -> None:
+        """Lay out and route the sheet again with two units unstacked where
+        another unit in their column is pinned to a row between theirs.
+
+        The new drawing is kept only if no tap leaves its line and no
+        finding, clash, crossing or fallback route grows; a kept drawing
+        holds the one it replaced for the next route().
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+        """
+        from pandid.layout.conflicts import analyze_conflicts
+        from pandid.layout.control import _flaws, _taps_off
+
+        def count() -> Counter[str]:
+            """Count findings and clashes, crossings and fallback routes.
+
+            Returns
+            -------
+            Counter[str]
+                What :func:`_flaws` counts, plus ``crossing`` and
+                ``fallback`` conflicts.
+            """
+            flaws = _flaws(self)
+            flaws.update(c.kind for c in analyze_conflicts(self)
+                         if c.kind in ("crossing", "fallback"))
+            return flaws
+
+        before, off, stacked = count(), _taps_off(self), self._state()
+        self._split_stacks = self._routing = True
+        try:
+            self.layout(self._engine)
+            self._route_once(router)
+            kept = _taps_off(self) <= off and not any(
+                n > before[k] for k, n in count().items())
+        except Exception:
+            kept = False
+        finally:
+            self._split_stacks = self._routing = False
+        if kept:
+            self._stacked = stacked
+        else:
+            self._put_state(stacked)
+        self._stack_spans = self._route_stale = False
+
     def _state(self) -> tuple:
         """Return a copy of the geometry and the state laid out with it.
 
@@ -2174,7 +2263,7 @@ class Flowsheet:
             State for :meth:`_put_state`.
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
-                        self._mounted_layout, self._widened))
+                        self._mounted_layout, self._widened, self._stack_spans))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2185,7 +2274,7 @@ class Flowsheet:
             What :meth:`_state` returned.
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
-         self._mounted_layout, self._widened) = _copied(state)
+         self._mounted_layout, self._widened, self._stack_spans) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2356,7 +2445,8 @@ class Flowsheet:
                 self.route_converged)
 
     def _put_geometry(self, state: tuple, keep_manual: bool) -> None:
-        """Put back what :meth:`_geometry` returned, for what is still here.
+        """Put back copies of what :meth:`_geometry` returned, for what is
+        still here.
 
         Parameters
         ----------
@@ -2370,13 +2460,13 @@ class Flowsheet:
         streams = {id(st) for st in self.streams}
         for u, frame, tap in frames:
             if id(u) in units:
-                u.frame = frame
+                u.frame = copy.deepcopy(frame)
                 if hasattr(u, "tap"):
-                    u.tap = tap
+                    u.tap = copy.deepcopy(tap)
         for st, route in routes:
             manual = st.route is not None and st.route.manual
             if id(st) in streams and not (keep_manual and manual):
-                st.route = route
+                st.route = copy.deepcopy(route)
         self.route_converged = converged
 
     def _unhang(self) -> None:
