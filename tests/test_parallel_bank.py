@@ -180,3 +180,12 @@ def test_a_grown_header_is_kept_only_where_it_draws_no_worse():
     assert fs.route_converged
     assert _taps_off(fs) == set()
     assert not [i for i in fs.validate() if i.code == "route-crosses-unit"]
+
+
+def test_lanes_are_kept_only_where_they_draw_no_worse_than_without():
+    fs, outlets, _ = _coolers(3)
+    for i, stream in enumerate(outlets):
+        fs.add_instrument("TI", 201 + i, sensing=stream, at=0.75)
+    fs.to_svg(diagram="p&id")
+    assert _flaws(fs)["line-on-line"] == 0
+    assert measure_final(fs).bends == 20

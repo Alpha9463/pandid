@@ -295,7 +295,7 @@ def _tangled(lines: list[list[Point]]) -> bool:
 
 
 def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
-           graph: "VisibilityGraph") -> None:
+           graph: "VisibilityGraph") -> bool:
     """Re-lay each group of laterals that cross, touch or wind.
 
     A group is also re-laid where a balloon it carries taps off its
@@ -311,6 +311,11 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
         Ends of each routed stream's stand-offs, by ``id(stream)``.
     graph : VisibilityGraph
         Graph the sheet was routed on, for its obstacles.
+
+    Returns
+    -------
+    bool
+        True if any group's new routes were kept.
     """
     from pandid.layout.attach import is_attached
     from pandid.layout.control import _taps_off
@@ -336,7 +341,7 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
         joined = [g for g in groups if any(lateral.meets(other) for other in g)]
         merged = [other for g in joined for other in g] + [lateral]
         groups = [g for g in groups if all(g is not j for j in joined)] + [merged]
-    before = None
+    before, changed = None, False
     for group in groups:
         if (not any(id(a.stream) in adrift for a in group)
                 and not _tangled([stream_polyline(a.stream) for a in group])):
@@ -351,7 +356,8 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
             a.stream.route = a.step(lanes[i])
         after = _score(fs)
         if after != before and not after[0] - before[0] and after[1] <= before[1]:
-            before = after
+            before, changed = after, True
             continue
         for a, route in zip(group, old):
             a.stream.route = route
+    return changed

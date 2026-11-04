@@ -441,5 +441,5 @@ class DefaultRouter:
         from pandid.routing.separation import separate_streams
         separate_streams(fs)
         # Keep the routes layout sets pipe furniture on.
-        if fs._lanes and not fs._laying_out:
-            relane(fs, escapes, graph)
+        if fs._lanes and not fs._laying_out and relane(fs, escapes, graph):
+            fs._relaned = True

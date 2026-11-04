@@ -302,6 +302,8 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     _rank(layers)
     _straighten(layers, segs)
     xs = _columns(layers, segs, fs._lanes)
+    plain = _columns(layers, segs, False)
+    fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
     if not any(u.pin_ is not None and (u.pin_.x is not None or u.pin_.y is not None)
                for u in units):
         _fold(layers, segs, xs)

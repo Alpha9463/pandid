@@ -536,8 +536,11 @@ class Flowsheet:
         # Whether a layout engine is running, which routes without hanging.
         self._laying_out = False
         # Whether layout widens gaps for lanes and the router lays
-        # crossing laterals on them.
+        # crossing laterals on them, whether the last layout's lane gaps
+        # moved a unit, and whether route() has laid any lateral on one.
         self._lanes = True
+        self._widened = False
+        self._relaned = False
         # Whether a balloon hung from a balloon keeps off the tapped line,
         # and whether any did since route() turned that on.
         self._keep_clear = False
@@ -2036,10 +2039,13 @@ class Flowsheet:
         has a tap off its line that was on it before hanging, the sheet is
         placed as if no controller could hang.
 
-        Where a mixer's or splitter's face grows to hold its nozzles, the
-        sheet is also laid out and routed with the stock face and without
-        lanes, and the grown face is kept only if no crossing, bend,
-        finding, clash or tap off its line grows by it.
+        Where a mixer's or splitter's face grows to hold its nozzles, or
+        laterals are laid on lanes, the sheet is also drawn as it would be
+        without them: stock faces, no lane gaps and no lanes. The grown
+        faces and lanes are kept only if no crossing, bend, fallback,
+        finding, clash or tap off its line grows by them; otherwise, and
+        wherever lanes changed no route and no face grew, the sheet is
+        drawn without them.
 
         Parameters
         ----------
@@ -2060,25 +2066,27 @@ class Flowsheet:
         headers = [u for u in self.units if getattr(u, "_stock_face", False)]
         for u in headers:
             u._stock_face = False
-        if headers:
+        if headers or not self._lanes:
             self._layout_stale = True
-        self._lanes = True
+        self._lanes, self._relaned = True, False
         grown = [u for u in self.units if header_grows(u)]
         start, start_unhung = self._geometry(), self._unhung
         self._route_once(router)
-        if not grown or self._laying_out or not (router is None or type(router) is DefaultRouter):
+        laned = bool(grown) or self._relaned
+        if (not (laned or self._widened) or self._laying_out
+                or not (router is None or type(router) is DefaultRouter)):
             return
         kept, unhung, judged = self._geometry(), self._unhung, _score(self)
-        # Draw the stock faces, without lanes, from the routes and taps
-        # the grown ones started from.
+        # Draw stock faces without lanes from the routes and taps the
+        # first drawing started from.
         self._put_geometry(start, keep_manual=False)
         self._unhung, self._lanes = start_unhung, False
         for u in grown:
             u._stock_face = True
         self.layout()
         self._route_once(router)
-        stock = _score(self)
-        if not judged[0] - stock[0] and judged[1] <= stock[1]:
+        plain = _score(self)
+        if laned and not judged[0] - plain[0] and judged[1] <= plain[1]:
             for u in grown:
                 u._stock_face = False
             self._put_geometry(kept, keep_manual=False)
