@@ -120,6 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A normally closed valve keeps every field of its open drawing (#646).**
+  Its filled body is drawn at the trim weight in SVG and draw.io, not at
+  twice the open valve's outline.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an

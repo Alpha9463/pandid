@@ -1414,6 +1414,8 @@ def closed_marking(unit, registry=None) -> str:
 def darkened(sym: Symbol) -> Symbol:
     """Return ``sym`` with its body filled and an ``_nc`` id suffix.
 
+    Every other field is kept.
+
     Parameters
     ----------
     sym : Symbol
@@ -1439,16 +1441,10 @@ def darkened(sym: Symbol) -> Symbol:
         )
     filled = head.group(0).replace(_BODY_PAPER, f'fill="{_BODY_INK}"', 1)
     svg = sym.svg[:head.start()] + filled + sym.svg[head.end():]
-    return Symbol(
-        svg=re.sub(r'id="([^"]*)"', r'id="\1_nc"', svg, count=1),
-        width=sym.width, height=sym.height, ports=dict(sym.ports),
-        port_faces={name: dict(faces) for name, faces in sym.port_faces.items()},
-        faceless_ports=sym.faceless_ports, port_series=sym.port_series,
-        label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_nc",
-        stretchable=sym.stretchable, bare_run=sym.bare_run,
-        gravity_fixed=sym.gravity_fixed,
+    return replace(
+        sym, svg=re.sub(r'id="([^"]*)"', r'id="\1_nc"', svg, count=1),
+        id_suffix=sym.id_suffix + "_nc",
         # Carry the fill to the draw.io export.
-        drawio_shape=sym.drawio_shape, drawio_flip_h=sym.drawio_flip_h,
         drawio_fill=_BODY_INK,
     )
 
