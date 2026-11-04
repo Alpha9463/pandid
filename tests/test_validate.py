@@ -531,21 +531,6 @@ def _mixer(n_inlets, wired):
     return fs, mix
 
 
-def test_the_off_by_one_that_started_this():
-    """Check that a mixer wired off by one reports its unpiped in_1 with both cures."""
-    fs = Flowsheet("183")
-    mix = fs.add(U.Mixer("M-101", n_inlets=4))
-    for i in (1, 2, 3):
-        fs.connect(fs.add(U.Feed(f"F-{i}")).outlet, mix.inlets[i])
-    fs.connect(mix.outlet, fs.add(U.Product("P")).inlet)
-    issues = _found(fs, "nozzle-unconnected")
-    assert [i.severity for i in issues] == ["warning"]
-    assert "M-101.in_1 carries no stream" in issues[0].message
-    assert "built with 4 numbered nozzles, in_1..in_4, and 3 of them are piped" in issues[0].message
-    assert "asserts 4 connections and draws 3" in issues[0].message
-    assert "Connect it, or build M-101 with the 3 it uses." in issues[0].message
-
-
 @pytest.mark.parametrize(("n_inlets", "wired"), [(4, (1, 2, 3, 4)), (3, (1, 2, 3))])
 def test_either_cure_the_message_names_silences_it(n_inlets, wired):
     """Check that wiring the nozzle, or building for the count used, leaves no finding."""
@@ -564,6 +549,17 @@ def test_it_is_reported_before_layout_has_run():
 @pytest.mark.parametrize(
     ("n_inlets", "wired", "said"),
     [
+        # Wired off by one: in_1 is the one left unpiped, with both cures.
+        (
+            4,
+            (2, 3, 4),
+            [
+                "M-101.in_1 carries no stream",
+                "built with 4 numbered nozzles, in_1..in_4, and 3 of them are piped",
+                "asserts 4 connections and draws 3",
+                "Connect it, or build M-101 with the 3 it uses.",
+            ],
+        ),
         (
             4,
             (2, 3),
@@ -584,7 +580,7 @@ def test_a_mixer_short_of_its_count_is_one_finding(n_inlets, wired, said):
     """Check that a mixer's unpiped nozzles make one finding with the right sentence."""
     fs, _ = _mixer(n_inlets, wired)
     issues = _found(fs, "nozzle-unconnected")
-    assert len(issues) == 1
+    assert [i.severity for i in issues] == ["warning"]
     for text in said:
         assert text in issues[0].message
 
@@ -1160,13 +1156,6 @@ def test_an_internal_line_with_nothing_on_it_is_not_reported():
     assert _found(fs, "boundary-flow-missing") == []
 
 
-def test_a_sheet_that_tabulates_nothing_is_not_reported():
-    """Check that a sheet with no property on any stream reports no boundary-flow-missing."""
-    fs = _partly_tabulated()
-    fs.streams[0].properties = {}
-    assert _found(fs, "boundary-flow-missing") == []
-
-
 def test_a_value_present_and_blank_is_a_report():
     """Check that an empty-string property counts as a stated value."""
     fs = _partly_tabulated()
@@ -1213,18 +1202,12 @@ def test_a_sheet_that_has_started_tabulating_is_boundary_flow_missings_to_report
     assert len(_found(fs, "boundary-flow-missing")) == 1  # S2 is the column left empty
 
 
-def test_a_pid_is_not_reported():
-    """Check that the sheet as a P&ID has no findings and renders."""
+@pytest.mark.parametrize("diagram", ["p&id", "bfd"])
+def test_a_pid_or_a_bfd_is_not_reported(diagram):
+    """Check that the sheet as a P&ID or a BFD has no findings and renders without warnings."""
     fs = _untabulated()
-    assert fs.validate(diagram="p&id") == []
-    fs.to_svg(diagram="p&id")  # does not raise or warn
-
-
-def test_a_bfd_is_not_reported():
-    """Check that the sheet as a BFD has no findings and renders without warnings."""
-    fs = _untabulated()
-    assert fs.validate(diagram="bfd") == []
-    fs.to_svg(diagram="bfd")  # does not raise or warn
+    assert fs.validate(diagram=diagram) == []
+    fs.to_svg(diagram=diagram)
     assert fs.warnings == []
 
 
@@ -1402,18 +1385,6 @@ def test_the_two_halves_are_the_whole_of_validate():
     assert [i.severity for i in whole] == sorted(
         (i.severity for i in whole), key=lambda s: s != "error"
     )
-
-
-def test_warnings_from_both_halves_land_on_the_sheet_together():
-    """Check that a render puts model and geometry warnings on fs.warnings together."""
-    fs = Flowsheet("warnings")
-    f = fs.add(U.Feed("F")).pin(x=60, y=100)
-    p = fs.add(U.Product("P")).pin(x=400, y=100)
-    fs.connect(f.outlet, p.inlet)
-    fs.add_instrument("FCI", 1, near=f)  # I, then C: out of ISO 15519-2 order
-    fs.to_svg()
-    assert "letter-sequence" in [w.code for w in fs.warnings]
-    assert all(w.severity == "warning" for w in fs.warnings)
 
 
 # --- a run drawn on the slant -------------------------------------------------

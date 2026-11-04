@@ -313,8 +313,8 @@ registered `(kind, variant)`, not just the ones the examples use:
 That last one is what `Symbol.stretchable` answers. A symbol that may be
 reshaped fills the box, and its ports map onto it linearly. One that may not,
 an instrument balloon being a circle because ISA-5.1 says a circle, keeps its
-aspect and is centred, and `pandid.portgeom.ink_box` is what keeps its ports on
-the drawing rather than out in the whitespace beside it. The vendored symbols
+aspect and is centred, and `pandid.portgeom` resolves its ports against the
+drawing rather than the whitespace beside it. The vendored symbols
 take the answer from the stencil's own `aspect` attribute, as section 1 above
 describes.
 
@@ -369,12 +369,12 @@ from their nozzles.
 - `symbol_to_box(...)` maps a point from the symbol's own coordinates into the
   placed box, applying mirroring **first** and then the clockwise quarter turn,
   which is exactly the order the renderer's SVG transform composes in.
-- `ink_box(...)` gives the rectangle inside that box the artwork actually
+- Ports are resolved against the rectangle inside that box the artwork actually
   occupies: the whole of it for a symbol that may be reshaped, and the centred,
-  aspect-preserving part of it for one that may not. Ports are resolved against
-  *that*, so a symbol drawn smaller than its box keeps its nozzles on the
-  drawing. `unit_box()` stays the full placed box, since that is the space the
-  unit occupies and what the router has to route around.
+  aspect-preserving part of it for one that may not, so a symbol drawn smaller
+  than its box keeps its nozzles on the drawing. `unit_box()` stays the full
+  placed box, since that is the space the unit occupies and what the router has
+  to route around.
 - `port_point(unit, frame, name)` is where a stream visually attaches.
 - `port_anchor(unit, frame, name)` is the routing anchor, projected onto the
   bounding-box edge, plus the outward direction.

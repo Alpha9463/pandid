@@ -122,22 +122,6 @@ class Deprecation:
             bucket.append(Issue("warning", CODE, text))
 
 
-def _recorded(obj: object) -> list[Issue]:
-    """Return the findings stored in one carrier's ``__dict__``.
-
-    Parameters
-    ----------
-    obj : object
-        Possible carrier.
-
-    Returns
-    -------
-    list[Issue]
-        Stored findings, possibly empty.
-    """
-    return list(getattr(obj, "__dict__", {}).get(_ATTR, ()))
-
-
 def findings(fs: "Flowsheet") -> list[Issue]:
     """Return the deprecation findings on a sheet and its objects.
 
@@ -151,30 +135,7 @@ def findings(fs: "Flowsheet") -> list[Issue]:
     list[Issue]
         Findings on the sheet and on the objects it holds.
     """
-    out = _recorded(fs)
-    for held in _HELD:
-        for obj in getattr(fs, held, ()):
-            out.extend(_recorded(obj))
+    out: list[Issue] = []
+    for obj in [fs, *(obj for held in _HELD for obj in getattr(fs, held, ()))]:
+        out.extend(getattr(obj, "__dict__", {}).get(_ATTR, ()))
     return out
-
-
-def declarations() -> dict[str, Deprecation]:
-    """Return every module-level :class:`Deprecation` in pandid.
-
-    Returns
-    -------
-    dict[str, Deprecation]
-        Declarations keyed by ``"module.NAME"``, one per attribute.
-    """
-    import importlib
-    import pkgutil
-
-    import pandid
-
-    found: dict[str, Deprecation] = {}
-    for info in pkgutil.walk_packages(pandid.__path__, prefix="pandid."):
-        module = importlib.import_module(info.name)
-        for name, value in vars(module).items():
-            if isinstance(value, Deprecation):
-                found[f"{info.name}.{name}"] = value
-    return found

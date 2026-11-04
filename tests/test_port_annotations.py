@@ -126,35 +126,29 @@ def _ranged(cls):
 
 
 @pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_every_port_built_is_annotated(cls):
-    """Check that every port built is annotated."""
-    missing = _built(cls) - _annotated(cls) - _family_members(cls)
+def test_the_annotations_are_the_ports_built_and_bind_nothing(cls):
+    """Check that every port built is annotated, every annotation is built, and none binds."""
+    built, annotated = _built(cls), _annotated(cls)
+    missing = built - annotated - _family_members(cls)
     assert not missing, (
         f"{cls.__name__} builds {sorted(missing)} but does not declare "
         f"them; add `{sorted(missing)[0]}: Port` to the class body"
     )
-
-
-@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_a_family_only_excuses_a_numbered_nozzle(cls):
-    """Check that a family only excuses a numbered nozzle."""
-    undeclared = {name for name in _built(cls) - _annotated(cls) if not _NUMBERED.search(name)}
+    # A family only excuses a numbered nozzle.
+    undeclared = {name for name in built - annotated if not _NUMBERED.search(name)}
     assert not undeclared, (
         f"{cls.__name__} reaches {sorted(undeclared)} only through a family, but "
         f"a nozzle whose name is not the caller's can be declared; add "
         f"`{sorted(undeclared)[0]}: Port` to the class body as well"
     )
-
-
-@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_every_annotation_is_a_port_that_is_built(cls):
-    """Check that every annotation is a port that is built."""
-    phantom = _annotated(cls) - _built(cls) - _superseded(cls) - _family_aliases(cls) - _ranged(cls)
+    phantom = annotated - built - _superseded(cls) - _family_aliases(cls) - _ranged(cls)
     assert not phantom, (
         f"{cls.__name__} declares {sorted(phantom)}, which a default "
         f"{cls.__name__} does not have; a nozzle only some variants carry "
         f"belongs on a per-variant subclass, not here"
     )
+    bound = {name for name in annotated | _families(cls) if name in vars(cls)}
+    assert not bound, f"{cls.__name__} assigns {sorted(bound)} instead of only annotating"
 
 
 @pytest.mark.parametrize("base", _COUNTS, ids=lambda c: c.__name__)
@@ -292,10 +286,3 @@ def test_variant_nozzles_exist_but_are_not_declared_on_the_base(cls, variant, no
     """Check that variant nozzles exist but are not declared on the base."""
     assert nozzle in cls("X-1", variant=variant).ports
     assert nozzle not in _annotated(cls)
-
-
-@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_annotations_bind_nothing(cls):
-    """Check that annotations bind nothing."""
-    bound = {name for name in _annotated(cls) | _families(cls) if name in vars(cls)}
-    assert not bound, f"{cls.__name__} assigns {sorted(bound)} instead of only annotating"

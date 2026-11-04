@@ -238,49 +238,6 @@ def _compute_offsets(
     return h_offsets, v_offsets
 
 
-def _apply_offsets(
-    streams: "Sequence[Stream]",
-    h_offsets: dict[tuple[int, int], float],
-    v_offsets: dict[tuple[int, int], float],
-) -> dict[int, list[tuple[float, float]]]:
-    """Return each stream's waypoints moved by the segment offsets.
-
-    Parameters
-    ----------
-    streams : Sequence[Stream]
-        Routed streams.
-    h_offsets : dict[tuple[int, int], float]
-        Horizontal-segment offsets by ``(id(stream), segment)``.
-    v_offsets : dict[tuple[int, int], float]
-        Vertical-segment offsets by ``(id(stream), segment)``.
-
-    Returns
-    -------
-    dict[int, list[tuple[float, float]]]
-        Offset waypoints by ``id(stream)``, for each routed stream.
-    """
-    result: dict[int, list[tuple[float, float]]] = {}
-    for s in streams:
-        if not s.route or not s.route.waypoints:
-            continue
-
-        pts = s.route.waypoints
-        n_segs = len(pts) - 1
-        new_pts = []
-
-        for i, pt in enumerate(pts):
-            dx = dy = 0.0
-            # A waypoint's own segment wins over the one before it.
-            for seg_idx in (i - 1, i):
-                if 0 <= seg_idx < n_segs:
-                    dy = h_offsets.get((id(s), seg_idx), dy)
-                    dx = v_offsets.get((id(s), seg_idx), dx)
-            new_pts.append((pt[0] + dx, pt[1] + dy))
-
-        result[id(s)] = new_pts
-    return result
-
-
 def separate_streams(fs: "Flowsheet") -> None:
     """Separate overlapping runs and rewrite every automatic route.
 
@@ -310,4 +267,24 @@ def preview_separated_waypoints(
     dict[int, list[tuple[float, float]]]
         Separated waypoints by ``id(stream)``, for each routed stream.
     """
-    return _apply_offsets(streams, *_compute_offsets(streams))
+    h_offsets, v_offsets = _compute_offsets(streams)
+    result: dict[int, list[tuple[float, float]]] = {}
+    for s in streams:
+        if not s.route or not s.route.waypoints:
+            continue
+
+        pts = s.route.waypoints
+        n_segs = len(pts) - 1
+        new_pts = []
+
+        for i, pt in enumerate(pts):
+            dx = dy = 0.0
+            # A waypoint's own segment wins over the one before it.
+            for seg_idx in (i - 1, i):
+                if 0 <= seg_idx < n_segs:
+                    dy = h_offsets.get((id(s), seg_idx), dy)
+                    dx = v_offsets.get((id(s), seg_idx), dx)
+            new_pts.append((pt[0] + dx, pt[1] + dy))
+
+        result[id(s)] = new_pts
+    return result

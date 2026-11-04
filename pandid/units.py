@@ -273,10 +273,8 @@ class Unit:
         list[tuple[str, str, str]]
             Port specs as ``(name, direction, role)``.
         """
-        for klass in cls.__mro__:
-            if "PORTS" in klass.__dict__:
-                return list(klass.__dict__["PORTS"])
-        return []
+        return list(next(klass.__dict__["PORTS"] for klass in cls.__mro__
+                         if "PORTS" in klass.__dict__))
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
@@ -623,7 +621,14 @@ class Unit:
             # A flag's coordinates place its only port by default.
             port = next(iter(self.ports)) if isinstance(self, _Boundary) else None
         # Check the port name first, even with no coordinate.
-        nozzle = self._pin_port(port) if port is not None else None
+        nozzle: str | None = None
+        if port is not None:
+            nozzle = self._canonical_port_name(port)
+            if nozzle not in self.ports:
+                raise KeyError(
+                    f"{type(self).__name__} {self.name!r} has no port {nozzle!r} to "
+                    f"pin by; available ports: {sorted(self.ports)}"
+                )
         # Record per axis which port the coordinate locates.
         for axis, value in (("x", x), ("y", y)):
             if value is None:
@@ -655,32 +660,6 @@ class Unit:
         self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
         self._mirror_stated = self._mirror_stated or mirrored is not _UNCHANGED
         return self
-
-    def _pin_port(self, port_name: str) -> str:
-        """Return the real port name for a name given to :meth:`pin`.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name or alias.
-
-        Returns
-        -------
-        str
-            Port name.
-
-        Raises
-        ------
-        KeyError
-            If the unit has no such port.
-        """
-        canonical = self._canonical_port_name(port_name)
-        if canonical not in self.ports:
-            raise KeyError(
-                f"{type(self).__name__} {self.name!r} has no port {canonical!r} to "
-                f"pin by; available ports: {sorted(self.ports)}"
-            )
-        return canonical
 
     def nozzle(self: _UnitT, port_name: str, face: str) -> _UnitT:
         """Fix the face a port is drawn on.
@@ -1785,36 +1764,16 @@ class _MultiPortVessel(_FaceFamilies):
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, list(options))
-        self._check_face_room(port_name, face)
-
-    def _check_face_room(self, port_name: str, face: str) -> None:
-        """Refuse a second port on a zero-length face.
-
-        Parameters
-        ----------
-        port_name : str
-            Family port name.
-        face : str
-            Compass face.
-
-        Raises
-        ------
-        ValueError
-            If another family port is already on a zero-length face.
-        """
-        from pandid.render.symbols import bandless_face
-
-        sym = self._registry_symbol()
-        if sym is None:
-            return
+        # Refuse a second port on a zero-length face.
         band = sym.bands.get(face)
         if band is None or band[0] < band[1]:
             return
         others = [name for name, on in self._faces.items()
                   if on == face and name != port_name]
-        if not others:
-            return
-        raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
+        if others:
+            from pandid.render.symbols import bandless_face
+
+            raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
 
     def default_input_face(self) -> str:
         """Return the face an inlet uses when none is named.
@@ -3035,9 +2994,7 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     if "-" in tag:
         letters, num = tag.split("-", 1)
         return letters, num
-    i = 0
-    while i < len(tag) and not tag[i].isdigit():
-        i += 1
+    i = next((i for i, char in enumerate(tag) if char.isdigit()), len(tag))
     return tag[:i], tag[i:]
 
 
@@ -3279,24 +3236,6 @@ class Instrument(Unit):
             )
         return self._add_port(name, self.ports[member.group(1)].direction, "signal")
 
-    def _mint_port(self, name: str) -> Port | None:
-        """Return :meth:`signal_port`, or ``None`` if there is none.
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-
-        Returns
-        -------
-        Port or None
-            Existing or new port, or ``None``.
-        """
-        try:
-            return self.signal_port(name)
-        except KeyError:
-            return None
-
     def _pool_of(self, port_name: str) -> str | None:
         """Return the port's signal pool, or ``None`` outside the pools.
 
@@ -3393,9 +3332,18 @@ class Instrument(Unit):
         for name, codes in (("a", safety), ("b", variable), ("c", high), ("d", low)):
             if codes is None:
                 continue
-            written = _quadrant_codes(self.name, name, codes)
+            if isinstance(codes, str):
+                codes = (codes,) if codes else ()
+            written = [str(code).strip() for code in codes]
+            if not all(written):
+                raise ValueError(
+                    f"{self.name}: quadrant {name!r} was given an empty letter code. A "
+                    f"quadrant holds the codes written outside the symbol, e.g. "
+                    f"high='LAH'; leave the argument out to write nothing there"
+                )
             if written:
-                self.quadrants[name] = written
+                self.quadrants[name] = tuple(sorted(written, key=lambda code: next(
+                    (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
             else:
                 self.quadrants.pop(name, None)
         return self
@@ -3559,42 +3507,6 @@ class Instrument(Unit):
         self.angle = angle
         self.relation = relation
         self._invalidate_layout()
-
-
-def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
-    """Return one quadrant's letter codes in ISO 15519-2 5.2.5 order.
-
-    Parameters
-    ----------
-    where : str
-        Tag, for messages.
-    quadrant : str
-        Quadrant letter, ``"a"`` to ``"d"``.
-    codes : str or Sequence[str]
-        Letter codes; an empty string writes none.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Stripped codes, sorted A, S then Z.
-
-    Raises
-    ------
-    ValueError
-        If a code is empty.
-    """
-    if isinstance(codes, str):
-        codes = (codes,) if codes else ()
-    out = [str(code).strip() for code in codes]
-    for code in out:
-        if not code:
-            raise ValueError(
-                f"{where}: quadrant {quadrant!r} was given an empty letter code. A "
-                f"quadrant holds the codes written outside the symbol, e.g. "
-                f"high='LAH'; leave the argument out to write nothing there"
-            )
-    return tuple(sorted(out, key=lambda code: next(
-        (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
 
 
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
@@ -3866,33 +3778,6 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     if n_feeds < 1:
         raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
     return [f"feed_{i}" for i in range(1, n_feeds + 1)]
-
-
-def _draw_names(n_draws: int, owner: str) -> list[str]:
-    """Return side-draw names: ``draw``, or ``draw_1`` to ``draw_n``.
-
-    Parameters
-    ----------
-    n_draws : int
-        Number of side draws.
-    owner : str
-        Class name, for messages.
-
-    Returns
-    -------
-    list[str]
-        Draw port names; empty for none.
-
-    Raises
-    ------
-    ValueError
-        If ``n_draws`` is negative.
-    """
-    if n_draws < 0:
-        raise ValueError(f"{owner} cannot take a negative number of draws, got {n_draws}")
-    if n_draws == 0:
-        return []
-    return ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
 
 
 def _stage_fractions(
@@ -4429,7 +4314,9 @@ class Column(Unit):
         reference: str = "",
     ):
         names = _feed_names(n_feeds, "Column")
-        draw_names = _draw_names(n_draws, "Column")
+        if n_draws < 0:
+            raise ValueError(f"Column cannot take a negative number of draws, got {n_draws}")
+        draw_names = ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
         super().__init__(
             name,
             variant=variant,
@@ -4486,8 +4373,7 @@ class DistillationColumn(Column):
     """
 
     PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
+        *Column.PORTS,
         ("reflux_in", "inlet", "liquid"),
         ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
@@ -4525,8 +4411,7 @@ class Stripper(Column):
     """
 
     PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
+        *Column.PORTS,
         ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
     ]
