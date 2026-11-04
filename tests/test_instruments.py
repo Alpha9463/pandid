@@ -2758,3 +2758,65 @@ def test_a_hand_drawn_signal_line_keeps_its_nozzle_faces():
 
     assert s.route.waypoints == points
     assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def _receiver_with_frozen_signal() -> tuple[Flowsheet, Stream, list[tuple[float, float]]]:
+    """Route PT-101 beside V-101 to PIC-101, then freeze the signal line as drawn."""
+    fs = Flowsheet("Receiver pressure")
+    v = fs.add(U.Vessel("V-101", width=60, height=100)).pin(x=150, y=80)
+    pt = fs.add_instrument("PT", 101, sensing=v, face="W").pin(x=100, y=100)
+    pic = fs.add(U.Instrument("PIC-101")).pin(x=350, y=100)
+    s = fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    fs.route()
+    assert s.route is not None
+    x, y = s.route.waypoints[0]
+    points = [(x, y), (x, 45.0), (325.0, 45.0), (325.0, 122.0)]
+    s.via(points)
+    return fs, s, points
+
+
+def test_a_frozen_turned_line_keeps_its_faces_through_a_new_layout():
+    """Draw a line frozen from a turned nozzle square after layout() and route().
+
+    Returns
+    -------
+    None
+        The line keeps its points and is drawn square.
+    """
+    fs, s, points = _receiver_with_frozen_signal()
+    fs.layout()
+    fs.route()
+
+    assert s.route is not None
+    assert s.route.waypoints == points
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_frozen_signal_line_keeps_its_faces_when_a_controller_is_hung_again():
+    """Draw a frozen signal line square when route() hangs its controller again.
+
+    Returns
+    -------
+    None
+        The line keeps its points and is drawn square.
+    """
+    from pandid import ControlValve, Feed, Instrument, Product, Vessel
+
+    fs = Flowsheet("Receiver pressure")
+    valve = fs.add(ControlValve("PV-101")).pin(x=180, y=230)
+    vessel = fs.add(Vessel("V-101", width=80, height=120)).pin(x=400, y=170)
+    fs.connect(fs.add(Feed("F")).pin(x=100, y=230).outlet, valve.inlet)
+    fs.connect(valve.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, fs.add(Product("P")).pin(x=650, y=230).inlet)
+    pt = fs.add_instrument("PT", 101, sensing=vessel, face="E", offset=25)
+    pic = fs.add(Instrument("PIC-101"))
+    signal = fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    fs.connect(pic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+    assert signal.route is not None
+    points = list(signal.route.waypoints)
+    signal.via(points)
+    fs.route()
+
+    assert signal.route.waypoints == points
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
