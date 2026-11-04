@@ -285,6 +285,10 @@ class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         """Route and separate the sheet's automatic streams.
 
+        Outside layout, and unless the sheet asks for none, laterals that
+        cross, share a run or wind are then laid on ordered lanes
+        (:func:`pandid.routing.lanes.relane`).
+
         Parameters
         ----------
         fs : Flowsheet
@@ -331,6 +335,8 @@ class DefaultRouter:
             edge_penalties[run] += TOUCH_PENALTY
         taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
         routed: list["Stream"] = []
+        # Ends of each found route's stand-offs.
+        escapes: dict[int, tuple[tuple[float, float], tuple[float, float]]] = {}
 
         def crossable(stream: "Stream") -> "CrossingIndex":
             """Return the drawn lines a route for a stream would cross.
@@ -427,6 +433,7 @@ class DefaultRouter:
             path_found = bool(path)
 
             if path:
+                escapes[id(stream)] = (start_proj, goal_proj)
                 path = [start] + path + [goal]
                 # Penalise used segments for later streams.
                 for u_node, v_node in zip(path, path[1:]):
@@ -455,5 +462,9 @@ class DefaultRouter:
             stream.route = Route(waypoints=simplified, used_fallback=not path_found)
             routed.append(stream)
 
+        from pandid.routing.lanes import relane
         from pandid.routing.separation import separate_streams
         separate_streams(fs)
+        # Keep the routes layout sets pipe furniture on.
+        if fs._lanes and not fs._laying_out and relane(fs, escapes, graph):
+            fs._relaned = True
