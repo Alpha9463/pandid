@@ -20,6 +20,10 @@ CROSSING_PENALTY = 10.0
 NOZZLE_PENALTY = BEND_PENALTY
 
 
+#: Cost of a lane edge run within EDGE_TOL beside a unit's side.
+TOUCH_PENALTY = BEND_PENALTY
+
+
 #: Crossing queries before a search caches the sorted tracks locally.
 _INLINE_CROSSING_QUERY_THRESHOLD = 500
 
@@ -287,7 +291,8 @@ def find_path(
     start_dir, goal_dir : str or None, optional
         Outward directions at the source and destination ports.
     edge_penalties : dict, optional
-        Penalties on directed edges used by earlier routes.
+        Penalties on directed edges: lanes beside a unit and runs used
+        by earlier routes.
     is_recycle : bool, default=False
         Favour recycle lanes and halve the bend cost.
     crossing_index : CrossingIndex or None, optional

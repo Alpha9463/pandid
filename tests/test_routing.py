@@ -9,6 +9,7 @@ from typing import cast
 
 import pytest
 
+from pandid import ControlValve, ShellAndTubeExchanger
 from pandid.flowsheet import Flowsheet
 from pandid.geometry import Route
 from pandid.streams import Stream
@@ -96,12 +97,22 @@ def test_rect_intersection():
     assert not r.intersects_segment(5, 5, 25, 5)
 
 
-def test_a_segment_a_line_width_off_an_edge_lies_on_it():
-    """Read a segment within one line width outside an edge as on it."""
-    r = Rect(10, 20, 10, 20)
-    assert r.intersects_segment(5, 21.5, 25, 21.5)
-    assert r.intersects_segment(8.5, 5, 8.5, 25)
-    assert not r.intersects_segment(5, 22.5, 25, 22.5)
+@pytest.mark.parametrize("valve_at", [(440, 170), (446, 150)])
+def test_a_lane_beside_a_tag_or_its_own_unit_stays_a_way_through(valve_at):
+    """Route a cooler's outlet up the narrow lane between it and its valve."""
+    fs = Flowsheet("product cooler")
+    cooler = fs.add(ShellAndTubeExchanger("E-101")).pin(x=360, y=180)
+    valve = fs.add(ControlValve("TV-101")).pin(x=valve_at[0], y=valve_at[1])
+    feed, product = fs.add(Feed("Feed")), fs.add(Product("Product"))
+    cws, cwr = fs.add(Feed("CWS")), fs.add(Product("CWR"))
+    fs.connect(feed.outlet, cooler.tube_in)
+    fs.connect(cooler.tube_out, valve.inlet)
+    fs.connect(valve.outlet, product.inlet)
+    fs.connect(cws.outlet, cooler.shell_in)
+    fs.connect(cooler.shell_out, cwr.inlet)
+    fs.add_control_loop("T", 101, measuring=cooler, acting_on=valve)
+    fs.to_svg(diagram="p&id")
+    assert fs.validate(diagram="p&id") == []
 
 
 def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():

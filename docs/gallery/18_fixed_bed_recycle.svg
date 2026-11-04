@@ -237,7 +237,7 @@
     <path d="M 271.61400000000003,650.0 L 310.36400000000003,650.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 380.36400000000003,630.0 L 500.36400000000003,630.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 512.364,630.0 L 607.364,630.0 L 607.364,588.0 L 632.364,588.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 752.364,588.0 L 949.364,588.0 L 949.364,530 M 949.364,520 L 949.364,459.1 M 949.364,449.1 L 949.364,379.00000000000006 L 994.364,379.00000000000006" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 752.364,588.0 L 950.614,588.0 L 950.614,530 M 950.614,520 L 950.614,459.1 M 950.614,449.1 L 950.614,379.00000000000006 L 994.364,379.00000000000006" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1074.364,404.00000000000006 L 1418.364,404.00000000000006" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1418.364,469.00000000000006 L 1016.114,469.00000000000006 L 1016.114,525.0 L 722.364,525.0 L 722.364,570.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 662.364,606.0 L 662.364,656 M 662.364,666 L 662.364,1055.0 L 974.364,1055.0" fill="none" stroke="black" stroke-width="2" />
@@ -323,8 +323,8 @@
     <path d="M 187.2,650.0 L 180.9,647.6 L 185.3,643.6 Z" fill="black" />
     <rect x="401.5" y="623.5" width="77.7" height="13.0" fill="white" />
     <text x="440.4" y="630.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">200-SG-302-CS</text>
-    <rect x="953.4" y="529.2" width="13.0" height="76.6" fill="white" />
-    <text x="959.9" y="567.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 959.9, 567.5)">350-LG-314-CS</text>
+    <rect x="954.6" y="529.2" width="13.0" height="76.6" fill="white" />
+    <text x="961.1" y="567.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 961.1, 567.5)">350-LG-314-CS</text>
     <rect x="1166.3" y="397.5" width="76.0" height="13.0" fill="white" />
     <text x="1204.4" y="404.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-AS</text>
     <rect x="1179.2" y="462.5" width="76.0" height="13.0" fill="white" />

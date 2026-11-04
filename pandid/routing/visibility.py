@@ -52,18 +52,17 @@ class Rect:
         Returns
         -------
         bool
-            Whether it enters or runs within :data:`EDGE_TOL` of a
-            side; False if diagonal.
+            Whether it enters or runs along a side; False if diagonal.
         """
         if x1 == x2:
             return (
-                self.x_min - EDGE_TOL < x1 < self.x_max + EDGE_TOL
+                self.x_min <= x1 <= self.x_max
                 and max(y1, y2) > self.y_min
                 and min(y1, y2) < self.y_max
             )
         if y1 == y2:
             return (
-                self.y_min - EDGE_TOL < y1 < self.y_max + EDGE_TOL
+                self.y_min <= y1 <= self.y_max
                 and max(x1, x2) > self.x_min
                 and min(x1, x2) < self.x_max
             )
@@ -92,6 +91,46 @@ def clear_gaps(lane: List[float], spans: List[Tuple[float, float]]) -> List[bool
         for k in range(first, last):
             clear[k] = False
     return clear
+
+
+def hugging_edges(
+    edges: Dict[Tuple[float, float], List[Tuple[float, float]]],
+    xs: List[float],
+    ys: List[float],
+    bodies: List[Tuple["Unit", Rect]],
+) -> Dict[Tuple[Tuple[float, float], Tuple[float, float]], Set[int]]:
+    """Return the edges that run within :data:`EDGE_TOL` outside a side.
+
+    Parameters
+    ----------
+    edges : dict
+        Clear neighbours of each node.
+    xs, ys : list[float]
+        Sorted lane coordinates.
+    bodies : list[tuple[Unit, Rect]]
+        Unit bodies with their units.
+
+    Returns
+    -------
+    dict[tuple[tuple[float, float], tuple[float, float]], set[int]]
+        ``id()`` of each unit beside each such edge, by edge both ways.
+    """
+    out: Dict[Tuple[Tuple[float, float], Tuple[float, float]], Set[int]] = {}
+    for unit, o in bodies:
+        for row, lo, hi, start, end in ((True, o.y_min, o.y_max, o.x_min, o.x_max),
+                                        (False, o.x_min, o.x_max, o.y_min, o.y_max)):
+            across, along = (ys, xs) if row else (xs, ys)
+            near = (across[bisect_right(across, lo - EDGE_TOL):bisect_left(across, lo)]
+                    + across[bisect_right(across, hi):bisect_left(across, hi + EDGE_TOL)])
+            for c in near:
+                for t in along[:bisect_left(along, end)]:
+                    node = (t, c) if row else (c, t)
+                    for other in edges.get(node, ()):
+                        reach, lane = (other[0], other[1]) if row else (other[1], other[0])
+                        if lane == c and reach > max(t, start):
+                            for edge in ((node, other), (other, node)):
+                                out.setdefault(edge, set()).add(id(unit))
+    return out
 
 
 TRAVEL: Dict[str, Tuple[int, float]] = {
@@ -223,6 +262,9 @@ class VisibilityGraph:
         Lane intersections outside every obstacle's interior.
     edges : dict[tuple[float, float], list[tuple[float, float]]]
         Clear neighbours of each node.
+    hugging : dict[tuple[tuple[float, float], tuple[float, float]], set[int]]
+        ``id()`` of each unit an edge runs within :data:`EDGE_TOL`
+        outside a side of, by edge both ways.
 
     Raises
     ------
@@ -354,13 +396,12 @@ class VisibilityGraph:
             for i in range(i0, i1):
                 blocked_on_col[i].update(inside_y)
 
-        # A lane within EDGE_TOL of an obstacle's edge is blocked along it.
         row_spans: List[List[Tuple[float, float]]] = [[] for _ in ys]
         col_spans: List[List[Tuple[float, float]]] = [[] for _ in xs]
         for o in self.obstacles:
-            for j in range(bisect_right(ys, o.y_min - EDGE_TOL), bisect_left(ys, o.y_max + EDGE_TOL)):
+            for j in range(bisect_left(ys, o.y_min), bisect_right(ys, o.y_max)):
                 row_spans[j].append((o.x_min, o.x_max))
-            for i in range(bisect_right(xs, o.x_min - EDGE_TOL), bisect_left(xs, o.x_max + EDGE_TOL)):
+            for i in range(bisect_left(xs, o.x_min), bisect_right(xs, o.x_max)):
                 col_spans[i].append((o.y_min, o.y_max))
 
         self.edges: Dict[Tuple[float, float], List[Tuple[float, float]]] = {}
@@ -380,6 +421,8 @@ class VisibilityGraph:
                 if clear:
                     self.edges[col[k]].append(col[k + 1])
                     self.edges[col[k + 1]].append(col[k])
+
+        self.hugging = hugging_edges(self.edges, xs, ys, self.body_obstacles)
 
     def reachable_projection(
         self,

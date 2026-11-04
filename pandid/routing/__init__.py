@@ -306,7 +306,7 @@ class DefaultRouter:
         from pandid.render.svg import tap_lines, tap_route
         from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
-        from pandid.routing.astar import CrossingIndex, find_path
+        from pandid.routing.astar import TOUCH_PENALTY, CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
@@ -407,11 +407,16 @@ class DefaultRouter:
             for s, head in heads:
                 if s is not stream:
                     nozzle_index.record(head)
+            # Charge a run beside any unit but the stream's own ends.
+            penalties = defaultdict(float, edge_penalties)
+            for run, units in graph.hugging.items():
+                if units - {id(src_u), id(dst_u)}:
+                    penalties[run] += TOUCH_PENALTY
             path = []
             if clear_stubs:
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
-                    edge_penalties, is_recycle, crossing_index, nozzle_index,
+                    penalties, is_recycle, crossing_index, nozzle_index,
                 )
             path_found = bool(path)
 
