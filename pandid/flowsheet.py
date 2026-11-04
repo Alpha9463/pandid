@@ -544,6 +544,8 @@ class Flowsheet:
         self._may_hang = False
         self._hung: set[int] = set()
         self._unhung: tuple | None = None
+        # The balloon nozzles route() turned off a blocked exit.
+        self._turned: list[tuple["Unit", str]] = []
         # Whether a layout engine is running, which routes without hanging.
         self._laying_out = False
         # Whether a balloon hung from a balloon keeps off the tapped line,
@@ -2163,6 +2165,7 @@ class Flowsheet:
                         kept = False
                     if kept:
                         self._unhung = self._unhung or prior
+                        self._turned.append((unit, name))
                         break
                     self._put_geometry(prior, keep_manual=False)
 
@@ -2250,22 +2253,13 @@ class Flowsheet:
         state : tuple
             What :meth:`_geometry` returned.
         keep_manual : bool
-            Keep a route now drawn by hand, and the faces of the nozzles at
-            its ends, rather than the saved ones.
+            Keep a route now drawn by hand rather than the saved one.
         """
         frames, routes, converged = state
         units = {id(u) for u in self.units}
         streams = {id(st) for st in self.streams}
         for u, frame, tap in frames:
             if id(u) in units:
-                if keep_manual and u.frame is not None and frame is not None:
-                    for name, port in u.ports.items():
-                        if port.stream is None or port.stream.route is None:
-                            continue
-                        if port.stream.route.manual:
-                            frame.port_faces.pop(name, None)
-                            if name in u.frame.port_faces:
-                                frame.port_faces[name] = u.frame.port_faces[name]
                 u.frame = frame
                 if hasattr(u, "tap"):
                     u.tap = tap
@@ -2276,10 +2270,19 @@ class Flowsheet:
         self.route_converged = converged
 
     def _unhang(self) -> None:
-        """Return the sheet to its state as routed without hanging."""
+        """Return the sheet to its state as routed without hanging, but
+        keep each turned nozzle face whose line is now drawn by hand."""
         if self._unhung is not None:
+            kept = [(u, name, u.frame.port_faces[name]) for u, name in self._turned
+                    if u.frame is not None and name in u.frame.port_faces
+                    and (line := u.ports[name].stream) is not None
+                    and line.route is not None and line.route.manual]
             self._put_geometry(self._unhung, keep_manual=True)
+            for u, name, face in kept:
+                if u.frame is not None:
+                    u.frame.port_faces[name] = face
             self._unhung = None
+        self._turned = []
 
     @staticmethod
     def _raise_on_errors(issues: list) -> None:
