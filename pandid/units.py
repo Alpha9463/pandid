@@ -3605,6 +3605,7 @@ class Instrument(Unit):
         ValueError
             If a code is empty.
         """
+        quadrants = dict(self.quadrants)
         for name, codes in (("a", safety), ("b", variable), ("c", high), ("d", low)):
             if codes is None:
                 continue
@@ -3618,10 +3619,12 @@ class Instrument(Unit):
                     f"high='LAH'; leave the argument out to write nothing there"
                 )
             if written:
-                self.quadrants[name] = tuple(sorted(written, key=lambda code: next(
+                quadrants[name] = tuple(sorted(written, key=lambda code: next(
                     (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
             else:
-                self.quadrants.pop(name, None)
+                quadrants.pop(name, None)
+        self.quadrants.clear()
+        self.quadrants.update(quadrants)
         return self
 
     def attach(
