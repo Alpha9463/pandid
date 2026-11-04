@@ -1104,6 +1104,26 @@ def junction_symbol(kind: str, count: int) -> Symbol:
     )
 
 
+def _junction(kind: str, count: int) -> Symbol:
+    """Return the registered mixer or splitter, built to its count if stock.
+
+    Parameters
+    ----------
+    kind : str
+        ``"mixer"`` or ``"splitter"``.
+    count : int
+        Inlets of a mixer, or outlets of a splitter.
+
+    Returns
+    -------
+    Symbol
+        :func:`junction_symbol` for the stock drawing, else the drawing
+        registered in its place.
+    """
+    drawn = default_registry.get(kind)
+    return junction_symbol(kind, count) if drawn is junction_symbol(kind, 2) else drawn
+
+
 def _face_local(face: str, x: float, y: float, width: float, height: float
                 ) -> tuple[float, float]:
     """Return ``(along, inset)`` of a symbol-space point on a face.
@@ -1248,8 +1268,8 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length,
                                                               unit.diameter),
     ("block", None): lambda unit: unit.symbol(),
-    ("mixer", "default"): lambda unit: junction_symbol("mixer", len(unit.inlets)),
-    ("splitter", "default"): lambda unit: junction_symbol("splitter", len(unit.outlets)),
+    ("mixer", "default"): lambda unit: _junction("mixer", len(unit.inlets)),
+    ("splitter", "default"): lambda unit: _junction("splitter", len(unit.outlets)),
     ("tank", None): lambda unit: unit.symbol(),
     ("vessel", None): lambda unit: unit.symbol(),
 }

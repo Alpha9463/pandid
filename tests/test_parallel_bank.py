@@ -64,3 +64,21 @@ def test_a_layer_gap_widens_to_give_each_lateral_a_lane():
     # Seven laterals overlap on the way up, needing eight pitches.
     assert pump.frame.x - (sp.frame.x + sp.frame.w) == 2 * MIN_ESCAPE + 8 * LANE_PITCH
     assert 2 * MIN_ESCAPE + 8 * LANE_PITCH > COL_GAP
+
+
+def test_a_mixer_drawing_registered_again_is_drawn():
+    from pandid.render.symbols import Symbol, default_registry
+
+    stock = default_registry.get("mixer")
+    mine = Symbol(
+        svg='<g id="sym_mixer"><rect width="40" height="40"/></g>',
+        width=40.0,
+        height=40.0,
+        ports={"outlet": (40.0, 20.0), "in_1": (0.0, 10.0), "in_2": (0.0, 30.0)},
+    )
+    default_registry.register("mixer", mine)
+    try:
+        assert default_registry.for_unit(U.Mixer("M-1")) is mine
+    finally:
+        default_registry.register("mixer", stock)
+    assert default_registry.for_unit(U.Mixer("M-1", n_inlets=4)).height == 90
