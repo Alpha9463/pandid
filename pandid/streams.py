@@ -27,7 +27,7 @@ LINE_NUMBER_FIELDS = ("size", "schedule", "service", "sequence", "spec", "insula
 _LINE_COMPONENTS = Deprecation(
     what="Stream.line_components()",
     instead="the stream's size, schedule, service, sequence, spec and insulation",
-    removed_in="0.1.7",
+    removed_in="0.3.0",
 )
 
 #: Kinds that carry process fluid or duty.
