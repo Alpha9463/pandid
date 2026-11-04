@@ -267,6 +267,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Annotation columns start where the sheet writes them (#579).** draw.io
   takes its column widths from the sheet, and both backends measure a box's
   bold first column bold.
+- **Example 13 pipes the dryer's gas through `heating_in` and `vent` (#646).**
+  The dried product leaves by `product` and joins the cyclone's dust ahead of
+  the magnetic separator.
 
 ## [0.1.5] - 2026-08-26
 
