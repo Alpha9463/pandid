@@ -307,8 +307,8 @@ def test_a_row_pin_between_two_stacking_units_holds(
 
 
 @pytest.mark.parametrize("col", [None, 0])
-def test_row_pins_hold_whether_or_not_a_stack_forms(col: int | None) -> None:
-    """Keep row pins in order when the lower of two stacking units has a column pin or not."""
+def test_a_stack_holds_where_unstacking_would_cross_lines(col: int | None) -> None:
+    """Keep a stack whose unstacking crosses lines, reporting the row pin it breaks."""
     fs = Flowsheet("Row pins")
     a = fs.add(Block("A", inputs=[], outputs=["S"])).pin(col=0, row=0)
     b = fs.add(Block("B", inputs=["N"], outputs=["E"])).pin(col=col, row=2)
@@ -321,24 +321,49 @@ def test_row_pins_hold_whether_or_not_a_stack_forms(col: int | None) -> None:
 
     assert a.frame is not None and b.frame is not None
     assert c.frame is not None and d.frame is not None
+    assert a.frame.cy < b.frame.cy < c.frame.cy
+    found = [i for i in fs.validate() if i.code == "pin-not-honored"]
     if col is None:
-        assert b.frame.cy < d.frame.cy
+        assert b.frame.cy < d.frame.cy and not found
     else:
-        assert a.frame.cy < c.frame.cy < b.frame.cy
-    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+        assert found
+
+
+def test_a_stack_holds_where_unstacking_would_draw_lines_through_units() -> None:
+    """Keep a stack whose unstacking routes lines through units, reporting the row pin."""
+    fs = Flowsheet("Recovery")
+    a = fs.add(U.Column("T-101")).pin(col=0, row=0)
+    b = fs.add(U.Tank("V-101").nozzle("in_1", "N")).pin(col=0, row=2)
+    c = fs.add(U.HeatExchanger("E-101")).pin(col=0, row=1)
+    feed = fs.add(Feed("Feed")).pin(col=-1, row=0)
+    top = fs.add(Product("Distillate")).pin(col=1, row=0)
+    bottoms = fs.add(Product("Bottoms")).pin(col=1, row=2)
+    fs.connect(a.ports["bottoms"], b.ports["in_1"])
+    fs.connect(a.ports["overhead"], c.ports["tube_in"])
+    fs.connect(feed.ports["outlet"], a.ports["feed_1"])
+    fs.connect(c.ports["tube_out"], top.ports["inlet"])
+    line = fs.connect(b.ports["out_1"], bottoms.ports["inlet"])
+    valve = fs.add(D.ControlValve("FV-101"), on=line)
+    fs.add_control_loop("F", 101, measuring=line, acting_on=valve)
+    fs.route()
+
+    assert b.frame is not None and c.frame is not None
+    assert b.frame.cy < c.frame.cy
+    codes = [i.code for i in fs.validate()]
+    assert "pin-not-honored" in codes and "route-crosses-unit" not in codes
 
 
 def test_row_only_pins_hold_beside_a_column_split_by_a_row_pin() -> None:
     """Keep two units pinned by row alone in order beside a column whose stack splits."""
     fs = Flowsheet("Mixed pins")
     a = fs.add(Block("A", inputs=[], outputs=["S"])).pin(col=0, row=0)
-    b = fs.add(Block("B", inputs=["N"], outputs=["E"])).pin(col=0, row=2)
-    c = fs.add(Block("C", inputs=[], outputs=["E"])).pin(col=0, row=1)
+    b = fs.add(Block("B", inputs=["N"], outputs=["E", "E"])).pin(col=0, row=2)
+    c = fs.add(Block("C")).pin(col=0, row=1)
     d = fs.add(Block("D", inputs=["W"], outputs=[])).pin(row=3)
     e = fs.add(Block("E", inputs=["W"], outputs=[])).pin(row=4)
     fs.connect(a.ports["out_1"], b.ports["in_1"])
     fs.connect(b.ports["out_1"], d.ports["in_1"])
-    fs.connect(c.ports["out_1"], e.ports["in_1"])
+    fs.connect(b.ports["out_2"], e.ports["in_1"])
     fs.route()
 
     assert a.frame is not None and b.frame is not None and c.frame is not None

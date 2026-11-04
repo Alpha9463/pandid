@@ -533,6 +533,11 @@ class Flowsheet:
         # other units, and whether the last layout drew one closer.
         self._exit_clear = False
         self._exit_tight = False
+        # Whether layout leaves two units unstacked where another unit in
+        # their column is pinned to a row between theirs, and whether the
+        # last layout stacked any such pair.
+        self._split_stacks = False
+        self._stack_spans = False
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -2020,7 +2025,7 @@ class Flowsheet:
         from pandid.layout import default_layout_engine
 
         self._unhang()
-        self._mounted_layout = self._exit_tight = False
+        self._mounted_layout = self._exit_tight = self._stack_spans = False
         if engine is None:
             engine = default_layout_engine
         self._engine = engine
@@ -2050,6 +2055,10 @@ class Flowsheet:
         kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
+        Where the last layout stacked two units in a column with another
+        unit pinned to a row between theirs, the sheet is laid out and
+        routed again with those two unstacked, kept only if no tap leaves
+        its line and no finding, clash, crossing or fallback route grows.
 
         Parameters
         ----------
@@ -2074,6 +2083,7 @@ class Flowsheet:
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
+        from pandid.layout.conflicts import analyze_conflicts
         from pandid.validate import geometry_issues
 
         def place() -> None:
@@ -2140,7 +2150,8 @@ class Flowsheet:
                 if chained:
                     attempt(may_hang=False, keep_clear=True)
 
-        def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
+        def keep_if_better(redo: Callable[[], None], before: Counter[str],
+                           count: Callable[["Flowsheet"], Counter[str]] = _flaws) -> bool:
             """Redo the sheet, and undo that if a finding or clash grew or a
             tap left its line.
 
@@ -2150,19 +2161,27 @@ class Flowsheet:
                 Lays out or routes the sheet again.
             before : Counter[str]
                 Findings and clashes of the sheet as it stands.
+            count : Callable[[Flowsheet], Counter[str]], optional
+                Counts the findings and clashes compared with ``before``.
+
+            Returns
+            -------
+            bool
+                Whether the redone sheet is kept.
             """
             prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
             free = self._free_faces
             try:
                 redo()
                 kept = _taps_off(self) <= off and not any(
-                    n > before[k] for k, n in _flaws(self).items())
+                    n > before[k] for k, n in count(self).items())
             except Exception:
                 kept = False
             if not kept:
                 self._free_faces = free
                 self._put_geometry(prior, keep_manual=False)
                 self._unhung = unhung
+            return kept
 
         def priced() -> None:
             """Settle the sheet with arrowheads and lanes beside units priced
@@ -2182,21 +2201,53 @@ class Flowsheet:
             if tries and any(i.code in touch for i in geometry_issues(self)):
                 keep_if_better(priced, _flaws(self))
 
-        def relaid() -> None:
-            """Lay out with every signal exit a lane clear, and settle."""
-            self._exit_clear = True
+        def relaid(clear: bool, split: bool) -> None:
+            """Lay out again and settle.
+
+            Parameters
+            ----------
+            clear : bool
+                Keep every signal exit a lane clear.
+            split : bool
+                Leave two units unstacked where another unit in their
+                column is pinned to a row between theirs.
+            """
+            self._exit_clear, self._split_stacks = clear, split
             try:
                 self.layout(self._engine)
-            finally:
                 self._exit_clear = False
-            settle_best()
+                settle_best()
+            finally:
+                self._exit_clear = self._split_stacks = False
+
+        def strict(fs: "Flowsheet") -> Counter[str]:
+            """Count findings and clashes, crossings and fallback routes.
+
+            Parameters
+            ----------
+            fs : Flowsheet
+                Routed sheet.
+
+            Returns
+            -------
+            Counter[str]
+                What :func:`_flaws` counts, plus ``crossing`` and
+                ``fallback`` conflicts.
+            """
+            flaws = _flaws(fs)
+            flaws.update(c.kind for c in analyze_conflicts(fs) if c.kind in ("crossing", "fallback"))
+            return flaws
 
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
+        clear = False
         if tries and self._exit_tight:
-            keep_if_better(relaid, _flaws(self))
+            clear = keep_if_better(lambda: relaid(clear=True, split=False), _flaws(self))
             self._exit_tight = False
+        if tries and self._stack_spans:
+            keep_if_better(lambda: relaid(clear=clear, split=True), strict(self), strict)
+            self._exit_tight = self._stack_spans = False
         self._route_stale = False
 
     def _geometry(self) -> tuple:

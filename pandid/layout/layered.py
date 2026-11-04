@@ -278,7 +278,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     """
     if not units:
         return
-    nodes, node_of, stacked = _stacks(units, links)
+    nodes, node_of, stacked, fs._stack_spans = _stacks(units, links, fs._split_stacks)
     edges = [(node_of[link.source.owner], node_of[link.dest.owner], link) for link in links
              if node_of[link.source.owner] is not node_of[link.dest.owner]]
     kept = {id(link) for _, _, link in _layers(nodes, edges)}
@@ -408,8 +408,8 @@ def _clear_pins(units: list[Unit]) -> None:
         placed.append(u)
 
 
-def _stacks(units: list[Unit], links: list[Link]
-            ) -> tuple[list[_Node], dict[Unit, _Node], list[tuple[Unit, Unit, Link]]]:
+def _stacks(units: list[Unit], links: list[Link], split: bool
+            ) -> tuple[list[_Node], dict[Unit, _Node], list[tuple[Unit, Unit, Link]], bool]:
     """Group units joined by a top-to-bottom pipe into stacks.
 
     Parameters
@@ -418,11 +418,15 @@ def _stacks(units: list[Unit], links: list[Link]
         Units to group.
     links : list[Link]
         Pipes between the units.
+    split : bool
+        Leave two units unstacked where another unit in their column is
+        pinned to a row between theirs.
 
     Returns
     -------
-    tuple[list[_Node], dict[Unit, _Node], list[tuple]]
-        Stacks, each unit's stack, and ``(upper, lower, link)`` pipes.
+    tuple[list[_Node], dict[Unit, _Node], list[tuple], bool]
+        Stacks, each unit's stack, ``(upper, lower, link)`` pipes, and
+        whether any stack would span such a row pin.
     """
     lead = {u: u for u in units}
 
@@ -452,6 +456,7 @@ def _stacks(units: list[Unit], links: list[Link]
     depth = dict.fromkeys(units, 0)
     group = {u: [u] for u in units}
     stacked = []
+    spans = False
     for link in links:
         a, b = link.source.owner, link.dest.owner
         up = _STACK.get((_face(link.source), _face(link.dest)))
@@ -463,13 +468,17 @@ def _stacks(units: list[Unit], links: list[Link]
         merged = [(u, depth[u]) for u in group[top]] + [(u, depth[u] + drop) for u in group[bottom]]
         ranked = [(r, d) for u, d in merged if (r := row[u]) is not None]
         held = [grid[u] for u, _ in merged if u in grid]
-        # Skip merges that break column or row pins, or that leave no
-        # room for a unit pinned between two of the stack's rows in its
-        # column.
+        # Whether a unit pinned outside the stack falls between two of
+        # its rows in its column.
+        span = any(r1 < r < r2 for u, (c, r) in grid.items()
+                   if find(u) is not top and find(u) is not bottom
+                   for c1, r1 in held if c1 == c for c2, r2 in held if c2 == c)
+        # Skip merges that break column or row pins.
         if (col[top] is not None and col[bottom] is not None and col[top] != col[bottom]) or any(
-                r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked) or any(
-                r1 < r < r2 for u, (c, r) in grid.items() if find(u) is not top and find(u) is not bottom
-                for c1, r1 in held if c1 == c for c2, r2 in held if c2 == c):
+                r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked):
+            continue
+        spans = spans or span
+        if split and span:
             continue
         for u in group[bottom]:
             depth[u] += drop
@@ -486,7 +495,7 @@ def _stacks(units: list[Unit], links: list[Link]
         node = _Node(members=members)
         nodes.append(node)
         node_of.update((u, node) for u in members)
-    return nodes, node_of, stacked
+    return nodes, node_of, stacked, spans
 
 
 def _shape(node: _Node, stacked: list[tuple[Unit, Unit, Link]], pads: dict[Unit, Pad]) -> None:
