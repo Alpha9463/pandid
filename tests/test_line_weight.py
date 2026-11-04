@@ -235,19 +235,16 @@ def check_symbol_weights(flowsheet: Flowsheet, svg: str) -> None:
         expected = [width * trim_factor for width in authored_pens(symbol)]
         rendered = by_identifier[identifier][: len(expected)]
         assert len(rendered) == len(expected), (
-            f"{unit.name}: {identifier} draws {len(rendered)} strokes, its definition "
-            f"declares {len(expected)}"
+            f"{unit.name}: {identifier} draws {len(rendered)} strokes, declares {len(expected)}"
         )
         width_scale, height_scale = _placement_scale(symbol, unit)
         for index, (expected_width, (minor, major)) in enumerate(zip(expected, rendered)):
             description = f"{unit.name} ({identifier}) stroke {index}"
             assert math.isclose(minor, major, rel_tol=1e-5), (
-                f"{description}: drawn {minor:.4g} by {major:.4g} after placement "
-                f"at {width_scale:.4g} by {height_scale:.4g}"
+                f"{description}: {minor:.4g} by {major:.4g} at {width_scale:.4g}x{height_scale:.4g}"
             )
             assert math.isclose(minor, expected_width, rel_tol=1e-5), (
-                f"{description}: expected {expected_width:.4g}, drawn {minor:.4g} "
-                f"at {width_scale:.4g} by {height_scale:.4g}"
+                f"{description}: drew {minor:.4g}, expected {expected_width:.4g}"
             )
         checked += 1
     assert checked, "no equipment symbols were checked"

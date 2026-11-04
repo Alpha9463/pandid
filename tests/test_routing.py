@@ -918,7 +918,4 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     assert s2.route.waypoints[1][1] == 100.0, f"the via() route moved: {s2.route.waypoints}"
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
-    assert s2_recordings[-1][1][1] == 106.0, (
-        f"s2 was recorded at its raw, pre-separation position rather than "
-        f"the one actually drawn: {s2_recordings[-1]}"
-    )
+    assert s2_recordings[-1][1][1] == 106.0, s2_recordings[-1]

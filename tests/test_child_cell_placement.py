@@ -39,10 +39,7 @@ def _export(
 def _children(cells, marker: str):
     """The child cells of the one placed unit, in the order written."""
     ours = [cid for cid in cells if cid and marker in cid and "-" in cid]
-    assert ours, (
-        f"the export drew no {marker!r} child cells at all, so this unit is not "
-        f"exercising the mechanism the test is about"
-    )
+    assert ours, f"the export drew no {marker!r} child cells"
     parent = ours[0]
     root = parent.split("-")[0]
     return cells[root], [cells[cid] for cid in sorted(cells) if cid.startswith(f"{root}-")]
@@ -82,8 +79,7 @@ def test_a_child_turns_with_the_symbol_it_is_part_of(factory, marker, rot):
 
     for (_style_up, up), (_style_turned, over) in zip(upright, turned):
         assert over[2] == pytest.approx(up[3], abs=0.02), (
-            "the child's width did not become its upright height, so it was "
-            "laid out in a frame the symbol is no longer in"
+            "the child's width did not become its upright height"
         )
         assert over[3] == pytest.approx(up[2], abs=0.02)
 

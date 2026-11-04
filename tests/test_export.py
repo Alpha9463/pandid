@@ -308,8 +308,7 @@ def test_lettering_is_drawn_at_the_size_the_file_asks_for(size):
     for x0, x1, weight in ((1.25, 2.75, "regular"), (2.75, 4.5, "bold")):
         cap = _ink_height(im, px, x0 * size, x1 * size)
         assert cap / size == pytest.approx(_CAP_HEIGHT, abs=0.02), (
-            f"a {weight} capital set in {size:g} drew a cap height of {cap:.3f}, "
-            f"{cap / size:.3f} of its size against the {_CAP_HEIGHT} the face declares"
+            f"a {weight} capital set in {size:g} drew a cap height of {cap:.3f}"
         )
 
 
@@ -401,10 +400,7 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
         assert ink, f"{text!r} drew no ink inside its own halo"
         off = (box[1] + (ink[1] + ink[3]) / 2 - (top + bottom) / 2) / px
         want = (_MIDDLE - _CAP_HEIGHT / 2) * size
-        assert abs(off - want) < 0.5, (
-            f"{text!r} sits {off:+.2f} px off the middle of its halo, where its "
-            f"{size:g} type and the alignment it was given put it {want:+.2f}"
-        )
+        assert abs(off - want) < 0.5, f"{text!r} sits {off:+.2f} px off, expected {want:+.2f}"
         measured += 1
     assert measured >= 4, "no haloed label was measured, so this checked nothing"
 

@@ -202,11 +202,7 @@ def test_the_mark_takes_the_same_run_whichever_mark_it_is():
     ][0]
     point = re.compile(r"[LMA][^LMA]*?([\d.]+),([\d.]+)")
     arc_points = point.findall(arc_run)
-    assert arc_points == point.findall(gap_run), (
-        "the two marks end at the same points, so the run they take out is "
-        "the same run and a sheet redrawn in the other convention needs "
-        "nothing else to move"
-    )
+    assert arc_points == point.findall(gap_run), "the two marks end at different points"
     ys = {float(y) for x, y in arc_points if float(x) == 300.0}
     assert {175.0 - HOP_R, 175.0 + HOP_R} <= ys
 
@@ -219,10 +215,7 @@ def test_the_interruption_leaves_one_line_and_not_two():
     broken = [d for d in _paths(gap) if d.count("M ") > 1][0]
     run = stream_polyline(fs.streams[1])
     assert broken.startswith(f"M {run[0][0]},")
-    assert broken.endswith(f"L {run[-1][0]},{run[-1][1]}"), (
-        "the last command is the run reaching its own end, so marker-end "
-        "lands there and not at the break"
-    )
+    assert broken.endswith(f"L {run[-1][0]},{run[-1][1]}"), "the run stops short of its end"
 
 
 def test_the_export_writes_one_jump_size_for_either_mark():
@@ -385,19 +378,14 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
             "the finding names the mark the sheet was drawing, not the arc"
         )
         assert "via()" in finding.message, "and what to do about it"
-        assert "crossing_style='plain'" in finding.message, (
-            "...including the cure #499 made available"
-        )
+        assert "crossing_style='plain'" in finding.message, "and the plain style"
 
 
 def test_a_plain_sheet_reports_nothing_because_it_promised_nothing():
     """Check plain crossings suppress unmarked-crossing warnings."""
     fs = _pair(TIGHT)
     SvgRenderer().render(fs)
-    assert _found(fs), (
-        "the fixture reports nothing at the default style, so the assertion "
-        "below would pass on a sheet that had nothing to silence"
-    )
+    assert _found(fs), "the fixture reports nothing at the default style"
     SvgRenderer().render(fs, crossing_style="plain")
     assert not _found(fs)
 
@@ -493,7 +481,6 @@ def test_every_crossing_style_default_is_the_package_default():
                 continue
             seen += 1
             assert parameter.default == CROSSING_STYLE_DEFAULT, (
-                f"{info.name}.{obj.__qualname__} defaults crossing_style to "
-                f"{parameter.default!r}, not {CROSSING_STYLE_DEFAULT!r}"
+                f"{info.name}.{obj.__qualname__} defaults to {parameter.default!r}"
             )
     assert seen, "no crossing_style parameter was found, so nothing was checked"

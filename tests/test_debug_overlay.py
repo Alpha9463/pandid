@@ -404,10 +404,7 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
     fs, svg, _plain = corpus_drawings[name]
     halos, labels = _halos(svg), _placed(svg)
     expected = sum(1 + len(u.ports) for u in fs.units if u.frame is not None)
-    assert len(labels) == expected, (
-        f"{name}: the overlay wrote {len(labels)} labels where the sheet has "
-        f"{expected} to write -- one per placed unit and one per nozzle"
-    )
+    assert len(labels) == expected, f"{name}: {len(labels)} labels, expected {expected}"
     buried = [
         text
         for i, (box, text) in enumerate(labels)
@@ -415,8 +412,7 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
         or any(overlaps(box, other) for j, (other, _) in enumerate(labels) if j != i)
     ]
     assert len(buried) <= _CROWDED.get(name, 0), (
-        f"{name}: {len(buried)} of {len(labels)} overlay labels are written under a "
-        f"halo or over another label, e.g. {buried[:5]}"
+        f"{name}: {len(buried)} of {len(labels)} labels are covered, e.g. {buried[:5]}"
     )
 
 

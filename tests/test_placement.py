@@ -178,15 +178,11 @@ def test_a_col_pin_sets_the_layer_at_every_density() -> None:
             wanted = _held(fs, share, seed * 17 + int(share * 100))
             fs.layout()
             for unit, (col, _) in wanted.items():
-                assert frame_of(unit).col == col, (
-                    f"{fs.name} at {share:.0%} pinned: {unit.name} was pinned to "
-                    f"col {col} and drew in col {frame_of(unit).col}"
-                )
+                assert frame_of(unit).col == col, f"{fs.name} at {share:.0%}: {unit.name}"
             for west, (west_col, _) in wanted.items():
                 for east, (east_col, _) in wanted.items():
                     assert west_col >= east_col or frame_of(west).x < frame_of(east).x, (
-                        f"{fs.name} at {share:.0%} pinned: {west.name} (col {west_col}) "
-                        f"is drawn east of {east.name} (col {east_col})"
+                        f"{fs.name} at {share:.0%}: {west.name} east of {east.name}"
                     )
 
 
@@ -203,8 +199,7 @@ def test_a_row_pin_orders_its_column_at_every_density() -> None:
                     if col != lower_col or upper_row >= lower_row:
                         continue
                     assert frame_of(upper).y < frame_of(lower).y, (
-                        f"{fs.name} at {share:.0%} pinned: {upper.name} (row {upper_row}) "
-                        f"is drawn below {lower.name} (row {lower_row}) in col {col}"
+                        f"{fs.name} at {share:.0%}: {upper.name} below {lower.name}"
                     )
 
 
@@ -282,10 +277,7 @@ def test_a_mirrored_pump_draws_its_peers_on_the_mirrored_side() -> None:
     assert at["F"].x < at["P-1"].x < at["Pr"].x
 
     at = _pump_line(mirrored=True)
-    assert at["Pr"].x < at["P-1"].x < at["F"].x, (
-        "a mirrored pump draws its supply on the side its suction is drawn on: "
-        f"F at {at['F'].x}, P-1 at {at['P-1'].x}, Pr at {at['Pr'].x}"
-    )
+    assert at["Pr"].x < at["P-1"].x < at["F"].x, {n: at[n].x for n in ("F", "P-1", "Pr")}
 
 
 def test_a_condenser_sits_beside_the_column_top() -> None:
@@ -297,8 +289,7 @@ def test_a_condenser_sits_beside_the_column_top() -> None:
     fs.layout()
     assert frame_of(col).x_max < frame_of(cond).x
     assert nozzle_of(cond, "shell_in")[1] <= nozzle_of(col, "overhead")[1] + 0.5, (
-        f"the condenser inlet at {nozzle_of(cond, 'shell_in')} is below the overhead "
-        f"nozzle at {nozzle_of(col, 'overhead')}"
+        "the condenser inlet is below the overhead nozzle"
     )
 
 
@@ -367,10 +358,7 @@ def test_a_header_is_not_sunk_by_the_bank_it_supplies() -> None:
     top = min(frame_of(h).y for h in heaters)
     bottom = max(frame_of(h).y_max for h in heaters)
     header = frame_of(steam)
-    assert top <= header.y and header.y_max <= bottom, (
-        f"the header spans {header.y:.0f}..{header.y_max:.0f}, outside the bank's "
-        f"{top:.0f}..{bottom:.0f}"
-    )
+    assert top <= header.y and header.y_max <= bottom, f"bank {top:.0f}..{bottom:.0f}"
 
 
 # ---------------------------------------------------------------------------
