@@ -199,6 +199,29 @@ def test_a_control_valve_sits_on_its_pipe_without_a_jog(
     assert measure_final(fs).bends == 0
 
 
+@pytest.mark.parametrize("shift", [0.0, 25.7, 26.3, 27.8])
+def test_a_valve_set_on_a_shifted_level_line_adds_no_bends(shift: float) -> None:
+    """Check that a valve set on a level line shifted down the sheet adds no bends.
+
+    Parameters
+    ----------
+    shift : float
+        Distance the whole sheet is shifted down.
+    """
+    fs = Flowsheet("Shifted")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100 + shift)
+    product = fs.add(Product("Product")).pin(port="inlet", x=500, y=100 + shift)
+    line = fs.connect(feed.outlet, product.inlet)
+    valve = fs.add(ControlValve("FV-101"), on=line)
+
+    fs.route()
+    assert feed.frame is not None and valve.frame is not None
+    pipe_y = port_point(feed, feed.frame, "outlet")[1]
+    assert port_point(valve, valve.frame, "inlet")[1] == pipe_y
+    assert port_point(valve, valve.frame, "outlet")[1] == pipe_y
+    assert measure_final(fs).excess_bends == 0
+
+
 @pytest.mark.parametrize("mirrored", [None, True])
 def test_valves_on_an_upright_pipe_turn_and_get_room(mirrored: bool | None) -> None:
     """Check that valves between stacked units are turned onto the pipe and fit.

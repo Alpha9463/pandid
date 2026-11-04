@@ -116,6 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A valve set on a pipe no longer sits a rounding step off it (#611).** Its
+  nozzles land on the pipe's coordinate, so the pipe draws no hidden jog.
 - **A balloon hung from another balloon no longer sits on the line it taps
   (#619).** After the controller-hanging attempt, `route()` tries keeping it
   clear of that line, and keeps the result only if no balloon's tap leaves its
