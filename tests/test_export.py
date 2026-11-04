@@ -3,7 +3,6 @@
 import base64
 import importlib.util
 import io
-import math
 import re
 import zlib
 from pathlib import Path
@@ -12,6 +11,7 @@ import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.render import export
+from test_symbol_invariants import _apply, _parse_transform as _matrix
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 GOLDENS = sorted(p.name for p in GOLDEN_DIR.glob("*.svg"))
@@ -20,49 +20,6 @@ GOLDENS = sorted(p.name for p in GOLDEN_DIR.glob("*.svg"))
 _HAS_PDF_EXTRA = all(
     importlib.util.find_spec(m) is not None for m in ("svglib", "reportlab", "pypdfium2", "PIL")
 )
-
-_OP = re.compile(r"(translate|scale|rotate)\(([^)]*)\)")
-
-
-def _matrix(transform: str) -> tuple[float, float, float, float, float, float]:
-    """Compose an SVG transform list, left to right, into one (a, b, c, d, e, f) matrix."""
-    m = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
-    for name, raw in _OP.findall(transform):
-        v = [float(n) for n in raw.replace(",", " ").split()]
-        if name == "translate":
-            other = (1.0, 0.0, 0.0, 1.0, v[0], v[1] if len(v) > 1 else 0.0)
-        elif name == "scale":
-            other = (v[0], 0.0, 0.0, v[1] if len(v) > 1 else v[0], 0.0, 0.0)
-        else:
-            r = math.radians(v[0])
-            cos, sin = math.cos(r), math.sin(r)
-            other = (cos, sin, -sin, cos, 0.0, 0.0)
-            if len(v) == 3:  # rotate about a point
-                cx, cy = v[1], v[2]
-                other = (
-                    cos,
-                    sin,
-                    -sin,
-                    cos,
-                    cx - cos * cx + sin * cy,
-                    cy - sin * cx - cos * cy,
-                )
-        a, b, c, d, e, f = m
-        oa, ob, oc, od, oe, of = other
-        m = (
-            a * oa + c * ob,
-            b * oa + d * ob,
-            a * oc + c * od,
-            b * oc + d * od,
-            a * oe + c * of + e,
-            b * oe + d * of + f,
-        )
-    return m
-
-
-def _apply(m, x, y):
-    a, b, c, d, e, f = m
-    return a * x + c * y + e, b * x + d * y + f
 
 
 def _page_content(pdf: bytes) -> bytes:

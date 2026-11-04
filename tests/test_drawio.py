@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import importlib.util
 import math
 from dataclasses import dataclass
 from decimal import Decimal
@@ -13,7 +12,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from _render_cases import copy_settled_case
+from _render_cases import _script, copy_settled_case
 from test_crossing_style import _ARC, MARKED, _paths
 from _layout_cases import overlaps
 import pandid
@@ -3332,11 +3331,7 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     monkeypatch : pytest.MonkeyPatch
         Fixture used to replace the package version during the test.
     """
-    path = ROOT / "scripts" / "drawio_samples.py"
-    spec = importlib.util.spec_from_file_location("_pandid_script_drawio_samples", path)
-    assert spec is not None and spec.loader is not None
-    samples = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(samples)
+    samples = _script("drawio_samples")
     current, _dropped = samples.sample("04_control_loop")
     monkeypatch.setattr(pandid, "__version__", "99.99.99")
     bumped, _dropped = samples.sample("04_control_loop")

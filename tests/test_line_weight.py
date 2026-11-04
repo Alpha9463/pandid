@@ -1,7 +1,6 @@
 """Verify rendered SVG stroke weights of symbols, sheet lines, and resized equipment."""
 
 import math
-import re
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -12,66 +11,12 @@ from pandid.render.svg import SvgRenderer, _placement_scale
 from pandid.render.symbols import Symbol, default_registry
 from pandid.render.weights import LineWeight
 from _render_cases import copy_settled_case, gallery
+from test_symbol_invariants import _IDENTITY, Matrix, _compose, _parse_transform
 
-Matrix = tuple[float, float, float, float]
 DrawnPen = tuple[str, float, float]
 
 _NS = "{http://www.w3.org/2000/svg}"
-_XFORM = re.compile(r"(translate|scale|rotate|matrix)\(([^)]*)\)")
-_IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0)
 _SHEETS = tuple(gallery.sheets())
-
-
-def _mul(left: Matrix, right: Matrix) -> Matrix:
-    """Compose two row-major linear transformation matrices.
-
-    Parameters
-    ----------
-    left : Matrix
-        Outer transformation matrix.
-    right : Matrix
-        Inner transformation matrix.
-
-    Returns
-    -------
-    Matrix
-        Matrix for applying ``right`` followed by ``left``.
-    """
-    return (
-        left[0] * right[0] + left[1] * right[2],
-        left[0] * right[1] + left[1] * right[3],
-        left[2] * right[0] + left[3] * right[2],
-        left[2] * right[1] + left[3] * right[3],
-    )
-
-
-def _linear(transform: str | None) -> Matrix:
-    """Extract the linear portion of an SVG transformation list.
-
-    Parameters
-    ----------
-    transform : str or None
-        SVG ``transform`` attribute value.
-
-    Returns
-    -------
-    Matrix
-        Combined two-dimensional linear transformation matrix.
-    """
-    matrix = _IDENTITY
-    for operation, arguments in _XFORM.findall(transform or ""):
-        values = [float(value) for value in re.split(r"[,\s]+", arguments.strip()) if value]
-        if operation == "translate":
-            continue
-        if operation == "scale":
-            next_matrix = (values[0], 0.0, 0.0, values[1] if len(values) > 1 else values[0])
-        elif operation == "rotate":
-            angle = math.radians(values[0])
-            next_matrix = (math.cos(angle), -math.sin(angle), math.sin(angle), math.cos(angle))
-        else:
-            next_matrix = (values[0], values[2], values[1], values[3])
-        matrix = _mul(matrix, next_matrix)
-    return matrix
 
 
 def _pen_axes(matrix: Matrix) -> tuple[float, float]:
@@ -87,7 +32,7 @@ def _pen_axes(matrix: Matrix) -> tuple[float, float]:
     tuple[float, float]
         Minor and major pen widths, in ascending order.
     """
-    a, b, c, d = matrix
+    a, b, c, d, _, _ = matrix
     first = math.hypot((a + d) / 2, (c - b) / 2)
     second = math.hypot((a - d) / 2, (c + b) / 2)
     return abs(first - second), first + second
@@ -114,7 +59,7 @@ def _viewport(use: ET.Element, symbol: ET.Element) -> Matrix:
     width = float(use.get("width", view_width))
     height = float(use.get("height", view_height))
     scale = min(width / view_width, height / view_height)
-    return (scale, 0.0, 0.0, scale)
+    return (scale, 0.0, 0.0, scale, 0.0, 0.0)
 
 
 def _walk(
@@ -143,9 +88,9 @@ def _walk(
         tag = child.tag.replace(_NS, "")
         if tag in ("defs", "symbol", "marker"):
             continue
-        child_matrix = _mul(matrix, _linear(child.get("transform", "")))
+        child_matrix = _compose(matrix, _parse_transform(child.get("transform", "")))
         if tag == "g" and child.get("id") == "drawing":
-            minor, major = _pen_axes(_linear(child.get("transform", "")))
+            minor, major = _pen_axes(_parse_transform(child.get("transform", "")))
             assert math.isclose(minor, major, rel_tol=1e-9), (
                 f"the page fit is not a uniform scale: {minor:.4g} by {major:.4g}"
             )
@@ -154,7 +99,7 @@ def _walk(
             reference = (child.get("href") or child.get(f"{_NS}href", ""))[1:]
             _walk(
                 symbols[reference],
-                _mul(child_matrix, _viewport(child, symbols[reference])),
+                _compose(child_matrix, _viewport(child, symbols[reference])),
                 symbols,
                 pens,
                 reference,

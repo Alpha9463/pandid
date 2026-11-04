@@ -5,6 +5,7 @@ import re
 import xml.etree.ElementTree as ET
 
 import pytest
+from test_drawio import _style
 from test_symbol_invariants import _script
 
 from pandid import Feed, Fitting, Flowsheet, Product, SteamTrap
@@ -183,11 +184,8 @@ def _cells(document):
         geometry = cell.find("mxGeometry")
         if geometry is None:
             continue
-        style = dict(
-            part.split("=", 1) for part in (cell.get("style") or "").split(";") if "=" in part
-        )
         out[cell.get("id")] = (
-            style,
+            _style(cell),
             {k: float(geometry.get(k, 0)) for k in ("x", "y", "width", "height")},
         )
     return out

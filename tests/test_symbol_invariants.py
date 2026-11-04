@@ -139,8 +139,6 @@ def _parse_transform(s: str) -> Matrix:
                 )
             else:
                 f = rot
-        elif name == "matrix" and len(vals) >= 6:
-            f = (vals[0], vals[1], vals[2], vals[3], vals[4], vals[5])
         else:
             continue
         m = _compose(m, f)

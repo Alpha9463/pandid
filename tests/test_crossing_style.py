@@ -80,15 +80,13 @@ def _jumps(document: str) -> dict[str, str]:
     dict[str, str]
         Non-plain jump styles keyed by edge identifier.
     """
+    from test_drawio import _style
+
     root = ET.fromstring(document).find("diagram/mxGraphModel/root")
     assert root is not None
     out = {}
     for cell in root.iter("mxCell"):
-        style = dict(
-            part.split("=", 1)  # pyright: ignore[reportArgumentType]
-            for part in (cell.get("style") or "").split(";")
-            if "=" in part
-        )
+        style = _style(cell)
         if style.get("jumpStyle", "none") != "none":
             out[cell.get("id") or ""] = style["jumpStyle"]
     return out
