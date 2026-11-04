@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standoff, unless that adds a finding or a clash.
 - **The alumina refinery example draws three sheets (#622).** Its areas are
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
+- **Examples draw only the furniture their sheet needs (#684).** The control
+  loop and metering skid examples render as the P&IDs they are, without a
+  stream table, and three others drop a legend, line list or title block.
 - **Unit options are keyword-only on 23 classes (#646).** `Feed`, `Product`,
   `Valve`, `Fitting`, `Vessel`, `Tank`, `HeatExchanger`, `Evaporator`,
   `Thickener`, `Reactor`, `Separator`, `Column`, `DistillationColumn`,

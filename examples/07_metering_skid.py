@@ -16,7 +16,7 @@ def main():
     fs = Flowsheet("Feed Metering Skid")
 
     # --- Equipment ----------------------------------------------------
-    feed = fs.add(Feed("Raw Feed", reference="PFD-100"))
+    feed = fs.add(Feed("Raw Feed", reference="P&ID-100"))
     strainer = fs.add(Fitting("ST-101", variant="strainer",
                               description="Suction Strainer"))
     pump = fs.add(Pump("P-101", description="Feed Pump"))
@@ -28,10 +28,10 @@ def main():
                           description="Surge Vessel"))
     psv = fs.add(ReliefValve("PSV-101", variant="psv",
                              description="Vessel Relief Valve"))
-    flare = fs.add(Product("To Flare", reference="PFD-900"))
+    flare = fs.add(Product("To Flare", reference="P&ID-900"))
     glass = fs.add(Fitting("SG-101", variant="sight_glass",
                            description="Sight Glass"))
-    prod = fs.add(Product("To Unit 200", reference="PFD-200"))
+    prod = fs.add(Product("To Unit 200", reference="P&ID-200"))
 
     # --- Placement ----------------------------------------------------
     # Pin by nozzle; the pump's discharge sits above its suction.
@@ -53,27 +53,23 @@ def main():
     flare.pin(port="inlet", x=900, y=110 + port_offset(psv, "outlet")[1])
 
     # --- Connections --------------------------------------------------
-    feed_in = fs.connect(feed.outlet, strainer.inlet)
+    fs.connect(feed.outlet, strainer.inlet)
     fs.connect(strainer.outlet, pump.suction)
     fs.connect(pump.discharge, meter.inlet)
     fs.connect(meter.outlet, fv.inlet)
     fs.connect(fv.outlet, surge.inlet)
     fs.connect(surge.outlet, glass.inlet)
-    product_out = fs.connect(glass.outlet, prod.inlet)
+    fs.connect(glass.outlet, prod.inlet)
 
     fs.connect(surge.vent, psv.inlet)
-    relief_out = fs.connect(psv.outlet, flare.inlet)
+    fs.connect(psv.outlet, flare.inlet)
 
     # Level controller below the vessel, in the central control system.
     lic = fs.add_instrument("LIC", 101, sensing=surge, face="S", offset=115,
                             display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
 
-    feed_in.properties = {"Flow (kg/h)": "8000"}
-    product_out.properties = {"Flow (kg/h)": "8000"}
-    relief_out.properties = {"Flow (kg/h)": ""}
-
-    fs.render(out("metering_skid.svg"), show_stream_table=True)
+    fs.render(out("metering_skid.svg"), diagram="p&id")
     print("Generated metering_skid.svg")
 
 
