@@ -1094,57 +1094,57 @@
     <path d="M 2835.0,1706.0 L 2835.0,1680 L 2960.0,1680.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2835.0,1846.0 L 2835.0,1924.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 2841.0,1930.0 L 2980.0,1930.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <rect x="1491.5" y="2253.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1493.7" y="2253.5" width="32.7" height="13.0" fill="white" />
     <text x="1510.0" y="2260.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-903</text>
-    <rect x="1121.5" y="1123.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1123.7" y="1123.5" width="32.7" height="13.0" fill="white" />
     <text x="1140.0" y="1130.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-932</text>
-    <rect x="1557.0" y="1553.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1559.2" y="1553.5" width="32.7" height="13.0" fill="white" />
     <text x="1575.5" y="1560.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-933</text>
-    <rect x="1223.5" y="1113.0" width="37.0" height="13.0" fill="white" />
-    <text x="1242.0" y="1119.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-934</text>
-    <rect x="1372.8" y="1263.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1225.7" y="1123.5" width="32.7" height="13.0" fill="white" />
+    <text x="1242.0" y="1130.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-934</text>
+    <rect x="1374.9" y="1263.5" width="32.7" height="13.0" fill="white" />
     <text x="1391.2" y="1270.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-935</text>
-    <rect x="1562.8" y="1393.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1564.9" y="1393.5" width="32.7" height="13.0" fill="white" />
     <text x="1581.2" y="1400.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-936</text>
-    <rect x="1909.0" y="1693.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1911.2" y="1693.5" width="32.7" height="13.0" fill="white" />
     <text x="1927.5" y="1700.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-937</text>
-    <rect x="1794.0" y="1173.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1796.2" y="1173.5" width="32.7" height="13.0" fill="white" />
     <text x="1812.5" y="1180.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-938</text>
-    <rect x="1208.5" y="1351.5" width="13.0" height="37.0" fill="white" />
+    <rect x="1208.5" y="1353.7" width="13.0" height="32.7" fill="white" />
     <text x="1215.0" y="1370.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1215.0, 1370.0)">S-939</text>
-    <rect x="2213.5" y="1561.5" width="13.0" height="37.0" fill="white" />
+    <rect x="2213.5" y="1563.7" width="13.0" height="32.7" fill="white" />
     <text x="2220.0" y="1580.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 2220.0, 1580.0)">S-940</text>
-    <rect x="1796.5" y="1613.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1798.7" y="1613.5" width="32.7" height="13.0" fill="white" />
     <text x="1815.0" y="1620.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-941</text>
-    <rect x="2213.5" y="1771.5" width="13.0" height="37.0" fill="white" />
+    <rect x="2213.5" y="1773.7" width="13.0" height="32.7" fill="white" />
     <text x="2220.0" y="1790.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 2220.0, 1790.0)">S-942</text>
-    <rect x="1271.5" y="1831.2" width="37.0" height="13.0" fill="white" />
+    <rect x="1273.7" y="1831.2" width="32.7" height="13.0" fill="white" />
     <text x="1290.0" y="1837.7" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-943</text>
-    <rect x="1449.0" y="1973.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1451.2" y="1973.5" width="32.7" height="13.0" fill="white" />
     <text x="1467.5" y="1980.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-944</text>
-    <rect x="1421.5" y="2018.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1423.7" y="2018.5" width="32.7" height="13.0" fill="white" />
     <text x="1440.0" y="2025.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-945</text>
-    <rect x="1716.5" y="2091.0" width="37.0" height="13.0" fill="white" />
+    <rect x="1718.7" y="2091.0" width="32.7" height="13.0" fill="white" />
     <text x="1735.0" y="2097.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-946</text>
-    <rect x="1593.5" y="1867.8" width="13.0" height="37.0" fill="white" />
+    <rect x="1593.5" y="1869.9" width="13.0" height="32.7" fill="white" />
     <text x="1600.0" y="1886.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1600.0, 1886.2)">S-947</text>
-    <rect x="1681.5" y="2213.5" width="37.0" height="13.0" fill="white" />
+    <rect x="1683.7" y="2213.5" width="32.7" height="13.0" fill="white" />
     <text x="1700.0" y="2220.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-948</text>
-    <rect x="2179.0" y="1983.0" width="37.0" height="13.0" fill="white" />
-    <text x="2197.5" y="1989.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-949</text>
-    <rect x="2226.5" y="2223.5" width="37.0" height="13.0" fill="white" />
+    <rect x="2181.2" y="1993.5" width="32.7" height="13.0" fill="white" />
+    <text x="2197.5" y="2000.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-949</text>
+    <rect x="2228.7" y="2223.5" width="32.7" height="13.0" fill="white" />
     <text x="2245.0" y="2230.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-950</text>
-    <rect x="2451.5" y="2083.8" width="37.0" height="13.0" fill="white" />
+    <rect x="2453.7" y="2083.8" width="32.7" height="13.0" fill="white" />
     <text x="2470.0" y="2090.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-951</text>
-    <rect x="2716.0" y="1923.5" width="37.0" height="13.0" fill="white" />
+    <rect x="2718.2" y="1923.5" width="32.7" height="13.0" fill="white" />
     <text x="2734.5" y="1930.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-952</text>
-    <rect x="2666.5" y="1713.5" width="37.0" height="13.0" fill="white" />
+    <rect x="2668.7" y="1713.5" width="32.7" height="13.0" fill="white" />
     <text x="2685.0" y="1720.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-953</text>
-    <rect x="2879.0" y="1673.5" width="37.0" height="13.0" fill="white" />
+    <rect x="2881.2" y="1673.5" width="32.7" height="13.0" fill="white" />
     <text x="2897.5" y="1680.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-954</text>
-    <rect x="2828.5" y="1866.5" width="13.0" height="37.0" fill="white" />
+    <rect x="2828.5" y="1868.7" width="13.0" height="32.7" fill="white" />
     <text x="2835.0" y="1885.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 2835.0, 1885.0)">S-955</text>
-    <rect x="2892.0" y="1923.5" width="37.0" height="13.0" fill="white" />
+    <rect x="2894.2" y="1923.5" width="32.7" height="13.0" fill="white" />
     <text x="2910.5" y="1930.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-956</text>
   </g>
   <g id="unit_labels">

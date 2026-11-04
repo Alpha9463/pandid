@@ -11,9 +11,9 @@ from pandid import Feed, Flowsheet, Pump, ShellAndTubeExchanger, Tank, Vessel
 from pandid.document import StreamLabelOptions
 from pandid.layout.conflicts import boxes_overlap
 from pandid.render.drawio import _tag_pass
+from pandid.render.furniture import text_width
 from pandid.render.symbols import default_registry
 from pandid.render.svg import (
-    _HALO_CHAR,
     _HALO_DEEP,
     _HALO_PAD,
     _ink,
@@ -25,6 +25,7 @@ from pandid.render.svg import (
     hop_box,
     HOP_R,
     JUMP_DIRECTIONS,
+    NUMBER_TYPE,
     sheet_connections,
     stream_hops,
     stream_numbers,
@@ -123,7 +124,7 @@ def halo(name: str) -> "tuple[float, float]":
     tuple[float, float]
         Width and height of the label text plate.
     """
-    return len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
+    return text_width(name, NUMBER_TYPE) + _HALO_PAD, _HALO_DEEP
 
 
 def drawn(shape: str, box, ink: str = "black", fill: bool = False) -> str:
