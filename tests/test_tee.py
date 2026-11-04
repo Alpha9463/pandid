@@ -388,15 +388,6 @@ def test_a_tee_comes_back_from_the_spec_branching_the_way_it_went_in(branch):
     assert rebuilt.ports["branch"].direction == branch
 
 
-def test_only_a_tee_takes_a_branch_direction():
-    from pandid.spec import SpecError
-
-    with pytest.raises(SpecError, match="only a Tee takes 'branch'"):
-        Flowsheet.from_dict(
-            {"name": "s", "units": [{"kind": "Valve", "name": "V", "branch": "inlet"}]}
-        )
-
-
 def test_a_spec_can_name_a_tee_by_its_kind():
     fs = Flowsheet.from_dict(
         {"name": "s", "units": [{"kind": "tee", "name": "T-1", "branch": "inlet"}]}

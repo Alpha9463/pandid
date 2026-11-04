@@ -361,16 +361,6 @@ def test_a_spec_position_that_is_not_one_names_the_entry():
         )
 
 
-def test_only_a_positioned_unit_takes_a_normal_position_in_a_spec():
-    with pytest.raises(spec.SpecError, match="only a Valve or a Fitting takes 'normal_position'"):
-        Flowsheet.from_dict(
-            {
-                "name": "bad",
-                "units": [{"kind": "Pump", "name": "P-101", "normal_position": "closed"}],
-            }
-        )
-
-
 def test_a_spec_may_not_close_a_control_valve():
     with pytest.raises(spec.SpecError, match="4.2.2.10"):
         Flowsheet.from_dict(

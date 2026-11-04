@@ -163,17 +163,6 @@ def test_a_flag_that_is_not_a_header_writes_no_word_about_it():
     assert "header" not in fs.to_dict()["units"][0]
 
 
-def test_header_on_equipment_is_refused_by_the_spec():
-    """The spec rejects a key the class cannot take rather than dropping it."""
-    with pytest.raises(ValueError, match="header"):
-        Flowsheet.from_dict(
-            {
-                "name": "spec",
-                "units": [{"kind": "Pump", "name": "P-101", "header": True}],
-            }
-        )
-
-
 # --- one flag, several lines --------------------------------------------------
 
 

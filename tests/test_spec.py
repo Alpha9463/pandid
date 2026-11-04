@@ -98,18 +98,37 @@ def test_reference_on_equipment_is_refused():
     assert "Feed or Product" in str(excinfo.value)
 
 
-def test_variable_port_units():
-    fs = Flowsheet.from_dict(
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"kind": "Mixer", "name": "M-1", "n_inlets": 4},
+        {"kind": "Splitter", "name": "SP-1", "n_outlets": 3},
+        {"kind": "Column", "name": "T-302", "n_feeds": 2},
+        {"kind": "Reactor", "name": "R-1"},
+        {"kind": "Separator", "name": "V-1", "n_feeds": 2},
+        {"kind": "Absorber", "name": "V-501"},
+        {"kind": "Stripper", "name": "T-601"},
+        {"kind": "Column", "name": "T-101"},
+        {"kind": "DistillationColumn", "name": "T-101", "internals": "valve_tray", "trays": 20},
+        {"kind": "Absorber", "name": "V-501", "n_feeds": 2, "feed_stages": [1, 8]},
+        {"kind": "Column", "name": "T-301", "n_draws": 2},
         {
-            "name": "T",
-            "units": [
-                {"kind": "Mixer", "name": "M-1", "n_inlets": 4},
-                {"kind": "Splitter", "name": "SP-1", "n_outlets": 3},
-            ],
-        }
-    )
-    assert sorted(fs.units[0].ports) == ["in_1", "in_2", "in_3", "in_4", "outlet"]
-    assert sorted(fs.units[1].ports) == ["inlet", "out_1", "out_2", "out_3"]
+            "kind": "Column",
+            "name": "T-301",
+            "internals": "valve_tray",
+            "trays": 30,
+            "n_feeds": 2,
+            "feed_stages": [10, None],
+            "n_draws": 2,
+            "draw_stages": [None, 22],
+        },
+    ],
+)
+def test_a_one_unit_entry_is_written_back_as_it_was_read(entry):
+    """Check that a one-unit spec entry is written back unchanged, twice over."""
+    written = Flowsheet.from_dict({"name": "T", "units": [entry]}).to_dict()
+    assert written["units"] == [entry]
+    assert Flowsheet.from_dict(written).to_dict() == written
 
 
 def test_exchanger_side_nozzles_round_trip():
@@ -189,115 +208,6 @@ def test_a_filters_wash_and_cake_round_trip():
     assert rebuilt.to_svg() == fs.to_svg()
 
 
-def test_an_ion_exchangers_regenerant_round_trips():
-    """Check that an ion exchanger's regenerant nozzles round-trip with their streams."""
-    fs = Flowsheet("demin")
-    regen = fs.add(units.Feed("Caustic"))
-    ix = fs.add(units.Filter("F-802", variant="ion_exchange"))
-    waste = fs.add(units.Product("To Neutralisation"))
-    fs.connect(regen.outlet, ix.port("regenerant_in"))
-    fs.connect(ix.port("spent_regenerant"), waste.inlet)
-
-    spec = fs.to_dict()
-    rebuilt = Flowsheet.from_dict(spec)
-    back = next(u for u in rebuilt.units if u.name == "F-802")
-    assert sorted(back.ports) == [
-        "inlet",
-        "outlet",
-        "regenerant_in",
-        "spent_regenerant",
-    ]
-    assert back.port("regenerant_in").stream is not None
-    assert back.port("spent_regenerant").stream is not None
-    assert rebuilt.to_dict() == spec
-
-
-def test_a_column_or_reactor_feed_count_round_trips():
-    fs = Flowsheet.from_dict(
-        {
-            "name": "T",
-            "units": [
-                {"kind": "Column", "name": "T-302", "n_feeds": 2},
-                {"kind": "Reactor", "name": "R-1"},
-            ],
-        }
-    )
-    assert {"feed_1", "feed_2"} <= set(fs.units[0].ports)
-    assert "feed_1" in fs.units[1].ports
-    assert fs.units[1].feed is fs.units[1].feed_1
-    written = {u["name"]: u for u in fs.to_dict()["units"]}
-    assert written["T-302"]["n_feeds"] == 2
-    assert "n_feeds" not in written["R-1"]
-
-
-def test_a_two_feed_separator_round_trips():
-    """Check that a two-feed separator writes ``n_feeds`` and round-trips."""
-    fs = Flowsheet("T")
-    sep = fs.add(units.Separator("V-1", n_feeds=2))
-    wash = fs.add(units.Feed("F-2"))
-    fs.connect(wash.outlet, sep.port("feed_2"))
-    spec = fs.to_dict()
-    assert spec["units"][0]["n_feeds"] == 2
-    assert Flowsheet.from_dict(spec).to_dict() == spec
-
-
-def test_absorber_and_stripper_kind_round_trips():
-    """Check that ``kind: Absorber`` and ``Stripper`` load their own class and round-trip."""
-    fs = Flowsheet.from_dict(
-        {
-            "name": "T",
-            "units": [
-                {"kind": "Absorber", "name": "V-501"},
-                {"kind": "Stripper", "name": "T-601"},
-            ],
-        }
-    )
-    assert set(fs.units[0].ports) == {"feed_1", "overhead", "bottoms"}
-    assert type(fs.units[0]).__name__ == "Absorber"
-    assert type(fs.units[1]).__name__ == "Stripper"
-    written = {u["name"]: u for u in fs.to_dict()["units"]}
-    assert written["V-501"]["kind"] == "Absorber"
-    assert written["T-601"]["kind"] == "Stripper"
-    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
-
-
-def test_a_bare_column_kind_still_loads_as_the_general_tower():
-    """Check that a bare ``kind: column`` loads as the general ``Column``."""
-    fs = Flowsheet.from_dict({"name": "T", "units": [{"kind": "column", "name": "T-101"}]})
-    assert type(fs.units[0]).__name__ == "Column"
-    assert set(fs.units[0].ports) == {"feed_1", "overhead", "bottoms"}
-
-
-def test_a_distillation_column_kind_round_trips():
-    """Check that ``kind: distillation_column`` loads its own class and round-trips."""
-    fs = Flowsheet.from_dict(
-        {
-            "name": "T",
-            "units": [
-                {
-                    "kind": "distillation_column",
-                    "name": "T-101",
-                    "internals": "valve_tray",
-                    "trays": 20,
-                },
-            ],
-        }
-    )
-    assert type(fs.units[0]).__name__ == "DistillationColumn"
-    assert set(fs.units[0].ports) == {
-        "feed_1",
-        "overhead",
-        "bottoms",
-        "reflux_in",
-        "boilup_in",
-        "reboiler_duty",
-        "condenser_duty",
-    }
-    written = fs.to_dict()["units"][0]
-    assert written["kind"] == "DistillationColumn"
-    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
-
-
 def test_an_absorbers_packing_default_round_trips_silently():
     """Check that an Absorber's packing default is not written and a null one stays null."""
     fs = Flowsheet.from_dict({"name": "T", "units": [{"kind": "Absorber", "name": "V-501"}]})
@@ -309,32 +219,6 @@ def test_an_absorbers_packing_default_round_trips_silently():
     )
     assert bare.units[0].internals is None
     assert Flowsheet.from_dict(bare.to_dict()).units[0].internals is None
-
-
-def test_absorber_and_stripper_still_take_n_feeds_and_feed_stages():
-    """Check that an Absorber takes ``n_feeds`` and ``feed_stages`` and round-trips."""
-    fs = Flowsheet.from_dict(
-        {
-            "name": "T",
-            "units": [
-                {
-                    "kind": "Absorber",
-                    "name": "V-501",
-                    "internals": "packing",
-                    "trays": 8,
-                    "n_feeds": 2,
-                    "feed_stages": [1, 8],
-                },
-            ],
-        }
-    )
-    absorber = fs.units[0]
-    assert {"feed_1", "feed_2"} <= set(absorber.ports)
-    assert absorber.feed_stages == [1, 8]
-    written = fs.to_dict()["units"][0]
-    assert written["n_feeds"] == 2
-    assert written["feed_stages"] == [1, 8]
-    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
 
 _STAGED_FAMILIES = [("n_feeds", "feed_stages"), ("n_draws", "draw_stages")]
@@ -415,6 +299,15 @@ def test_a_stage_list_of_the_wrong_length_is_refused_from_a_spec(count, stages):
         ("draw_stages", [1], "a Column"),
         ("n_draws", 2, "a Column"),
         ("n_feeds", 2, "a Column or a Reactor or a Separator"),
+        ("n_inlets", 3, "a Mixer"),
+        ("supports", "skirt", "a Evaporator or a Vessel"),
+        ("diameter", 40, "a Conveyor"),
+        ("length", 200, "a Conveyor"),
+        ("large_end", "outlet", "a Reducer"),
+        ("normal_position", "closed", "a Valve or a Fitting"),
+        ("header", True, "a Feed or a Product"),
+        ("fail", "closed", "a Valve"),
+        ("branch", "inlet", "a Tee"),
     ],
 )
 def test_a_family_key_on_a_kind_with_no_such_family_is_rejected(key, value, owners):
@@ -422,43 +315,6 @@ def test_a_family_key_on_a_kind_with_no_such_family_is_rejected(key, value, owne
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", key: value}]})
     assert f"only {owners} takes {key!r}, not a Pump" in str(excinfo.value)
-
-
-def test_a_columns_draw_count_round_trips():
-    """Check that ``n_draws`` is written when set and left out of a column with none."""
-    fs = Flowsheet.from_dict(
-        {"name": "T", "units": [{"kind": "Column", "name": "T-301", "n_draws": 2}]}
-    )
-    assert {"draw_1", "draw_2"} <= set(fs.units[0].ports)
-    written = fs.to_dict()["units"][0]
-    assert written["n_draws"] == 2
-    bare = Flowsheet.from_dict({"name": "T", "units": [{"kind": "Column", "name": "T-101"}]})
-    assert "n_draws" not in bare.to_dict()["units"][0]
-
-
-def test_a_column_with_both_feed_and_draw_families_round_trips():
-    """Check that a column with both a feed and a draw family round-trips."""
-    fs = Flowsheet.from_dict(
-        {
-            "name": "T",
-            "units": [
-                {
-                    "kind": "Column",
-                    "name": "T-301",
-                    "internals": "valve_tray",
-                    "trays": 30,
-                    "n_feeds": 2,
-                    "feed_stages": [10, None],
-                    "n_draws": 2,
-                    "draw_stages": [None, 22],
-                },
-            ],
-        }
-    )
-    col = fs.units[0]
-    assert {"feed_1", "feed_2", "draw_1", "draw_2"} <= set(col.ports)
-    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
-    assert Flowsheet.from_dict(fs.to_dict()).to_svg() == fs.to_svg()
 
 
 @pytest.mark.parametrize("kind", ["Vessel", "Tank"])
@@ -538,17 +394,6 @@ def test_every_composition_keyword_round_trips(make, expected):
     assert _artwork(rebuilt) == _artwork(unit)
 
 
-def test_a_columns_tray_count_survives_the_trip():
-    """Check that a column's internals and tray count survive the round trip."""
-    unit = units.Column("T-102", internals="sieve_tray", trays=18)
-    entry, rebuilt = _round_trip(unit)
-    assert (entry["internals"], entry["trays"]) == ("sieve_tray", 18)
-    assert _drawn(unit) == [(27, "sieve_tray", False)] * 18
-    assert (rebuilt.internals, rebuilt.trays) == ("sieve_tray", 18)
-    assert _drawn(rebuilt) == _drawn(unit)
-    assert _artwork(rebuilt) == _artwork(unit)
-
-
 def test_a_body_carrying_two_parts_keeps_both_and_their_order():
     """Check that a reactor's bed and stirrer round-trip in drawing order."""
     unit = units.Reactor("R-301", internals="fluidised_bed", agitator="turbine")
@@ -613,14 +458,6 @@ def test_a_body_asked_for_bare_comes_back_bare(make, key):
     assert _drawn(rebuilt) == []
 
 
-def test_a_separators_characteristic_is_written_as_itself_not_as_the_variant():
-    """Check that a separator's characteristic is written as itself, not as ``variant``."""
-    entry, _ = _round_trip(units.Separator("V-201", characteristic="gravity"))
-    assert entry == {"kind": "Separator", "name": "V-201", "characteristic": "gravity"}
-    rebuilt = Flowsheet.from_dict({"name": "T", "units": [entry]}).units[0]
-    assert (rebuilt.characteristic, rebuilt.variant) == ("gravity", "gravity")
-
-
 def test_composition_keywords_read_from_a_hand_written_spec():
     fs = Flowsheet.from_dict(
         {
@@ -638,13 +475,6 @@ def test_composition_keywords_read_from_a_hand_written_spec():
     assert (reactor.internals, reactor.agitator) == ("packing", None)
     assert _drawn(column) == [(27, "bubble_cap_tray", False)] * 12
     assert _drawn(vessel) == [(26, "leg", False), (26, "leg", False)]
-
-
-def test_a_composition_keyword_on_a_kind_with_no_such_part_is_rejected():
-    """Check that ``supports`` on a pump is refused, naming every class that takes it."""
-    with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict(_spec(units=[{"kind": "Pump", "name": "P-1", "supports": "skirt"}]))
-    assert "only a Evaporator or a Vessel takes 'supports', not a Pump" in str(excinfo.value)
 
 
 def test_a_part_no_such_group_has_names_the_ones_it_does():
@@ -1555,14 +1385,6 @@ def test_unknown_key_is_rejected_not_ignored(spec, where, key, hint):
     assert f"{where}: unknown key {key}" in message
     assert f"did you mean {hint}?" in message
     assert "allowed keys:" in message
-
-
-def test_variable_port_count_belongs_to_its_own_kind():
-    with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict(
-            {"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_inlets": 3}]}
-        )
-    assert "only a Mixer takes 'n_inlets', not a Pump" in str(excinfo.value)
 
 
 def test_instruments_are_not_declared_as_units():

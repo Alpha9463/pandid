@@ -185,14 +185,6 @@ def test_a_conveyor_round_trips_through_a_spec_with_its_roller():
     assert rebuilt.to_dict() == spec
 
 
-def test_a_diameter_on_something_that_is_not_a_conveyor_is_refused():
-    from pandid.spec import SpecError
-
-    spec = {"name": "s", "units": [{"kind": "Pump", "name": "P-101", "diameter": 40}]}
-    with pytest.raises(SpecError, match=r"only a Conveyor takes 'diameter'"):
-        Flowsheet.from_dict(spec)
-
-
 # ---------------------------------------------------------------------------
 # Two numbers, and the box is neither of them.
 # ---------------------------------------------------------------------------
@@ -334,14 +326,6 @@ def test_a_conveyor_round_trips_through_a_spec_with_its_length():
     again = next(u for u in rebuilt.units if u.kind == "conveyor")
     assert again.length == 300.0
     assert rebuilt.to_dict() == spec
-
-
-def test_a_length_on_something_that_is_not_a_conveyor_is_refused():
-    from pandid.spec import SpecError
-
-    spec = {"name": "s", "units": [{"kind": "Pump", "name": "P-101", "length": 200}]}
-    with pytest.raises(SpecError, match=r"only a Conveyor takes 'length'"):
-        Flowsheet.from_dict(spec)
 
 
 def test_a_spec_length_below_the_minimum_names_the_entry():
