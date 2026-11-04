@@ -2041,10 +2041,13 @@ class Flowsheet:
         from balloons kept off the line their chain taps, kept only if no
         tap leaves its line and no finding or clash grows. Where the result
         has a tap off its line that was on it before hanging, the sheet is
-        placed as if no controller could hang. Where the last layout drew
-        a valve's signal exit within a lane of another unit, the sheet is
-        laid out and routed again, once, with every exit a lane clear,
-        kept only if no tap leaves its line and no finding or clash grows.
+        placed as if no controller could hang. Where a line is drawn
+        through a unit, the sheet is routed again without pricing
+        arrowheads and lanes beside units, and the priced routes are kept
+        only if no tap leaves its line and no finding or clash grows.
+        Where the last layout drew a valve's signal exit within a lane of
+        another unit, the sheet is laid out and routed again, once, with
+        every exit a lane clear, kept on the same terms.
 
         Parameters
         ----------
@@ -2145,8 +2148,9 @@ class Flowsheet:
             self._priced = False
             try:
                 settle()
+                unpriced = _flaws(self)
                 kept = off <= _taps_off(self) and not any(
-                    n > _flaws(self)[k] for k, n in after.items())
+                    n > unpriced[k] for k, n in after.items())
             except Exception:
                 kept = True
             finally:
