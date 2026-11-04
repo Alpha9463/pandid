@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from pandid import Flowsheet, units as U
-from pandid.document import TitleBlock, Revision
+from pandid.document import Annotation, Revision, TableBox, TitleBlock
 
 
 def _sheet(name: str = "Demo", span: float = 0.0) -> Flowsheet:
@@ -259,6 +259,25 @@ def test_align_nine_point():
     assert Annotation(align="bottom-left").align == "bottom-left"
     with pytest.raises(ValueError):
         Annotation(align="middle-ish")
+
+
+@pytest.mark.parametrize("cls", [Annotation, TableBox])
+def test_an_alignment_assigned_later_is_checked_at_once(cls: type[Annotation | TableBox]) -> None:
+    """Check that ``align`` set after construction is checked, and ``None`` means the default."""
+    box = cls(align="top")
+    with pytest.raises(ValueError, match="align must be one of .*, got 'middle-ish'"):
+        box.align = "middle-ish"
+    assert box.align == "top"
+    setattr(box, "align", None)
+    assert box.align == cls().align
+
+
+def test_a_column_alignment_assigned_later_is_checked_at_once() -> None:
+    """Check that ``col_align`` set after construction is checked."""
+    table = TableBox(headers=["A", "B"], rows=[["1", "2"]])
+    with pytest.raises(ValueError, match=r"col_align\[1\] must be one of"):
+        table.col_align = ["l", "left"]
+    assert table.col_align is None
 
 
 def test_annotation_docks_flush_to_frame():
