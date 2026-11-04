@@ -1834,75 +1834,12 @@ def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
 # Stencil-generation invariants
 
 
-def _clip(line: str, column: int, width: int = 90) -> str:
-    """Extract context around a character position.
-
-    Parameters
-    ----------
-    line : str
-        Source line.
-    column : int
-        Centre position.
-    width : int
-        Context width.
-
-    Returns
-    -------
-    str
-        Clipped line.
-    """
-    if len(line) <= 2 * width:
-        return line
-    lo, hi = max(0, column - width), min(len(line), column + width)
-    return ("..." if lo else "") + line[lo:hi] + ("..." if hi < len(line) else "")
-
-
-def _generator_diff(committed: str, generated: str, context: int = 2) -> str:
-    """Describe the first generated-file difference.
-
-    Parameters
-    ----------
-    committed, generated : str
-        Compared file contents.
-    context : int
-        Context rows.
-
-    Returns
-    -------
-    str
-        Compact difference report.
-    """
-    old, new = committed.split("\n"), generated.split("\n")
-    total = max(len(old), len(new))
-    row = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
-    a = old[row] if row < len(old) else ""
-    b = new[row] if row < len(new) else ""
-    column = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
-    out = [f"first divergence at line {row + 1} of {total}, column {column + 1}:"]
-    for k in range(max(0, row - context), min(total, row + context + 1)):
-        mark = ">>" if k == row else "  "
-        for label, lines in (("committed", old), ("regenerated", new)):
-            text = _clip(lines[k], column) if k < len(lines) else "<no line>"
-            out.append(f"{mark} [{k + 1}] {label}: {text}")
-    return "\n".join(out)
-
-
 def test_the_generated_symbols_match_the_generator():
     """Verify generated symbols match the generator output."""
     vendor = _script("vendor_symbols")
     committed = vendor.OUT.read_text(encoding="utf-8")
     generated = vendor.render()
-    if generated != committed:
-        pytest.fail(
-            f"{vendor.OUT.name} is not what scripts/vendor_symbols.py emits today.\n"
-            "It is regenerated wholesale, so a hand edit to it is lost the next time\n"
-            "anyone runs the generator, and the drawing silently reverts. Change the\n"
-            "KIND_MAP entry (or the stencil patch) that produces it, then run\n\n"
-            "    python scripts/vendor_symbols.py\n\n"
-            "and commit the regenerated file with the change that caused it.\n\n"
-            + _generator_diff(committed, generated),
-            pytrace=False,
-        )
+    assert generated == committed, "run scripts/vendor_symbols.py"
 
 
 @pytest.mark.parametrize(
