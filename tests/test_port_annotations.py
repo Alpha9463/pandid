@@ -95,35 +95,29 @@ def _built(cls):
 
 
 @pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_every_port_built_is_annotated(cls):
-    """Check that every port built is annotated."""
-    missing = _built(cls) - _annotated(cls) - _family_members(cls)
+def test_the_annotations_are_the_ports_built_and_bind_nothing(cls):
+    """Check that every port built is annotated, every annotation is built, and none binds."""
+    built, annotated = _built(cls), _annotated(cls)
+    missing = built - annotated - _family_members(cls)
     assert not missing, (
         f"{cls.__name__} builds {sorted(missing)} but does not declare "
         f"them; add `{sorted(missing)[0]}: Port` to the class body"
     )
-
-
-@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_a_family_only_excuses_a_numbered_nozzle(cls):
-    """Check that a family only excuses a numbered nozzle."""
-    undeclared = {name for name in _built(cls) - _annotated(cls) if not _NUMBERED.search(name)}
+    # A family only excuses a numbered nozzle.
+    undeclared = {name for name in built - annotated if not _NUMBERED.search(name)}
     assert not undeclared, (
         f"{cls.__name__} reaches {sorted(undeclared)} only through a family, but "
         f"a nozzle whose name is not the caller's can be declared; add "
         f"`{sorted(undeclared)[0]}: Port` to the class body as well"
     )
-
-
-@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_every_annotation_is_a_port_that_is_built(cls):
-    """Check that every annotation is a port that is built."""
-    phantom = _annotated(cls) - _built(cls) - _superseded(cls) - _family_aliases(cls)
+    phantom = annotated - built - _superseded(cls) - _family_aliases(cls)
     assert not phantom, (
         f"{cls.__name__} declares {sorted(phantom)}, which a default "
         f"{cls.__name__} does not have; a nozzle only some variants carry "
         f"belongs on a per-variant subclass, not here"
     )
+    bound = {name for name in annotated | _families(cls) if name in vars(cls)}
+    assert not bound, f"{cls.__name__} assigns {sorted(bound)} instead of only annotating"
 
 
 #: Classes whose numbered nozzles a checker-visible ``__getattr__`` answers for.
@@ -145,6 +139,29 @@ _EXACT_ARITY = {
 _MAX_ARITY = 8
 
 
+def _parsed(module):
+    """Return the syntax tree of ``module``'s source."""
+    return ast.parse(pathlib.Path(module.__file__).read_text(encoding="utf-8"))
+
+
+def view_nozzles(module):
+    """Return each typed view in ``module`` and the nozzles its mixin declares."""
+    mixins = {}
+    for node in ast.walk(_parsed(units)):
+        if isinstance(node, ast.ClassDef) and node.name.startswith("_"):
+            own = {
+                stmt.target.id
+                for stmt in node.body
+                if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+            }
+            mixins[node.name] = own.union(*(mixins.get(ast.unparse(b), ()) for b in node.bases))
+    return {
+        node.name: mixins[ast.unparse(node.bases[1])]
+        for node in ast.walk(_parsed(module))
+        if isinstance(node, ast.ClassDef) and len(node.bases) == 2
+    }
+
+
 def _arity_families():
     """Return ``_EXACT_ARITY`` flattened to one row per (class, family)."""
     return [
@@ -156,7 +173,7 @@ def _arity_families():
 
 def _classes_with_a_visible_getattr():
     """Return every class in ``units.py`` defining ``__getattr__`` under ``TYPE_CHECKING``."""
-    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    tree = _parsed(units)
     out = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
@@ -187,16 +204,7 @@ def test_only_these_classes_answer_for_a_numbered_nozzle():
 )
 def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls, keyword, member, suffix):
     """Check that a literal count gets a class declaring exactly those nozzles."""
-    module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
-    declared = {
-        node.name: {
-            stmt.target.id
-            for stmt in node.body
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-        }
-        for node in ast.walk(module)
-        if isinstance(node, ast.ClassDef)
-    }
+    declared = view_nozzles(units)
     for n in range(1, _MAX_ARITY + 1):
         name = f"{cls.__name__}{suffix}{n}"
         assert name in declared, f"{name} is not defined; the overload names it"
@@ -216,7 +224,7 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls, keywo
 
 def test_no_arity_class_is_left_over(cls=None):
     """Check that no arity class is left over."""
-    module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    module = _parsed(units)
     expected = {
         f"{cls.__name__}{suffix}{n}"
         for cls, keyword, member, suffix in _arity_families()
@@ -241,7 +249,7 @@ def test_the_run_time_getattr_stays_hidden_from_checkers():
     assert "__getattr__" in vars(units.Unit)
 
     # And it must be the ``if not TYPE_CHECKING`` one.
-    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    tree = _parsed(units)
     guarded = [
         node.name
         for node in ast.walk(tree)
@@ -328,10 +336,3 @@ def test_variant_nozzles_exist_but_are_not_declared_on_the_base(cls, variant, no
     """Check that variant nozzles exist but are not declared on the base."""
     assert nozzle in cls("X-1", variant=variant).ports
     assert nozzle not in _annotated(cls)
-
-
-@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
-def test_annotations_bind_nothing(cls):
-    """Check that annotations bind nothing."""
-    bound = {name for name in _annotated(cls) | _families(cls) if name in vars(cls)}
-    assert not bound, f"{cls.__name__} assigns {sorted(bound)} instead of only annotating"

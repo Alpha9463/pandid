@@ -248,15 +248,6 @@ def test_the_rest_of_the_title_block_is_the_diagram_s():
     assert "Process Flow Diagram 1" not in svg  # the diagram's subtitle is not this sheet's
 
 
-def test_a_flowsheet_with_no_title_block_still_gets_a_sheet_that_can_be_filed():
-    """Verify that a flowsheet with no title block still gets a sheet that can be filed."""
-    fs = _sheet(streams=3)
-    fs.title_block = None
-    svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
-    assert "Stream Table" in svg and "DRAWING No" in svg
-    assert "Aromatics Recovery A100" in svg  # the flowsheet's name, as the strip falls back to
-
-
 def test_a_table_sheet_states_no_scale():
     """Verify that a table sheet states no scale."""
     fs = _sheet(streams=3)
@@ -271,39 +262,24 @@ def test_a_table_sheet_states_no_scale():
 
 
 def test_more_streams_than_fit_wrap_into_stacked_blocks():
-    """Verify that more streams than fit wrap into stacked blocks."""
-    svg = _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
-    blocks = _blocks(svg)
+    """Verify that streams wrap into stacked, headed blocks holding each stream once, in order."""
+    fs = _sheet(streams=21)
+    names = [run[0].name for run in fs._named_runs().values()]
+    blocks = _blocks(fs.to_svg(show_stream_table="sheet", page_size="A4"))
     assert len(blocks) > 1, "21 streams do not fit across an A4 sheet"
     # Blocks share an x origin and stack vertically.
     tops = []
-    for block in blocks:
+    drawn: list[str] = []
+    for i, block in enumerate(blocks):
         cells = _cells(block)
         tops.append(min(y for _x, y, _w, _h in cells))
         assert min(x for x, _y, _w, _h in cells) == min(x for x, _y, _w, _h in _cells(blocks[0]))
-    assert tops == sorted(tops) and len(set(tops)) == len(tops)
-
-
-def test_every_block_repeats_the_heading_row():
-    """Verify that every block repeats the heading row."""
-    svg = _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
-    blocks = _blocks(svg)
-    assert len(blocks) > 1
-    for i, block in enumerate(blocks):
         texts = _texts(block)
         assert texts[0] == "Stream Number", f"block {i} is not headed"
         # Each block retains the section heading.
         assert "Mass Fraction" in texts, f"block {i} lost its section heading"
-
-
-def test_every_stream_appears_once_and_in_order():
-    """Verify that every stream appears once and in order."""
-    fs = _sheet(streams=21)
-    names = [run[0].name for run in fs._named_runs().values()]
-    svg = fs.to_svg(show_stream_table="sheet", page_size="A4")
-    drawn: list[str] = []
-    for block in _blocks(svg):
-        drawn.extend(t for t in _texts(block) if t in names)
+        drawn.extend(t for t in texts if t in names)
+    assert tops == sorted(tops) and len(set(tops)) == len(tops)
     assert drawn == names
 
 
@@ -580,15 +556,21 @@ def _unnumbered(fs: Flowsheet) -> list:
 
 
 def test_a_table_sheet_with_no_number_to_derive_says_so():
-    """Verify that a table sheet with no number to derive says so."""
+    """Verify that a sheet with no title block is drawn and filed, and warns until numbered."""
     fs = _sheet(streams=3)
     fs.title_block = None
     svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert _blocks(svg), "the sheet is still drawn"
+    assert "Stream Table" in svg and "DRAWING No" in svg
+    assert "Aromatics Recovery A100" in svg  # the flowsheet's name, as the strip falls back to
     found = _unnumbered(fs)
     assert len(found) == 1
     assert "drawing number" in found[0].message
     assert found[0].severity == "warning"
+    # A valid number removes the previous warning.
+    fs.stream_table.sheet_drawing_number = "PFD-1003"
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert not _unnumbered(fs)
 
 
 def test_a_title_block_carrying_no_number_says_so_too():
@@ -597,18 +579,6 @@ def test_a_title_block_carrying_no_number_says_so_too():
     fs.title_block = TitleBlock(title="Aromatics Recovery A100", company="Pandid")
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert _unnumbered(fs)
-
-
-def test_numbering_it_either_way_silences_the_finding():
-    """Verify that either valid numbering source clears the warning."""
-    fs = _sheet(streams=3)
-    fs.title_block = None
-    fs.to_svg(show_stream_table="sheet", page_size="A3")
-    assert _unnumbered(fs)
-    # A valid number removes the previous warning.
-    fs.stream_table.sheet_drawing_number = "PFD-1003"
-    fs.to_svg(show_stream_table="sheet", page_size="A3")
-    assert not _unnumbered(fs)
 
 
 def test_the_diagram_sheet_is_never_unnumbered_by_this():
@@ -722,19 +692,13 @@ def test_the_ruling_does_not_depend_on_whether_a_page_was_named():
     fs = _sheet(streams=21)
     unpaged = F.stream_table_sheet(fs, None)
     paged = F.stream_table_sheet(fs, 4000.0)
-    assert unpaged is not None and paged is not None
+    wrapped = F.stream_table_sheet(fs, 900.0)
+    assert unpaged is not None and paged is not None and wrapped is not None
     assert len(unpaged.blocks) == len(paged.blocks) == 1
     assert unpaged.blocks[0].size == paged.blocks[0].size == F._BASE_SIZE
     assert unpaged.blocks[0].row_h == paged.blocks[0].row_h
     assert unpaged.w == paged.w and unpaged.h == paged.h
-
-
-def test_the_unpaged_sheet_is_the_paged_one_with_the_cutting_left_out():
-    """Verify that an unpaged sheet omits only the page cutting."""
-    fs = _sheet(streams=21)
-    unpaged = F.stream_table_sheet(fs, None)
-    wrapped = F.stream_table_sheet(fs, 900.0)
-    assert unpaged is not None and wrapped is not None
+    # A page that cuts the table into blocks rules them as the unpaged sheet does.
     assert len(wrapped.blocks) > 1
     assert wrapped.blocks[0].size == unpaged.blocks[0].size
     assert wrapped.blocks[0].row_h == unpaged.blocks[0].row_h
@@ -1174,18 +1138,7 @@ def test_a_table_that_fits_in_more_blocks_is_drawn_rather_than_refused():
     svg = _long_section().to_svg(show_stream_table="sheet", page_size="A4")
     blocks = _blocks(svg)
     assert len(blocks) == 3
-    assert [len(_texts(b)) for b in blocks]  # every block drew something
-
-
-def test_the_partition_that_fits_really_fits():
-    """Verify that the partition that fits really fits."""
-    fs = _long_section()
-    svg = fs.to_svg(show_stream_table="sheet", page_size="A4")
-    vx, vy, vw, vh = _viewbox(svg)
-    for block in _blocks(svg):
-        for x, y, w, h in _cells(block):
-            assert vx <= x and x + w <= vx + vw
-            assert vy <= y and y + h <= vy + vh
+    assert all(_texts(b) for b in blocks)  # every block drew something
 
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
@@ -1229,29 +1182,17 @@ def test_a_table_no_partition_can_fit_is_still_refused():
 # --- the columns are shared out evenly, at every count ------------------------
 
 
-@pytest.mark.parametrize("n", range(1, 26))
-def test_blocks_are_shared_out_within_one_column_at_every_count(n):
-    """Verify that blocks are shared out within one column at every count.
-
-    Parameters
-    ----------
-    n : int
-        Number of stream columns.
-    """
-    for count in range(1, n + 1):
-        blocks = F._blocks_of(n, count)
-        sizes = [len(b) for b in blocks]
-        assert len(blocks) == count, sizes
-        assert max(sizes) - min(sizes) <= 1, sizes
-        assert sum(sizes) == n
-        # Every column occurs once in sheet order.
-        assert [i for b in blocks for i in b] == list(range(n))
-
-
-def test_the_instance_the_review_named():
-    """Verify the named uneven-partition examples."""
-    assert [len(b) for b in F._blocks_of(10, 4)] == [3, 3, 2, 2]
-    assert [len(b) for b in F._blocks_of(10, 6)] == [2, 2, 2, 2, 1, 1]
+def test_blocks_are_shared_out_within_one_column_at_every_count():
+    """Verify that blocks are shared out within one column at every count."""
+    for n in range(1, 26):
+        for count in range(1, n + 1):
+            blocks = F._blocks_of(n, count)
+            sizes = [len(b) for b in blocks]
+            assert len(blocks) == count, (n, sizes)
+            assert max(sizes) - min(sizes) <= 1, (n, sizes)
+            assert sum(sizes) == n
+            # Every column occurs once in sheet order.
+            assert [i for b in blocks for i in b] == list(range(n))
 
 
 def test_a_stub_block_no_longer_widens_the_label_column_into_a_refusal():

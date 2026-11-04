@@ -82,6 +82,24 @@ _RENDER_OPTS = (
 )
 
 
+def _codes_beside_a_flange() -> "tuple[Flowsheet, dict]":
+    """Build a flanged sheet whose alarm codes would fall on a valve's flange."""
+    fs = Flowsheet("codes beside a flange")
+    feed = fs.add(U.Feed("F"))
+    valve = fs.add(U.Valve("HV-1"))
+    prod = fs.add(U.Product("P"))
+    feed.pin(port="outlet", x=100, y=200)
+    valve.pin(port="inlet", x=180, y=140)
+    prod.pin(port="inlet", x=380, y=140)
+    riser = fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    fs.add_instrument("PI", 1, sensing=riser, at=0.6).annotate(high="PAH", low="PAL")
+    return fs, {"diagram": "p&id", "connections": "flanged"}
+
+
+CORPUS["codes_beside_a_flange"] = _codes_beside_a_flange
+
+
 # --- reading the drawn sheet --------------------------------------------------
 
 

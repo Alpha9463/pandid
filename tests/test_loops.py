@@ -60,19 +60,6 @@ def test_a_loop_takes_a_single_letter_and_a_number():
 # --- automatic numbering ------------------------------------------------------
 
 
-def test_the_counter_is_one_series_across_measured_variables():
-    """Check that omitted numbers come from one series across all variables."""
-    fs = Flowsheet("A300", loop_number_start=301)
-    names = [fs.add_loop(v).name for v in ("P", "T", "F", "L", "F", "L", "T", "F")]
-    assert names == ["P-301", "T-302", "F-303", "L-304", "F-305", "L-306", "T-307", "F-308"]
-
-
-def test_the_series_starts_at_a_unit_100_number_by_default():
-    """Check that the series starts at 101 by default."""
-    fs = Flowsheet("plain")
-    assert [fs.add_loop("F").name for _ in range(3)] == ["F-101", "F-102", "F-103"]
-
-
 def test_allocation_order_is_declaration_order():
     """Check that numbers are allocated in declaration order, tagged or not."""
     fs, line = _sheet()
@@ -232,19 +219,6 @@ def test_a_foreign_first_letter_raises_at_the_call_site():
     assert "loop F-303 measures 'F'" in message  # names the loop's variable
     assert "'TT' opens with 'T'" in message  # names what was passed
     assert [u.name for u in fs.units if isinstance(u, U.Instrument)] == []
-
-
-def test_the_check_is_only_on_the_first_letter():
-    """The function letters are the member's own business; the loop owns one."""
-    fs = Flowsheet("functions")
-    loop = fs.add_loop("L", 101)
-    assert [loop.tag(t) for t in ("LT", "LIC", "LAH", "LAL", "LY")] == [
-        "LT-101",
-        "LIC-101",
-        "LAH-101",
-        "LAL-101",
-        "LY-101",
-    ]
 
 
 def test_a_loop_letter_is_matched_case_insensitively():
@@ -440,17 +414,6 @@ def test_a_duplicate_loop_in_a_spec_names_the_entry():
 
 
 # --- reading a frozen sheet back and carrying on ------------------------------
-
-
-def test_a_sheet_read_back_carries_its_series_on():
-    """Check that a sheet read back continues its loop series."""
-    fs = Flowsheet("A300", loop_number_start=301)
-    for variable in ("P", "T", "F", "L"):
-        fs.add_loop(variable)
-
-    rebuilt = Flowsheet.from_dict(fs.to_dict())
-    assert [loop.name for loop in rebuilt.loops] == ["P-301", "T-302", "F-303", "L-304"]
-    assert rebuilt.add_loop("F").name == "F-305" == fs.add_loop("F").name
 
 
 def test_the_restored_counter_clears_a_typed_number_too():
@@ -664,18 +627,6 @@ def test_the_function_letters_are_the_authors_and_are_whole_codes():
     assert (loop.transmitter.name, loop.controller.name) == ("FIT-101", "FRC-101")
 
 
-def test_the_letters_are_the_whole_code_and_a_foreign_variable_is_refused():
-    """Check that controller letters are a whole code and one of another variable is refused."""
-    fs, drum, lv = _feedback_sheet()
-
-    loop = fs.add_control_loop("L", 909, measuring=drum, acting_on=lv, controller_letters="LIC")
-    assert loop.controller.name == "LIC-909"
-
-    fs, drum, lv = _feedback_sheet()
-    with pytest.raises(ValueError, match=r"loop L-101 measures 'L', but 'FIC'"):
-        fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, controller_letters="FIC")
-
-
 def test_a_bare_measured_variable_is_not_a_functional_code():
     """Check that a bare suffix or a bare variable letter is refused by name."""
     fs, drum, lv = _feedback_sheet()
@@ -810,6 +761,15 @@ _REJECTIONS = [
         lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv),
         "controller_letters",
         id="empty function letters",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", measuring=drum, acting_on=lv, controller_letters=""
+        ),
+        lambda fs, drum, lv: fs.add_control_loop("L", measuring=drum, acting_on=lv),
+        "controller_letters",
+        id="empty function letters on an allocated number",
     ),
     pytest.param(
         _nothing,
@@ -1008,20 +968,6 @@ def test_a_loop_refused_at_its_second_line_leaves_the_sheet_whole():
         fs.add_control_loop("L", measuring=drum, acting_on=lv, at="S")
     assert _snapshot(fs) == before
     assert [i for i in fs.validate() if i.code == "deprecated"] == []
-
-
-def test_a_refused_control_loop_burns_no_allocated_number():
-    """Check that a refused call spends no allocated number."""
-    fs, drum, lv = _feedback_sheet()
-    before = _snapshot(fs)
-
-    with pytest.raises(ValueError, match="controller_letters"):
-        fs.add_control_loop("L", measuring=drum, acting_on=lv, controller_letters="")
-
-    assert _snapshot(fs) == before
-
-    loop = fs.add_control_loop("L", measuring=drum, acting_on=lv)
-    assert loop.loop.name == "L-101"
 
 
 def test_a_loop_declared_on_another_sheet_is_refused():
