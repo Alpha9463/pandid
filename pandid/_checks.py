@@ -67,21 +67,24 @@ def suggest(value: str, candidates: Iterable[str]) -> str:
     return f" (did you mean {close[0]!r}?)" if close else ""
 
 
-def _hint(value: Any) -> str:
+def _hint(value: Any, advice: str) -> str:
     """Return advice for a ``Decimal`` or ``Fraction``, or ``""``.
 
     Parameters
     ----------
     value : Any
         Refused value.
+    advice : str
+        Text to append to the error message for a ``Decimal`` or
+        ``Fraction``.
 
     Returns
     -------
     str
-        Text to append to the error message.
+        ``advice``, or ``""``.
     """
     if isinstance(value, (Decimal, numbers.Rational)) and not isinstance(value, numbers.Integral):
-        return "; layout computes with floats, so pass float(value)"
+        return advice
     return ""
 
 
@@ -104,7 +107,8 @@ def check_real(value: Any, where: str) -> None:
     """
     if not is_real(value):
         raise TypeError(
-            f"{where} must be a number (an int or float), got {value!r}{_hint(value)}"
+            f"{where} must be a number (an int or float), got {value!r}"
+            f"{_hint(value, '; layout computes with floats, so pass float(value)')}"
         )
     if not math.isfinite(value):
         raise ValueError(f"{where} must be a finite number, got {value!r}")
@@ -126,4 +130,7 @@ def check_whole(value: Any, where: str) -> None:
         If :func:`is_whole` is false.
     """
     if not is_whole(value):
-        raise TypeError(f"{where} must be a whole number (an int), got {value!r}{_hint(value)}")
+        raise TypeError(
+            f"{where} must be a whole number (an int), got {value!r}"
+            f"{_hint(value, '; pass int(value)')}"
+        )

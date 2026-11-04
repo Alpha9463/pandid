@@ -123,6 +123,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A refused `Instrument.annotate()` changes no quadrant (#646).**
   `annotate(safety="SIL2", high=["LAH", " "])` used to write `SIL2` before
   refusing the empty code.
+- **A `Decimal` or `Fraction` grid position is told to pass `int(value)`
+  (#646).** `pin(col=Decimal(1))` used to advise `float(value)`, which `pin`
+  refuses too.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an
