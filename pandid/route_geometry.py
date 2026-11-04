@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 Point = tuple[float, float]
 
+#: Coordinates nearer than this to the previous point's are drawn on its track.
+SNAP = 1e-6
+
 
 def stream_polyline(stream: Stream) -> list[Point]:
     """Return the line drawn between a stream's two nozzles.
@@ -23,7 +26,9 @@ def stream_polyline(stream: Stream) -> list[Point]:
     Returns
     -------
     list[Point]
-        Nozzle points and route waypoints with collinear points removed.
+        Nozzle points and route waypoints, each coordinate within
+        :data:`SNAP` of the previous point's set to it, with collinear
+        points removed.
 
     Raises
     ------
@@ -36,6 +41,9 @@ def stream_polyline(stream: Stream) -> list[Point]:
     start = port_point(source, source.frame, stream.source.name)
     end = port_point(dest, dest.frame, stream.dest.name)
     points = [start, *(stream.route.waypoints if stream.route is not None else []), end]
+    for index in range(1, len(points)):
+        (px, py), (x, y) = points[index - 1], points[index]
+        points[index] = (px if 0 < abs(x - px) < SNAP else x, py if 0 < abs(y - py) < SNAP else y)
 
     simplified = [points[0]]
     for index in range(1, len(points) - 1):
