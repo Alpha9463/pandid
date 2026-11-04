@@ -84,13 +84,13 @@ SCENARIOS: dict[str, tuple[Callable[[], tuple[Flowsheet, dict]], Budget]] = {
     "biodiesel with one pin removed": (_biodiesel(skip="s103"), Budget(7, 1981, 1254)),
     "biodiesel automatic": (_biodiesel(pinned=False), Budget(20, 1998, 942)),
     # Four of the 13 crossings are a station bypass under its own controller's signal.
-    "ethanol P&ID automatic": (_stripped("11_ethanol_pid"), Budget(13, 2588, 1992)),
+    "ethanol P&ID automatic": (_stripped("10_ethanol_pid"), Budget(13, 2588, 1992)),
     # The layered engine keeps one band up to 3200 px wide.
-    "molecular sieve automatic": (_stripped("20_molecular_sieve_dryer"), Budget(32, 2903, 1822)),
+    "molecular sieve automatic": (_stripped("19_molecular_sieve_dryer"), Budget(32, 2903, 1822)),
     # Measured on the three sheets the alumina refinery is drawn on.
-    "alumina digestion automatic": (_stripped("21_alumina_refinery_1"), Budget(4, 2901, 418)),
-    "alumina clarification automatic": (_stripped("21_alumina_refinery_2"), Budget(4, 1487, 422)),
-    "alumina precipitation automatic": (_stripped("21_alumina_refinery_3"), Budget(10, 2329, 910)),
+    "alumina digestion automatic": (_stripped("20_alumina_refinery_1"), Budget(4, 2901, 418)),
+    "alumina clarification automatic": (_stripped("20_alumina_refinery_2"), Budget(4, 1487, 422)),
+    "alumina precipitation automatic": (_stripped("20_alumina_refinery_3"), Budget(10, 2329, 910)),
     # 4690 px drawn in one band, so it meets the width budget only folded into two.
     "long chain folded": (_long_chain, Budget(0, 3040, 534)),
 }

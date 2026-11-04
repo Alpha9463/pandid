@@ -1,11 +1,11 @@
 """
-Example 10: Ethanol Purification A300, a full A3 process flow diagram
+Example 9: Ethanol Purification A300, a full A3 process flow diagram
 
 Fermentation broth is fed to the beer column T-301. The overhead
 condenses to azeotropic ethanol, part of it returned as reflux; the
 bottoms are cooled in HX-301, dosed with flocculant and dewatered in
 the filter press F-301, which sends filtrate to effluent and drops its
-cake onto the belt BC-301. Example 11 draws the same unit as a P&ID.
+cake onto the belt BC-301. Example 10 draws the same unit as a P&ID.
 
 Drawn on a fixed A3 page with a zone border, title strip, equipment
 list, stream property table and utilities summary.

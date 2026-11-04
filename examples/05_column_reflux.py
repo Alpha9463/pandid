@@ -1,5 +1,5 @@
 """
-Example 6: Distillation column with reflux and reboiler loops
+Example 5: Distillation column with reflux and reboiler loops
 
 A column with its overhead condenser and reflux drum, a kettle reboiler
 off the bottom, and two side draws. The equipment is pinned; routing,

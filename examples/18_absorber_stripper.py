@@ -1,5 +1,5 @@
 """
-Example 19: Amine Sweetening A400, an absorber and its regenerator
+Example 18: Amine Sweetening A400, an absorber and its regenerator
 
 Sour natural gas is contacted counter-currently with lean MDEA in
 T-401, leaves the top on specification, and the acid gas it gave up

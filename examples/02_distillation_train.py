@@ -1,5 +1,5 @@
 """
-Example 3: Advanced distillation train
+Example 2: Advanced distillation train
 
 Two towers, each with a condenser onto a reflux drum whose draw parts
 into reflux and distillate, and a kettle reboiler returning boilup. The

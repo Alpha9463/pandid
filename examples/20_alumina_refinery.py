@@ -1,5 +1,5 @@
 """
-Example 21: Alumina Refinery A900, the Bayer process as a set of three PFDs
+Example 20: Alumina Refinery A900, the Bayer process as a set of three PFDs
 
 One ``Flowsheet`` per area, each rendered to its own file: grinding and
 digestion (PFD-901), clarification (PFD-902), and precipitation and

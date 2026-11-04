@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Examples draw only the furniture their sheet needs (#684).** The control
   loop and metering skid examples render as the P&IDs they are, without a
   stream table, and three others drop a legend, line list or title block.
+- **Examples are numbered from 01 (#706).** Each example, gallery sheet and
+  draw.io sample moves down one number.
 - **Unit options are keyword-only on 23 classes (#646).** `Feed`, `Product`,
   `Valve`, `Fitting`, `Vessel`, `Tank`, `HeatExchanger`, `Evaporator`,
   `Thickener`, `Reactor`, `Separator`, `Column`, `DistillationColumn`,
@@ -94,8 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **The ammonia loop example (#624).** Example 05 draws the same loop with more
-  equipment. The other examples keep their numbers.
+- **The ammonia loop example (#624).** Example 04 draws the same loop with more
+  equipment.
 - **Layout refinement and search after routing (#564).** `route()` no longer
   moves units, and `pandid.layout.search`, `trials`, `candidates`, `settle` and
   the `layout-search-*` warnings are deleted.
@@ -296,7 +298,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Annotation columns start where the sheet writes them (#579).** draw.io
   takes its column widths from the sheet, and both backends measure a box's
   bold first column bold.
-- **Example 13 pipes the dryer's gas through `heating_in` and `vent` (#646).**
+- **Example 12 pipes the dryer's gas through `heating_in` and `vent` (#646).**
   The dried product leaves by `product` and joins the cyclone's dust ahead of
   the magnetic separator.
 

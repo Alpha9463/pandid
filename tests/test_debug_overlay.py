@@ -265,13 +265,13 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 
 # Maximum tolerated overlay-label collisions for intentionally dense sheets.
 _CROWDED = {
-    "04_control_loop": 3,
-    "11_ethanol_pid": 50,
-    "14_tank_farm": 14,
-    "17_stirred_reactor_train": 6,
-    "18_fixed_bed_recycle": 7,
-    "19_absorber_stripper": 4,
-    "20_molecular_sieve_dryer": 5,
+    "03_control_loop": 3,
+    "10_ethanol_pid": 50,
+    "13_tank_farm": 14,
+    "16_stirred_reactor_train": 6,
+    "17_fixed_bed_recycle": 7,
+    "18_absorber_stripper": 4,
+    "19_molecular_sieve_dryer": 5,
     "codes_beside_a_flange": 1,
 }
 

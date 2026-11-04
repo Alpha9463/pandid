@@ -936,7 +936,7 @@ def test_laying_out_twice_gives_identical_frames() -> None:
 
 
 def _interlock_on_a_signal() -> tuple[Flowsheet, U.Unit]:
-    """Return ``examples/04_control_loop.py``'s shape: a balloon on a balloon's line."""
+    """Return ``examples/03_control_loop.py``'s shape: a balloon on a balloon's line."""
     fs = Flowsheet("interlock")
     feed = fs.add(U.Feed("Feed"))
     drum = fs.add(U.Vessel("V-101"))

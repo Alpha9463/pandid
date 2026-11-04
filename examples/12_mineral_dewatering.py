@@ -1,5 +1,5 @@
 """
-Example 13: Mineral Concentrate Dewatering A400, a solids-handling PFD
+Example 12: Mineral Concentrate Dewatering A400, a solids-handling PFD
 
 A flotation concentrate arrives as a dilute slurry and leaves as a dry,
 magnetics-free powder through a thickener, a belt filter, a rotary

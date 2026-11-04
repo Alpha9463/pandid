@@ -56,7 +56,7 @@ def _fingerprint(fs: Flowsheet) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-@pytest.mark.parametrize("stem", ["04_control_loop", "08_from_data", "16_demineralised_water"])
+@pytest.mark.parametrize("stem", ["03_control_loop", "07_from_data", "15_demineralised_water"])
 def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     """Draw the same sheet from author intent and from a fresh build."""
     fs, _ = build_unpinned(stem)

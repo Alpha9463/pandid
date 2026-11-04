@@ -37,13 +37,13 @@ from _render_cases import copy_settled_case
 SHAPES = ("diamond", "circle", "box")
 
 #: Gallery sheet with vertical labels and leaders.
-CROWDED = "13_mineral_dewatering"
+CROWDED = "12_mineral_dewatering"
 
 #: Gallery sheet with crossing runs and line jumps.
-CROSSED = "11_ethanol_pid"
+CROSSED = "10_ethanol_pid"
 
 #: Gallery sheets with label-pair findings across all enclosure shapes.
-LABEL_CASES = ("11_ethanol_pid", "13_mineral_dewatering", "14_tank_farm")
+LABEL_CASES = ("10_ethanol_pid", "12_mineral_dewatering", "13_tank_farm")
 
 
 def sheet(scheme: "str | Callable[[int], str]" = "S{n}") -> Flowsheet:
@@ -468,7 +468,7 @@ def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
 # Label plates and crossing streams.
 
 #: Gallery sheet and labels with no safe opaque plate, as the sheet is laid out.
-PLATELESS_SHEET = "14_tank_farm"
+PLATELESS_SHEET = "13_tank_farm"
 PLATELESS = {"MS-601-200-40-CS", "ETH-607-80-40-SS"}
 
 
@@ -765,7 +765,7 @@ def test_the_author_is_told_which_unit_a_diamond_was_drawn_over(settled_gallery)
 
 def test_the_author_is_told_which_line_a_diamond_was_drawn_over(settled_gallery):
     """Test that the author is told which line a diamond was drawn over."""
-    fs, kwargs = copy_settled_case(settled_gallery, "11_ethanol_pid")
+    fs, kwargs = copy_settled_case(settled_gallery, "10_ethanol_pid")
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     over_lines = findings(fs, {"enclosure-over-line"})

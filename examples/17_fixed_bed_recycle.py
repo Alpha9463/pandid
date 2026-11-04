@@ -1,5 +1,5 @@
 """
-Example 18: Methanol Synthesis Loop A300, a fixed-bed recycle P&ID
+Example 17: Methanol Synthesis Loop A300, a fixed-bed recycle P&ID
 
 Make-up synthesis gas is compressed into the loop, joins the recycle,
 is heated against the converter effluent in E-301 and fired to reaction

@@ -5,7 +5,7 @@ and block flow diagrams (BFDs) from a Python flowsheet. Describe equipment and
 connections; pandid places the units and routes the streams. The core package
 has no runtime dependencies.
 
-[![Ethanol purification P&ID](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/11_ethanol_pid.svg)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
+[![Ethanol purification P&ID](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/10_ethanol_pid.svg)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
 
 [See the example and the full gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md).
 

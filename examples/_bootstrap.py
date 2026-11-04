@@ -1,7 +1,7 @@
 """Let the examples run from a source checkout, from either directory.
 
-``python examples/03_distillation_train.py`` and
-``cd examples && python 03_distillation_train.py`` both work:
+``python examples/02_distillation_train.py`` and
+``cd examples && python 02_distillation_train.py`` both work:
 
 - Python puts the *script's* directory on ``sys.path``, not the repo
   root, so an un-installed checkout cannot ``import pandid``. This adds

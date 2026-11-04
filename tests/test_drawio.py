@@ -396,7 +396,7 @@ def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it(settled_galler
     """Scale exported lettering with the drawing geometry."""
     from pandid.render.drawio import _TAG_TYPE
 
-    fs, kwargs = copy_settled_case(settled_gallery, "11_ethanol_pid")
+    fs, kwargs = copy_settled_case(settled_gallery, "10_ethanol_pid")
     fs.to_svg(**kwargs)
 
     # Without paper the export keeps the drawing's own coordinates and type.
@@ -1025,14 +1025,14 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
 
     # Assert the code population as well as parity between both renderers.
     assert counted == {
-        "04_control_loop": 2,
-        "11_ethanol_pid": 6,
-        "14_tank_farm": 5,
+        "03_control_loop": 2,
+        "10_ethanol_pid": 6,
+        "13_tank_farm": 5,
     }, counted
     # Check identities as well as counts on the affected sheets.
-    assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
-    assert written["04_control_loop"] == {"LAH", "LAL"}
-    assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
+    assert written["10_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
+    assert written["03_control_loop"] == {"LAH", "LAL"}
+    assert written["13_tank_farm"] == {"LAH", "LAL", "PAH"}
 
 
 def _exported_codes(fs, kwargs) -> tuple:
@@ -2117,34 +2117,34 @@ def _drawio_cells_from_document(document: str) -> dict:
 
 #: Representative sheets for cross-backend Draw.io export checks.
 DRAWIO_REPRESENTATIVES = (
-    "03_distillation_train",
-    "04_control_loop",
-    "09_line_numbers",
-    "10_ethanol_pfd",
-    "11_ethanol_pid",
-    "12_block_flow_diagram",
-    "14_tank_farm",
-    "21_alumina_refinery_3",
+    "02_distillation_train",
+    "03_control_loop",
+    "08_line_numbers",
+    "09_ethanol_pfd",
+    "10_ethanol_pid",
+    "11_block_flow_diagram",
+    "13_tank_farm",
+    "20_alumina_refinery_3",
 )
 
 #: Sheets whose material-line labels exercise collision avoidance.
-LINE_NUMBER_SHEETS = ("09_line_numbers", "11_ethanol_pid", "14_tank_farm")
+LINE_NUMBER_SHEETS = ("08_line_numbers", "10_ethanol_pid", "13_tank_farm")
 
 #: Sheets that place at least one line-number leader.
-LEADER_SHEETS = ("11_ethanol_pid", "14_tank_farm")
+LEADER_SHEETS = ("10_ethanol_pid", "13_tank_farm")
 
 #: Representatives that write an equipment tag beside its symbol.
-TAGGED_SHEETS = tuple(stem for stem in DRAWIO_REPRESENTATIVES if stem != "12_block_flow_diagram")
+TAGGED_SHEETS = tuple(stem for stem in DRAWIO_REPRESENTATIVES if stem != "11_block_flow_diagram")
 
 
 #: Instrumented P&ID representatives with all exported function-code forms.
-INSTRUMENT_CODE_SHEETS = ("04_control_loop", "11_ethanol_pid", "14_tank_farm")
+INSTRUMENT_CODE_SHEETS = ("03_control_loop", "10_ethanol_pid", "13_tank_farm")
 
 #: Zoned, paged, and large tables for Draw.io furniture checks.
-TABLE_REPRESENTATIVES = ("03_distillation_train", "10_ethanol_pfd", "21_alumina_refinery_3")
+TABLE_REPRESENTATIVES = ("02_distillation_train", "09_ethanol_pfd", "20_alumina_refinery_3")
 
 #: Paged representatives for checking actual gallery fit on A3 paper.
-PAGED_REPRESENTATIVES = ("10_ethanol_pfd", "11_ethanol_pid")
+PAGED_REPRESENTATIVES = ("09_ethanol_pfd", "10_ethanol_pid")
 
 
 @dataclass(frozen=True)
@@ -2603,13 +2603,13 @@ def test_the_hop_is_the_radius_the_sheet_draws_it_at(settled_gallery):
     """Match exported jump size to the rendered hop radius."""
     from pandid.render.svg import HOP_R
 
-    fs, kwargs = copy_settled_case(settled_gallery, "11_ethanol_pid")
+    fs, kwargs = copy_settled_case(settled_gallery, "10_ethanol_pid")
     # Select arcs explicitly to check their exported radius.
     fs.to_svg(**kwargs, crossing_style="arc")
     _boxes, _frame, fit = _drawio_furniture(fs, dict(kwargs, crossing_style="arc"))
     cells = _drawio_cells(fs, dict(kwargs, crossing_style="arc"))
     hopping = [c for c in cells.values() if _style(c).get("jumpStyle", "none") != "none"]
-    assert len(hopping) == 6, "11_ethanol_pid has six runs that hop another"
+    assert len(hopping) == 6, "10_ethanol_pid has six runs that hop another"
     for cell in hopping:
         style = _style(cell)
         assert style["jumpStyle"] == "arc", "the sheet hops with a semicircle"
@@ -2623,7 +2623,7 @@ def test_the_hop_is_the_radius_the_sheet_draws_it_at(settled_gallery):
 
 def test_only_a_stream_hops_or_is_hopped(rendered_gallery):
     """Restrict line jumps to stream crossings."""
-    cells = _gallery_cells(rendered_gallery, "11_ethanol_pid")
+    cells = _gallery_cells(rendered_gallery, "10_ethanol_pid")
     edges = {cid: c for cid, c in cells.items() if c.get("edge") == "1"}
     assert edges, "no edges at all"
     for cid, cell in edges.items():
@@ -2706,9 +2706,9 @@ def test_a_cycle_costs_only_the_runs_inside_it():
 def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     """Keep generated sample structure independent of generator provenance."""
     samples = _script("drawio_samples")
-    current, _dropped = samples.sample("04_control_loop")
+    current, _dropped = samples.sample("03_control_loop")
     monkeypatch.setattr(pandid, "__version__", "99.99.99")
-    bumped, _dropped = samples.sample("04_control_loop")
+    bumped, _dropped = samples.sample("03_control_loop")
 
     assert current != bumped, "the generator version is absent from the sample"
     agent = re.compile(r'(<mxfile\b[^>]*\bagent=)"[^"]*"')

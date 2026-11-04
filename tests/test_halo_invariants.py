@@ -156,15 +156,15 @@ def test_the_corpus_has_impulse_lines_to_check(drawn):
         name: sum(1 for line in _ink(fs, "vertical") if line.kind == "tap")
         for name, (fs, _halos, _bars, _codes) in drawn.items()
     }
-    assert counted["11_ethanol_pid"] > 15, counted
-    assert counted["14_tank_farm"] > 10, counted
+    assert counted["10_ethanol_pid"] > 15, counted
+    assert counted["13_tank_farm"] > 10, counted
 
 
 def test_the_corpus_has_halos_to_check(drawn):
     """Check that the corpus has halos to check."""
     counted = {name: len(halos) for name, (_fs, halos, _bars, _codes) in drawn.items()}
     assert all(counted.values()), counted
-    assert counted["11_ethanol_pid"] > 50, counted
+    assert counted["10_ethanol_pid"] > 50, counted
 
 
 # --- and the same question from the other side: the flange marks --------------
@@ -220,7 +220,7 @@ def test_the_corpus_has_flange_marks_to_check(drawn):
     """Check that the corpus has flange marks to check."""
     counted = {name: len(bars) for name, (_fs, _halos_, bars, _codes) in drawn.items()}
     # Two faces per mark on every nozzle and in-line body of the densest sheet.
-    assert counted["11_ethanol_pid"] > 80, counted
+    assert counted["10_ethanol_pid"] > 80, counted
     assert all(n % 2 == 0 for n in counted.values()), (
         "a flange is a pair of faces and they are drawn together"
     )
@@ -426,6 +426,6 @@ def test_a_letter_code_by_a_flange_mark_lands_on_no_line_or_label(build):
 def test_the_corpus_has_letter_codes_to_check(drawn):
     """Check that the corpus has letter codes to check."""
     counted = {name: len(codes) for name, (_fs, _h, _b, codes) in drawn.items()}
-    assert counted["04_control_loop"] == 2, counted
-    assert counted["11_ethanol_pid"] == 6, counted
-    assert counted["14_tank_farm"] == 5, counted
+    assert counted["03_control_loop"] == 2, counted
+    assert counted["10_ethanol_pid"] == 6, counted
+    assert counted["13_tank_farm"] == 5, counted

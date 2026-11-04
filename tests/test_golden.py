@@ -15,11 +15,11 @@ GOLDEN_DIR = Path(__file__).parents[1] / "docs" / "gallery"
 
 #: Representative manual, PFD, P&ID, BFD, and automatic-layout fixtures.
 GOLDEN_SCENARIOS = (
-    "02_manual_layout",
-    "03_distillation_train",
-    "11_ethanol_pid",
-    "12_block_flow_diagram",
-    "18_fixed_bed_recycle",
+    "01_manual_layout",
+    "02_distillation_train",
+    "10_ethanol_pid",
+    "11_block_flow_diagram",
+    "17_fixed_bed_recycle",
 )
 
 #: Finding codes a golden sheet is drawn with.
@@ -58,7 +58,7 @@ def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
     """Keep golden fixtures independent of version metadata."""
     import pandid
 
-    name = "03_distillation_train"
+    name = "02_distillation_train"
     build, kwargs = SCENARIOS[name]
     at_this_version = build().to_svg(**kwargs)
     monkeypatch.setattr(pandid, "__version__", "99.99.99")
@@ -118,7 +118,7 @@ def test_representative_sheets_draw_nozzles_on_their_own_bodies(settled_gallery,
 
 def test_the_fractionator_schedules_only_equipment_that_exists():
     """Keep the fractionator schedule aligned with its process topology."""
-    fs = SCENARIOS["06_column_reflux"][0]()
+    fs = SCENARIOS["05_column_reflux"][0]()
     col = next(u for u in fs.units if u.name == "T-701")
     reb = next(u for u in fs.units if u.name == "E-702")
     # The column bottoms stream enters the reboiler.
@@ -137,7 +137,7 @@ def test_each_alumina_off_page_flag_has_its_partner_on_the_sheet_it_names():
     """Pair every alumina refinery flag that names another sheet of its set."""
     sheets = {}
     for n in (1, 2, 3):
-        fs = SCENARIOS[f"21_alumina_refinery_{n}"][0]()
+        fs = SCENARIOS[f"20_alumina_refinery_{n}"][0]()
         assert fs.title_block is not None
         sheets[fs.title_block.drawing_number] = fs
     assert len(sheets) == 3, "two sheets share a drawing number"

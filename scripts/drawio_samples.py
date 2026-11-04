@@ -16,8 +16,8 @@ sys.path.insert(0, str(ROOT))
 
 #: The examples the gallery links as draw.io documents.
 SAMPLES = {
-    "11_ethanol_pid": "a full P&ID on A3 paper, with every piece of furniture",
-    "03_distillation_train": "a bordered PFD sized to its own drawing",
+    "10_ethanol_pid": "a full P&ID on A3 paper, with every piece of furniture",
+    "02_distillation_train": "a bordered PFD sized to its own drawing",
 }
 
 OUT = ROOT / "drawio-samples"

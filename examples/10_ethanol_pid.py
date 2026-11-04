@@ -1,7 +1,7 @@
 """
-Example 11: Ethanol Purification A300, the P&ID of example 10's unit
+Example 10: Ethanol Purification A300, the P&ID of example 9's unit
 
-The unit of ``10_ethanol_pfd.py`` drawn as a P&ID on the same A3 sheet:
+The unit of ``09_ethanol_pfd.py`` drawn as a P&ID on the same A3 sheet:
 flanged connections, line numbers, four control valve stations
 (``fs.add_valve_station()``), eight loops with three cascades, alarms
 lettered in their controllers, and repeated ``variant="sis"`` trips.
