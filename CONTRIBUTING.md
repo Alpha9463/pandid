@@ -33,7 +33,7 @@ pip install pre-commit && pre-commit install
 CI (`.github/workflows/ci.yml`) runs these checks:
 
 ```bash
-python -m pytest -q                 # tests (full-suite CI: Python 3.11 and 3.14)
+python -m pytest -q                 # tests (full-suite CI: Python 3.11 and 3.15)
 python -m ruff check .              # lint the whole tree
 python -m ruff format --check tests # tests/ must stay ruff-formatted
 python -m mypy pandid               # type check the package
