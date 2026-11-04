@@ -836,7 +836,9 @@ def emit(spec: dict) -> str:
     ]
     if spec["aliases"]:
         body.append(f"    VARIANT_ALIASES = {_dict(spec['aliases'])}")
-    body.append(f"    PORTS = {_ports_source(spec['ports'])}")
+    # Unit._declared_ports reads the nearest PORTS up the class tree.
+    if spec["ports"] != getattr(units, spec["base"])._declared_ports():
+        body.append(f"    PORTS = {_ports_source(spec['ports'])}")
     body.append("")
     body += [f"    {name}: Port" for name, _direction, _role in spec["ports"]]
     body.append("")

@@ -5,6 +5,7 @@ grid at :data:`PART_STROKE`, every agitator shaft one solid stroke, and
 places each part on a body as fractions of the body's box.
 """
 
+import functools
 import math
 
 from pandid.render.weights import M, LineWeight
@@ -75,8 +76,9 @@ def _run(x0: float, x1: float, y: float = _DECK_Y, dash: str = "") -> str:
             + (f" {dash}" if dash else "") + "/>")
 
 
-def _build() -> tuple:
-    """Return every part, in Table 2 order.
+@functools.cache
+def parts() -> tuple:
+    """Return every part in Table 2 order, built once.
 
     Returns
     -------
@@ -490,35 +492,6 @@ def _build() -> tuple:
     )
 
 
-_PARTS: "tuple | None" = None
-
-
-def parts() -> tuple:
-    """Return every part in Table 2 order, built once.
-
-    Returns
-    -------
-    tuple[OverlayPart, ...]
-        The parts.
-    """
-    global _PARTS
-    if _PARTS is None:
-        _PARTS = _build()
-    return _PARTS
-
-
-def register_parts(registry) -> None:
-    """Register every part on ``registry``.
-
-    Parameters
-    ----------
-    registry : SymbolRegistry
-        Registry to add the parts to.
-    """
-    for part in parts():
-        registry.register_part(part)
-
-
 # Placement helpers: each returns overlays placed as fractions of the
 # body's box.
 
@@ -634,20 +607,14 @@ def internals_overlays(name: str, count: int = 1) -> tuple:
             f"a body with {count} of an internal has none of it; pass "
             f"internals=None to draw a bare shell"
         )
-    top, span = _INTERNALS_TOP, _INTERNALS_BOTTOM - _INTERNALS_TOP
-    # Each internal spans the shell from wall to wall.
+    # Each internal spans the shell from wall to wall: a deck centred on
+    # its stage, a bed filling the middle 0.8 of its band.
     if part.height <= DECK_H:
-        # Decks: centre each on its share of the span.
-        pitch = span / count
-        return tuple(
-            Overlay(27, name, 0.0,
-                    top + (i + 0.5) * pitch - _DECK_BAND / 2, 1.0, _DECK_BAND)
-            for i in range(count))
-    # Beds: leave a tenth of each band clear above and below.
-    band = span / count
-    return tuple(
-        Overlay(27, name, 0.0, top + (i + 0.1) * band, 1.0, band * 0.8)
-        for i in range(count))
+        return tuple(Overlay(27, name, 0.0, stage_fraction(name, i, count) - _DECK_BAND / 2,
+                             1.0, _DECK_BAND) for i in range(1, count + 1))
+    band = (_INTERNALS_BOTTOM - _INTERNALS_TOP) / count
+    return tuple(Overlay(27, name, 0.0, stage_fraction(name, i, count), 1.0, band * 0.8)
+                 for i in range(1, count + 1))
 
 
 def stage_fraction(name: str, stage: int, count: int) -> float:
