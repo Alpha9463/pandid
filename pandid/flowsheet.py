@@ -2098,10 +2098,6 @@ class Flowsheet:
         kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
-        Last, each balloon nozzle where a unit blocks a line the router
-        could not route is turned to the cheapest clear face with which the
-        routed sheet takes no tap off its line and grows no finding or
-        clash.
 
         Where a mixer's or splitter's face grows to hold its nozzles, or
         laterals are laid on lanes, the sheet is also drawn as route() would
@@ -2111,6 +2107,11 @@ class Flowsheet:
         crossing, bend, fallback, finding, clash or tap off its line grows
         by them; otherwise, and wherever lanes changed no route and no face
         grew, the sheet is drawn without them.
+
+        Last, each balloon nozzle where a unit blocks a line the router
+        could not route is turned to the cheapest clear face with which the
+        routed sheet takes no tap off its line and grows no finding or
+        clash.
 
         Parameters
         ----------
@@ -2147,6 +2148,7 @@ class Flowsheet:
             laned = bool(grown) or self._relaned
             if ((not (laned or self._widened) and held is None) or self._laying_out
                     or not (router is None or type(router) is DefaultRouter)):
+                self._turn(router)
                 return
             kept, judged = self._state(), _score(self)
             # Draw the sheet without grown faces or lanes as route() would
@@ -2166,6 +2168,7 @@ class Flowsheet:
                     u._stock_face = False
                 self._put_state(kept)
                 self._lanes = True
+            self._turn(router)
         finally:
             self._routing = False
 
@@ -2219,7 +2222,6 @@ class Flowsheet:
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
-        from pandid.layout.faces import blocked_nozzles, clear_faces
         from pandid.validate import geometry_issues
 
         def place() -> None:
@@ -2286,27 +2288,6 @@ class Flowsheet:
                 if chained:
                     attempt(may_hang=False, keep_clear=True)
 
-        def turn() -> None:
-            """Turn each blocked balloon nozzle to the cheapest clear face
-            with which the sheet, routed again, takes no tap off its line
-            and grows no finding or clash."""
-            for unit, name in blocked_nozzles(self):
-                for face in clear_faces(self, unit, name):
-                    prior = self._geometry()
-                    before, off = _flaws(self), _taps_off(self)
-                    assert unit.frame is not None
-                    unit.frame.port_faces[name] = face
-                    try:
-                        router.route(self)
-                        kept = _taps_off(self) <= off and not any(
-                            n > before[k] for k, n in _flaws(self).items())
-                    except Exception:
-                        kept = False
-                    if kept:
-                        self._unhung = self._unhung or prior
-                        break
-                    self._put_geometry(prior, keep_manual=False)
-
         def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
             """Redo the sheet, and undo that if a finding or clash grew or a
             tap left its line.
@@ -2364,9 +2345,42 @@ class Flowsheet:
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False
-        if tries:
-            turn()
         self._route_stale = False
+
+    def _turn(self, router=None) -> None:
+        """Turn each blocked balloon nozzle to the cheapest clear face with
+        which the sheet, routed again, takes no tap off its line and grows
+        no finding or clash.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router the sheet was routed with; ``None`` is the default.
+        """
+        from pandid.layout.control import _flaws, _taps_off
+        from pandid.layout.faces import blocked_nozzles, clear_faces
+        from pandid.routing import DefaultRouter
+
+        if router is None:
+            router = DefaultRouter()
+        if type(router) is not DefaultRouter or self._laying_out:
+            return
+        for unit, name in blocked_nozzles(self):
+            for face in clear_faces(self, unit, name):
+                prior = self._geometry()
+                before, off = _flaws(self), _taps_off(self)
+                assert unit.frame is not None
+                unit.frame.port_faces[name] = face
+                try:
+                    router.route(self)
+                    kept = _taps_off(self) <= off and not any(
+                        n > before[k] for k, n in _flaws(self).items())
+                except Exception:
+                    kept = False
+                if kept:
+                    self._unhung = self._unhung or prior
+                    break
+                self._put_geometry(prior, keep_manual=False)
 
     def _geometry(self) -> tuple:
         """Return each unit's frame and tap, each automatic route, and
