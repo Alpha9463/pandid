@@ -305,28 +305,28 @@
     <line x1="1194.1" y1="87.6" x2="1200.1" y2="77.6" stroke="black" stroke-width="1" />
     <line x1="1157.2" y1="89.6" x2="1167.2" y2="95.6" stroke="black" stroke-width="1" />
     <line x1="1157.2" y1="93.6" x2="1167.2" y2="99.6" stroke="black" stroke-width="1" />
-    <rect x="62.8" y="427.8" width="80.4" height="13.0" fill="white" />
-    <text x="103.0" y="434.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-PO-201-SS</text>
-    <rect x="239.8" y="433.8" width="80.4" height="13.0" fill="white" />
-    <text x="280.0" y="440.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">50-PO-202-SS</text>
-    <rect x="149.8" y="613.5" width="80.4" height="13.0" fill="white" />
+    <rect x="73.2" y="427.8" width="71.6" height="13.0" fill="white" />
+    <text x="109.0" y="434.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-PO-201-SS</text>
+    <rect x="244.2" y="444.3" width="71.6" height="13.0" fill="white" />
+    <text x="280.0" y="450.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">50-PO-202-SS</text>
+    <rect x="153.1" y="613.5" width="73.8" height="13.0" fill="white" />
     <text x="190.0" y="620.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">50-PW-203-CS</text>
-    <rect x="166.7" y="733.5" width="86.6" height="13.0" fill="white" />
+    <rect x="169.2" y="733.5" width="81.6" height="13.0" fill="white" />
     <text x="210.0" y="740.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-QWS-205-CS</text>
-    <rect x="843.9" y="334.2" width="86.6" height="13.0" fill="white" />
+    <rect x="848.7" y="334.2" width="77.1" height="13.0" fill="white" />
     <text x="887.2" y="340.7" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-VG-206-SS</text>
-    <rect x="1433.6" y="433.8" width="92.8" height="13.0" fill="white" />
+    <rect x="1436.7" y="433.8" width="86.6" height="13.0" fill="white" />
     <text x="1480.0" y="440.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">150-CWS-207-CS</text>
-    <rect x="754.7" y="713.5" width="86.6" height="13.0" fill="white" />
+    <rect x="759.4" y="713.5" width="77.1" height="13.0" fill="white" />
     <text x="798.0" y="720.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-PG-208-SS</text>
-    <rect x="1311.7" y="713.5" width="86.6" height="13.0" fill="white" />
+    <rect x="1316.4" y="713.5" width="77.1" height="13.0" fill="white" />
     <text x="1355.0" y="720.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-PG-211-SS</text>
-    <rect x="1145.6" y="573.0" width="92.8" height="13.0" fill="white" />
-    <text x="1192.0" y="579.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-CWS-209-CS</text>
-    <line x1="1158.1" y1="586.0" x2="1154.1" y2="590.0" stroke="black" stroke-width="1" />
-    <path d="M 1154.1,590.0 L 1156.2,583.6 L 1160.5,587.9 Z" fill="black" />
-    <rect x="1029.5" y="746.6" width="13.0" height="92.8" fill="white" />
-    <text x="1036.0" y="793.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1036.0, 793.0)">100-CWR-210-CS</text>
+    <rect x="1142.7" y="573.0" width="86.6" height="13.0" fill="white" />
+    <text x="1186.0" y="579.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-CWS-209-CS</text>
+    <line x1="1155.2" y1="586.0" x2="1151.2" y2="590.0" stroke="black" stroke-width="1" />
+    <path d="M 1151.2,590.0 L 1153.3,583.6 L 1157.6,587.9 Z" fill="black" />
+    <rect x="1029.5" y="743.4" width="13.0" height="87.1" fill="white" />
+    <text x="1036.0" y="787.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1036.0, 787.0)">100-CWR-210-CS</text>
   </g>
   <g id="instrument_taps">
     <line x1="422.5" y1="440.77" x2="422.5" y2="402.77" stroke="black" stroke-width="1" />
