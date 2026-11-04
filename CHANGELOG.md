@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines as crossings.
 - **`help(pandid)` is a guide to using the package (#174).** It gives the
   model, a runnable example, port names, common mistakes and how to check a
-  sheet; `AGENTS.md` points coding agents to it.
+  sheet; `pandid --help`, `help(pandid.Flowsheet)` and `AGENTS.md` point to it.
 
 ### Changed
 

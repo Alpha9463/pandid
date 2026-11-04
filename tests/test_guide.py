@@ -4,6 +4,9 @@ import itertools
 import textwrap
 
 import pandid
+from pandid.cli import EXIT_OK, main
+
+GUIDE = 'python -c "import pandid; print(pandid.__doc__)"'
 
 
 def _example() -> str:
@@ -24,3 +27,9 @@ def test_the_guide_example_draws_a_clean_sheet(tmp_path, monkeypatch):
     fs = namespace["fs"]
     assert isinstance(fs, pandid.Flowsheet)
     assert fs.validate() == []
+
+
+def test_cli_help_names_the_guide(capsys):
+    """Check that ``pandid --help`` names the command that prints the guide."""
+    assert main(["--help"]) == EXIT_OK
+    assert GUIDE in " ".join(capsys.readouterr().out.split())

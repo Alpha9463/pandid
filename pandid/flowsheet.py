@@ -453,6 +453,8 @@ def _whole_number(value: Any, name: str) -> int:
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
 
+    Read the guide first: ``python -c "import pandid; print(pandid.__doc__)"``.
+
     Parameters
     ----------
     name : str

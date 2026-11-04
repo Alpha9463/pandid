@@ -389,6 +389,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pandid",
         description="Draw a P&ID or process flow diagram from a flowsheet spec file.",
+        epilog='Python API guide: python -c "import pandid; print(pandid.__doc__)"',
     )
     parser.add_argument("--version", action="version", version=f"pandid {__version__}")
     commands = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
