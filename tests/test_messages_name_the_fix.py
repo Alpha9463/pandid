@@ -135,3 +135,28 @@ def test_stream_table_missing_on_an_instrumented_sheet_suggests_a_pid() -> None:
 
     (found,) = [i.message for i in fs.validate() if i.code == "stream-table-missing"]
     assert 'render with diagram="p&id"' in found
+
+
+@pytest.mark.parametrize("tee_at", [0.25, 0.9])
+def test_following_the_tee_advice_keeps_the_order_the_fractions_ask_for(tee_at: float) -> None:
+    """Check that the hand-piped tee and the moved valve keep their order along the line."""
+    fs, feed, product = _line()
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.add(Valve("HV-1"), on=line, at=0.75)
+    with pytest.raises(ValueError) as refused:
+        fs.add(Tee("T"), on=line, at=tee_at)
+    side = re.search(r"move HV-1 to on= the line (into|out of) T\b", str(refused.value))
+    assert side is not None, str(refused.value)
+
+    fs, feed, product = _line()
+    tee = fs.add(Tee("T"))
+    into = fs.connect(feed.outlet, tee.inlet)
+    out_of = fs.connect(tee.outlet, product.inlet)
+    fs.connect(tee.branch, fs.add(Product("B")).inlet)
+    fs.add(Valve("HV-1"), on=into if side[1] == "into" else out_of, at=0.75)
+
+    order, port = [], feed.outlet
+    while port.stream is not None and port.stream.dest.owner is not product:
+        order.append(port.stream.dest.owner.name)
+        port = port.stream.dest.owner.port("outlet")
+    assert order == (["T", "HV-1"] if tee_at < 0.75 else ["HV-1", "T"])

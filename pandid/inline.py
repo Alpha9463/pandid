@@ -85,7 +85,7 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
 
 
 def _ends(segments: list[Stream]) -> tuple[str, str]:
-    """Return a line's source and destination as ``unit.port`` text.
+    """Return a line's source and destination as ``connect()`` took them.
 
     Parameters
     ----------
@@ -95,10 +95,12 @@ def _ends(segments: list[Stream]) -> tuple[str, str]:
     Returns
     -------
     tuple[str, str]
-        Where the line starts and ends.
+        ``unit.port`` where the line starts and ends, naming a pool
+        member by its pool.
     """
-    source, dest = segments[0].source, segments[-1].dest
-    return f"{source.owner.name}.{source.name}", f"{dest.owner.name}.{dest.name}"
+    source, dest = (f"{p.owner.name}.{p.owner._pool_of(p.name) or p.name}"
+                    for p in (segments[0].source, segments[-1].dest))
+    return source, dest
 
 
 def position(segment: Stream) -> float | None:
@@ -200,6 +202,13 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
         branch = (f"fs.connect({tee}.branch, ...)"
                   if device.ports["branch"].direction == "outlet"
                   else f"fs.connect(..., {tee}.branch)")
+        # Name what on= already put on the line, either side of the tee.
+        items = [next((f"valve station {a.station.control.name}"
+                       for a in fs._station_assemblies if a.station.inlet is s.dest),
+                      s.dest.owner.name) for s in segments[:-1]]
+        moves = [f"{', '.join(group)} to on= the line {where} {tee}"
+                 for group, where in ((items[:index], "into"), (items[index:], "out of"))
+                 if group]
         raise ValueError(
             f"on= puts a device with one inlet and one outlet in a line, and a tee "
             f"has a third connection, its branch, that on= cannot pipe. Connect the "
@@ -207,6 +216,8 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
             f"arguments: "
             f"fs.connect({source}, {tee}.inlet), fs.connect({tee}.outlet, {dest}) "
             f"and {branch}"
+            + (f". Then move {' and '.join(moves)}, keeping each one's at="
+               if moves else "")
         )
     if not isinstance(device, Unit) or device.kind not in _INLINE_KINDS:
         raise ValueError("on= puts a valve, reducer or fitting in a line")
