@@ -7,11 +7,10 @@ from typing import NamedTuple
 
 import pytest
 
-from _layout_cases import build as build_biodiesel
+from _layout_cases import build as build_biodiesel, build_unpinned
 from pandid import Flowsheet, units as U
 from pandid.layout.quality import _HARD_CODES, measure_final
 from pandid.portgeom import pin_intent, port_point
-from scripts import layout_quality
 
 #: Allowance on a budgeted extent, as a fraction of it.
 EXTENT_SLACK = 0.01
@@ -123,7 +122,7 @@ def _stripped(stem: str) -> Callable[[], tuple[Flowsheet, dict]]:
     Callable[[], tuple[Flowsheet, dict]]
         Builder of a fresh flowsheet and its render options.
     """
-    return lambda: layout_quality.build(stem, True)
+    return lambda: build_unpinned(stem)
 
 
 SCENARIOS: dict[str, tuple[Callable[[], tuple[Flowsheet, dict]], Budget]] = {

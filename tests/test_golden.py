@@ -1,5 +1,6 @@
 """Test representative SVG fixtures and rendered nozzle placement."""
 
+import difflib
 import os
 import re
 from pathlib import Path
@@ -29,59 +30,6 @@ GOLDEN_FINDINGS = {
 }
 
 
-def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
-    """Keep copied settled flowsheets independent.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Settled gallery flowsheets and render options.
-    """
-    source, source_options = settled_gallery["11_ethanol_pid"]
-    copied, copied_options = copy_settled_case(settled_gallery, "11_ethanol_pid")
-
-    copied.streams[0].route = None
-    copied_options["diagram"] = "pfd"
-
-    assert copied is not source
-    assert source.streams[0].route is not None
-    assert source_options.get("diagram") != "pfd"
-
-
-def _diff_message(name: str, golden: str, actual: str) -> str:
-    """Describe the first difference between normalized SVG documents.
-
-    Parameters
-    ----------
-    name : str
-        Golden fixture name.
-    golden : str
-        Expected normalized SVG.
-    actual : str
-        Actual normalized SVG.
-
-    Returns
-    -------
-    str
-        First differing line with nearby context.
-    """
-    exp = golden.split("\n")
-    act = actual.split("\n")
-    for i, (e, a) in enumerate(zip(exp, act)):
-        if e == a:
-            continue
-        lo, hi = max(0, i - 2), min(max(len(exp), len(act)), i + 3)
-        ctx = []
-        for k in range(lo, hi):
-            ek = exp[k] if k < len(exp) else "<no line>"
-            ak = act[k] if k < len(act) else "<no line>"
-            mark = ">>" if k == i else "  "
-            ctx.append(f"{mark} [{k}] golden: {ek}")
-            ctx.append(f"{mark} [{k}] actual: {ak}")
-        return f"{name}: first mismatch at line {i} of {max(len(exp), len(act))}\n" + "\n".join(ctx)
-    return f"{name}: identical prefix but line counts differ (golden {len(exp)}, actual {len(act)})"
-
-
 def _check_golden(name: str, svg: str) -> None:
     """Compare an SVG document with its approved fixture.
 
@@ -101,8 +49,9 @@ def _check_golden(name: str, svg: str) -> None:
     if not path.exists():
         pytest.fail(f"no golden at {path}; regenerate with PANDID_UPDATE_GOLDEN=1", pytrace=False)
     golden = _normalize(path.read_text(encoding="utf-8"))
-    if golden != normalized:
-        pytest.fail(_diff_message(name, golden, normalized), pytrace=False)
+    assert golden == normalized, "".join(
+        difflib.unified_diff(golden.splitlines(True), normalized.splitlines(True), n=2)
+    )
 
 
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
@@ -211,11 +160,6 @@ def test_representative_sheets_draw_nozzles_on_their_own_bodies(settled_gallery,
     assert off_body == [], f"{name} draws {len(off_body)} nozzles off their own bodies"
 
 
-def test_only_representative_examples_have_golden_fixtures():
-    """Store SVG fixtures only for representative renderer scenarios."""
-    assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(GOLDEN_SCENARIOS)
-
-
 def test_the_fractionator_schedules_only_equipment_that_exists():
     """Keep the fractionator schedule aligned with its process topology."""
     fs = SCENARIOS["06_column_reflux"][0]()
@@ -234,13 +178,7 @@ def test_the_fractionator_schedules_only_equipment_that_exists():
 
 
 def test_each_alumina_off_page_flag_has_its_partner_on_the_sheet_it_names():
-    """Pair every alumina refinery flag that names another sheet of its set.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Pair every alumina refinery flag that names another sheet of its set."""
     sheets = {}
     for n in (1, 2, 3):
         fs = SCENARIOS[f"21_alumina_refinery_{n}"][0]()

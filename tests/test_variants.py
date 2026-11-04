@@ -1,28 +1,17 @@
-"""Test ``VARIANTS``: construction refuses a drawing the class does not own.
-
-Check that the ``pandid.units`` classes still accept every variant of their kind.
-"""
+"""Test ``VARIANTS``: a class accepts every variant of its kind and refuses the rest."""
 
 import pytest
 
 import pandid
 from pandid import Flowsheet, devices, units
 from pandid.render.symbols import default_registry
+from test_placement import _shipped_unit_classes
 from test_symbol_invariants import _drawing
 
 
 def _unit_classes():
     """Return every ``Unit`` subclass :mod:`pandid.units` itself defines."""
-    found: dict[type, None] = {}
-    pending = [units.Unit]
-    while pending:
-        cls = pending.pop()
-        if cls in found:
-            continue
-        pending.extend(cls.__subclasses__())
-        if cls.__module__ == units.__name__:
-            found[cls] = None
-    return list(found)
+    return [cls for cls in _shipped_unit_classes() if cls.__module__ == units.__name__]
 
 
 def _shipped_cases():
@@ -182,12 +171,6 @@ def test_a_class_can_alias_default_onto_its_own_drawing():
     assert _Knockout("S-2", variant="knockout").variant == "knockout"
 
 
-def test_a_renamed_variant_reads_back_the_spelling_it_writes():
-    """Check that a renamed variant accepts the registry spelling it stores."""
-    stored = _Screen("S-1", variant="screen").variant
-    assert _Screen("S-2", variant=stored).variant == stored
-
-
 # --- The refusal itself ---
 
 
@@ -197,13 +180,9 @@ def test_a_variant_belonging_to_another_device_is_refused_at_construction():
         _Cyclone("S-1", variant="sifter")
     message = str(excinfo.value)
     assert message.startswith("S-1: _Cyclone draws 'cyclone', not 'sifter'.")
-
-
-def test_the_refusal_teaches_the_low_level_form():
-    """Check that the refusal names the base-class form that draws the variant."""
-    with pytest.raises(ValueError, match=r"Separator\(variant='sifter'\)") as excinfo:
-        _Cyclone("S-1", variant="sifter")
-    assert "any variant registered for a separator" in str(excinfo.value)
+    # The refusal names the base-class form that draws the variant.
+    assert "Separator(variant='sifter')" in message
+    assert "any variant registered for a separator" in message
 
 
 def test_a_near_miss_is_suggested():

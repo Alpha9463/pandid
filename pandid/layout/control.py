@@ -215,12 +215,10 @@ def _halos(fs: "Flowsheet") -> list[_Box]:
     list[_Box]
         Each halo as ``(left, top, right, bottom)``.
     """
-    from pandid.routing.visibility import VisibilityGraph
+    from pandid.routing.visibility import _tag_halo
 
-    graph = VisibilityGraph(fs)
-    bodies = {id(r) for _, r in graph.body_obstacles}
-    return [(r.x_min, r.y_min, r.x_max, r.y_max) for r in graph.obstacles
-            if id(r) not in bodies]
+    halos = (_tag_halo(u, u.frame) for u in fs.units if u.frame is not None)
+    return [(r.x_min, r.y_min, r.x_max, r.y_max) for r in halos if r is not None]
 
 
 def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":

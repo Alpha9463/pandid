@@ -93,31 +93,6 @@ COMPASS: dict[str, tuple[int, int]] = {
 }
 
 
-def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True
-            ) -> tuple[float, float, float, float]:
-    """Return where a symbol's artwork lands inside its placed box.
-
-    Parameters
-    ----------
-    bw, bh : float
-        Symbol box, already turned by :func:`symbol_to_box`.
-    w, h : float
-        Placed box.
-    stretchable : bool, default=True
-        Whether the artwork fills the box or keeps its aspect.
-
-    Returns
-    -------
-    tuple[float, float, float, float]
-        ``(x, y, width, height)`` from the box's top-left corner.
-    """
-    if stretchable:
-        return 0.0, 0.0, w, h
-    scale = min(w / bw, h / bh)
-    iw, ih = bw * scale, bh * scale
-    return (w - iw) / 2, (h - ih) / 2, iw, ih
-
-
 def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
     """Return the faces a port may be drawn on.
 
@@ -211,7 +186,12 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
         else:
             bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height,
                                            rot, mirrored, mirror_y)
-            ox, oy, iw, ih = ink_box(bw, bh, w, h, getattr(sym, "stretchable", True))
+            # The artwork fills the box, or keeps its aspect centred in it.
+            ox, oy, iw, ih = 0.0, 0.0, w, h
+            if not getattr(sym, "stretchable", True):
+                scale = min(w / bw, h / bh)
+                iw, ih = bw * scale, bh * scale
+                ox, oy = (w - iw) / 2, (h - ih) / 2
             lx, ly = ox + bx * iw / bw, oy + by * ih / bh
             face = outward_dir(lx - ox, ly - oy, iw, ih, unit.kind, anchor, mirrored)
         out.setdefault(face, (lx, ly))

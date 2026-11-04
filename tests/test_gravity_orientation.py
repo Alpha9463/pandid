@@ -123,12 +123,8 @@ def test_a_turned_lying_variant_is_still_reported_and_offered_no_way_out():
 # --- the registry-wide list ----------------------------------------------------
 
 
-#: Every (kind, variant) the registry marks, and what in the artwork only means
-#: one thing one way up. Written out rather than derived, so adding a symbol to
-#: ``GRAVITY_FIXED`` in scripts/vendor_symbols.py is a decision this file has to
-#: agree with rather than one that lands silently.
+#: Every (kind, variant) the registry marks gravity-fixed.
 GRAVITY_FIXED = {
-    # separation by density -- ISO's X 2618 and its six siblings
     ("separator", "default"),
     ("separator", "cyclone"),
     ("separator", "electrostatic"),
@@ -136,38 +132,22 @@ GRAVITY_FIXED = {
     ("separator", "horizontal"),
     ("separator", "knockout"),
     ("separator", "scrubber"),
-    # the venturi scrubber is fixed twice over: the family's hopper, and its own
-    # throat, which the artwork draws running downward into it
     ("separator", "venturi_scrubber"),
-    # the four mechanical separators, listed for the hopper rather than for what
-    # does the separating: a magnet sorts by magnetism and a precipitator by
-    # charge, and what fixes the attitude of all of them is the fall into the
-    # hopper the artwork draws
     ("separator", "sifter"),
     ("separator", "impact"),
     ("separator", "permanent_magnet"),
     ("separator", "electromagnetic"),
-    # a free liquid surface -- ISO's 2061
     ("tank", "default"),
     ("tank", "conical"),
     ("tank", "floating_roof"),
     ("tank", "sphere"),
-    # ...and the three that drain to a cone rather than to a flat floor, which
-    # is the hopper the mechanical separators above are listed for: turned, the
-    # cone is a roof and the tank drains nowhere
     ("tank", "conical_bottom"),
     ("tank", "conical_ends"),
     ("tank", "dished_roof_conical_bottom"),
-    # ...and the one whose free surface is a seal rather than the inventory: the
-    # bell is drawn resting on the water, and turned it rests on nothing
     ("tank", "gas_holder"),
-    # water distributed over the fill, falling through the draught into the
-    # basin the artwork draws under the whole machine
     ("cooling_tower", "default"),
     ("cooling_tower", "induced_draft"),
     ("cooling_tower", "forced_draft"),
-    # ...and the eight ISO 10628-2 group-5 drawings: the same fill-and-basin
-    # claim, whichever draught mark or fill mark is composed onto it
     ("cooling_tower", "general"),
     ("cooling_tower", "dry_natural"),
     ("cooling_tower", "dry_forced"),
@@ -176,9 +156,7 @@ GRAVITY_FIXED = {
     ("cooling_tower", "wet_forced"),
     ("cooling_tower", "wet_induced"),
     ("cooling_tower", "wet_dry_natural"),
-    # ISO item 4.1, 2532: steam collects in the shell's highest point, the dome
     ("boiler", "default"),
-    # holdup with a vapour space over it
     ("vessel", "default"),
     ("vessel", "dished"),
     ("vessel", "dome"),
@@ -187,30 +165,19 @@ GRAVITY_FIXED = {
     ("vessel", "insulated"),
     ("vessel", "jacketed"),
     ("vessel", "swaged"),
-    # liquid running down over trays or packing, vapour rising through it
     ("column", "default"),
     ("column", "packed"),
     ("reactor", "default"),
     ("reactor", "jacketed"),
-    # open ends: what leaves rises, what would fall in must not
     ("vent", "default"),
     ("vent", "breather"),
     ("vent", "exhaust_head"),
     ("funnel", "default"),
-    # ISO items 4.7 (2041) and 4.8 (2591): the same claim as the two above --
-    # a stack exhausts up, a flare burns off its tip up
     ("stack", "default"),
     ("flare", "default"),
-    # solids that fall
     ("dryer", "spray"),
     ("dryer", "fluidized_bed"),
-    # ISO item 10.2, X8083: trays resting on their shelves. general, turbo and
-    # belt are not marked, on the reasoning default (the rotary drum) was not
     ("dryer", "shelf"),
-    # ISO group 11's thirteen rows are one trapezoid, wide at the top and
-    # narrow at the bottom, with a connection tick above it and another
-    # below: ore in at the mouth, product out of the throat. Turned, the
-    # machine is fed from its discharge.
     ("crushing_machine", "default"),
     ("crusher", "default"),
     ("crusher", "cone"),
@@ -223,27 +190,16 @@ GRAVITY_FIXED = {
     ("mill", "impact"),
     ("mill", "roller"),
     ("mill", "vibration"),
-    # A machine whose purpose is to raise material: in at the boot, out at the
-    # head. Turned, it lowers it. The conveyors beside it are *not* marked --
-    # a belt or a screw runs whichever way the plant needs it to.
     ("elevator", "default"),
     ("elevator", "z_form"),
-    # the three gas filters, each drawn with a dust hopper under its medium
     ("filter", "gas"),
     ("filter", "gas_fixed_bed"),
     ("filter", "gas_belt"),
-    # ISO group 19's hopper valves: solids drop in at the top and are
-    # metered out at the bottom, the same claim group 11's crushers make.
     ("feeder", "general"),
     ("feeder", "rotary_valve"),
     ("feeder", "rotary_table"),
     ("feeder", "metering"),
-    # ISO item 12.4 X8134: twin shafts driven from above, working a
-    # trough that holds its charge below them.
     ("kneader", "default"),
-    # ISO group 7's screens: oversize retained on a deck, undersize
-    # dropped through it -- group 11's hopper claim again, at this
-    # group's own outline.
     ("screening_device", "general"),
     ("screening_device", "coarse_rake"),
     ("screening_device", "fine_rake"),
@@ -251,23 +207,14 @@ GRAVITY_FIXED = {
     ("screening_device", "vibrating"),
     ("screening_device", "rotating_drum"),
     ("screening_device", "basket_reel"),
-    # The five evaporator bodies: vapour off the crown and concentrate out
-    # of the bottom, which is the drum family's own claim on the shell the
-    # evaporators are drawn from.
     ("evaporator", "default"),
     ("evaporator", "calandria"),
     ("evaporator", "climbing_film"),
     ("evaporator", "falling_film"),
     ("evaporator", "plate"),
-    # The three kilns, each fixed by its own construction: a rotary shell
-    # FALLS from feed end to discharge and turned over it climbs; a
-    # fluidised bed rests on its grid with the freeboard above it; a shaft
-    # kiln is charged over the mouth and discharged out of the cone.
     ("kiln", "default"),
     ("kiln", "fluidized_bed"),
     ("kiln", "shaft"),
-    # The thickener: an open rim to clarify at, and a raked cone under the
-    # floor for what settles. Turned, the cone is a roof.
     ("thickener", "default"),
 }
 

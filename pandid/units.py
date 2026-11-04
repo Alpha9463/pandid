@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
+from typing import TYPE_CHECKING, Any, TypedDict, TypeVar, Unpack
 
 from pandid._checks import check_real, check_whole, is_whole, suggest
 from pandid.deprecation import Deprecation
@@ -111,8 +111,6 @@ _LAYOUT_INPUTS = frozenset(
         "_pin_ports",
         "width",
         "height",
-        "_width",
-        "_height",
         "_length",
         "_diameter",
         "_large_end",
@@ -170,6 +168,22 @@ _DEFAULT_FACES = Deprecation(
              "output_faces to read them"),
     removed_in="0.1.7",
 )
+
+
+class _UnitOptions(TypedDict, total=False):
+    """Keyword options a unit class passes on to :class:`Unit`.
+
+    Attributes
+    ----------
+    width, height, label_pos, description, reference
+        As for :class:`Unit`.
+    """
+
+    width: float | None
+    height: float | None
+    label_pos: str | None
+    description: str
+    reference: str
 
 
 class Unit:
@@ -273,10 +287,8 @@ class Unit:
         list[tuple[str, str, str]]
             Port specs as ``(name, direction, role)``.
         """
-        for klass in cls.__mro__:
-            if "PORTS" in klass.__dict__:
-                return list(klass.__dict__["PORTS"])
-        return []
+        return list(next(klass.__dict__["PORTS"] for klass in cls.__mro__
+                         if "PORTS" in klass.__dict__))
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
@@ -623,7 +635,14 @@ class Unit:
             # A flag's coordinates place its only port by default.
             port = next(iter(self.ports)) if isinstance(self, _Boundary) else None
         # Check the port name first, even with no coordinate.
-        nozzle = self._pin_port(port) if port is not None else None
+        nozzle: str | None = None
+        if port is not None:
+            nozzle = self._canonical_port_name(port)
+            if nozzle not in self.ports:
+                raise KeyError(
+                    f"{type(self).__name__} {self.name!r} has no port {nozzle!r} to "
+                    f"pin by; available ports: {sorted(self.ports)}"
+                )
         # Record per axis which port the coordinate locates.
         for axis, value in (("x", x), ("y", y)):
             if value is None:
@@ -655,32 +674,6 @@ class Unit:
         self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
         self._mirror_stated = self._mirror_stated or mirrored is not _UNCHANGED
         return self
-
-    def _pin_port(self, port_name: str) -> str:
-        """Return the real port name for a name given to :meth:`pin`.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name or alias.
-
-        Returns
-        -------
-        str
-            Port name.
-
-        Raises
-        ------
-        KeyError
-            If the unit has no such port.
-        """
-        canonical = self._canonical_port_name(port_name)
-        if canonical not in self.ports:
-            raise KeyError(
-                f"{type(self).__name__} {self.name!r} has no port {canonical!r} to "
-                f"pin by; available ports: {sorted(self.ports)}"
-            )
-        return canonical
 
     def nozzle(self: _UnitT, port_name: str, face: str) -> _UnitT:
         """Fix the face a port is drawn on.
@@ -1005,12 +998,14 @@ class _Boundary(Unit):
 
     Parameters
     ----------
-    name, variant, width, height, label_pos, description, reference
+    name, variant
         As for :class:`Unit`.
     header : bool, default=False
         Whether the flag is a utility header drawn at several taps.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
     """
-
 
     ONE_NOZZLE_MANY_RUNS = True
 
@@ -1018,22 +1013,11 @@ class _Boundary(Unit):
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         header: bool = False,
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.header = bool(header)
         # Drawn label, kept when a repeated header is renamed.
         self._tag = name
@@ -1164,12 +1148,14 @@ class _NormallyPositioned(Unit):
 
     Parameters
     ----------
-    name, variant, width, height, label_pos, description, reference
+    name, variant
         As for :class:`Unit`.
     normal_position : str, default="open"
         ``"open"`` or ``"closed"`` in normal operation.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
     """
-
 
     #: Normal positions a device may declare.
     NORMAL_POSITIONS = ("open", "closed")
@@ -1178,22 +1164,11 @@ class _NormallyPositioned(Unit):
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         normal_position: str = "open",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._normal_position = "open"
         self.normal_position = normal_position
 
@@ -1232,7 +1207,7 @@ class _NormallyPositioned(Unit):
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
-        """Accept a closed position; subclasses refuse it where needed."""
+        """Accept a closed position; a subclass may refuse it."""
 
 
 class Valve(_NormallyPositioned):
@@ -1251,12 +1226,13 @@ class Valve(_NormallyPositioned):
     actuator : str, default=""
         ``"diaphragm"``, ``"motor"``, ``"solenoid"``, ``"hydraulic"``,
         ``"handwheel"`` or empty.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
     normal_position : str, default="open"
         ``"open"`` or ``"closed"``.
     fail : str, default=""
         Position on loss of actuating energy; see :attr:`fail`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Raises
     ------
@@ -1290,25 +1266,12 @@ class Valve(_NormallyPositioned):
         variant: str = "default",
         *,
         actuator: str = "",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
         normal_position: str = "open",
         fail: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         variant = self._resolve(name, variant, actuator)
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-            normal_position=normal_position,
-        )
+        super().__init__(name, variant=variant, normal_position=normal_position, **options)
         # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -1710,7 +1673,6 @@ class _MultiPortVessel(_FaceFamilies):
         Port families in declaration order.
     """
 
-
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
 
@@ -1788,36 +1750,16 @@ class _MultiPortVessel(_FaceFamilies):
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, list(options))
-        self._check_face_room(port_name, face)
-
-    def _check_face_room(self, port_name: str, face: str) -> None:
-        """Refuse a second port on a zero-length face.
-
-        Parameters
-        ----------
-        port_name : str
-            Family port name.
-        face : str
-            Compass face.
-
-        Raises
-        ------
-        ValueError
-            If another family port is already on a zero-length face.
-        """
-        from pandid.render.symbols import bandless_face
-
-        sym = self._registry_symbol()
-        if sym is None:
-            return
+        # Refuse a second port on a zero-length face.
         band = sym.bands.get(face)
         if band is None or band[0] < band[1]:
             return
         others = [name for name, on in self._faces.items()
                   if on == face and name != port_name]
-        if not others:
-            return
-        raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
+        if others:
+            from pandid.render.symbols import bandless_face
+
+            raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
 
     def default_input_face(self) -> str:
         """Return the face an inlet uses when none is named.
@@ -1992,8 +1934,9 @@ class Vessel(_MultiPortVessel):
         ``"leg"`` (26.1), ``"bracket"`` (26.2) or ``"ring"`` (26.4).
         Set at construction only; assigning it later raises
         ``AttributeError``.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Raises
     ------
@@ -2001,6 +1944,16 @@ class Vessel(_MultiPortVessel):
         If a count or face is invalid, a face is absent or full on the
         artwork, the support is unknown, or the variant cannot carry it.
     """
+
+    # Numbered nozzles a count can build.
+    in_1: Port
+    in_2: Port
+    in_3: Port
+    in_4: Port
+    in_5: Port
+    in_6: Port
+    in_7: Port
+    in_8: Port
 
     inlets: tuple[Port, ...]
     outlets: tuple[Port, ...]
@@ -2010,82 +1963,6 @@ class Vessel(_MultiPortVessel):
     vent: Port
     relief: Port
     drain: Port
-
-    # A literal inputs= count or tuple of faces returns a typed view
-    # (Vessel1 to Vessel8) declaring in_1 to in_n.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[1] = 1, *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel1": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel1": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[2], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel2": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel2": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[3], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel3": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel3": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[4], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel4": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel4": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[5], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[6], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[7], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[8], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel8": ...
-
-        @overload
-        def __new__(
-            cls, name: str, inputs: tuple[str, str, str, str, str, str, str, str], *args: Any,
-            outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any
-        ) -> "Vessel8": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Vessel": ...
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Vessel": ...
 
     kind = "vessel"
     PORTS = [
@@ -2104,97 +1981,14 @@ class Vessel(_MultiPortVessel):
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
         supports: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._init_connections(inputs, outputs)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
 
         _compose_onto(self, ("supports", supports, lambda name, _body: support_overlays(name)))
-
-
-if TYPE_CHECKING:
-
-    class Vessel1(Vessel):
-        """Typed view declaring ``in_1``."""
-
-        in_1: Port
-
-    class Vessel2(Vessel):
-        """Typed view declaring ``in_1`` to ``in_2``."""
-
-        in_1: Port
-        in_2: Port
-
-    class Vessel3(Vessel):
-        """Typed view declaring ``in_1`` to ``in_3``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-
-    class Vessel4(Vessel):
-        """Typed view declaring ``in_1`` to ``in_4``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-
-    class Vessel5(Vessel):
-        """Typed view declaring ``in_1`` to ``in_5``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-
-    class Vessel6(Vessel):
-        """Typed view declaring ``in_1`` to ``in_6``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-
-    class Vessel7(Vessel):
-        """Typed view declaring ``in_1`` to ``in_7``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-
-    class Vessel8(Vessel):
-        """Typed view declaring ``in_1`` to ``in_8``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-        in_8: Port
 
 
 class Tank(_MultiPortVessel):
@@ -2218,8 +2012,9 @@ class Tank(_MultiPortVessel):
         Number of inlets or outlets, or one face per port.
     variant : str, default="default"
         Tank drawing.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Raises
     ------
@@ -2228,6 +2023,16 @@ class Tank(_MultiPortVessel):
         the variant's artwork.
     """
 
+    # Numbered nozzles a count can build.
+    in_1: Port
+    in_2: Port
+    in_3: Port
+    in_4: Port
+    in_5: Port
+    in_6: Port
+    in_7: Port
+    in_8: Port
+
     inlets: tuple[Port, ...]
     outlets: tuple[Port, ...]
     inlet: Port
@@ -2235,81 +2040,6 @@ class Tank(_MultiPortVessel):
     vent: Port
     relief: Port
     drain: Port
-
-    # Typed overloads, as on Vessel.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[1] = 1, *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank1": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank1": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[2], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank2": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank2": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[3], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank3": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank3": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[4], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank4": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank4": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[5], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[6], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[7], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str, str], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[8], *args: Any,
-                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank8": ...
-
-        @overload
-        def __new__(
-            cls, name: str, inputs: tuple[str, str, str, str, str, str, str, str], *args: Any,
-            outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any
-        ) -> "Tank8": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
-        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
-                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
 
     kind = "tank"
     PORTS = [
@@ -2324,93 +2054,10 @@ class Tank(_MultiPortVessel):
         inputs: "int | Sequence[str]" = 1,
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._init_connections(inputs, outputs)
-
-
-if TYPE_CHECKING:
-
-    class Tank1(Tank):
-        """Typed view declaring ``in_1``."""
-
-        in_1: Port
-
-    class Tank2(Tank):
-        """Typed view declaring ``in_1`` to ``in_2``."""
-
-        in_1: Port
-        in_2: Port
-
-    class Tank3(Tank):
-        """Typed view declaring ``in_1`` to ``in_3``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-
-    class Tank4(Tank):
-        """Typed view declaring ``in_1`` to ``in_4``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-
-    class Tank5(Tank):
-        """Typed view declaring ``in_1`` to ``in_5``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-
-    class Tank6(Tank):
-        """Typed view declaring ``in_1`` to ``in_6``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-
-    class Tank7(Tank):
-        """Typed view declaring ``in_1`` to ``in_7``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-
-    class Tank8(Tank):
-        """Typed view declaring ``in_1`` to ``in_8``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-        in_8: Port
 
 
 class Blower(_FluidMover):
@@ -2437,10 +2084,11 @@ class Reducer(Unit):
         Tag.
     variant : str, default="default"
         Body style.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
     large_end : {"inlet", "outlet"}, default="inlet"
         Port on the wide face.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -2465,22 +2113,11 @@ class Reducer(Unit):
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         large_end: str = "inlet",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._large_end = "inlet"
         self.large_end = large_end
 
@@ -2537,8 +2174,9 @@ class Tee(Unit):
         ``"outlet"`` takes flow off the run; ``"inlet"`` returns it.
     variant : str, default="default"
         Drawing variant.
-    width, height, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``description`` or ``reference``, as for
+        :class:`Unit`.
 
     Attributes
     ----------
@@ -2549,6 +2187,8 @@ class Tee(Unit):
 
     Raises
     ------
+    TypeError
+        If ``label_pos`` is given.
     ValueError
         If ``branch`` is not in :attr:`BRANCH_DIRECTIONS`.
     """
@@ -2570,11 +2210,10 @@ class Tee(Unit):
         name: str = "",
         branch: str = "outlet",
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
+        if "label_pos" in options:
+            raise TypeError(f"{name or self.DEFAULT_NAME}: a tee has no tag, so it takes no label_pos")
         if branch not in self.BRANCH_DIRECTIONS:
             raise ValueError(
                 f"{name or self.DEFAULT_NAME}: branch= is "
@@ -2582,14 +2221,7 @@ class Tee(Unit):
                 f"the third connection takes flow off the run or returns it; got "
                 f"{branch!r}"
             )
-        super().__init__(
-            name or self.DEFAULT_NAME,
-            variant=variant,
-            width=width,
-            height=height,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name or self.DEFAULT_NAME, variant=variant, **options)
         self._add_port("branch", branch, "process")
 
     @property
@@ -2833,29 +2465,20 @@ class _VariantPorted(Unit):
 
     Parameters
     ----------
-    name, variant, width, height, label_pos, description, reference
+    name, variant
         As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
     """
 
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -3111,10 +2734,10 @@ class Conveyor(Unit):
         Belt roller or screw bore; :meth:`default_diameter` if omitted.
     variant : str, default="default"
         ``"default"`` (belt) or ``"screw"``.
-    width, height : None
-        Refused; use ``length`` and ``diameter``.
-    label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``label_pos``, ``description`` or ``reference``, as for
+        :class:`Unit`. ``width`` and ``height`` are refused; use
+        ``length`` and ``diameter``.
 
     Raises
     ------
@@ -3138,14 +2761,11 @@ class Conveyor(Unit):
         length: float | None = None,
         diameter: float | None = None,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         from pandid.render.symbols import CONVEYOR_LENGTH
 
+        width, height = options.get("width"), options.get("height")
         if width is not None or height is not None:
             # Suggest the keyword the given number belongs on.
             given = width if width is not None else height
@@ -3158,9 +2778,7 @@ class Conveyor(Unit):
                 f"swaps and which would stretch a belt's rollers out of round "
                 f"and a screw's flight off its pitch. Pass {instead}={given!r}."
             )
-        super().__init__(
-            name, variant=variant, label_pos=label_pos, description=description, reference=reference
-        )
+        super().__init__(name, variant=variant, **options)
         # The length check reads the diameter.
         self.diameter = self.default_diameter() if diameter is None else diameter
         self.length = CONVEYOR_LENGTH if length is None else length
@@ -3311,9 +2929,7 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     if "-" in tag:
         letters, num = tag.split("-", 1)
         return letters, num
-    i = 0
-    while i < len(tag) and not tag[i].isdigit():
-        i += 1
+    i = next((i for i, char in enumerate(tag) if char.isdigit()), len(tag))
     return tag[:i], tag[i:]
 
 
@@ -3370,10 +2986,11 @@ class Instrument(Unit):
     variant : str, default="default"
         Symbol type: ``"default"``, ``"shared"``, ``"computer"``,
         ``"sis"``, ``"logic"`` or ``"interlock"``.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
     display : str, optional
         One of :data:`DISPLAYS`; implied by ``variant`` when omitted.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -3428,27 +3045,16 @@ class Instrument(Unit):
         type: str,
         number: str | int = "",
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         display: str | None = None,
+        **options: Unpack[_UnitOptions],
     ):
         letters, num = split_tag(type, number)
         name = f"{letters}-{num}" if letters and num else letters + num
         # _resolved_variant sets the final display.
         self.display = "field"
         variant = self._resolved_variant(name, variant, display)
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.type = letters
         self.number = num
         self.symbol_type = _BALLOON_SHAPES.get(variant, variant)
@@ -3555,24 +3161,6 @@ class Instrument(Unit):
             )
         return self._add_port(name, self.ports[member.group(1)].direction, "signal")
 
-    def _mint_port(self, name: str) -> Port | None:
-        """Return :meth:`signal_port`, or ``None`` if there is none.
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-
-        Returns
-        -------
-        Port or None
-            Existing or new port, or ``None``.
-        """
-        try:
-            return self.signal_port(name)
-        except KeyError:
-            return None
-
     def _pool_of(self, port_name: str) -> str | None:
         """Return the port's signal pool, or ``None`` outside the pools.
 
@@ -3669,9 +3257,18 @@ class Instrument(Unit):
         for name, codes in (("a", safety), ("b", variable), ("c", high), ("d", low)):
             if codes is None:
                 continue
-            written = _quadrant_codes(self.name, name, codes)
+            if isinstance(codes, str):
+                codes = (codes,) if codes else ()
+            written = [str(code).strip() for code in codes]
+            if not all(written):
+                raise ValueError(
+                    f"{self.name}: quadrant {name!r} was given an empty letter code. A "
+                    f"quadrant holds the codes written outside the symbol, e.g. "
+                    f"high='LAH'; leave the argument out to write nothing there"
+                )
             if written:
-                self.quadrants[name] = written
+                self.quadrants[name] = tuple(sorted(written, key=lambda code: next(
+                    (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
             else:
                 self.quadrants.pop(name, None)
         return self
@@ -3837,42 +3434,6 @@ class Instrument(Unit):
         self._invalidate_layout()
 
 
-def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
-    """Return one quadrant's letter codes in ISO 15519-2 5.2.5 order.
-
-    Parameters
-    ----------
-    where : str
-        Tag, for messages.
-    quadrant : str
-        Quadrant letter, ``"a"`` to ``"d"``.
-    codes : str or Sequence[str]
-        Letter codes; an empty string writes none.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Stripped codes, sorted A, S then Z.
-
-    Raises
-    ------
-    ValueError
-        If a code is empty.
-    """
-    if isinstance(codes, str):
-        codes = (codes,) if codes else ()
-    out = [str(code).strip() for code in codes]
-    for code in out:
-        if not code:
-            raise ValueError(
-                f"{where}: quadrant {quadrant!r} was given an empty letter code. A "
-                f"quadrant holds the codes written outside the symbol, e.g. "
-                f"high='LAH'; leave the argument out to write nothing there"
-            )
-    return tuple(sorted(out, key=lambda code: next(
-        (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
-
-
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
     """Return an inlet and an outlet port spec for each named side.
 
@@ -3990,8 +3551,9 @@ class Evaporator(Unit):
     supports : str, optional
         ``"leg"``, ``"bracket"``, ``"skirt"`` or ``"ring"``; fixed at
         construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4026,21 +3588,9 @@ class Evaporator(Unit):
         name: str,
         variant: str = "default",
         supports: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         from pandid.render.iso_parts import support_overlays
 
         self.supports = supports
@@ -4066,8 +3616,9 @@ class Thickener(Unit):
     rake : str or None, default=DEFAULT_RAKE
         Stirrer on the shaft, one of :class:`Reactor`'s ``agitator``
         names, or ``None``. Fixed at construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4098,21 +3649,9 @@ class Thickener(Unit):
         name: str,
         variant: str = "default",
         rake: str | None = DEFAULT_RAKE,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         from pandid.render.iso_parts import rake_overlays
 
         self.rake = rake
@@ -4142,33 +3681,6 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     if n_feeds < 1:
         raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
     return [f"feed_{i}" for i in range(1, n_feeds + 1)]
-
-
-def _draw_names(n_draws: int, owner: str) -> list[str]:
-    """Return side-draw names: ``draw``, or ``draw_1`` to ``draw_n``.
-
-    Parameters
-    ----------
-    n_draws : int
-        Number of side draws.
-    owner : str
-        Class name, for messages.
-
-    Returns
-    -------
-    list[str]
-        Draw port names; empty for none.
-
-    Raises
-    ------
-    ValueError
-        If ``n_draws`` is negative.
-    """
-    if n_draws < 0:
-        raise ValueError(f"{owner} cannot take a negative number of draws, got {n_draws}")
-    if n_draws == 0:
-        return []
-    return ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
 
 
 def _stage_fractions(
@@ -4271,8 +3783,9 @@ class Reactor(Unit):
         ``"valve_tray"``, ``"sieve_tray"``, ``"filter_insert"``,
         ``"fluidised_bed"``, ``"packing"`` or ``None``. Fixed at
         construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4288,6 +3801,16 @@ class Reactor(Unit):
         cannot carry a part, such as ``agitator`` on ``"tubular"``.
     """
 
+    # Numbered nozzles a count can build.
+    feed_1: Port
+    feed_2: Port
+    feed_3: Port
+    feed_4: Port
+    feed_5: Port
+    feed_6: Port
+    feed_7: Port
+    feed_8: Port
+
     outlet: Port
     vent: Port
     duty: Port
@@ -4297,53 +3820,6 @@ class Reactor(Unit):
     feeds: tuple[Port, ...]
     # Alias for feed_1 when there is one feed.
     feed: Port
-
-    # A literal n_feeds returns a typed view, Reactor1 to Reactor8.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Reactor1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Reactor2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Reactor3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Reactor4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Reactor5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Reactor6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Reactor7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Reactor8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Reactor": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Reactor": ...
 
     kind = "reactor"
     # __init__ adds the variant's ports.
@@ -4402,22 +3878,10 @@ class Reactor(Unit):
         variant: str = "default",
         agitator: str | None = _UNSTATED,
         internals: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         names = _feed_names(n_feeds, "Reactor")
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         if agitator is _UNSTATED:
             agitator = self.composition_defaults(self.variant, {"internals": internals})["agitator"]
         self.agitator = agitator
@@ -4439,78 +3903,6 @@ class Reactor(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
             self.feed = self.feeds[0]
-
-
-if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Reactor1(Reactor):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Reactor2(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Reactor3(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Reactor4(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Reactor5(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Reactor6(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Reactor7(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Reactor8(Reactor):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 class Separator(Unit):
@@ -4535,8 +3927,9 @@ class Separator(Unit):
     characteristic : str, optional
         Group-29 mark: ``"gravity"``, ``"electrostatic"`` or
         ``"electromagnetic"``. Replaces ``variant``.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4553,6 +3946,16 @@ class Separator(Unit):
         less than 1, or the variant takes one feed only.
     """
 
+    # Numbered nozzles a count can build.
+    feed_1: Port
+    feed_2: Port
+    feed_3: Port
+    feed_4: Port
+    feed_5: Port
+    feed_6: Port
+    feed_7: Port
+    feed_8: Port
+
     # Only the phase draws; other draws are ``sep.port("overflow")``.
     vapor: Port
     liquid: Port
@@ -4560,53 +3963,6 @@ class Separator(Unit):
     feeds: tuple[Port, ...]
     # Alias for feed_1 when there is one feed.
     feed: Port
-
-    # Typed overloads for a literal n_feeds, as on Reactor.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Separator1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Separator2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Separator3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Separator4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Separator5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Separator6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Separator7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Separator8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Separator": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Separator": ...
 
     kind = "separator"
     # __init__ adds the feeds, then the variant's ports.
@@ -4673,11 +4029,7 @@ class Separator(Unit):
         n_feeds: int = 1,
         variant: str = "default",
         characteristic: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         names = _feed_names(n_feeds, "Separator")
         if variant in self._CHARACTERISTICS:
@@ -4703,15 +4055,7 @@ class Separator(Unit):
                     f"so each is a variant= of its own"
                 )
             variant = characteristic
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.characteristic = self.variant if self.variant in self._CHARACTERISTICS else None
         # Check the variant after VARIANT_ALIASES.
         instead = self._ONE_FEED_VARIANTS.get(self.variant)
@@ -4729,78 +4073,6 @@ class Separator(Unit):
             self.feed = self.feeds[0]
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
-
-
-if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Separator1(Separator):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Separator2(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Separator3(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Separator4(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Separator5(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Separator6(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Separator7(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Separator8(Separator):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 #: Default drawn tray count (ISO 10628-2 2.6).
@@ -4842,8 +4114,9 @@ class Column(Unit):
     draw_stages : list[int or None], optional
         Stage per draw; ``None`` keeps the even spread. Fixed at
         construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4864,114 +4137,34 @@ class Column(Unit):
         outside the column, or a stage is given with no internals.
     """
 
+    # Numbered nozzles a count can build.
+    feed_1: Port
+    feed_2: Port
+    feed_3: Port
+    feed_4: Port
+    feed_5: Port
+    feed_6: Port
+    feed_7: Port
+    feed_8: Port
+    draw_1: Port
+    draw_2: Port
+    draw_3: Port
+    draw_4: Port
+    draw_5: Port
+    draw_6: Port
+    draw_7: Port
+    draw_8: Port
+
     overhead: Port
     bottoms: Port
     # feed_1 to feed_n, in declaration order.
     feeds: tuple[Port, ...]
     # Alias for feed_1 when there is one feed.
     feed: Port
-    # Side draws in declaration order; ColumnDraw1 declares ``draw``.
+    # Side draws in declaration order.
     draws: tuple[Port, ...]
-
-    # A literal n_feeds with n_draws=0 returns Column1 to Column8;
-    # n_feeds=1 with a literal n_draws returns ColumnDraw1 to
-    # ColumnDraw8. Other counts return Column.
-    if TYPE_CHECKING:
-        # Family A: any n_feeds, n_draws=0.
-        @overload
-        def __new__(
-            cls,
-            name: str,
-            n_feeds: Literal[1] = 1,
-            *args: Any,
-            n_draws: Literal[0] = 0,
-            **kwargs: Any,
-        ) -> "Column1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
-        ) -> "Column8": ...
-
-        # Family B: n_feeds=1 and a required n_draws.
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[1], **kwargs: Any
-        ) -> "ColumnDraw1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[2], **kwargs: Any
-        ) -> "ColumnDraw2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[3], **kwargs: Any
-        ) -> "ColumnDraw3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[4], **kwargs: Any
-        ) -> "ColumnDraw4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[5], **kwargs: Any
-        ) -> "ColumnDraw5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[6], **kwargs: Any
-        ) -> "ColumnDraw6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[7], **kwargs: Any
-        ) -> "ColumnDraw7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[8], **kwargs: Any
-        ) -> "ColumnDraw8": ...
-
-        # Both counts above one, or computed counts.
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: int = 1, *args: Any, n_draws: int = 0, **kwargs: Any
-        ) -> "Column": ...
-        def __new__(
-            cls, name: str, n_feeds: int = 1, *args: Any, n_draws: int = 0, **kwargs: Any
-        ) -> "Column": ...
+    # The side draw when there is one.
+    draw: Port
 
     kind = "column"
     PORTS = [
@@ -4996,23 +4189,13 @@ class Column(Unit):
         feed_stages: list[int | None] | None = None,
         n_draws: int = 0,
         draw_stages: list[int | None] | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         names = _feed_names(n_feeds, "Column")
-        draw_names = _draw_names(n_draws, "Column")
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        if n_draws < 0:
+            raise ValueError(f"Column cannot take a negative number of draws, got {n_draws}")
+        draw_names = ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
+        super().__init__(name, variant=variant, **options)
         if internals is _UNSTATED:
             internals = self.composition_defaults(self.variant)["internals"]
         self.internals = internals
@@ -5051,148 +4234,6 @@ class Column(Unit):
         return self._stage_fractions.get(port_name)
 
 
-if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Column1(Column):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Column2(Column):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Column3(Column):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Column4(Column):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Column5(Column):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Column6(Column):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Column7(Column):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Column8(Column):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
-    # Typed views for Family B.
-
-    class ColumnDraw1(Column):
-        """Typed view declaring ``draw``."""
-
-        draw: Port
-
-    class ColumnDraw2(Column):
-        """Typed view declaring ``draw_1`` to ``draw_2``."""
-
-        draw_1: Port
-        draw_2: Port
-
-    class ColumnDraw3(Column):
-        """Typed view declaring ``draw_1`` to ``draw_3``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-
-    class ColumnDraw4(Column):
-        """Typed view declaring ``draw_1`` to ``draw_4``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-
-    class ColumnDraw5(Column):
-        """Typed view declaring ``draw_1`` to ``draw_5``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-
-    class ColumnDraw6(Column):
-        """Typed view declaring ``draw_1`` to ``draw_6``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-        draw_6: Port
-
-    class ColumnDraw7(Column):
-        """Typed view declaring ``draw_1`` to ``draw_7``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-        draw_6: Port
-        draw_7: Port
-
-    class ColumnDraw8(Column):
-        """Typed view declaring ``draw_1`` to ``draw_8``."""
-
-        draw_1: Port
-        draw_2: Port
-        draw_3: Port
-        draw_4: Port
-        draw_5: Port
-        draw_6: Port
-        draw_7: Port
-        draw_8: Port
-
-
 class DistillationColumn(Column):
     """Distillation column with reflux and reboiler ports.
 
@@ -5202,8 +4243,7 @@ class DistillationColumn(Column):
     """
 
     PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
+        *Column.PORTS,
         ("reflux_in", "inlet", "liquid"),
         ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
@@ -5216,128 +4256,6 @@ class DistillationColumn(Column):
     boilup_in: Port
     reboiler_duty: Port
     condenser_duty: Port
-
-    # Typed overloads for a literal n_feeds, as on Absorber.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "DistillationColumn1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "DistillationColumn8": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: int, *args: Any, **kwargs: Any
-        ) -> "DistillationColumn": ...
-        def __new__(
-            cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any
-        ) -> "DistillationColumn": ...
-
-
-if TYPE_CHECKING:
-
-    class DistillationColumn1(DistillationColumn):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class DistillationColumn2(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class DistillationColumn3(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class DistillationColumn4(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class DistillationColumn5(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class DistillationColumn6(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class DistillationColumn7(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class DistillationColumn8(DistillationColumn):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 class Absorber(Column):
@@ -5354,124 +4272,6 @@ class Absorber(Column):
 
     COMPOSITION = {"internals": "packing", "trays": DEFAULT_TRAYS}
 
-    # A literal n_feeds returns a typed view, Absorber1 to Absorber8.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Absorber1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Absorber2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Absorber3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Absorber4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Absorber5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Absorber6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Absorber7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Absorber8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Absorber": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Absorber": ...
-
-
-if TYPE_CHECKING:
-
-    class Absorber1(Absorber):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Absorber2(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Absorber3(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Absorber4(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Absorber5(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Absorber6(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Absorber7(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Absorber8(Absorber):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
 
 class Stripper(Column):
     """Stripping column: a tower with boil-up and reboiler ports.
@@ -5481,8 +4281,7 @@ class Stripper(Column):
     """
 
     PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
+        *Column.PORTS,
         ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
     ]
@@ -5491,124 +4290,6 @@ class Stripper(Column):
     bottoms: Port
     boilup_in: Port
     reboiler_duty: Port
-
-    # Typed overloads for a literal n_feeds, as on Absorber.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
-        ) -> "Stripper1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
-        ) -> "Stripper2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Stripper3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Stripper4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Stripper5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Stripper6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Stripper7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Stripper8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Stripper": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Stripper": ...
-
-
-if TYPE_CHECKING:
-
-    class Stripper1(Stripper):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Stripper2(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Stripper3(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Stripper4(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Stripper5(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Stripper6(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Stripper7(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Stripper8(Stripper):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 # Variable-port unit types
@@ -5625,8 +4306,11 @@ class Mixer(Unit):
         Tag.
     n_inlets : int, default=2
         Number of inlets.
-    variant, width, height, label_pos, description, reference
+    variant
         As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -5639,56 +4323,19 @@ class Mixer(Unit):
         If ``n_inlets`` is less than 1.
     """
 
+    # Numbered nozzles a count can build.
+    in_1: Port
+    in_2: Port
+    in_3: Port
+    in_4: Port
+    in_5: Port
+    in_6: Port
+    in_7: Port
+    in_8: Port
+
     # in_1 to in_n in order.
     inlets: tuple[Port, ...]
     outlet: Port
-
-    # A literal n_inlets returns a typed view, Mixer1 to Mixer8.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[1], *args: Any, **kwargs: Any
-        ) -> "Mixer1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[2] = 2, *args: Any, **kwargs: Any
-        ) -> "Mixer2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Mixer3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Mixer4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Mixer5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Mixer6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Mixer7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_inlets: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Mixer8": ...
-
-        @overload
-        def __new__(cls, name: str, n_inlets: int, *args: Any, **kwargs: Any) -> "Mixer": ...
-        def __new__(cls, name: str, n_inlets: int = 2, *args: Any, **kwargs: Any) -> "Mixer": ...
 
     kind = "mixer"
     def __init__(  # numpydoc ignore=GL08
@@ -5696,99 +4343,15 @@ class Mixer(Unit):
         name: str,
         n_inlets: int = 2,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         if n_inlets < 1:
             raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.inlets = tuple(
             self._add_port(f"in_{i}", "inlet", "process") for i in range(1, n_inlets + 1)
         )
         self._add_port("outlet", "outlet", "process")
-
-
-if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Mixer1(Mixer):
-        """Typed view declaring ``in_1``."""
-
-        in_1: Port
-
-    class Mixer2(Mixer):
-        """Typed view declaring ``in_1`` to ``in_2``."""
-
-        in_1: Port
-        in_2: Port
-
-    class Mixer3(Mixer):
-        """Typed view declaring ``in_1`` to ``in_3``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-
-    class Mixer4(Mixer):
-        """Typed view declaring ``in_1`` to ``in_4``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-
-    class Mixer5(Mixer):
-        """Typed view declaring ``in_1`` to ``in_5``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-
-    class Mixer6(Mixer):
-        """Typed view declaring ``in_1`` to ``in_6``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-
-    class Mixer7(Mixer):
-        """Typed view declaring ``in_1`` to ``in_7``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-
-    class Mixer8(Mixer):
-        """Typed view declaring ``in_1`` to ``in_8``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-        in_8: Port
 
 
 class Splitter(Unit):
@@ -5802,8 +4365,11 @@ class Splitter(Unit):
         Tag.
     n_outlets : int, default=2
         Number of outlets.
-    variant, width, height, label_pos, description, reference
+    variant
         As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -5816,58 +4382,19 @@ class Splitter(Unit):
         If ``n_outlets`` is less than 1.
     """
 
+    # Numbered nozzles a count can build.
+    out_1: Port
+    out_2: Port
+    out_3: Port
+    out_4: Port
+    out_5: Port
+    out_6: Port
+    out_7: Port
+    out_8: Port
+
     inlet: Port
     # out_1 to out_n in order.
     outlets: tuple[Port, ...]
-
-    # Typed overloads for a literal n_outlets, as on Mixer.
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[1], *args: Any, **kwargs: Any
-        ) -> "Splitter1": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[2] = 2, *args: Any, **kwargs: Any
-        ) -> "Splitter2": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[3], *args: Any, **kwargs: Any
-        ) -> "Splitter3": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[4], *args: Any, **kwargs: Any
-        ) -> "Splitter4": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[5], *args: Any, **kwargs: Any
-        ) -> "Splitter5": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[6], *args: Any, **kwargs: Any
-        ) -> "Splitter6": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[7], *args: Any, **kwargs: Any
-        ) -> "Splitter7": ...
-
-        @overload
-        def __new__(
-            cls, name: str, n_outlets: Literal[8], *args: Any, **kwargs: Any
-        ) -> "Splitter8": ...
-
-        @overload
-        def __new__(cls, name: str, n_outlets: int, *args: Any, **kwargs: Any) -> "Splitter": ...
-        def __new__(
-            cls, name: str, n_outlets: int = 2, *args: Any, **kwargs: Any
-        ) -> "Splitter": ...
 
     kind = "splitter"
 
@@ -5876,99 +4403,15 @@ class Splitter(Unit):
         name: str,
         n_outlets: int = 2,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         if n_outlets < 1:
             raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._add_port("inlet", "inlet", "process")
         self.outlets = tuple(
             self._add_port(f"out_{i}", "outlet", "process") for i in range(1, n_outlets + 1)
         )
-
-
-if TYPE_CHECKING:
-    # Typed views for the overloads above.
-
-    class Splitter1(Splitter):
-        """Typed view declaring ``out_1``."""
-
-        out_1: Port
-
-    class Splitter2(Splitter):
-        """Typed view declaring ``out_1`` to ``out_2``."""
-
-        out_1: Port
-        out_2: Port
-
-    class Splitter3(Splitter):
-        """Typed view declaring ``out_1`` to ``out_3``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-
-    class Splitter4(Splitter):
-        """Typed view declaring ``out_1`` to ``out_4``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-
-    class Splitter5(Splitter):
-        """Typed view declaring ``out_1`` to ``out_5``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-
-    class Splitter6(Splitter):
-        """Typed view declaring ``out_1`` to ``out_6``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-        out_6: Port
-
-    class Splitter7(Splitter):
-        """Typed view declaring ``out_1`` to ``out_7``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-        out_6: Port
-        out_7: Port
-
-    class Splitter8(Splitter):
-        """Typed view declaring ``out_1`` to ``out_8``."""
-
-        out_1: Port
-        out_2: Port
-        out_3: Port
-        out_4: Port
-        out_5: Port
-        out_6: Port
-        out_7: Port
-        out_8: Port
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument: str) -> list[str]:
@@ -6061,8 +4504,11 @@ class Block(_FaceFamilies):
         Section name, written inside the box.
     inputs, outputs : int or Sequence[str], default=1
         Count on the default face, or one face per connection.
-    variant, width, height, label_pos, description, reference
+    variant
         As for :class:`Unit`; there are no variants.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -6094,21 +4540,13 @@ class Block(_FaceFamilies):
     DEFAULT_INPUT_FACE = "W"
     DEFAULT_OUTPUT_FACE = "E"
 
-    # Class defaults, read when Unit.__init__ first sets the size.
-    _width: float | None = None
-    _height: float | None = None
-
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         inputs: "int | Sequence[str]" = 1,
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         in_faces = _block_faces(inputs, self.DEFAULT_INPUT_FACE, name, "inputs")
         out_faces = _block_faces(outputs, self.DEFAULT_OUTPUT_FACE, name, "outputs")
@@ -6118,15 +4556,7 @@ class Block(_FaceFamilies):
                 f"in it, which nothing can be routed to. Give it at least one "
                 f"inputs= or outputs=."
             )
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._faces = {}
         self.inlets = tuple(
             self._add_connection(f"in_{i}", "inlet", face)
@@ -6159,91 +4589,34 @@ class Block(_FaceFamilies):
         self._faces[name] = face
         return port
 
-    @property
-    def width(self) -> float | None:
-        """Return the box width, or ``None`` to fit the connections.
-
-        Returns
-        -------
-        float or None
-            Width in pixels, or ``None``.
-        """
-        return self._width
-
-    @width.setter
-    def width(self, value: float | None) -> None:
-        """Set the box width.
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set an attribute, keeping the old size if the box is too small.
 
         Parameters
         ----------
-        value : float or None
-            Width in pixels, or ``None`` to fit the connections.
+        name : str
+            Attribute name.
+        value : Any
+            New value.
 
         Raises
         ------
         TypeError
-            If ``value`` is neither ``None`` nor a real number.
+            If ``width`` or ``height`` is neither ``None`` nor a real
+            number.
         ValueError
-            If ``value`` is not positive and finite, or the box is too
-            small for its connections.
+            If ``width`` or ``height`` is not positive and finite, or the
+            box is too small for its connections.
         """
-        self._resize("_width", value)
-
-    @property
-    def height(self) -> float | None:
-        """Return the box height, or ``None`` to fit the connections.
-
-        Returns
-        -------
-        float or None
-            Height in pixels, or ``None``.
-        """
-        return self._height
-
-    @height.setter
-    def height(self, value: float | None) -> None:
-        """Set the box height.
-
-        Parameters
-        ----------
-        value : float or None
-            Height in pixels, or ``None`` to fit the connections.
-
-        Raises
-        ------
-        TypeError
-            If ``value`` is neither ``None`` nor a real number.
-        ValueError
-            If ``value`` is not positive and finite, or the box is too
-            small for its connections.
-        """
-        self._resize("_height", value)
-
-    def _resize(self, attr: str, value: float | None) -> None:
-        """Set a box dimension, keeping the old one if refused.
-
-        Parameters
-        ----------
-        attr : str
-            ``"_width"`` or ``"_height"``.
-        value : float or None
-            New size, or ``None`` to fit the connections.
-
-        Raises
-        ------
-        ValueError
-            If the box is too small for its connections.
-        """
-        was = getattr(self, attr)
-        setattr(self, attr, value)
+        was = self.__dict__.get(name)
+        super().__setattr__(name, value)
         # Unit.__init__ sets the size before the connections exist.
-        if "_faces" not in self.__dict__:
-            return
-        try:
-            self._check_box()
-        except ValueError:
-            setattr(self, attr, was)
-            raise
+        if name in ("width", "height") and "_faces" in self.__dict__:
+            try:
+                self._check_box()
+            except ValueError:
+                super().__setattr__(name, was)
+                raise
 
     def pin(
         self,

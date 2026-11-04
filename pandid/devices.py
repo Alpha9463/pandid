@@ -7,8 +7,6 @@ variants by default, so ``Cyclone("S-1")`` draws
 ``Separator("S-1", variant="cyclone")``.
 """
 
-from typing import TYPE_CHECKING, Any, Literal, overload
-
 from pandid.ports import Port
 from pandid.units import (
     Compressor,
@@ -116,7 +114,6 @@ class CentrifugalPump(Pump):
     """
 
     VARIANTS = ("default",)
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -130,7 +127,6 @@ class GearPump(Pump):
 
     VARIANTS = ("default", "gear")
     VARIANT_ALIASES = {"default": "gear"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -144,7 +140,6 @@ class ScrewPump(Pump):
 
     VARIANTS = ("default", "screw")
     VARIANT_ALIASES = {"default": "screw"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -160,7 +155,6 @@ class PeristalticPump(Pump):
 
     VARIANTS = ("default", "peristaltic")
     VARIANT_ALIASES = {"default": "peristaltic"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -177,7 +171,6 @@ class SubmersiblePump(Pump):
 
     VARIANTS = ("default", "submersible")
     VARIANT_ALIASES = {"default": "submersible"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -193,7 +186,6 @@ class VacuumPump(Pump):
 
     VARIANTS = ("default", "vacuum")
     VARIANT_ALIASES = {"default": "vacuum"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -206,7 +198,6 @@ class CentrifugalCompressor(Compressor):
     """
 
     VARIANTS = ("default",)
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -220,7 +211,6 @@ class ReciprocatingCompressor(Compressor):
 
     VARIANTS = ("default", "reciprocating")
     VARIANT_ALIASES = {"default": "reciprocating"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -234,7 +224,6 @@ class RotaryCompressor(Compressor):
 
     VARIANTS = ("default", "rotary")
     VARIANT_ALIASES = {"default": "rotary"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -248,7 +237,6 @@ class LiquidRingCompressor(Compressor):
 
     VARIANTS = ("default", "liquid_ring")
     VARIANT_ALIASES = {"default": "liquid_ring"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -444,13 +432,6 @@ class CalandriaEvaporator(Evaporator):
 
     VARIANTS = ("default", "calandria")
     VARIANT_ALIASES = {"default": "calandria"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -467,13 +448,6 @@ class FallingFilmEvaporator(Evaporator):
 
     VARIANTS = ("default", "falling_film")
     VARIANT_ALIASES = {"default": "falling_film"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -490,13 +464,6 @@ class ClimbingFilmEvaporator(Evaporator):
 
     VARIANTS = ("default", "climbing_film")
     VARIANT_ALIASES = {"default": "climbing_film"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -513,13 +480,6 @@ class PlateEvaporator(Evaporator):
 
     VARIANTS = ("default", "plate")
     VARIANT_ALIASES = {"default": "plate"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -535,13 +495,6 @@ class RotaryKiln(Kiln):
     """
 
     VARIANTS = ("default",)
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("offgas", "outlet", "vapor"),
-        ("fuel", "inlet", "feed"),
-        ("air", "inlet", "utility"),
-    ]
 
     feed: Port
     product: Port
@@ -560,13 +513,6 @@ class FluidizedBedCalciner(Kiln):
 
     VARIANTS = ("default", "fluidized_bed")
     VARIANT_ALIASES = {"default": "fluidized_bed"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("offgas", "outlet", "vapor"),
-        ("fuel", "inlet", "feed"),
-        ("air", "inlet", "utility"),
-    ]
 
     feed: Port
     product: Port
@@ -583,13 +529,6 @@ class ShaftKiln(Kiln):
 
     VARIANTS = ("default", "shaft")
     VARIANT_ALIASES = {"default": "shaft"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("offgas", "outlet", "vapor"),
-        ("fuel", "inlet", "feed"),
-        ("air", "inlet", "utility"),
-    ]
 
     feed: Port
     product: Port
@@ -614,117 +553,6 @@ class Cyclone(Separator):
     overflow: Port
     underflow: Port
 
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "Cyclone1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "Cyclone2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Cyclone3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Cyclone4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Cyclone5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Cyclone6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Cyclone7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Cyclone8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "Cyclone": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "Cyclone": ...
-
-
-if TYPE_CHECKING:
-
-    class Cyclone1(Cyclone):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Cyclone2(Cyclone):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Cyclone3(Cyclone):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Cyclone4(Cyclone):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Cyclone5(Cyclone):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Cyclone6(Cyclone):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Cyclone7(Cyclone):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Cyclone8(Cyclone):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
 
 class GravitySeparator(Separator):
     """Gravity separator: the gas slows and the heavy phase falls.
@@ -738,117 +566,6 @@ class GravitySeparator(Separator):
 
     overflow: Port
     underflow: Port
-
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "GravitySeparator1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "GravitySeparator2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "GravitySeparator3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "GravitySeparator4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "GravitySeparator5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "GravitySeparator6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "GravitySeparator7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "GravitySeparator8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "GravitySeparator": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "GravitySeparator": ...
-
-
-if TYPE_CHECKING:
-
-    class GravitySeparator1(GravitySeparator):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class GravitySeparator2(GravitySeparator):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class GravitySeparator3(GravitySeparator):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class GravitySeparator4(GravitySeparator):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class GravitySeparator5(GravitySeparator):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class GravitySeparator6(GravitySeparator):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class GravitySeparator7(GravitySeparator):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class GravitySeparator8(GravitySeparator):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 class ElectrostaticPrecipitator(Separator):
@@ -864,117 +581,6 @@ class ElectrostaticPrecipitator(Separator):
     overflow: Port
     underflow: Port
 
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator": ...
-
-
-if TYPE_CHECKING:
-
-    class ElectrostaticPrecipitator1(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class ElectrostaticPrecipitator2(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class ElectrostaticPrecipitator3(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class ElectrostaticPrecipitator4(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class ElectrostaticPrecipitator5(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class ElectrostaticPrecipitator6(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class ElectrostaticPrecipitator7(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class ElectrostaticPrecipitator8(ElectrostaticPrecipitator):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
 
 class Screen(Separator):
     """Screen: a deck sorting by size, oversize over and fines through.
@@ -989,117 +595,6 @@ class Screen(Separator):
     overflow: Port
     underflow: Port
 
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "Screen1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "Screen2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Screen3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Screen4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Screen5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Screen6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Screen7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Screen8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "Screen": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "Screen": ...
-
-
-if TYPE_CHECKING:
-
-    class Screen1(Screen):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Screen2(Screen):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Screen3(Screen):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Screen4(Screen):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Screen5(Screen):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Screen6(Screen):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Screen7(Screen):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Screen8(Screen):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
 
 class ImpactSeparator(Separator):
     """Impact separator: a baffle the stream is thrown against.
@@ -1113,117 +608,6 @@ class ImpactSeparator(Separator):
 
     overflow: Port
     underflow: Port
-
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "ImpactSeparator": ...
-
-
-if TYPE_CHECKING:
-
-    class ImpactSeparator1(ImpactSeparator):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class ImpactSeparator2(ImpactSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class ImpactSeparator3(ImpactSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class ImpactSeparator4(ImpactSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class ImpactSeparator5(ImpactSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class ImpactSeparator6(ImpactSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class ImpactSeparator7(ImpactSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class ImpactSeparator8(ImpactSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 class MagneticSeparator(Separator):
@@ -1242,117 +626,6 @@ class MagneticSeparator(Separator):
     overflow: Port
     underflow: Port
 
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "MagneticSeparator": ...
-
-
-if TYPE_CHECKING:
-
-    class MagneticSeparator1(MagneticSeparator):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class MagneticSeparator2(MagneticSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class MagneticSeparator3(MagneticSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class MagneticSeparator4(MagneticSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class MagneticSeparator5(MagneticSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class MagneticSeparator6(MagneticSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class MagneticSeparator7(MagneticSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class MagneticSeparator8(MagneticSeparator):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
 
 class Scrubber(Separator):
     """Wet scrubber: a wash liquid cleans a gas.
@@ -1366,117 +639,6 @@ class Scrubber(Separator):
 
     vapor: Port
     liquid: Port
-
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "Scrubber1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "Scrubber2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Scrubber3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Scrubber4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Scrubber5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Scrubber6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Scrubber7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Scrubber8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "Scrubber": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "Scrubber": ...
-
-
-if TYPE_CHECKING:
-
-    class Scrubber1(Scrubber):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class Scrubber2(Scrubber):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class Scrubber3(Scrubber):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class Scrubber4(Scrubber):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class Scrubber5(Scrubber):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class Scrubber6(Scrubber):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class Scrubber7(Scrubber):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class Scrubber8(Scrubber):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 class VenturiScrubber(Separator):
@@ -1492,117 +654,6 @@ class VenturiScrubber(Separator):
     vapor: Port
     liquid: Port
 
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "VenturiScrubber": ...
-
-
-if TYPE_CHECKING:
-
-    class VenturiScrubber1(VenturiScrubber):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class VenturiScrubber2(VenturiScrubber):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class VenturiScrubber3(VenturiScrubber):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class VenturiScrubber4(VenturiScrubber):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class VenturiScrubber5(VenturiScrubber):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class VenturiScrubber6(VenturiScrubber):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class VenturiScrubber7(VenturiScrubber):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class VenturiScrubber8(VenturiScrubber):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
 
 class KnockoutDrum(Separator):
     """Knock-out drum: an upright drum with a demister pad.
@@ -1616,117 +667,6 @@ class KnockoutDrum(Separator):
 
     vapor: Port
     liquid: Port
-
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "KnockoutDrum": ...
-
-
-if TYPE_CHECKING:
-
-    class KnockoutDrum1(KnockoutDrum):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class KnockoutDrum2(KnockoutDrum):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class KnockoutDrum3(KnockoutDrum):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class KnockoutDrum4(KnockoutDrum):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class KnockoutDrum5(KnockoutDrum):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class KnockoutDrum6(KnockoutDrum):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class KnockoutDrum7(KnockoutDrum):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class KnockoutDrum8(KnockoutDrum):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
 
 
 class DustCollector(Filter):
@@ -1825,12 +765,6 @@ class RotaryDryer(Dryer):
     """
 
     VARIANTS = ("default",)
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -1846,12 +780,6 @@ class FluidizedBedDryer(Dryer):
 
     VARIANTS = ("default", "fluidized_bed")
     VARIANT_ALIASES = {"default": "fluidized_bed"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -1867,12 +795,6 @@ class SprayDryer(Dryer):
 
     VARIANTS = ("default", "spray")
     VARIANT_ALIASES = {"default": "spray"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -1890,12 +812,6 @@ class ShelfDryer(Dryer):
 
     VARIANTS = ("default", "shelf")
     VARIANT_ALIASES = {"default": "shelf"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -1913,12 +829,6 @@ class TurboDryer(Dryer):
 
     VARIANTS = ("default", "turbo")
     VARIANT_ALIASES = {"default": "turbo"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -1936,12 +846,6 @@ class BeltDryer(Dryer):
 
     VARIANTS = ("default", "belt")
     VARIANT_ALIASES = {"default": "belt"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -1959,7 +863,6 @@ class JawCrusher(Crusher):
 
     VARIANTS = ("default", "jaw")
     VARIANT_ALIASES = {"default": "jaw"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1975,7 +878,6 @@ class ConeCrusher(Crusher):
 
     VARIANTS = ("default", "cone")
     VARIANT_ALIASES = {"default": "cone"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1991,7 +893,6 @@ class HammerCrusher(Crusher):
 
     VARIANTS = ("default", "hammer")
     VARIANT_ALIASES = {"default": "hammer"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2007,7 +908,6 @@ class ImpactCrusher(Crusher):
 
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2023,7 +923,6 @@ class RollerCrusher(Crusher):
 
     VARIANTS = ("default", "roller")
     VARIANT_ALIASES = {"default": "roller"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2039,7 +938,6 @@ class HammerMill(Mill):
 
     VARIANTS = ("default", "hammer")
     VARIANT_ALIASES = {"default": "hammer"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2055,7 +953,6 @@ class ImpactMill(Mill):
 
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2071,7 +968,6 @@ class RollerMill(Mill):
 
     VARIANTS = ("default", "roller")
     VARIANT_ALIASES = {"default": "roller"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2087,7 +983,6 @@ class VibratingMill(Mill):
 
     VARIANTS = ("default", "vibration")
     VARIANT_ALIASES = {"default": "vibration"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2105,7 +1000,6 @@ class ScrewConveyor(Conveyor):
 
     VARIANTS = ("default", "screw")
     VARIANT_ALIASES = {"default": "screw"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2121,7 +1015,6 @@ class RotaryValveFeeder(Feeder):
 
     VARIANTS = ("default", "rotary_valve")
     VARIANT_ALIASES = {"default": "rotary_valve"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2137,7 +1030,6 @@ class RotaryTableFeeder(Feeder):
 
     VARIANTS = ("default", "rotary_table")
     VARIANT_ALIASES = {"default": "rotary_table"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2153,7 +1045,6 @@ class MeteringFeeder(Feeder):
 
     VARIANTS = ("default", "metering")
     VARIANT_ALIASES = {"default": "metering"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -2169,11 +1060,6 @@ class CoarseRakeScreen(ScreeningDevice):
 
     VARIANTS = ("default", "coarse_rake")
     VARIANT_ALIASES = {"default": "coarse_rake"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -2190,11 +1076,6 @@ class FineRakeScreen(ScreeningDevice):
 
     VARIANTS = ("default", "fine_rake")
     VARIANT_ALIASES = {"default": "fine_rake"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -2211,11 +1092,6 @@ class CoarseAndFineScreen(ScreeningDevice):
 
     VARIANTS = ("default", "coarse_and_fine")
     VARIANT_ALIASES = {"default": "coarse_and_fine"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -2232,11 +1108,6 @@ class VibratingScreen(ScreeningDevice):
 
     VARIANTS = ("default", "vibrating")
     VARIANT_ALIASES = {"default": "vibrating"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -2253,11 +1124,6 @@ class RotaryDrumScreen(ScreeningDevice):
 
     VARIANTS = ("default", "rotating_drum")
     VARIANT_ALIASES = {"default": "rotating_drum"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -2274,11 +1140,6 @@ class ReelScreen(ScreeningDevice):
 
     VARIANTS = ("default", "basket_reel")
     VARIANT_ALIASES = {"default": "basket_reel"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -2445,7 +1306,6 @@ class SpectacleBlind(Fitting):
 
     VARIANTS = ("default", "blind")
     VARIANT_ALIASES = {"default": "blind"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port
     outlet: Port
@@ -2461,7 +1321,6 @@ class SteamTrap(Fitting):
 
     VARIANTS = ("default", "steam_trap")
     VARIANT_ALIASES = {"default": "steam_trap"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port
     outlet: Port
@@ -2492,7 +1351,6 @@ class FlowElement(Fitting):
         "averaging_pitot",
     )
     VARIANT_ALIASES = {"default": "venturi"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port
     outlet: Port
@@ -2517,117 +1375,6 @@ class StirredTankReactor(Reactor):
     vent: Port
     duty: Port
 
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor1": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor2": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor3": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor4": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor5": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor6": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor7": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor8": ...
-
-        @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "StirredTankReactor": ...
-
-
-if TYPE_CHECKING:
-
-    class StirredTankReactor1(StirredTankReactor):
-        """Typed view declaring ``feed_1``."""
-
-        feed_1: Port
-
-    class StirredTankReactor2(StirredTankReactor):
-        """Typed view declaring ``feed_1`` to ``feed_2``."""
-
-        feed_1: Port
-        feed_2: Port
-
-    class StirredTankReactor3(StirredTankReactor):
-        """Typed view declaring ``feed_1`` to ``feed_3``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-
-    class StirredTankReactor4(StirredTankReactor):
-        """Typed view declaring ``feed_1`` to ``feed_4``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-
-    class StirredTankReactor5(StirredTankReactor):
-        """Typed view declaring ``feed_1`` to ``feed_5``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-
-    class StirredTankReactor6(StirredTankReactor):
-        """Typed view declaring ``feed_1`` to ``feed_6``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-
-    class StirredTankReactor7(StirredTankReactor):
-        """Typed view declaring ``feed_1`` to ``feed_7``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-
-    class StirredTankReactor8(StirredTankReactor):
-        """Typed view declaring ``feed_1`` to ``feed_8``."""
-
-        feed_1: Port
-        feed_2: Port
-        feed_3: Port
-        feed_4: Port
-        feed_5: Port
-        feed_6: Port
-        feed_7: Port
-        feed_8: Port
-
 
 class GasHolder(Tank):
     """Gas holder: a bell floating in a water seal.
@@ -2641,123 +1388,7 @@ class GasHolder(Tank):
 
     VARIANTS = ("default", "gas_holder")
     VARIANT_ALIASES = {"default": "gas_holder"}
-    PORTS = [
-        ("vent", "outlet", "vapor"),
-        ("relief", "outlet", "process"),
-        ("drain", "outlet", "liquid"),
-    ]
 
     vent: Port
     relief: Port
     drain: Port
-
-    if TYPE_CHECKING:
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "GasHolder1": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[2],
-                    *args: Any, **kwargs: Any) -> "GasHolder2": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[3],
-                    *args: Any, **kwargs: Any) -> "GasHolder3": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[4],
-                    *args: Any, **kwargs: Any) -> "GasHolder4": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[5],
-                    *args: Any, **kwargs: Any) -> "GasHolder5": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[6],
-                    *args: Any, **kwargs: Any) -> "GasHolder6": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[7],
-                    *args: Any, **kwargs: Any) -> "GasHolder7": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: Literal[8],
-                    *args: Any, **kwargs: Any) -> "GasHolder8": ...
-
-        @overload
-        def __new__(cls, name: str, inputs: int,
-                    *args: Any, **kwargs: Any) -> "GasHolder": ...
-        def __new__(cls, name: str, inputs: int = 1,
-                    *args: Any, **kwargs: Any) -> "GasHolder": ...
-
-
-if TYPE_CHECKING:
-
-    class GasHolder1(GasHolder):
-        """Typed view declaring ``in_1``."""
-
-        in_1: Port
-
-    class GasHolder2(GasHolder):
-        """Typed view declaring ``in_1`` to ``in_2``."""
-
-        in_1: Port
-        in_2: Port
-
-    class GasHolder3(GasHolder):
-        """Typed view declaring ``in_1`` to ``in_3``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-
-    class GasHolder4(GasHolder):
-        """Typed view declaring ``in_1`` to ``in_4``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-
-    class GasHolder5(GasHolder):
-        """Typed view declaring ``in_1`` to ``in_5``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-
-    class GasHolder6(GasHolder):
-        """Typed view declaring ``in_1`` to ``in_6``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-
-    class GasHolder7(GasHolder):
-        """Typed view declaring ``in_1`` to ``in_7``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-
-    class GasHolder8(GasHolder):
-        """Typed view declaring ``in_1`` to ``in_8``."""
-
-        in_1: Port
-        in_2: Port
-        in_3: Port
-        in_4: Port
-        in_5: Port
-        in_6: Port
-        in_7: Port
-        in_8: Port

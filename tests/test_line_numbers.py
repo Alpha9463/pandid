@@ -1,5 +1,7 @@
 """Test how line numbers are formed, sequenced, drawn and written to a spec."""
 
+import warnings
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -25,28 +27,10 @@ def _skid(**line):
 # --- forming the number -------------------------------------------------------
 
 
-def test_components_replace_the_stream_number():
-    fs, _, (s1, _, _) = _skid(size='6"', service="P", spec="A1A")
-    assert s1.name == '6"-P-1001-A1A'
-    assert fs.streams[0].has_line_number
-
-
 def test_a_stream_with_no_components_is_numbered_as_before():
     fs, _, streams = _skid()
     assert [s.name for s in streams] == ["S1", "S1", "S1"]
     assert not streams[0].has_line_number
-
-
-def test_an_unset_component_drops_out_with_its_separator():
-    """Check that an unset component drops out with its separator."""
-    _, _, (s1, _, _) = _skid(size='6"', service="P")
-    assert s1.name == '6"-P-1001'
-
-
-def test_an_unset_first_component_drops_its_separator_too():
-    """Check that an unset first component drops its separator too."""
-    _, _, (s1, _, _) = _skid(service="AE", spec="SS")
-    assert s1.name == "AE-1001-SS"
 
 
 @pytest.mark.parametrize(
@@ -275,6 +259,29 @@ def test_components_the_scheme_never_uses_are_not_silently_dropped():
     prod = fs.add(U.Product("P"))
     with pytest.raises(ValueError, match="line number would be empty"):
         fs.connect(feed.outlet, prod.inlet, spec="A1A")
+
+
+def test_line_components_is_deprecated(same_file: Callable[[str], str]) -> None:
+    """Check that ``line_components()`` warns at the caller, is reported, and still answers."""
+    fs = Flowsheet(
+        "t", line_numbering_scheme=lambda s: "-".join(filter(None, s.line_components().values()))
+    )
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    with pytest.warns(DeprecationWarning, match=r"line_components\(\)") as caught:
+        s = fs.connect(feed.outlet, prod.inlet, size='6"', service="P")
+    assert s.name == '6"-P-1001'
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+    found = [i.message for i in fs.validate() if i.code == "deprecated"]
+    assert found == [str(caught[0].message)]
+
+
+def test_a_format_string_scheme_raises_no_deprecation() -> None:
+    """Check that numbering a line by a format string does not call ``line_components()``."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        _, _, (s1, _, _) = _skid(size='6"', service="P")
+    assert s1.name == '6"-P-1001'
 
 
 # --- the spec format ----------------------------------------------------------

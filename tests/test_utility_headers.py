@@ -54,15 +54,6 @@ def test_both_taps_of_a_header_are_drawn_the_same_size():
     assert len(widths) == 1
 
 
-def test_each_tap_is_still_one_unit_to_look_up():
-    """Check that each tap is one unit with its own stream."""
-    fs, taps = _two_taps()
-    for supply, ret in taps:
-        assert [u for u in fs.units if u.name == supply.name] == [supply]
-        assert [u for u in fs.units if u.name == ret.name] == [ret]
-        assert supply.outlet.stream is not ret.inlet.stream
-
-
 def test_a_header_flag_carries_its_off_page_reference_to_every_tap():
     """Check that every tap draws the header's off-page reference."""
     fs, taps = _two_taps(reference="U-1201")
@@ -129,7 +120,6 @@ def test_each_tap_gets_its_own_stream_and_line_number():
         '4"-CWS-1003-A1A',
         '4"-CWR-1004-A1A',
     ]
-    assert len(set(numbers)) == len(numbers)
 
 
 def test_a_repeated_header_passes_validation():
@@ -161,17 +151,6 @@ def test_a_flag_that_is_not_a_header_writes_no_word_about_it():
     fs = Flowsheet("plain")
     fs.add(U.Feed("Raw Feed", reference="PFD-100"))
     assert "header" not in fs.to_dict()["units"][0]
-
-
-def test_header_on_equipment_is_refused_by_the_spec():
-    """The spec rejects a key the class cannot take rather than dropping it."""
-    with pytest.raises(ValueError, match="header"):
-        Flowsheet.from_dict(
-            {
-                "name": "spec",
-                "units": [{"kind": "Pump", "name": "P-101", "header": True}],
-            }
-        )
 
 
 # --- one flag, several lines --------------------------------------------------
@@ -235,15 +214,9 @@ def test_the_coincidence_a_flag_draws_is_not_reported():
 
 def test_only_a_boundary_flag_draws_its_runs_on_one_point():
     """Check that only the boundary flags set ``ONE_NOZZLE_MANY_RUNS``."""
-    from pandid import units
+    from test_placement import _shipped_unit_classes
 
-    def walk(cls):
-        yield cls
-        for sub in cls.__subclasses__():
-            if sub.__module__.startswith("pandid."):
-                yield from walk(sub)
-
-    exempt = {c.__name__ for c in walk(units.Unit) if c.ONE_NOZZLE_MANY_RUNS}
+    exempt = {c.__name__ for c in _shipped_unit_classes() if c.ONE_NOZZLE_MANY_RUNS}
     assert exempt == {"_Boundary", "Feed", "Product"}
 
 

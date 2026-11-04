@@ -93,23 +93,15 @@ def cv303():
     return station()
 
 
-# ---------------------------------------------------------------------------
 # The model
-# ---------------------------------------------------------------------------
 
 
-def test_the_branch_takes_flow_off_the_run_by_default():
-    tee = units.Tee()
-    assert tee.branch.direction == "outlet"
+# By default the branch takes flow off the run; a returning tee takes it back on.
+@pytest.mark.parametrize(("kwargs", "branch"), [({}, "outlet"), ({"branch": "inlet"}, "inlet")])
+def test_the_branch_goes_the_way_it_is_asked_and_the_run_stays_the_run(kwargs, branch):
+    tee = units.Tee(**kwargs)
+    assert tee.branch.direction == branch
     assert tee.branch.role == "process"
-    assert tee.inlet.direction == "inlet"
-    assert tee.outlet.direction == "outlet"
-
-
-def test_a_returning_tee_takes_flow_back_onto_the_run():
-    tee = units.Tee(branch="inlet")
-    assert tee.branch.direction == "inlet"
-    # The run is the run whichever way the third connection goes.
     assert tee.inlet.direction == "inlet"
     assert tee.outlet.direction == "outlet"
 
@@ -121,6 +113,12 @@ def test_a_branch_that_is_neither_is_refused():
 
 def test_a_tee_carries_no_tag():
     assert units.Tee("T-1").tag == ""
+
+
+def test_a_tee_refuses_a_label_position():
+    """Check that a tee, which has no tag, refuses ``label_pos=``."""
+    with pytest.raises(TypeError, match="label_pos"):
+        units.Tee("T-1", label_pos="top")
 
 
 def test_tees_share_one_name_and_are_told_apart_by_the_flowsheet():
@@ -139,9 +137,7 @@ def test_a_tee_may_not_take_a_name_that_already_means_something_else():
         fs.add(units.Tee("P-101"))
 
 
-# ---------------------------------------------------------------------------
 # The drawing
-# ---------------------------------------------------------------------------
 
 
 def test_the_run_does_not_kink_through_a_junction(cv303):
@@ -278,9 +274,7 @@ def test_the_bypass_and_the_drains_are_drawn(cv303):
         assert point[1] != RUN_Y
 
 
-# ---------------------------------------------------------------------------
 # The equipment list
-# ---------------------------------------------------------------------------
 
 
 def test_a_tee_is_not_equipment(cv303):
@@ -293,9 +287,7 @@ def test_a_tee_still_has_a_name_for_an_explicit_schedule(cv303):
     assert rows == [("TEE", "Pipe Tee"), ("TEE (2)", "Pipe Tee")]
 
 
-# ---------------------------------------------------------------------------
 # Numbering
-# ---------------------------------------------------------------------------
 
 
 def test_the_run_keeps_one_number_through_its_tees_and_each_branch_takes_its_own(
@@ -327,9 +319,7 @@ def test_a_new_line_number_tee_breaks_the_run_number():
     assert upstream.name != downstream.name
 
 
-# ---------------------------------------------------------------------------
 # The spec
-# ---------------------------------------------------------------------------
 
 
 def test_a_station_round_trips_through_the_spec(cv303):
@@ -349,9 +339,7 @@ def test_the_spec_writes_the_branch_direction_only_when_it_is_a_return(cv303):
     assert [t.get("branch") for t in tees] == [None, None, None, "inlet"]
 
 
-# ---------------------------------------------------------------------------
 # branch_direction is the port's own
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("branch", ["outlet", "inlet"])
@@ -388,15 +376,6 @@ def test_a_tee_comes_back_from_the_spec_branching_the_way_it_went_in(branch):
     assert rebuilt.ports["branch"].direction == branch
 
 
-def test_only_a_tee_takes_a_branch_direction():
-    from pandid.spec import SpecError
-
-    with pytest.raises(SpecError, match="only a Tee takes 'branch'"):
-        Flowsheet.from_dict(
-            {"name": "s", "units": [{"kind": "Valve", "name": "V", "branch": "inlet"}]}
-        )
-
-
 def test_a_spec_can_name_a_tee_by_its_kind():
     fs = Flowsheet.from_dict(
         {"name": "s", "units": [{"kind": "tee", "name": "T-1", "branch": "inlet"}]}
@@ -406,9 +385,7 @@ def test_a_spec_can_name_a_tee_by_its_kind():
     assert tee.branch.direction == "inlet"
 
 
-# ---------------------------------------------------------------------------
 # What the reference measures out at
-# ---------------------------------------------------------------------------
 
 
 def test_the_branch_is_drawn_at_the_weight_of_the_run(cv303):

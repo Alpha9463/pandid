@@ -16,11 +16,7 @@ Three tables hold the mapping:
 
 Run:  python scripts/gen_devices.py
 """
-import ast
-import functools
-import inspect
 import pathlib
-import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -582,91 +578,6 @@ def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
     return [*declared, *variant_ports]
 
 
-# (count keyword, port prefix, default count, highest typed arity).
-_Family = tuple[str, str, int, int]
-
-_ARITY_CLASS_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
-
-
-@functools.lru_cache(maxsize=None)
-def _arity_families() -> dict[str, dict[int, list[str]]]:
-    """Return each base's ``{arity: port names}`` from units.py.
-
-    Returns
-    -------
-    dict[str, dict[int, list[str]]]
-        Base name to its per-arity annotated port names.
-    """
-    tree = ast.parse((HERE.parent / "pandid" / "units.py").read_text(encoding="utf-8"))
-    families: dict[str, dict[int, list[str]]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        m = _ARITY_CLASS_RE.match(node.name)
-        if not m:
-            continue
-        base_name, n = m.group(1), int(m.group(2))
-        members = [
-            stmt.target.id
-            for stmt in node.body
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-        ]
-        families.setdefault(base_name, {})[n] = members
-    return families
-
-
-def arity_family(base: type) -> "_Family | None":
-    """Return ``(keyword, member, default, max_n)`` for a family base.
-
-    Parameters
-    ----------
-    base : type
-        Base unit class.
-
-    Returns
-    -------
-    tuple[str, str, int, int] or None
-        The family, or ``None`` when ``base`` has no per-arity classes.
-
-    Raises
-    ------
-    SystemExit
-        If the family cannot be derived from the base.
-    """
-    arities = _arity_families().get(base.__name__)
-    if not arities:
-        return None
-    max_n = max(arities)
-    sample = next((members for n, members in arities.items() if n >= 2 and members), None)
-    if sample is None:
-        raise SystemExit(
-            f"{base.__name__} declares arity classes 1..{max_n} but none past "
-            f"1 has a numbered nozzle; cannot tell what a device subclass's "
-            f"own arity classes should be named"
-        )
-    prefixes = {name.rsplit("_", 1)[0] for name in sample}
-    if len(prefixes) != 1:
-        raise SystemExit(
-            f"{base.__name__}'s numbered nozzles ({sorted(sample)}) do not "
-            f"share one prefix; cannot derive the member name"
-        )
-    member = next(iter(prefixes))
-    # The class signature omits self.
-    params = list(inspect.signature(base).parameters.values())
-    if not params or params[0].name != "name":
-        raise SystemExit(f"{base.__name__}.__init__ does not take name first")
-    if len(params) < 2:
-        raise SystemExit(f"{base.__name__}.__init__ takes no count argument after name")
-    keyword = params[1].name
-    default = params[1].default
-    if not isinstance(default, int) or isinstance(default, bool):
-        raise SystemExit(
-            f"{base.__name__}.__init__'s {keyword}= has no integer default; "
-            f"cannot derive a fallback overload for it"
-        )
-    return keyword, member, default, max_n
-
-
 def claims() -> dict[tuple[str, str], str]:
     """Return each registered ``(kind, variant)`` and its claimant.
 
@@ -750,7 +661,7 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     Returns
     -------
     dict
-        Name, base, doc, variants, aliases, ports and family.
+        Name, base, doc, variants, aliases and ports.
 
     Raises
     ------
@@ -775,7 +686,6 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     return {
         "name": class_name, "base": base.__name__, "doc": doc,
         "variants": variants, "aliases": aliases, "ports": ports,
-        "family": arity_family(base),
     }
 
 
@@ -787,7 +697,7 @@ Each class subclasses a :mod:`pandid.units` base and draws one of its
 variants by default, so ``Cyclone("S-1")`` draws
 ``Separator("S-1", variant="cyclone")``.
 """
-{typing_import}
+
 from pandid.ports import Port
 from pandid.units import (
 {imports})
@@ -795,9 +705,6 @@ from pandid.units import (
 __all__ = [
 {exports}]
 '''
-
-#: Typing import added to :data:`HEADER` when a class has overloads.
-_TYPING_IMPORT = "\nfrom typing import TYPE_CHECKING, Any, Literal, overload\n"
 
 
 def render() -> str:
@@ -826,7 +733,6 @@ def render() -> str:
         )
 
     lines = [HEADER.format(
-        typing_import=_TYPING_IMPORT if any(s["family"] for s in specs) else "",
         imports="".join(f"    {base},\n" for base in sorted({s["base"] for s in specs})),
         exports="".join(f'    "{spec["name"]}",\n' for spec in specs),
     )]
@@ -836,7 +742,7 @@ def render() -> str:
 
 
 def emit(spec: dict) -> str:
-    """Return one generated class, plus its arity classes, as source.
+    """Return one generated class as source.
 
     Parameters
     ----------
@@ -858,77 +764,13 @@ def emit(spec: dict) -> str:
     ]
     if spec["aliases"]:
         body.append(f"    VARIANT_ALIASES = {_dict(spec['aliases'])}")
-    body.append(f"    PORTS = {_ports_source(spec['ports'])}")
+    # Unit._declared_ports reads the nearest PORTS up the class tree.
+    if spec["ports"] != getattr(units, spec["base"])._declared_ports():
+        body.append(f"    PORTS = {_ports_source(spec['ports'])}")
     body.append("")
     body += [f"    {name}: Port" for name, _direction, _role in spec["ports"]]
     body.append("")
-    if spec["family"]:
-        body += _family_overload_lines(spec["name"], spec["family"])
-    out = "\n".join(body)
-    if spec["family"]:
-        # Two blank lines before the top-level block.
-        out += "\n\n\n" + _family_class_block(spec["name"], spec["family"])
-    return out
-
-
-def _family_overload_lines(name: str, family: "_Family") -> list[str]:
-    """Return ``__new__`` overloads giving a literal count its class.
-
-    Parameters
-    ----------
-    name : str
-        Generated class name.
-    family : tuple[str, str, int, int]
-        Output of :func:`arity_family`.
-
-    Returns
-    -------
-    list[str]
-        Source lines, indented for the class body.
-    """
-    keyword, _member, default, max_n = family
-    lines = ["    if TYPE_CHECKING:", ""]
-    for n in range(1, max_n + 1):
-        default_clause = f" = {default}" if n == default else ""
-        lines.append("        @overload")
-        lines.append(
-            f"        def __new__(cls, name: str, {keyword}: Literal[{n}]{default_clause},"
-        )
-        lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}{n}": ...')
-        lines.append("")
-    lines.append("        @overload")
-    lines.append(f"        def __new__(cls, name: str, {keyword}: int,")
-    lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}": ...')
-    lines.append(f"        def __new__(cls, name: str, {keyword}: int = {default},")
-    lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}": ...')
-    return lines
-
-
-def _family_class_block(name: str, family: "_Family") -> str:
-    """Return the ``if TYPE_CHECKING:`` block of per-arity classes.
-
-    Parameters
-    ----------
-    name : str
-        Generated class name.
-    family : tuple[str, str, int, int]
-        Output of :func:`arity_family`.
-
-    Returns
-    -------
-    str
-        Block declaring ``Name1`` to ``Name{max_n}``.
-    """
-    _keyword, member, _default, max_n = family
-    lines = ["if TYPE_CHECKING:", ""]
-    for n in range(1, max_n + 1):
-        lines.append(f"    class {name}{n}({name}):")
-        ports = f"``{member}_1``" if n == 1 else f"``{member}_1`` to ``{member}_{n}``"
-        lines.append(f'        """Typed view declaring {ports}."""')
-        lines.append("")
-        lines += [f"        {member}_{i}: Port" for i in range(1, n + 1)]
-        lines.append("")
-    return "\n".join(lines)
+    return "\n".join(body)
 
 
 def _q(text: str) -> str:

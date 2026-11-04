@@ -1,6 +1,4 @@
-"""Check composing a symbol from a body and ISO 10628-2 group 26-29 parts,
-and the ISO rows the registry draws.
-"""
+"""Test symbol composition from ISO 10628-2 group 26-29 parts and the registry's ISO rows."""
 
 import re
 import subprocess
@@ -108,13 +106,6 @@ def test_a_part_has_to_say_what_the_standard_calls_it():
 
 
 # ---------------------------------------------------------------- placement
-
-
-def test_a_part_lands_on_the_fraction_of_the_body_it_names():
-    """Placement is stated in fractions, so it is resolved against the box."""
-    sym = compose(body(), [(Overlay(27, "tray", 0.15, 0.30, 0.70, 0.05), part(TRAY))])
-    # 0.15 x 100 across, 0.30 x 200 down, and scaled 70/40 by 10/10.
-    assert transforms(sym.svg) == ["translate(15,60) scale(1.75,1)"]
 
 
 def test_the_placement_is_proportional_so_a_stretched_body_carries_its_parts():

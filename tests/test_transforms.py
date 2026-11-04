@@ -265,9 +265,7 @@ def test_a_series_port_survives_a_quarter_turn(gapped_kind):
     assert port_faces(mix, "in_2", Pin(x=0, y=0, orientation=90, mirrored=True)) == ["S"]
 
 
-# ---------------------------------------------------------------------------
 # A symbol's own lettering under a placement transform.
-# ---------------------------------------------------------------------------
 
 
 def _linear(transform: str) -> tuple[float, float, float, float]:
@@ -346,32 +344,8 @@ def test_lettered_symbols_get_one_definition_per_transform():
     assert re.findall(r'<symbol id="(sym_valve_control[^"]*)"', svg) == ["sym_valve_control"]
 
 
-# ---------------------------------------------------------------------------
-# A symbol's own *direction* under a placement transform.
-#
-# The lettering problem one level out, and the same answer. A cooler is the
-# heater's circle and the heater's zigzag with the arrowhead moved to the other
-# end of the diagonal, and nothing else tells the two apart -- so a flipped
-# cooler is not a cooler drawn the other way round, it is the heater. The
-# statement is drawn from the tail of the diagonal to its head, so it is the
-# *heading* that has to survive, and the heading is the linear part of whatever
-# the sheet finally applies to the artwork.
-#
-# Swept over the whole of the placement group and not over the flips alone. The
-# eight placements a unit may take split in two, and the split is what the rule
-# is:
-#
-#   reversed, and so undone   mirrored="x" / "y" / "xy", and orientation=180,
-#                             which is exactly the two mirrors composed
-#   carried, and so left      orientation=90 / 270, whose mirror part is still
-#                             undone on its own
-#
-# The mirror half of that shipped un-handled until example 10 flipped a
-# condenser, and the half-turn half shipped un-handled until this sweep, for the
-# same reason both times: nothing placed a directional symbol that way. Which is
-# why the sweep is over all sixteen combinations rather than over the ones some
-# sheet happens to use.
-# ---------------------------------------------------------------------------
+# A symbol's own direction under every placement transform: a mirror or
+# orientation=180 is undone, orientation=90 or 270 is carried.
 
 #: (0, 80) -> (80, 0) as the cooler stencil draws it: up and to the right on a
 #: y-down canvas. Read as a direction, so the length does not matter.

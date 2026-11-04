@@ -588,10 +588,7 @@ def test_the_shape_is_ruled_round_the_box_reserved_and_fills_none_of_it(shape):
     assert placed
 
     fillable = fillable_enclosures(fs, shape, placed, "vertical")
-    assert all(fillable), (
-        f"{shape}: this fixture is uncrowded, so every shape on it should be "
-        f"clear enough to fill; got {fillable}"
-    )
+    assert all(fillable), f"{shape}: {fillable}"
     for number, fill in zip(placed, fillable):
         assert ruled.count(drawn(shape, number.box, fill=fill)) == 1, (
             f"{shape}: {number.name} is not drawn to fill the box reserved for it"
@@ -746,10 +743,7 @@ def test_an_enclosed_label_is_written_on_its_run_and_never_beside_it(shape, stem
     assert placed
     for number in placed:
         on, span, reach = _on_its_run(number)
-        assert on, (
-            f"{stem}: {number.name}'s {shape} left its run, which is {span:.1f} "
-            f"units long against a {reach:.1f}-unit shape"
-        )
+        assert on, f"{stem}: {number.name}'s {shape} left its {span:.1f}-unit run"
         assert number.leader is None, f"{stem}: {number.name} carries a leader"
 
 
@@ -859,9 +853,7 @@ def test_no_label_paints_out_a_line_that_is_not_its_own(shape, stem, settled_gal
                 continue
             for segment in segments:
                 assert not stroke_meets(plate_box, segment, width), (
-                    f"{stem}: {number.name}'s plate at {shape!r} is laid over "
-                    f"{stream.name}'s drawn run near "
-                    f"{tuple(round(v, 2) for v in segment[0])}, which it deletes"
+                    f"{stem}: {number.name}'s {shape!r} plate covers {stream.name}"
                 )
 
 
@@ -923,8 +915,7 @@ def test_the_hop_the_sheet_draws_is_the_hop_the_search_is_told_about():
     ]
     assert route, "the hopping run has to have a route, or this proves nothing"
     assert not any(b[0] <= tip[0] <= b[2] and b[1] <= tip[1] <= b[3] for b in route), (
-        "the arc's far point is already inside the hopping run's own straight "
-        "ink, so this fixture cannot tell a hop-aware model from a blind one"
+        "the arc's far point is inside the hopping run's straight ink"
     )
 
 
@@ -1246,10 +1237,7 @@ def test_the_author_is_told_which_line_a_diamond_was_drawn_over(settled_gallery)
         )
     )
     for name in named:
-        assert fills[name] is False, (
-            f"{name}'s diamond is reported as drawn over another line and is "
-            f"filled white, so it is deleting that line rather than crowding it"
-        )
+        assert fills[name] is False, f"{name}'s diamond is drawn over a line and filled"
 
 
 def reported_pairs(fs, shape: str) -> set:
@@ -1310,8 +1298,7 @@ def test_every_pair_the_sheet_calls_crossed_really_crosses(shape, settled_galler
             for other in placed[:i]:
                 pair = frozenset((number.name, other.name))
                 assert (pair in named) == crosses(shape, number.box, other.box), (
-                    f"{stem}: {shape}s of {number.name} and {other.name} "
-                    f"{'were' if pair in named else 'were not'} called crossed"
+                    f"{stem}: {shape}s of {number.name} and {other.name}"
                 )
     assert reported, f"{shape}: representative sheets have no reported intersections"
 

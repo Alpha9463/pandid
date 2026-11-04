@@ -170,48 +170,6 @@ def _plant(payload: str, field: str) -> Flowsheet:
     return fs
 
 
-def _svg_document(payload: str, field: str) -> str:
-    """Render a value through the SVG backend.
-
-    Parameters
-    ----------
-    payload : str
-        User-controlled value to render.
-    field : str
-        Name of the model field containing the value.
-
-    Returns
-    -------
-    str
-        Rendered SVG document.
-    """
-    return _plant(payload, field).to_svg(**RENDERED)
-
-
-def _drawio_document(payload: str, field: str) -> str:
-    """Render a value through the Draw.io backend.
-
-    Parameters
-    ----------
-    payload : str
-        User-controlled value to render.
-    field : str
-        Name of the model field containing the value.
-
-    Returns
-    -------
-    str
-        Rendered Draw.io XML document.
-    """
-    return _plant(payload, field).to_drawio(
-        border="zone",
-        diagram="p&id",
-        connections="flanged",
-        show_stream_table=True,
-        check=False,
-    )
-
-
 def _parsed(document: str) -> ET.Element:
     """Parse XML or fail the current test.
 
@@ -272,7 +230,7 @@ def test_a_hostile_value_cannot_break_the_svg_document(field: str) -> None:
     field : str
         SVG renderer context containing the injection probe.
     """
-    svg = _svg_document(RENDER_PROBE, field)
+    svg = _plant(RENDER_PROBE, field).to_svg(**RENDERED)
     root = _parsed(svg)
     _carries_no_injected_markup(root)
     _every_reference_resolves(root)
@@ -287,7 +245,15 @@ def test_a_hostile_value_cannot_break_the_drawio_document(field: str) -> None:
     field : str
         Draw.io renderer context containing the injection probe.
     """
-    root = _parsed(_drawio_document(RENDER_PROBE, field))
+    root = _parsed(
+        _plant(RENDER_PROBE, field).to_drawio(
+            border="zone",
+            diagram="p&id",
+            connections="flanged",
+            show_stream_table=True,
+            check=False,
+        )
+    )
     _carries_no_injected_markup(root)
     _carries_no_html_beyond_br(root)
 
@@ -445,7 +411,7 @@ def test_ident_leaves_a_name_alone():
 
 def test_ident_is_a_function_of_its_input_alone():
     """Verify identifier generation is deterministic."""
-    assert ident("arrow", "rgb(1, 2, 3)") == ident("arrow", "rgb(1, 2, 3)")
+    assert ident("arrow", "rgb(1, 2, 3)") == "arrow_rgb_1_2_3_e278ea93"
 
 
 def test_the_two_spellings_of_a_name_character_agree():
