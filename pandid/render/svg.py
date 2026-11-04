@@ -1172,8 +1172,8 @@ def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
 
 #: Font size of a line number.
 NUMBER_TYPE = 10
-# Halo width per character, added width and depth.
-_HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
+# Halo width added to the words, and depth.
+_HALO_PAD, _HALO_DEEP = 6.0, 13.0
 
 # Gap a box enclosure leaves outside the halo on each side.
 _ENCLOSURE_PAD = 4.0
@@ -1387,7 +1387,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
 
     # Enclosures are one size per sheet, fitted to the longest label.
     shape = enclosure_shape(fs)
-    widest = max((len(name) * _HALO_CHAR + _HALO_PAD
+    widest = max((F.text_width(name, NUMBER_TYPE) + _HALO_PAD
                   for _s, name, _c, _k in label_items), default=0.0)
     uniform = enclosure_box(shape, widest, _HALO_DEEP)
 
@@ -1395,7 +1395,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     for seg, name, color, keep in label_items:
         (sx1, sy1), (sx2, sy2) = seg
         # The words' size, and the reserved size.
-        tw, th = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
+        tw, th = F.text_width(name, NUMBER_TYPE) + _HALO_PAD, _HALO_DEEP
         hw, hh = (tw, th) if shape == "none" else uniform
         cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
         vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
@@ -1413,13 +1413,16 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         window = (cx - rx, cy - ry, cx + rx, cy + ry)
 
         axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
-        # Extent of the whole collinear run, through inline valves.
+        # Centreline extent of the whole collinear run, through inline valves.
         run_lo = min(sy1, sy2) if vertical else min(sx1, sx2)
         run_hi = max(sy1, sy2) if vertical else max(sx1, sx2)
         for line in ink:
-            if line.line == name and line.axis == axis and abs(line.at - at) < 0.5:
-                run_lo = min(run_lo, line.y0 if vertical else line.x0)
-                run_hi = max(run_hi, line.y1 if vertical else line.x1)
+            if (line.kind == "pipe" and line.line == name and line.axis == axis
+                    and abs(line.at - at) < 0.5):
+                # A pipe's box pads its centreline equally on every side.
+                pad = (line.x1 - line.x0) / 2 if vertical else (line.y1 - line.y0) / 2
+                run_lo = min(run_lo, (line.y0 if vertical else line.x0) + pad)
+                run_hi = max(run_hi, (line.y1 if vertical else line.x1) - pad)
 
         near_symbols = [p for p in symbols if boxes_overlap(p, window)]
         occupied = [p for p in placed if boxes_overlap(p, window)]
