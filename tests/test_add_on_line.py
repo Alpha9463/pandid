@@ -96,13 +96,7 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
 
 @pytest.mark.parametrize("pinned_origin", [False, True])
 def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> None:
-    """Place inline valves on the leg that reaches the receiver.
-
-    Parameters
-    ----------
-    pinned_origin : bool
-        Fix the reactor's absolute frame position when true.
-    """
+    """Place inline valves on the leg that reaches the receiver."""
     fs = Flowsheet("South outlet inline train")
     feed = fs.add(Feed("Feed"))
     reactor = fs.add(Reactor("R-101"))

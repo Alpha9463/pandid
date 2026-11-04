@@ -20,15 +20,7 @@ HARD_LABELS = ("validation errors", "fallback routes", *_HARD_CODES, "undrawn st
 
 
 class Budget(NamedTuple):
-    """Upper limits for one scenario's drawing.
-
-    Attributes
-    ----------
-    crossings : int
-        Line crossings in the finished drawing.
-    width, height : float
-        Extent of the unit frames, in pixels.
-    """
+    """Upper limits for one scenario's drawing."""
 
     crossings: int
     width: float
@@ -36,13 +28,7 @@ class Budget(NamedTuple):
 
 
 def _simple_chain() -> tuple[Flowsheet, dict]:
-    """Build a feed, pump, exchanger and product in one line.
-
-    Returns
-    -------
-    tuple[Flowsheet, dict]
-        Unpinned flowsheet and its render options.
-    """
+    """Build a feed, pump, exchanger and product in one line."""
     fs = Flowsheet("Simple chain")
     feed = fs.add(U.Feed("Feed"))
     pump = fs.add(U.Pump("P-101"))
@@ -55,13 +41,7 @@ def _simple_chain() -> tuple[Flowsheet, dict]:
 
 
 def _pixel_anchors() -> tuple[Flowsheet, dict]:
-    """Build a free pump between two flags pinned in pixels.
-
-    Returns
-    -------
-    tuple[Flowsheet, dict]
-        Flowsheet with two absolute pins and its render options.
-    """
+    """Build a free pump between two flags pinned in pixels."""
     fs = Flowsheet("Pixel anchors")
     feed = fs.add(U.Feed("Feed"))
     pump = fs.add(U.Pump("P-101"))
@@ -74,29 +54,12 @@ def _pixel_anchors() -> tuple[Flowsheet, dict]:
 
 
 def _biodiesel(**options) -> Callable[[], tuple[Flowsheet, dict]]:
-    """Return a builder for one variant of the biodiesel sheet.
-
-    Parameters
-    ----------
-    **options
-        Keyword arguments for ``tests._layout_cases.build``.
-
-    Returns
-    -------
-    Callable[[], tuple[Flowsheet, dict]]
-        Builder of a fresh flowsheet and empty render options.
-    """
+    """Return a builder for one variant of the biodiesel sheet."""
     return lambda: (build_biodiesel(**options)[0], {})
 
 
 def _long_chain() -> tuple[Flowsheet, dict]:
-    """Build twelve pump and exchanger pairs in one line, too wide for one band.
-
-    Returns
-    -------
-    tuple[Flowsheet, dict]
-        Unpinned flowsheet and its render options.
-    """
+    """Build twelve pump and exchanger pairs in one line, too wide for one band."""
     fs = Flowsheet("Long chain")
     port = fs.add(U.Feed("Feed")).outlet
     for i in range(101, 113):
@@ -110,18 +73,7 @@ def _long_chain() -> tuple[Flowsheet, dict]:
 
 
 def _stripped(stem: str) -> Callable[[], tuple[Flowsheet, dict]]:
-    """Return a builder for a shipped example with its placement pins removed.
-
-    Parameters
-    ----------
-    stem : str
-        Example filename stem.
-
-    Returns
-    -------
-    Callable[[], tuple[Flowsheet, dict]]
-        Builder of a fresh flowsheet and its render options.
-    """
+    """Return a builder for a shipped example with its placement pins removed."""
     return lambda: build_unpinned(stem)
 
 
@@ -145,18 +97,7 @@ SCENARIOS: dict[str, tuple[Callable[[], tuple[Flowsheet, dict]], Budget]] = {
 
 
 def _extent(fs: Flowsheet) -> tuple[float, float]:
-    """Measure the width and height spanned by every unit frame.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out flowsheet.
-
-    Returns
-    -------
-    tuple[float, float]
-        Width and height in pixels.
-    """
+    """Measure the width and height spanned by every unit frame."""
     frames = [unit.frame for unit in fs.units if unit.frame is not None]
     return (
         max(frame.x_max for frame in frames) - min(frame.x for frame in frames),
@@ -165,18 +106,7 @@ def _extent(fs: Flowsheet) -> tuple[float, float]:
 
 
 def _drawing(fs: Flowsheet) -> tuple[object, ...]:
-    """Snapshot the resolved frames, port faces, routes and convergence.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out and routed flowsheet.
-
-    Returns
-    -------
-    tuple[object, ...]
-        Comparable geometry of the drawing.
-    """
+    """Snapshot the resolved frames, port faces, routes and convergence."""
     units = tuple(
         (
             unit.name,
@@ -211,18 +141,7 @@ def _drawing(fs: Flowsheet) -> tuple[object, ...]:
 
 
 def _unhonoured_pins(fs: Flowsheet) -> list[str]:
-    """List the pixel pins that the drawing does not keep.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out flowsheet.
-
-    Returns
-    -------
-    list[str]
-        One description per pinned axis more than half a pixel off.
-    """
+    """List the pixel pins that the drawing does not keep."""
     missed = []
     for unit in fs.units:
         for axis, (port, value) in pin_intent(unit).items():
@@ -240,13 +159,7 @@ def _unhonoured_pins(fs: Flowsheet) -> list[str]:
 
 @pytest.mark.parametrize("name", list(SCENARIOS))
 def test_scenario_meets_invariants_and_budget(name: str) -> None:
-    """Draw a scenario cleanly, repeatably and within its budget.
-
-    Parameters
-    ----------
-    name : str
-        Scenario key in ``SCENARIOS``.
-    """
+    """Draw a scenario cleanly, repeatably and within its budget."""
     build, budget = SCENARIOS[name]
     fs, options = build()
     fs.route()

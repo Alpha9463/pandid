@@ -76,21 +76,7 @@ def test_a_default_annotation_title_writes_no_key(box):
 
 
 def _sheet(real: Any, whole: Any) -> Flowsheet:
-    """Return a sheet whose numeric fields are all built from two values.
-
-    Parameters
-    ----------
-    real : Any
-        Real number used for sizes, positions and displayed values.
-    whole : Any
-        Integer used for counts, ranks and stages.
-
-    Returns
-    -------
-    Flowsheet
-        Sheet with sizes, a pin, a column, a line number, a property and
-        an annotation.
-    """
+    """Return a sheet whose numeric fields are all built from two values."""
     fs = Flowsheet("numbers")
     feed = fs.add(U.Feed("F"))
     pump = fs.add(U.Pump("P-1", width=real * 70, height=real * 45))
@@ -170,13 +156,7 @@ def test_a_decimal_geometry_value_is_refused_on_reading():
 
 
 def _flagged() -> tuple[Flowsheet, Any, Any]:
-    """Return a two-flag sheet with a tabulated stream.
-
-    Returns
-    -------
-    tuple
-        The sheet, its feed and its stream.
-    """
+    """Return a two-flag sheet with a tabulated stream."""
     fs = Flowsheet("flags")
     feed = fs.add(U.Feed("F"))
     run = fs.connect(feed.outlet, fs.add(U.Product("PR")).inlet)
@@ -296,15 +276,7 @@ def test_a_fractional_grid_rank_is_not_told_to_truncate_it(value: Any):
 
 
 def _numbered_labels() -> Flowsheet:
-    """Return a sheet with numbers in its drawn-text fields.
-
-    Returns
-    -------
-    Flowsheet
-        Sheet whose name, descriptions, references, formula, section
-        heading, table-sheet number and subtitle, and box contents are
-        numbers.
-    """
+    """Return a sheet with numbers in its drawn-text fields."""
     from pandid.components import Component
     from pandid.document import legend, notes
 

@@ -22,13 +22,7 @@ RETIRED = Deprecation(
 
 
 def declarations() -> dict[str, Deprecation]:
-    """Return every module-level :class:`Deprecation` in pandid.
-
-    Returns
-    -------
-    dict[str, Deprecation]
-        Declarations keyed by ``"module.NAME"``, one per attribute.
-    """
+    """Return every module-level :class:`Deprecation` in pandid."""
     found: dict[str, Deprecation] = {}
     for info in pkgutil.walk_packages(pandid.__path__, prefix="pandid."):
         module = importlib.import_module(info.name)

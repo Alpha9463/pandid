@@ -15,33 +15,12 @@ from test_symbol_invariants import _drawing
 
 
 def _found(fs: Flowsheet, code: str, **kw: Any) -> list:
-    """Return the findings of one code.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet to validate.
-    code : str
-        Finding code.
-    **kw : Any
-        Arguments for ``validate()``.
-
-    Returns
-    -------
-    list
-        The findings with that code, in order.
-    """
+    """Return the findings of one code."""
     return [i for i in fs.validate(**kw) if i.code == code]
 
 
 def _overlapping_reactors() -> Flowsheet:
-    """Build two reactors pinned on top of each other.
-
-    Returns
-    -------
-    Flowsheet
-        The sheet, not yet laid out.
-    """
+    """Build two reactors pinned on top of each other."""
     fs = Flowsheet("overlap")
     a = fs.add(U.Reactor("R1")).pin(x=100, y=100)
     b = fs.add(U.Reactor("R2")).pin(x=110, y=110)

@@ -368,18 +368,7 @@ def _codes(fs):
 
 
 def _drum_run(name: str) -> tuple[Flowsheet, U.Vessel]:
-    """Build a feed, a drum ``V-1`` and a product in one line.
-
-    Parameters
-    ----------
-    name : str
-        Sheet name.
-
-    Returns
-    -------
-    tuple[Flowsheet, Vessel]
-        The unlaid sheet and its drum.
-    """
+    """Build a feed, a drum ``V-1`` and a product in one line."""
     fs = Flowsheet(name)
     feed = fs.add(U.Feed("F"))
     vessel = fs.add(U.Vessel("V-1"))

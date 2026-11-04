@@ -10,36 +10,14 @@ from pandid.portgeom import port_point
 
 
 def _drawing(fs: Flowsheet) -> str:
-    """Return a snapshot of every frame and route on a routed sheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Routed sheet.
-
-    Returns
-    -------
-    str
-        Each unit's frame and each stream's waypoints, as text.
-    """
+    """Return a snapshot of every frame and route on a routed sheet."""
     units = [(unit.name, unit.frame) for unit in fs.units]
     routes = [(stream.name, stream.route) for stream in fs.streams]
     return repr((units, routes))
 
 
 def _clean(fs: Flowsheet) -> bool:
-    """Return whether a routed sheet has no hard finding.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Routed sheet.
-
-    Returns
-    -------
-    bool
-        Whether every hard count is zero.
-    """
+    """Return whether a routed sheet has no hard finding."""
     quality = measure_final(fs)
     return quality.hard == (0,) * len(quality.hard) and not quality.hard_conflicts
 
@@ -171,15 +149,7 @@ def test_routing_a_mounted_sheet_again_draws_the_same_sheet() -> None:
 def test_a_control_valve_sits_on_its_pipe_without_a_jog(
     orientation: int | None, mirrored: str | None
 ) -> None:
-    """Check that a turned or mirrored valve keeps both nozzles on the pipe.
-
-    Parameters
-    ----------
-    orientation : int or None
-        Turn the author pinned, if any.
-    mirrored : str or None
-        Mirroring the author pinned, if any.
-    """
+    """Check that a turned or mirrored valve keeps both nozzles on the pipe."""
     fs = Flowsheet("No jog")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -204,16 +174,7 @@ def test_a_control_valve_sits_on_its_pipe_without_a_jog(
     [(False, 100.0), (False, 125.7), (False, 126.3), (False, 127.8), (True, -128.0)],
 )
 def test_a_valve_set_on_a_shifted_line_adds_no_bends(upright: bool, at: float) -> None:
-    """Check that a valve set on a line shifted across the sheet adds no bends.
-
-    Parameters
-    ----------
-    upright : bool
-        Run the line down the sheet between two turned valves, else across it
-        between flags.
-    at : float
-        Coordinate the line runs at.
-    """
+    """Check that a valve set on a line shifted across the sheet adds no bends."""
     fs = Flowsheet("Shifted")
     if upright:
         start = fs.add(Valve("A")).pin(orientation=90).pin(port="outlet", x=at, y=100)
@@ -282,13 +243,7 @@ def test_a_valve_whose_nozzles_sit_apart_keeps_the_frame_that_fits_its_line() ->
 
 @pytest.mark.parametrize("mirrored", [None, True])
 def test_valves_on_an_upright_pipe_turn_and_get_room(mirrored: bool | None) -> None:
-    """Check that valves between stacked units are turned onto the pipe and fit.
-
-    Parameters
-    ----------
-    mirrored : bool or None
-        Mirroring the author pinned, which states no turn.
-    """
+    """Check that valves between stacked units are turned onto the pipe and fit."""
     from pandid import Cyclone, HeatExchanger
     from pandid.layout.mounted import ALONG
 

@@ -94,17 +94,7 @@ def test_a_stream_with_no_components_is_numbered_as_before():
 def test_a_scheme_writes_the_components_it_names(
     sheet: dict[str, Any], components: dict[str, Any], name: str
 ):
-    """Check that the scheme writes the line number from the stream's components.
-
-    Parameters
-    ----------
-    sheet : dict[str, Any]
-        Line-numbering keywords for the flowsheet.
-    components : dict[str, Any]
-        Line-number components given to ``connect``.
-    name : str
-        Expected line number.
-    """
+    """Check that the scheme writes the line number from the stream's components."""
     fs = Flowsheet("t", **sheet)
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))

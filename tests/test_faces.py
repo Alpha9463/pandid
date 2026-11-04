@@ -8,22 +8,7 @@ from pandid.routing import DefaultRouter
 
 
 def _drum_fed_from(x, y, *, fs=None, **drum_pin):
-    """Build a horizontal separator fed by one boundary flag.
-
-    Parameters
-    ----------
-    x, y : float
-        Pinned position of the flag's nozzle.
-    fs : Flowsheet or None, optional
-        Sheet to add the units to; a new one by default.
-    **drum_pin
-        Extra ``pin()`` keywords for the drum.
-
-    Returns
-    -------
-    tuple[Flowsheet, Separator]
-        The sheet and the drum pinned at (200, 200).
-    """
+    """Build a horizontal separator fed by one boundary flag."""
     fs = fs if fs is not None else Flowsheet("faces")
     drum = fs.add(units.Separator("V-1", variant="horizontal"))
     drum.pin(x=200, y=200, **drum_pin)
@@ -46,17 +31,7 @@ def _drum_fed_from(x, y, *, fs=None, **drum_pin):
     ids=["overhead-north-shell", "astern-far-head", "ahead-home-nozzle", "mirrored-drawn-face"],
 )
 def test_the_feed_takes_the_face_toward_its_peer(x, y, pin, face):
-    """Select the feed placement facing the peer, named as drawn.
-
-    Parameters
-    ----------
-    x, y : float
-        Pinned position of the flag's nozzle.
-    pin : dict
-        Extra ``pin()`` keywords for the drum.
-    face : str
-        Face the feed is drawn on.
-    """
+    """Select the feed placement facing the peer, named as drawn."""
     fs, drum = _drum_fed_from(x, y, **pin)
     fs.layout()
     assert port_anchor(drum, drum.frame, "feed")[2] == face
@@ -152,17 +127,7 @@ def test_the_kill_switch_restores_the_symbols_own_nozzles():
 def test_recovered_escape_preserves_selected_and_authored_faces(
     auto_faces: bool, explicit: bool, face: str
 ) -> None:
-    """Keep the resolved nozzle face while recovering an outward escape.
-
-    Parameters
-    ----------
-    auto_faces : bool
-        Whether automatic face selection is enabled.
-    explicit : bool
-        Whether the author fixed the nozzle to the east face.
-    face : str
-        Expected drawn face before and after routing.
-    """
+    """Keep the resolved nozzle face while recovering an outward escape."""
     fs, drum = _drum_fed_from(220, 60, fs=Flowsheet("faces", auto_faces=auto_faces))
     if explicit:
         drum.nozzle("feed", "E")
@@ -181,22 +146,7 @@ def test_recovered_escape_preserves_selected_and_authored_faces(
 
 
 def _reactor_discharging_to(x, y, *, blocker=None, **sheet):
-    """Build a pinned reactor whose outlet feeds one product flag.
-
-    Parameters
-    ----------
-    x, y : float
-        Pinned position of the flag's nozzle.
-    blocker : tuple[float, float] or None, optional
-        Pinned corner of a 40 px vessel placed beside the reactor.
-    **sheet
-        Extra ``Flowsheet`` keywords.
-
-    Returns
-    -------
-    tuple[Flowsheet, Reactor]
-        The sheet and the reactor pinned at (300, 200).
-    """
+    """Build a pinned reactor whose outlet feeds one product flag."""
     fs = Flowsheet("reactor", **sheet)
     reactor = fs.add(units.Reactor("R-1")).pin(x=300, y=200)
     flag = fs.add(units.Product("P")).pin(x=x, y=y)
@@ -213,15 +163,7 @@ def _reactor_discharging_to(x, y, *, blocker=None, **sheet):
     [(600, 150, "E"), (60, 150, "W"), (331, 500, "S"), (600, 450, "S")],
 )
 def test_a_reactor_outlet_takes_a_side_only_when_it_saves_a_bend(x, y, face):
-    """Select a side outlet only when it needs no more bends than the floor.
-
-    Parameters
-    ----------
-    x, y : float
-        Pinned position of the product flag's nozzle.
-    face : str
-        Expected drawn face of the reactor outlet.
-    """
+    """Select a side outlet only when it needs no more bends than the floor."""
     fs, reactor = _reactor_discharging_to(x, y)
     fs.layout()
     assert port_anchor(reactor, reactor.frame, "outlet")[2] == face
@@ -249,17 +191,7 @@ def test_an_explicit_reactor_outlet_face_beats_the_engine():
     [(600, 150, (370, 294), {"S"}), (331, 500, (311, 340), {"E", "W"})],
 )
 def test_a_face_whose_stub_crosses_a_unit_is_skipped(x, y, blocker, faces):
-    """Skip a face whose outward stub crosses another unit.
-
-    Parameters
-    ----------
-    x, y : float
-        Pinned position of the product flag's nozzle.
-    blocker : tuple[float, float]
-        Pinned corner of the vessel inside the preferred face's stub.
-    faces : set[str]
-        Clear faces the selection may take.
-    """
+    """Skip a face whose outward stub crosses another unit."""
     fs, reactor = _reactor_discharging_to(x, y, blocker=blocker)
     fs.layout()
     assert port_anchor(reactor, reactor.frame, "outlet")[2] in faces

@@ -33,13 +33,7 @@ HEADROOM = 50
 
 
 def _layout_with_little_stack(fs: Flowsheet) -> None:
-    """Lay a sheet out with the recursion limit ``HEADROOM`` above the caller's depth.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet to lay out.
-    """
+    """Lay a sheet out with the recursion limit ``HEADROOM`` above the caller's depth."""
     limit = sys.getrecursionlimit()
     sys.setrecursionlimit(len(inspect.stack(0)) + HEADROOM)
     try:

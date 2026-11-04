@@ -345,34 +345,12 @@ MARK = 'class="re-registered"'
 
 
 def _marked(svg: str) -> str:
-    """Return ``svg`` with a mark added inside its group.
-
-    Parameters
-    ----------
-    svg : str
-        Artwork, one ``<g>`` group.
-
-    Returns
-    -------
-    str
-        Marked artwork.
-    """
+    """Return ``svg`` with a mark added inside its group."""
     return svg.removesuffix("</g>") + f'<path {MARK} d="M 0 0"/></g>'
 
 
 def _drawn(unit: units.Unit) -> str:
-    """Return ``unit`` drawn alone on a sheet.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit to draw.
-
-    Returns
-    -------
-    str
-        SVG document.
-    """
+    """Return ``unit`` drawn alone on a sheet."""
     fs = Flowsheet("redrawn")
     fs.add(unit)
     return fs.to_svg()
@@ -382,15 +360,7 @@ def _drawn(unit: units.Unit) -> str:
 def test_a_tank_or_vessel_is_drawn_with_the_body_registered_now(
     kind: str, make: Callable[[str], units.Unit]
 ) -> None:
-    """Check that a tank or vessel is drawn with the body registered now.
-
-    Parameters
-    ----------
-    kind : str
-        Unit kind supplied by pytest.
-    make : Callable[[str], Unit]
-        Unit class supplied by pytest.
-    """
+    """Check that a tank or vessel is drawn with the body registered now."""
     shipped = default_registry.get(kind)
     assert MARK not in _drawn(make("X-1"))
     default_registry.register(kind, replace(shipped, svg=_marked(shipped.svg)))

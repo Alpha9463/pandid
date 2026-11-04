@@ -214,18 +214,7 @@ def _alongness(box, turned, runs) -> float:
 
 @pytest.fixture(scope="module")
 def sheets(corpus_svg):
-    """Parse the line numbers of every corpus sheet once.
-
-    Parameters
-    ----------
-    corpus_svg : dict[str, tuple[Flowsheet, dict, str]]
-        Shared corpus flowsheets, render options and SVGs.
-
-    Returns
-    -------
-    dict
-        Flowsheets and parsed labels keyed by corpus name.
-    """
+    """Parse the line numbers of every corpus sheet once."""
     return {name: (fs, _labels(svg)) for name, (fs, _options, svg) in corpus_svg.items()}
 
 

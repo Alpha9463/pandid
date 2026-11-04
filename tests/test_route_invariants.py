@@ -21,13 +21,7 @@ TOL = 0.01
 
 
 def _crowded_taps() -> Flowsheet:
-    """Build a control layout that needs more than two placement passes.
-
-    Returns
-    -------
-    Flowsheet
-        Routed-control fixture with two attached instruments.
-    """
+    """Build a control layout that needs more than two placement passes."""
     fs = Flowsheet("Crowded Taps")
     feed = fs.add(units.Feed("F"))
     drum = fs.add(units.Vessel("V-1"))
@@ -50,13 +44,7 @@ CORPUS["crowded_taps"] = _crowded_taps
 
 @pytest.fixture(scope="module")
 def routed(settled_gallery):
-    """Return isolated routed sheets for the invariant corpus.
-
-    Returns
-    -------
-    dict[str, Flowsheet]
-        Routed flowsheets keyed by corpus name.
-    """
+    """Return isolated routed sheets for the invariant corpus."""
     sheets = {}
     for name, build in CORPUS.items():
         if name in settled_gallery:
@@ -143,26 +131,14 @@ def test_a_settled_sheet_says_so():
 
 
 class _WanderingRouter:
-    """Router that alternates paths to force bounded non-convergence.
-
-    Attributes
-    ----------
-    passes : int
-        Number of route calls.
-    """
+    """Router that alternates paths to force bounded non-convergence."""
 
     def __init__(self) -> None:
         """Initialize the route-call counter."""
         self.passes = 0
 
     def route(self, fs) -> None:
-        """Assign alternating paths to every stream.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Flowsheet whose streams receive routes.
-        """
+        """Assign alternating paths to every stream."""
         self.passes += 1
         jog = 40.0 if self.passes % 2 else 90.0
         for s in fs.streams:

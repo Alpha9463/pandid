@@ -7,13 +7,7 @@ from pandid.spec import SpecError
 
 
 def _inline_chain() -> Flowsheet:
-    """Build a material chain containing one inline-capable valve.
-
-    Returns
-    -------
-    pandid.Flowsheet
-        Unpositioned feed, valve, and product connected in material order.
-    """
+    """Build a material chain containing one inline-capable valve."""
     flowsheet = Flowsheet("Stream contracts")
     feed = flowsheet.add(Feed("Feed"))
     valve = flowsheet.add(Valve("HV-101"))

@@ -308,15 +308,7 @@ def test_a_port_does_not_overshoot_the_lane_it_is_leaving_for():
 
 
 def _routed_through(stream: Stream, points: list[tuple[float, float]]) -> None:
-    """Give a stream an automatic route through ``points``.
-
-    Parameters
-    ----------
-    stream : Stream
-        Stream to route.
-    points : list[tuple[float, float]]
-        Waypoints, as the router would leave them.
-    """
+    """Give a stream an automatic route through ``points``."""
     stream.route = Route(list(points))
 
 

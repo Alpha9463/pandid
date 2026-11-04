@@ -172,15 +172,7 @@ def test_every_trip_square_repeats_wherever_its_logic_acts(variant):
     ids=["diamond-and-square", "two-transmitters", "square-then-balloon", "balloon-then-square"],
 )
 def test_two_symbols_may_not_share_a_tag(tag, variants):
-    """Check that a second instrument on a tag already used is refused.
-
-    Parameters
-    ----------
-    tag : tuple
-        Letters and number of the shared tag.
-    variants : tuple[str, str]
-        Variants of the first and second instrument.
-    """
+    """Check that a second instrument on a tag already used is refused."""
     first, second = variants
     fs = Flowsheet("i")
     fs.add(U.Instrument(*tag, variant=first))

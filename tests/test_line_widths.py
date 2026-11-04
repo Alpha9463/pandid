@@ -27,34 +27,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def _quantised(width: float) -> float:
-    """Round a pen width to the stencil precision.
-
-    Parameters
-    ----------
-    width : float
-        Width in drawing units.
-
-    Returns
-    -------
-    float
-        Width rounded to the stencil precision.
-    """
+    """Round a pen width to the stencil precision."""
     return round(width, 2)
 
 
 def _renderer_widths(svg: str) -> set[float]:
-    """Return the widths selected by the SVG renderer.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    set[float]
-        Widths selected for renderer-controlled ink.
-    """
+    """Return the widths selected by the SVG renderer."""
     out: set[float] = set()
     by_symbol: dict[str, float] = {}
     for where, lo, _hi in drawn_pens(svg):
@@ -66,35 +44,13 @@ def _renderer_widths(svg: str) -> set[float]:
 
 
 def _streams_group(svg: str) -> str:
-    """Return the SVG group containing process streams.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    str
-        SVG fragment containing stream paths.
-    """
+    """Return the SVG group containing process streams."""
     start = svg.index('<g id="streams">')
     return svg[start : svg.index("</g>", start)]
 
 
 def _stream_pens(svg: str) -> set[float]:
-    """Return widths used by stream path elements.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    set[float]
-        Quantised widths used by stream paths.
-    """
+    """Return widths used by stream path elements."""
     return {
         _quantised(float(w))
         for w in re.findall(r'<path [^>]*stroke-width="([\d.]+)"', _streams_group(svg))
@@ -102,13 +58,7 @@ def _stream_pens(svg: str) -> set[float]:
 
 
 def _two_unit_sheet() -> Flowsheet:
-    """Build a flowsheet containing material and signal lines.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet with material and signal lines.
-    """
+    """Build a flowsheet containing material and signal lines."""
     fs = Flowsheet("ladder")
     feed = fs.add(units.Feed("F"))
     vessel = fs.add(units.Vessel("V-1"))
@@ -204,15 +154,7 @@ def test_a_control_line_is_drawn_at_half_the_run_it_reads() -> None:
 def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(
     settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], name: str
 ) -> None:
-    """Check representative sheets use only ladder widths, none under the floor.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Session-scoped routed gallery source.
-    name : str
-        Representative gallery example name.
-    """
+    """Check representative sheets use only ladder widths, none under the floor."""
     fs, kwargs = copy_settled_case(settled_gallery, name)
     widths = _renderer_widths(fs.to_svg(**kwargs))
     assert widths, f"{name} drew nothing"
@@ -237,15 +179,7 @@ def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(
 def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(
     settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], name: str
 ) -> None:
-    """Check Draw.io preserves representative stream-weight ratios.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Session-scoped routed gallery source.
-    name : str
-        Representative gallery example name.
-    """
+    """Check Draw.io preserves representative stream-weight ratios."""
     from test_drawio import _DRAWIO_KWARGS, _drawio_cells, _style
 
     fs, kwargs = copy_settled_case(settled_gallery, name)

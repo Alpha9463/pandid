@@ -34,52 +34,19 @@ _ARC = f"A {HOP_R:g} {HOP_R:g} 0 0 1 "
 
 
 def _paths(svg: str) -> list[str]:
-    """Return process-stream paths from an SVG document.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    list[str]
-        Stream path commands in drawing order.
-    """
+    """Return process-stream paths from an SVG document."""
     group = svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
     return re.findall(r'<path d="(M [^"]*)" fill="none"', group)
 
 
 def _marks(svg: str) -> tuple[int, int]:
-    """Count crossing arcs and interruptions in an SVG document.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    tuple[int, int]
-        Arc count followed by interruption count.
-    """
+    """Count crossing arcs and interruptions in an SVG document."""
     paths = _paths(svg)
     return (sum(d.count(_ARC) for d in paths), sum(d.count("M ") - 1 for d in paths))
 
 
 def _jumps(document: str) -> dict[str, str]:
-    """Return Draw.io jump styles by edge identifier.
-
-    Parameters
-    ----------
-    document : str
-        Draw.io XML document.
-
-    Returns
-    -------
-    dict[str, str]
-        Non-plain jump styles keyed by edge identifier.
-    """
+    """Return Draw.io jump styles by edge identifier."""
     from test_drawio import _style
 
     root = ET.fromstring(document).find("diagram/mxGraphModel/root")
@@ -93,34 +60,12 @@ def _jumps(document: str) -> dict[str, str]:
 
 
 def _found(fs: Flowsheet) -> list[Any]:
-    """Return unmarked-crossing warnings from a flowsheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Rendered flowsheet to inspect.
-
-    Returns
-    -------
-    list[Any]
-        Warnings with the unmarked-crossing code.
-    """
+    """Return unmarked-crossing warnings from a flowsheet."""
     return [w for w in fs.warnings if w.code == CROSSING_UNMARKED]
 
 
 def _pair(bend: float | None = None) -> Flowsheet:
-    """Build a two-stream flowsheet with an optional manual crossing.
-
-    Parameters
-    ----------
-    bend : float | None
-        Vertical coordinate for the manual detour.
-
-    Returns
-    -------
-    Flowsheet
-        Settled two-stream flowsheet with an optional manual route.
-    """
+    """Build a two-stream flowsheet with an optional manual crossing."""
     fs = Flowsheet("crossing")
     a = fs.add(U.Feed("F1")).pin(x=60, y=175)
     b = fs.add(U.Product("P1")).pin(x=600, y=175)
@@ -144,15 +89,7 @@ TIGHT = 171.0
 def test_naming_the_default_draws_what_not_naming_it_draws(
     settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], stem: str
 ) -> None:
-    """Check that naming the default preserves SVG and Draw.io output.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Session-scoped routed gallery source.
-    stem : str
-        Representative gallery example name.
-    """
+    """Check that naming the default preserves SVG and Draw.io output."""
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     default = fs.to_svg(**kwargs)
     assert sum(_marks(default)) > 0, f"{stem} has no crossing and proves nothing"
@@ -230,13 +167,7 @@ def test_the_export_writes_one_jump_size_for_either_mark():
 
 @pytest.mark.parametrize("bad", ["", "none", "Arc", "hop", "break", "arcs", "gap "])
 def test_an_unknown_crossing_style_is_refused_and_names_what_is_accepted(bad: str) -> None:
-    """Check invalid style validation and diagnostics.
-
-    Parameters
-    ----------
-    bad : str
-        Invalid crossing-style value.
-    """
+    """Check invalid style validation and diagnostics."""
     with pytest.raises(ValueError) as raised:
         check_crossing_style(bad)
     message = str(raised.value)
@@ -250,17 +181,7 @@ def test_an_unknown_crossing_style_is_refused_and_names_what_is_accepted(bad: st
 def test_every_call_that_takes_the_word_refuses_a_word_it_cannot_draw(
     call: str, tmp_path: pathlib.Path, caught: dict[str, str]
 ) -> None:
-    """Check public entry points reject invalid crossing styles.
-
-    Parameters
-    ----------
-    call : str
-        Public rendering method name.
-    tmp_path : pathlib.Path
-        Temporary output directory.
-    caught : dict[str, str]
-        Captured preview documents.
-    """
+    """Check public entry points reject invalid crossing styles."""
     fs = _pair(ROOMY)
     out = tmp_path / "sheet.svg"
     with pytest.raises(ValueError, match="crossing_style"):
@@ -277,15 +198,7 @@ def test_every_call_that_takes_the_word_refuses_a_word_it_cannot_draw(
 def test_every_entry_point_hands_the_word_on(
     tmp_path: pathlib.Path, caught: dict[str, str]
 ) -> None:
-    """Check public entry points preserve the requested crossing style.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory.
-    caught : dict[str, str]
-        Captured preview documents.
-    """
+    """Check public entry points preserve the requested crossing style."""
     svg = tmp_path / "sheet.svg"
     drawio = tmp_path / "sheet.drawio"
     _pair(ROOMY).render(svg, crossing_style="arc", check=False)
@@ -314,15 +227,7 @@ _SPEC = """\
 def test_the_shell_offers_exactly_the_three_the_api_offers(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Check CLI choices and forwarding match the rendering API.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory.
-    capsys : pytest.CaptureFixture[str]
-        Captured CLI output fixture.
-    """
+    """Check CLI choices and forwarding match the rendering API."""
     spec_file = tmp_path / "sheet.json"
     spec_file.write_text(_SPEC, encoding="utf-8")
     out = tmp_path / "cli.svg"
@@ -347,13 +252,7 @@ def test_the_model_does_not_carry_the_crossing_style():
 
 @pytest.mark.parametrize("style", ["arc", "gap"])
 def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
-    """Check an unmarkable crossing produces a style-specific warning.
-
-    Parameters
-    ----------
-    style : str
-        Requested crossing style.
-    """
+    """Check an unmarkable crossing produces a style-specific warning."""
     fs = _pair(TIGHT)
     svg = SvgRenderer().render(fs, crossing_style=style)
     assert _marks(svg) == (0, 0), "no mark fits, so none is drawn"
@@ -393,18 +292,7 @@ def test_the_finding_counts_the_crossings_the_sheet_left_bare():
 
 
 def _crossings(fs: Flowsheet) -> int:
-    """Count strict orthogonal crossings from stream geometry.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to inspect or render.
-
-    Returns
-    -------
-    int
-        Number of strict vertical-horizontal crossings.
-    """
+    """Count strict orthogonal crossings from stream geometry."""
     horizontal, vertical = [], []
     for s in fs.streams:
         points = stream_polyline(s)
@@ -436,13 +324,7 @@ def test_a_crossing_moved_clear_stops_being_reported():
 def test_the_settled_gallery_has_no_unmarked_crossings(
     settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]],
 ) -> None:
-    """Check that every shipped route has enough clearance for default marks.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Session-scoped routed gallery source.
-    """
+    """Check that every shipped route has enough clearance for default marks."""
     crossings = 0
     for stem, (flowsheet, options) in settled_gallery.items():
         crossings += _crossings(flowsheet)

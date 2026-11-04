@@ -20,18 +20,7 @@ _SHEETS = tuple(SCENARIOS)
 
 
 def _pen_axes(matrix: Matrix) -> tuple[float, float]:
-    """Calculate the minor and major transformed pen widths.
-
-    Parameters
-    ----------
-    matrix : Matrix
-        Linear transformation applied to a circular pen.
-
-    Returns
-    -------
-    tuple[float, float]
-        Minor and major pen widths, in ascending order.
-    """
+    """Calculate the minor and major transformed pen widths."""
     a, b, c, d, _, _ = matrix
     first = math.hypot((a + d) / 2, (c - b) / 2)
     second = math.hypot((a - d) / 2, (c + b) / 2)
@@ -39,20 +28,7 @@ def _pen_axes(matrix: Matrix) -> tuple[float, float]:
 
 
 def _viewport(use: ET.Element, symbol: ET.Element) -> Matrix:
-    """Calculate the scale from a ``<use>`` viewport to its symbol.
-
-    Parameters
-    ----------
-    use : xml.etree.ElementTree.Element
-        SVG ``<use>`` element.
-    symbol : xml.etree.ElementTree.Element
-        Referenced SVG ``<symbol>`` element.
-
-    Returns
-    -------
-    Matrix
-        Viewport scale applied to the symbol contents.
-    """
+    """Calculate the scale from a ``<use>`` viewport to its symbol."""
     view_box = symbol.get("viewBox")
     assert view_box is not None, "symbol definitions must declare a viewBox"
     _, _, view_width, view_height = (float(value) for value in view_box.split())
@@ -71,21 +47,7 @@ def _walk(
     pens: list[DrawnPen],
     group: str,
 ) -> None:
-    """Collect effective stroke widths from an SVG element tree.
-
-    Parameters
-    ----------
-    element : xml.etree.ElementTree.Element
-        Current SVG element.
-    matrix : Matrix
-        Transformation inherited from parent elements.
-    symbols : dict[str, xml.etree.ElementTree.Element]
-        Symbol definitions indexed by identifier.
-    pens : list[DrawnPen]
-        Effective widths collected during traversal.
-    group : str
-        Current SVG group or symbol identifier.
-    """
+    """Collect effective stroke widths from an SVG element tree."""
     for child in element:
         tag = child.tag.replace(_NS, "")
         if tag in ("defs", "symbol", "marker"):
@@ -116,18 +78,7 @@ def _walk(
 
 
 def drawn_pens(svg: str) -> list[DrawnPen]:
-    """Return the effective widths of all rendered SVG strokes.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    list[DrawnPen]
-        Group or symbol identifier with each stroke's minor and major widths.
-    """
+    """Return the effective widths of all rendered SVG strokes."""
     root = ET.fromstring(svg)
     symbols = {element.get("id", ""): element for element in root.iter(f"{_NS}symbol")}
     pens: list[DrawnPen] = []
@@ -136,18 +87,7 @@ def drawn_pens(svg: str) -> list[DrawnPen]:
 
 
 def authored_pens(symbol: Symbol) -> list[float]:
-    """Return a symbol definition's declared stroke widths.
-
-    Parameters
-    ----------
-    symbol : pandid.render.symbols.Symbol
-        Symbol definition to inspect.
-
-    Returns
-    -------
-    list[float]
-        Geometric mean of each definition stroke's transformed widths.
-    """
+    """Return a symbol definition's declared stroke widths."""
     root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{symbol.svg}</svg>')
     pens: list[DrawnPen] = []
     _walk(root, _IDENTITY, {}, pens, "")
@@ -155,15 +95,7 @@ def authored_pens(symbol: Symbol) -> list[float]:
 
 
 def check_symbol_weights(flowsheet: Flowsheet, svg: str) -> None:
-    """Assert that every placed equipment symbol preserves its declared pens.
-
-    Parameters
-    ----------
-    flowsheet : pandid.Flowsheet
-        Flowsheet that produced ``svg``.
-    svg : str
-        Rendered SVG document for ``flowsheet``.
-    """
+    """Assert that every placed equipment symbol preserves its declared pens."""
     renderer = SvgRenderer()
     by_identifier: dict[str, list[tuple[float, float]]] = {}
     for identifier, minor, major in drawn_pens(svg):
@@ -199,18 +131,7 @@ def check_symbol_weights(flowsheet: Flowsheet, svg: str) -> None:
 def settled_gallery_svg(
     settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]],
 ) -> dict[str, tuple[Flowsheet, str]]:
-    """Render every settled gallery sheet once for the corpus checks.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[pandid.Flowsheet, dict[str, Any]]]
-        Session-scoped settled gallery flowsheets and render options.
-
-    Returns
-    -------
-    dict[str, tuple[pandid.Flowsheet, str]]
-        Independent flowsheets and their rendered SVG documents by sheet name.
-    """
+    """Render every settled gallery sheet once for the corpus checks."""
     rendered: dict[str, tuple[Flowsheet, str]] = {}
     for stem in _SHEETS:
         flowsheet, options = copy_settled_case(settled_gallery, stem)
@@ -256,15 +177,7 @@ def test_no_symbol_draws_ink_below_the_floor_once_its_class_is_applied() -> None
 def test_every_symbol_on_the_corpus_is_drawn_at_its_declared_weight(
     stem: str, settled_gallery_svg: dict[str, tuple[Flowsheet, str]]
 ) -> None:
-    """Verify that all gallery equipment preserves its definition stroke widths.
-
-    Parameters
-    ----------
-    stem : str
-        Gallery sheet name.
-    settled_gallery_svg : dict[str, tuple[pandid.Flowsheet, str]]
-        Shared rendered gallery sheets.
-    """
+    """Verify that all gallery equipment preserves its definition stroke widths."""
     flowsheet, svg = settled_gallery_svg[stem]
     check_symbol_weights(flowsheet, svg)
 
@@ -273,15 +186,7 @@ def test_every_symbol_on_the_corpus_is_drawn_at_its_declared_weight(
 def test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights(
     stem: str, settled_gallery_svg: dict[str, tuple[Flowsheet, str]]
 ) -> None:
-    """Verify that gallery stream and instrument lines use defined sheet weights.
-
-    Parameters
-    ----------
-    stem : str
-        Gallery sheet name.
-    settled_gallery_svg : dict[str, tuple[pandid.Flowsheet, str]]
-        Shared rendered gallery sheets.
-    """
+    """Verify that gallery stream and instrument lines use defined sheet weights."""
     _, svg = settled_gallery_svg[stem]
     allowed_widths = {LineWeight.MAIN_FLOW.width, LineWeight.DETAIL.width}
     groups = {"streams", "instrument_taps"}
@@ -299,15 +204,7 @@ def test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights(
 def test_the_sheet_the_raster_backend_is_handed_carries_no_uneven_pen(
     stem: str, settled_gallery_svg: dict[str, tuple[Flowsheet, str]]
 ) -> None:
-    """Verify that flattened gallery SVGs have only circular effective pens.
-
-    Parameters
-    ----------
-    stem : str
-        Gallery sheet name.
-    settled_gallery_svg : dict[str, tuple[pandid.Flowsheet, str]]
-        Shared rendered gallery sheets.
-    """
+    """Verify that flattened gallery SVGs have only circular effective pens."""
     from pandid.render.export import flatten
 
     _, svg = settled_gallery_svg[stem]
@@ -344,15 +241,7 @@ _BOXES = {
 @pytest.mark.parametrize("box", _BOXES, ids=_BOXES)
 @pytest.mark.parametrize("specimen", _SPECIMENS, ids=_SPECIMENS)
 def test_a_resized_unit_is_drawn_with_the_pen_its_symbol_declares(specimen: str, box: str) -> None:
-    """Verify that each equipment family preserves pens across box shapes.
-
-    Parameters
-    ----------
-    specimen : str
-        Symbol family and optional variant under test.
-    box : str
-        Named width and height scaling factors.
-    """
+    """Verify that each equipment family preserves pens across box shapes."""
     width_factor, height_factor = _BOXES[box]
     symbol = default_registry.get(*(specimen.split("/") + ["default"])[:2])
     flowsheet = Flowsheet("weights")

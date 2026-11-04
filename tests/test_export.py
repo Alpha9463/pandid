@@ -44,13 +44,7 @@ def _fs():
 
 @pytest.mark.parametrize("name", GOLDENS)
 def test_every_golden_sheet_flattens_to_something_the_backend_can_draw(name):
-    """Flatten each golden sheet to no ``<use>``, ``<symbol>``, marker or ``<defs>``.
-
-    Parameters
-    ----------
-    name : str
-        Golden fixture file name.
-    """
+    """Flatten each golden sheet to no ``<use>``, ``<symbol>``, marker or ``<defs>``."""
     flat = export.flatten((GOLDEN_DIR / name).read_text(encoding="utf-8"))
     for gone in ("<use", "<symbol", "<marker", "marker-end", "<defs"):
         assert gone not in flat, f"{gone} survived flattening of {name}"
@@ -124,13 +118,7 @@ def _text_y(flat: str) -> float:
 
 @pytest.mark.parametrize("size", ["12", "10"])
 def test_a_vertically_centred_label_is_handed_the_baseline_it_meant(size):
-    """Move a ``dominant-baseline="middle"`` label to its alphabetic baseline.
-
-    Parameters
-    ----------
-    size : str
-        Font size of the label.
-    """
+    """Move a ``dominant-baseline="middle"`` label to its alphabetic baseline."""
     flat = export.flatten(_label("middle", size))
     assert "dominant-baseline" not in flat
     assert _text_y(flat) == pytest.approx(50 + _MIDDLE * float(size))
@@ -138,13 +126,7 @@ def test_a_vertically_centred_label_is_handed_the_baseline_it_meant(size):
 
 @pytest.mark.parametrize("baseline", ["baseline", "auto", "alphabetic"])
 def test_a_label_already_set_on_its_baseline_does_not_move(baseline):
-    """Leave a label already set on its alphabetic baseline where it is.
-
-    Parameters
-    ----------
-    baseline : str
-        ``dominant-baseline`` value that means the alphabetic baseline.
-    """
+    """Leave a label already set on its alphabetic baseline where it is."""
     flat = export.flatten(_label(baseline))
     assert "dominant-baseline" not in flat
     assert _text_y(flat) == pytest.approx(50)
@@ -233,13 +215,7 @@ def _ink_height(im, px: float, x0: float, x1: float) -> float:
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 @pytest.mark.parametrize("size", _SIZES)
 def test_lettering_is_drawn_at_the_size_the_file_asks_for(size):
-    """Rasterise a rule and two capitals and check both draw at the declared size.
-
-    Parameters
-    ----------
-    size : float
-        Font size read from the golden sheets.
-    """
+    """Rasterise a rule and two capitals and check both draw at the declared size."""
     from PIL import Image
 
     # Scale so a capital is about 170 device px tall at any size.
@@ -270,13 +246,7 @@ def test_the_written_out_metrics_are_the_ones_the_backend_will_draw_with():
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_render_writes_a_png(tmp_path):
-    """Write a PNG for a ``.png`` path.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Output directory.
-    """
+    """Write a PNG for a ``.png`` path."""
     out = tmp_path / "d.png"
     _fs().render(str(out))
     assert out.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
@@ -284,13 +254,7 @@ def test_render_writes_a_png(tmp_path):
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_the_exported_pdf_draws_the_sheet_rather_than_a_picture_of_it(tmp_path):
-    """Export the PDF as vector paths and text, not an embedded image.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Output directory.
-    """
+    """Export the PDF as vector paths and text, not an embedded image."""
     out = tmp_path / "d.pdf"
     _fs().render(str(out), page_size="A4", border="zone")
     body = out.read_bytes()
@@ -348,13 +312,7 @@ def _strings_on_the_paper(svg: str) -> int:
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 @pytest.mark.parametrize("name", GOLDENS)
 def test_every_label_on_the_sheet_reaches_the_page(name):
-    """Draw one PDF ``Tj`` per string the golden sheet draws.
-
-    Parameters
-    ----------
-    name : str
-        Golden fixture file name.
-    """
+    """Draw one PDF ``Tj`` per string the golden sheet draws."""
     svg = (GOLDEN_DIR / name).read_text(encoding="utf-8")
     drawn = len(re.findall(rb"\) Tj", _page_content(export.to_pdf(svg))))
     assert drawn == _strings_on_the_paper(svg)
