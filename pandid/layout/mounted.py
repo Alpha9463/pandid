@@ -431,9 +431,11 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     Poses run 0, 180, 90, 270 on a level leg or 90, 270, 180, 0
     upright, each unmirrored then mirrored, kept to a stated turn or
     mirror and to poses every stated nozzle face allows, else the
-    current pose. The first pose with both nozzles on the leg, inlet
-    upstream, wins; upright, with an actuator and no stated turn, the
-    first with the actuator on the flow's left wins, else the first.
+    current pose; with both a turn and a mirror stated, the stated
+    turn mirrored the other way follows. The first pose with both
+    nozzles on the leg, inlet upstream, wins; upright, with an
+    actuator and no stated turn, the first with the actuator on the
+    flow's left wins, else the first.
 
     Parameters
     ----------
@@ -460,6 +462,9 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     turns = ([int(unit.frame.orientation)] if turned
              else [turn % 360 for turn in (first, first + 180, first + 90, first + 270)])
     flips = [bool(unit.frame.mirrored)] if unit._mirror_stated else [False, True]
+    if turned and unit._mirror_stated:
+        # Then try the stated turn end for end: the other mirror.
+        flips.append(not flips[0])
     poses = [(turn, flip) for turn in turns for flip in flips
              if _reaches(unit, _candidate(unit, point, turn, flip))]
     if not poses:
