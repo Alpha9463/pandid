@@ -5,7 +5,6 @@ import io
 
 import pytest
 
-from _render_cases import gallery
 from pandid import (
     DistillationColumn,
     Feed,
@@ -133,6 +132,8 @@ def build_unpinned(stem: str) -> tuple[Flowsheet, dict]:
     tuple[Flowsheet, dict]
         The flowsheet and its render options.
     """
+    from _render_cases import gallery
+
     pin = Unit.pin
 
     def stripped_pin(self, *, orientation=_UNCHANGED, mirrored=_UNCHANGED, **_):
