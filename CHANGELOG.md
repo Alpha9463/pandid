@@ -123,6 +123,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Line-number plates fit their text, and draw.io tags sit on their halos
+  (#618).** A line number is measured with the face's letter widths, and one
+  beside less than half its length of line gets a leader. draw.io writes an
+  equipment tag inside the halo the sheet clears for it, not up to 8 units
+  nearer its symbol.
 - **A line no longer draws a hidden jog where its ends differ by a rounding
   step (#611).** Coordinates within 1e-6 of the previous point's are drawn on
   its track, so a valve set a rounding step off its pipe adds no bends.
@@ -133,6 +138,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#619).** After the controller-hanging attempt, `route()` tries keeping it
   clear of that line, and keeps the result only if no balloon's tap leaves its
   line and no finding or clash grows.
+- **A letter code beside a balloon keeps off flange marks (#624).** On a
+  flanged P&ID, an alarm or other code written over a flange mark moves to a
+  spot clear of every mark, line, symbol and label, if there is one, and
+  nothing else on the sheet moves. draw.io leaves the codes in place on a
+  sheet where a tag is stacked with NC or fail letters, or wraps.
 - **A refused balloon placement changes nothing (#438).** `attach()` with a
   bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
   face no longer leaves the balloon on the sheet, and `add_instrument()`

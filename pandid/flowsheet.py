@@ -290,30 +290,6 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
     )
 
 
-def _port_bearers(*ends: "Port | Unit") -> "tuple[Any, ...]":
-    """Return the units at a connection's ends, then all their ports.
-
-    Parameters
-    ----------
-    *ends : Port or Unit
-        Connection ends.
-
-    Returns
-    -------
-    tuple
-        Distinct units, then each of their ports.
-    """
-    from pandid.ports import Port
-    from pandid.units import Unit
-
-    units: "list[Unit]" = []
-    for end in ends:
-        owner = end.owner if isinstance(end, Port) else end
-        if isinstance(owner, Unit) and not any(owner is u for u in units):
-            units.append(owner)
-    return (*units, *(port for unit in units for port in unit.ports.values()))
-
-
 def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
     """Return the keyword arguments that are not ``None``.
 
@@ -772,8 +748,13 @@ class Flowsheet:
             raise ValueError(f"{unit.name}: at= is a position on the line given by on=")
         clash = self._refuse_unaddable(unit)
         if clash is not None:
-            # Name a repeat from its tag, or a tee from its name.
-            unit.name = self._repeat_name(unit.tag or unit.name)
+            # Name a repeat "<tag> (n)" from its tag, or a tee from its name.
+            stem = unit.tag or unit.name
+            taken = {u.name for u in self.units}
+            n = 2
+            while f"{stem} ({n})" in taken:
+                n += 1
+            unit.name = f"{stem} ({n})"
         unit.flowsheet = self
         self.units.append(unit)
         self._invalidate_layout()
@@ -830,25 +811,6 @@ class Flowsheet:
                 f"{unit!r} is already on flowsheet {unit.flowsheet.name!r}"
             )
         return clash
-
-    def _repeat_name(self, tag: str) -> str:
-        """Return a unique name for another drawing of a repeated tag.
-
-        Parameters
-        ----------
-        tag : str
-            Repeated tag.
-
-        Returns
-        -------
-        str
-            ``"<tag> (n)"`` with the least free ``n`` from 2.
-        """
-        taken = {u.name for u in self.units}
-        n = 2
-        while f"{tag} ({n})" in taken:
-            n += 1
-        return f"{tag} ({n})"
 
     def add_loop(self, variable: str, number: str | int | None = None) -> "Loop":
         """Declare a control loop and return its handle.
@@ -1510,9 +1472,8 @@ class Flowsheet:
             from pandid.portgeom import port_offset, resolve_size
             from pandid.stations import (
                 BYPASS_ANCHORS, ROLE_WORDS, ValveStation, member_tag, member_mirror,
-                station_number,
             )
-            from pandid.units import Reducer, Tee, Valve
+            from pandid.units import Reducer, Tee, Valve, split_tag
 
             if on is not None:
                 # Refuse a bad position before any member is added.
@@ -1554,6 +1515,11 @@ class Flowsheet:
                     f"sheet, ranked and faced by the layout engine. Give x= and y=, or "
                     f"drop {named}"
                 )
+            # Apply the run defaults.
+            mirrored = bool(mirrored)
+            gap = DEFAULT_GAP if gap is None else gap
+            bypass_rise = DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise
+            drain_drop = DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop
             if bypass_over is not None and bypass_over not in BYPASS_ANCHORS:
                 raise ValueError(
                     f"{tag}: bypass_over names the member the bypass valve stands over, "
@@ -1571,7 +1537,7 @@ class Flowsheet:
                 )
 
             scheme = tag_scheme if tag_scheme is not None else self.valve_station_tag_scheme
-            num = str(number) if number is not None else station_number(tag)
+            num = str(number) if number is not None else split_tag(tag)[1] or tag
 
             def valve(role: str, closed: bool = False) -> "Valve":
                 """Add a member valve.
@@ -1613,23 +1579,6 @@ class Flowsheet:
                 self.add(unit)
                 return unit
 
-            def tee(returns: bool = False) -> "Tee":
-                """Add a station tee.
-
-                Parameters
-                ----------
-                returns : bool, default=False
-                    Whether the branch flows into the run.
-
-                Returns
-                -------
-                Tee
-                    The added tee.
-                """
-                unit = Tee(branch="inlet" if returns else "outlet")
-                self.add(unit)
-                return unit
-
             control = Valve(tag, variant=variant,
                             description=f"{description} Control Valve".strip())
             self.add(control)
@@ -1640,10 +1589,10 @@ class Flowsheet:
             dr_b = valve("downstream_drain", closed=True) if drains >= 2 else None
             red = size_change("reduction") if reducers else None
             exp = size_change("expansion") if reducers else None
-            t_bya = tee() if bypass else None
-            t_byb = tee(returns=True) if bypass else None
-            t_dra = tee() if dr_a is not None else None
-            t_drb = tee() if dr_b is not None else None
+            t_bya = self.add(Tee()) if bypass else None
+            t_byb = self.add(Tee(branch="inlet")) if bypass else None
+            t_dra = self.add(Tee()) if dr_a is not None else None
+            t_drb = self.add(Tee()) if dr_b is not None else None
 
             # Members in flow order; a mirrored station reverses them.
             run = [u for u in (t_bya, iso_a, t_dra, red, control, exp, t_drb, iso_b, t_byb)
@@ -1652,11 +1601,6 @@ class Flowsheet:
                        "reduction": red, "expansion": exp, "control": control}
 
             if x is not None and y is not None:
-                # Apply the run defaults.
-                mirrored = bool(mirrored)
-                gap = DEFAULT_GAP if gap is None else gap
-                bypass_rise = DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise
-                drain_drop = DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop
                 # Pinned left edge per member.
                 left: dict[int, float] = {}
                 cursor = x
@@ -1689,30 +1633,17 @@ class Flowsheet:
                     if drawn is not None:
                         drawn._turn_stated = drawn._mirror_stated = False
 
-            def branch_line(src: "Port", dst: "Port") -> Stream:
-                """Connect a leg with the station's line number.
-
-                Parameters
-                ----------
-                src, dst : Port
-                    Leg ends.
-
-                Returns
-                -------
-                Stream
-                    The new stream.
-                """
-                return self.connect(src, dst, size=size, schedule=schedule, service=service,
-                                    sequence=sequence, spec=spec, insulation=insulation)
-
+            # A leg carries the station's line number.
+            leg: dict[str, Any] = dict(size=size, schedule=schedule, service=service,
+                                       sequence=sequence, spec=spec, insulation=insulation)
             for upstream, downstream in zip(run, run[1:]):
                 self.connect(upstream.outlet, downstream.inlet)
             if byp is not None and t_bya is not None and t_byb is not None:
-                branch_line(t_bya.branch, byp.inlet)
+                self.connect(t_bya.branch, byp.inlet, **leg)
                 self.connect(byp.outlet, t_byb.branch)
             for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
                 if junction is not None and drain is not None:
-                    branch_line(junction.branch, drain.inlet)
+                    self.connect(junction.branch, drain.inlet, **leg)
 
             hanging = {id(t_bya): byp, id(t_dra): dr_a, id(t_drb): dr_b}
             members: list["Unit"] = []
@@ -1731,11 +1662,8 @@ class Flowsheet:
             from pandid.stations import StationAssembly
 
             self._station_assemblies.append(StationAssembly(
-                station=station, mirrored=bool(mirrored),
-                gap=DEFAULT_GAP if gap is None else gap,
-                bypass_rise=DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise,
-                drain_drop=DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop,
-                bypass_over=bypass_over,
+                station=station, mirrored=mirrored, gap=gap, bypass_rise=bypass_rise,
+                drain_drop=drain_drop, bypass_over=bypass_over,
             ))
             if on is not None:
                 insert_station(self, on, station, at=at)
@@ -1805,8 +1733,17 @@ class Flowsheet:
             If the kind, ports, ``ends`` or numbering is invalid, or a
             port is taken and its unit has no other like it.
         """
-        # Restore the sheet and both end units if anything raises.
-        with self._unchanged_if_it_raises((self, *_port_bearers(src, dst))):
+        from pandid.ports import Port
+        from pandid.units import Unit
+
+        # Restore the sheet, both end units and their ports if anything raises.
+        owners: "list[Unit]" = []
+        for end in (src, dst):
+            owner = end.owner if isinstance(end, Port) else end
+            if isinstance(owner, Unit) and not any(owner is u for u in owners):
+                owners.append(owner)
+        ports = (port for unit in owners for port in unit.ports.values())
+        with self._unchanged_if_it_raises((self, *owners, *ports)):
             src, dst, kind = self._resolve_connection(src, dst, kind=kind, ends=ends)
             # Writes start here.
             if src.stream is not None:
@@ -2176,13 +2113,6 @@ class Flowsheet:
             self._put_geometry(self._unhung, keep_manual=True)
             self._unhung = None
 
-    def _resolve_geometry(self) -> None:
-        """Lay out and route where the geometry is missing or stale."""
-        if self._layout_stale or any(u.frame is None for u in self.units):
-            self.layout()
-        if self._route_stale or any(s.route is None for s in self.streams):
-            self.route()
-
     @staticmethod
     def _raise_on_errors(issues: list) -> None:
         """Raise one error listing every error-severity finding.
@@ -2261,7 +2191,11 @@ class Flowsheet:
         if check:
             found = model_issues(self, tabulates=tabulates_boundary_flows(diagram))
             self._raise_on_errors(found)
-        self._resolve_geometry()
+        # Lay out and route where the geometry is missing or stale.
+        if self._layout_stale or any(u.frame is None for u in self.units):
+            self.layout()
+        if self._route_stale or any(s.route is None for s in self.streams):
+            self.route()
         if check:
             found += geometry_issues(self, arrows=draws_arrowheads(diagram))
             self.warnings = [i for i in found if i.severity == "warning"]

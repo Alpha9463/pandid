@@ -1,7 +1,5 @@
 """Test the generated ``pandid.devices`` classes against the generator, registry and spec."""
 
-import ast
-import pathlib
 import re
 import typing
 
@@ -10,6 +8,7 @@ import pytest
 from pandid import Flowsheet, devices, portgeom, spec, units
 from pandid.ports import Port
 from pandid.render.symbols import default_registry
+from test_port_annotations import view_nozzles
 from test_symbol_invariants import _drawing, _script
 
 DEVICE_CLASSES = [getattr(devices, name) for name in devices.__all__]
@@ -116,16 +115,7 @@ def test_a_generated_family_subclass_gets_its_own_exact_arity_classes(cls):
     """Check that each generated arity class declares exactly the family nozzles it builds."""
     generator = _script("gen_devices")
     keyword, member, _default, max_n = generator.arity_family(cls.__mro__[1])
-    module = ast.parse(pathlib.Path(devices.__file__).read_text(encoding="utf-8"))
-    declared = {
-        node.name: {
-            stmt.target.id
-            for stmt in node.body
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-        }
-        for node in ast.walk(module)
-        if isinstance(node, ast.ClassDef)
-    }
+    declared = view_nozzles(devices)
     for n in range(1, max_n + 1):
         name = f"{cls.__name__}{n}"
         assert name in declared, f"{name} is not defined; the overload names it"

@@ -1385,6 +1385,66 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
     assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
 
 
+def _exported_codes(fs, kwargs) -> tuple:
+    """Return each exported letter code with the page box its halo paints, and the fit."""
+    from pandid.render.drawio import _TEXT_INSET
+
+    cells = _drawio_cells_from_document(fs.to_drawio(**kwargs))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+    codes = []
+    for cid, cell in cells.items():
+        if not re.fullmatch(r"q\d+", cid or ""):
+            continue
+        geometry = cell.find("mxGeometry")
+        assert geometry is not None
+        x, y = float(geometry.get("x", 0)), float(geometry.get("y", 0))
+        w, h = float(geometry.get("width", 0)), float(geometry.get("height", 0))
+        # The halo fills the cell inside draw.io's text inset.
+        inset = _TEXT_INSET
+        codes.append((cell.get("value"), (x + inset, y + inset, x + w - inset, y + h - inset)))
+    assert codes, "the sheet exports no letter code"
+    return codes, fit
+
+
+def test_a_letter_code_is_exported_clear_of_a_flange_mark():
+    """Export each letter code clear of the flange marks on its sheet."""
+    from test_halo_invariants import _flange_bars
+    from test_label_invariants import CORPUS
+
+    fs, kwargs = CORPUS["codes_beside_a_flange"]()
+    codes, fit = _exported_codes(fs, kwargs)
+    faces = [fit.box(face.box) for face in _flange_bars(fs, kwargs)]
+    hit = [text for text, box in codes for face in faces if overlaps(box, face)]
+    assert not hit, f"letter codes exported over a flange mark: {hit}"
+
+
+@pytest.mark.parametrize(
+    "sheet",
+    [
+        "a_flange_and_a_line",
+        "a_fixed_tag",
+        "another_balloon",
+        "a_closed_valve",
+        "a_pneumatic_line",
+        "a_stacked_tag",
+    ],
+)
+def test_a_letter_code_by_a_flange_mark_is_exported_clear_of_every_line_and_tag(sheet):
+    """Export a letter code by a flange mark clear of every line, hatch and tag label."""
+    from pandid.render.svg import _ink
+    from test_halo_invariants import CROWDED_CODES, _hatch_bars
+
+    fs, kwargs = CROWDED_CODES[sheet]()
+    codes, fit = _exported_codes(fs, kwargs)
+    _symbols, tags, _numbers = _drawn_boxes(
+        fs, kwargs, _drawio_cells_from_document(fs.to_drawio(**kwargs))
+    )
+    marks = [fit.box(line.box) for line in _ink(fs, "vertical")]
+    marks += [fit.box(bar) for bar in _hatch_bars(fs)] + list(tags.values())
+    hit = [text for text, box in codes for mark in marks if overlaps(box, mark)]
+    assert not hit, f"letter codes exported over a line or tag: {hit}"
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -2715,6 +2775,9 @@ LINE_NUMBER_SHEETS = ("09_line_numbers", "11_ethanol_pid", "14_tank_farm")
 #: Sheets that place at least one line-number leader.
 LEADER_SHEETS = ("11_ethanol_pid", "14_tank_farm")
 
+#: Representatives that write an equipment tag beside its symbol.
+TAGGED_SHEETS = tuple(stem for stem in DRAWIO_REPRESENTATIVES if stem != "12_block_flow_diagram")
+
 
 #: Instrumented P&ID representatives with all exported function-code forms.
 INSTRUMENT_CODE_SHEETS = ("04_control_loop", "11_ethanol_pid", "14_tank_farm")
@@ -2860,8 +2923,9 @@ def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
         symbols[f"u{i}"] = (x, y, x + w, y + h)
         text = cell.get("value") or ""
         style = _style(cell)
+        side = style.get("labelPosition", style.get("verticalLabelPosition", "middle"))
         # Internal labels are part of their shape, not separate obstacles.
-        if not text or style.get("verticalLabelPosition", "middle") == "middle":
+        if not text or side in ("middle", "center"):
             continue
         size = float(style.get("fontSize", 12))
         lines = text.split("<br>")
@@ -2870,10 +2934,16 @@ def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
         offset = geometry.find("mxPoint[@as='offset']")
         dx = float(offset.get("x")) if offset is not None else 0.0
         dy = float(offset.get("y")) if offset is not None else 0.0
-        # The label box sits outside the cell, with its text pulled against it.
-        cx = x + w / 2 + dx
-        top = (y - lh if style["verticalLabelPosition"] == "top" else y + h) + dy
-        tags[f"u{i}"] = (cx - lw / 2, top, cx + lw / 2, top + lh)
+        # draw.io holds a side label 2 off the cell, and 1 more under and 5 over its text.
+        nx, ny, gap = {
+            "top": (0, -1, 3.0),
+            "bottom": (0, 1, 7.0),
+            "left": (-1, 0, 2.0),
+            "right": (1, 0, 2.0),
+        }[side]
+        cx = x + w / 2 + dx + nx * (w / 2 + gap + lw / 2)
+        cy = y + h / 2 + dy + ny * (h / 2 + gap + lh / 2)
+        tags[f"u{i}"] = (cx - lw / 2, cy - lh / 2, cx + lw / 2, cy + lh / 2)
 
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     assert isinstance(fit, _Fit)
@@ -2921,6 +2991,81 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
         if overlaps(box, obstacle)
     ]
     assert not struck, f"{stem}: line numbers written over {struck}"
+
+
+_HALO = re.compile(
+    r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\n'
+    r"\s*<text [^>]*>([^<]*)</text>"
+)
+
+
+@pytest.mark.parametrize("stem", TAGGED_SHEETS, ids=TAGGED_SHEETS)
+def test_an_equipment_tag_is_written_inside_its_halo_on_the_sheet(
+    settled_gallery, rendered_gallery, stem
+):
+    """Write each one-line equipment tag inside the halo the sheet draws for it.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+    stem : str
+        Representative gallery example name.
+    """
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+    group = rendered_gallery[stem].svg.split('<g id="unit_labels">', 1)[1].split("</g>", 1)[0]
+    halos: dict[str, list] = {}
+    for x, y, w, h, text in _HALO.findall(group):
+        x0, y0 = float(x), float(y)
+        halos.setdefault(html.unescape(text), []).append(
+            fit.box((x0, y0, x0 + float(w), y0 + float(h)))
+        )
+    cells = _gallery_cells(rendered_gallery, stem)
+    _symbols, tags, _numbers = _drawn_boxes(fs, kwargs, cells)
+
+    def inside(box, halo) -> bool:
+        # The sheet writes a halo to a tenth of a unit.
+        x0, y0, x1, y1 = halo
+        return box[0] > x0 - 0.1 and box[1] > y0 - 0.1 and box[2] < x1 + 0.1 and box[3] < y1 + 0.1
+
+    adrift = [
+        (tag, [round(v, 1) for v in box])
+        for cid, box in tags.items()
+        if "<br>" not in (tag := html.unescape(cells[cid].get("value") or ""))
+        and not any(inside(box, halo) for halo in halos.get(tag, ()))
+    ]
+    assert tags, f"{stem}: no equipment tag is written beside its symbol"
+    assert not adrift, f"{stem}: tags off their halos {adrift}"
+
+
+def test_a_tag_draw_io_wraps_keeps_off_the_unit_above():
+    """Keep a tag that wraps to two lines in its cell clear of the unit above it."""
+    fs = Flowsheet("wrapped tag")
+    fs.add(pandid.Block("U-1", width=60, height=40)).pin(x=100, y=100)
+    fs.add(pandid.Mixer("M-101 A/B", label_pos="top")).pin(x=115, y=172)
+    cells = _drawio_cells_from_document(fs.to_drawio())
+    assert "whiteSpace=wrap" in (cells["u1"].get("style") or "")
+    geometry = cells["u1"].find("mxGeometry")
+    assert geometry is not None
+    offset = geometry.find("mxPoint[@as='offset']")
+    # Two wrapped lines rise from draw.io's own spot, three above the cell.
+    top = float(geometry.get("y", 0)) - 3.0 - 2 * 1.2 * 12.0
+    top += float(offset.get("y", 0)) if offset is not None else 0.0
+    assert top >= 140.0, f"the wrapped tag reaches up to {top:.1f}, into U-1"
+
+
+def test_a_tag_stacked_with_fail_letters_keeps_off_the_unit_above():
+    """Keep a two-line tag label clear of the unit above its symbol."""
+    fs = Flowsheet("stacked equipment")
+    fs.add(pandid.Pump("P-1", width=60, height=40, label_pos="center")).pin(x=100, y=100)
+    fs.add(pandid.ControlValve("CV-1", fail="closed")).pin(x=115, y=172)
+    cells = _drawio_cells_from_document(fs.to_drawio())
+    symbols, tags, _numbers = _drawn_boxes(fs, {}, cells)
+    assert cells["u1"].get("value") == "CV-1<br>FC"
+    assert not overlaps(tags["u1"], symbols["u0"]), (tags["u1"], symbols["u0"])
 
 
 @pytest.mark.parametrize("stem", LEADER_SHEETS, ids=LEADER_SHEETS)
