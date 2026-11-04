@@ -122,6 +122,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An alignment set on an `Annotation` or `TableBox` after construction is
   checked (#646).** A bad `align` or `col_align` raises `ValueError` where it
   is assigned, not a `KeyError` inside `to_svg()`.
+- **A normally closed valve keeps every field of its open drawing (#646).**
+  Its filled body is drawn at the trim weight in SVG and draw.io, not at
+  twice the open valve's outline.
+- **draw.io reports an annotation box too narrow for its text (#646).**
+  `to_drawio` now gives the same `text-overruns-cell` finding as `to_svg` for
+  an `Annotation` whose `width=` is too small.
+- **A tank or vessel drawing registered again is drawn (#646).** A sheet drawn
+  after `default_registry.register("tank", ...)`, `register("vessel", ...)` or
+  `register_part(...)` uses the new drawing, not the one drawn before it.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an
