@@ -5,6 +5,8 @@ and the ISO rows the registry draws.
 import re
 import subprocess
 import sys
+from collections.abc import Callable
+from dataclasses import replace
 
 import pytest
 
@@ -345,6 +347,79 @@ def test_re_registering_a_body_or_a_part_drops_the_compositions_using_it(registr
     second = registry.composed("composition_test", "default", overlays)
     registry.register("composition_test", body())
     assert registry.composed("composition_test", "default", overlays) is not second
+
+
+#: Attribute of the mark added to a re-registered drawing.
+MARK = 'class="re-registered"'
+
+
+def _marked(svg: str) -> str:
+    """Return ``svg`` with a mark added inside its group.
+
+    Parameters
+    ----------
+    svg : str
+        Artwork, one ``<g>`` group.
+
+    Returns
+    -------
+    str
+        Marked artwork.
+    """
+    return svg.removesuffix("</g>") + f'<path {MARK} d="M 0 0"/></g>'
+
+
+def _drawn(unit: units.Unit) -> str:
+    """Return ``unit`` drawn alone on a sheet.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to draw.
+
+    Returns
+    -------
+    str
+        SVG document.
+    """
+    fs = Flowsheet("redrawn")
+    fs.add(unit)
+    return fs.to_svg()
+
+
+@pytest.mark.parametrize(("kind", "make"), [("tank", units.Tank), ("vessel", units.Vessel)])
+def test_a_tank_or_vessel_is_drawn_with_the_body_registered_now(
+    kind: str, make: Callable[[str], units.Unit]
+) -> None:
+    """Check that a tank or vessel is drawn with the body registered now.
+
+    Parameters
+    ----------
+    kind : str
+        Unit kind supplied by pytest.
+    make : Callable[[str], Unit]
+        Unit class supplied by pytest.
+    """
+    shipped = default_registry.get(kind)
+    assert MARK not in _drawn(make("X-1"))
+    default_registry.register(kind, replace(shipped, svg=_marked(shipped.svg)))
+    try:
+        assert MARK in _drawn(make("X-1"))
+    finally:
+        default_registry.register(kind, shipped)
+    assert MARK not in _drawn(make("X-1"))
+
+
+def test_a_vessel_is_drawn_with_the_part_registered_now() -> None:
+    """Check that a vessel is drawn with the part registered now."""
+    shipped = default_registry.part(26, "leg")
+    assert MARK not in _drawn(units.Vessel("V-1", supports="leg"))
+    default_registry.register_part(replace(shipped, svg=_marked(shipped.svg)))
+    try:
+        assert MARK in _drawn(units.Vessel("V-1", supports="leg"))
+    finally:
+        default_registry.register_part(shipped)
+    assert MARK not in _drawn(units.Vessel("V-1", supports="leg"))
 
 
 def test_a_unit_that_names_no_parts_draws_what_it_always_drew(registry):

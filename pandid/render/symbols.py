@@ -2997,6 +2997,7 @@ class SymbolRegistry:
         self._expanders.pop((kind, variant), None)
         for key in [k for k in self._composed if k[:2] == (kind, variant)]:
             del self._composed[key]
+        vessel_symbol.cache_clear()
 
     def register_part(self, part: OverlayPart) -> None:
         """Register one ISO 10628-2 group 26-29 supplementary symbol.
@@ -3009,6 +3010,7 @@ class SymbolRegistry:
         self._parts[part.key()] = part
         # Drop every composition; any may use this part.
         self._composed.clear()
+        vessel_symbol.cache_clear()
 
     def part(self, group: int, name: str) -> OverlayPart:
         """Return the part registered as ``(group, name)``.
