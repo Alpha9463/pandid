@@ -9,41 +9,8 @@ atmospheric pressure, picks up heat from the returning lean amine in
 E-401, is stripped in T-402 over the reboiler E-403, and is pumped back
 up to contactor pressure through the trim cooler E-404.
 
-Two columns on one sheet, and they are **not the same tower**. ISO
-10628-2 gives an absorber and a regenerator no symbols of their own:
-each is the one dished-end shell of group 2 carrying whichever group-27
-internal it really contains, so what tells them apart here is
-``internals=``.
-
-- T-401 is ``internals="valve_tray"``. The contactor runs at 66 bara,
-  where a deck's pressure drop costs nothing worth having, and it has to
-  turn down with the gas rate and tolerate the compressor oil and iron
-  sulphide that arrive with the feed. A valve deck does both, and can be
-  washed.
-- T-402 is ``internals="packing"``. The regenerator runs just above
-  atmospheric, where pressure drop *is* the design: every millibar
-  across the tower raises the reboiler's bubble point, and MDEA degrades
-  thermally above about 130 C. Packing buys the low drop, and the two
-  beds are the wash section over the stripping section.
-
-They differ in **class**, not only in furnishing. T-401 is an
-``Absorber``: nothing in a contactor boils, so it has no reboiler, no
-condenser and no reflux loop, and drawing it as a general ``Column``
-would carry none of those nozzles at all but say nothing about why. Its
-two feeds are the counter-current streams a contactor actually takes --
-lean amine over the top deck, sour gas under the bottom one -- placed
-with ``feed_stages=`` the same way any other Column places one. T-402
-keeps its overhead condenser (E-402) and reflux drum (V-401): a
-regenerator that refluxes to hold its water balance is a
-``DistillationColumn``, not the shell a ``Stripper`` draws with no
-condenser at all, and not the general ``Column`` either -- that class
-carries a feed, an overhead and a bottoms and nothing that assumes a
-reflux loop, which T-402 very much has.
-
-Drawn as a PFD -- an arrowhead on every process line, an equipment
-list, a utilities summary and a stream table sectioned into a mass
-fraction block, with one control valve on the sheet and no instrument
-balloon anywhere.
+T-401 is an ``Absorber`` with valve trays; T-402 is a packed
+``DistillationColumn`` with its condenser E-402 and reflux drum V-401.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -65,8 +32,7 @@ from pandid.document import Revision, TableBox, TitleBlock, equipment_list
 from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 # --- Stream property table --------------------------------------------
-# Rows render in first-seen key order, so every stream carries the same
-# keys; values are drawn verbatim and an empty one renders as "-".
+# An empty value renders as "-".
 PROPERTY_ROWS = (
     "Temperature (C)", "Pressure (bara)", "Vapour Fraction", "Total Flow (kg/s)",
     "Methane", "Ethane", "CO2", "H2S", "MDEA", "Water",
@@ -114,18 +80,7 @@ def main():
     fs = Flowsheet("Amine Sweetening A400")
 
     # --- Equipment ----------------------------------------------------
-    # An Absorber's two feeds are the counter-current process inlets a
-    # contactor actually has: lean amine over the top deck (feed_1, stage
-    # 1) and sour gas under the bottom one (feed_2, stage 20 of the 20
-    # this tower carries). Both are the feed family's own west face, so
-    # nothing needs mirroring to bring them round to the sheet's west
-    # edge the way a distillation column's two return nozzles would.
-    #
-    # No label_pos: a tag written in the middle of a tower is written
-    # across the decks, and a tag is not haloed the way a line number is.
-    # Left unset the engine takes the first face no nozzle's stream runs
-    # through -- top, bottom, right, left in that order -- which is the
-    # wall beside each of these two.
+    # Lean amine enters over stage 1 (feed_1), sour gas under stage 20.
     contactor = fs.add(Absorber("T-401", internals="valve_tray", trays=20,
                                 n_feeds=2, feed_stages=[1, 20],
                                 width=110, height=340,
@@ -134,14 +89,7 @@ def main():
                                       width=110, height=300,
                                       description="Amine Regenerator"))
 
-    # The rich amine goes tube side and the returning lean amine shell
-    # side. Nozzles are named for the side of the equipment, never for
-    # the duty, and the choice is a real one: the rich stream flashes
-    # across E-401, carries the iron sulphide the contactor washed out of
-    # the gas, and is the corrosive half of the circuit -- so it goes in
-    # the half that can be pulled and cleaned. The shell also runs east
-    # to west against the tubes, which is the counter-current the
-    # exchanger is sized on.
+    # Rich amine tube side, lean amine shell side.
     cross = fs.add(ShellAndTubeExchanger("E-401", variant="straight_tubes", width=140,
                                          height=44,
                                          description="Lean / Rich Exchanger"))
@@ -158,21 +106,13 @@ def main():
     lean_pump = fs.add(Pump("P-401A/B", description="Lean Solvent Pump"))
     reflux_pump = fs.add(Pump("P-402A/B", description="Reflux Pump"))
 
-    # The one valve on the sheet. A PFD draws the plant that sets the
-    # process conditions, and this is the 64 bar break between a
-    # contactor at 66 bara and a regenerator at 1.9: without it the
-    # pressures in the table either side of E-401 have nothing to happen
-    # across.
+    # The let-down from contactor to regenerator pressure.
     letdown = fs.add(ControlValve("LV-401",
                                   description="Rich Amine Level Control Valve"))
 
     sour = fs.add(Feed("Sour Gas", reference="PFD-301"))
     steam = fs.add(Feed("LP Steam", reference="PFD-901"))
-    # header=True is one service tapped wherever the sheet wants it, so
-    # both cooling-water tie-ins carry CWS and both returns CWR. Without
-    # it a second flag with the same name is refused: a tag names one
-    # item, and a header is the exception because it is one service drawn
-    # at each place it is tapped.
+    # header=True lets several flags name the same header.
     cws_ovhd = fs.add(Feed("CWS", header=True))
     cws_trim = fs.add(Feed("CWS", header=True))
     sweet = fs.add(Product("Sweet Gas", reference="PFD-501"))
@@ -182,10 +122,6 @@ def main():
     cwr_trim = fs.add(Product("CWR", header=True))
 
     # --- Placement ----------------------------------------------------
-    # Pinned by nozzle, not by corner: pin(port=...) asks the symbol
-    # where its own nozzle sits, so no rescaling of the artwork can leave
-    # a flag off its run. A boundary flag is pinned at the tip of its
-    # arrow.
     contactor.pin(x=300, y=250)
     lean_in_y = 250 + port_offset(contactor, "feed_1")[1]
     gas_in_y = 250 + port_offset(contactor, "feed_2")[1]
@@ -193,10 +129,7 @@ def main():
     sour.pin(port="outlet", x=120, y=gas_in_y)
     sweet.pin(port="inlet", x=contactor_axis, y=140)
 
-    # The rich amine runs along the foot of the sheet and the heated
-    # rich rises to the regenerator's feed: one elevation each, which is
-    # what keeps the two halves of E-401 from having to be read as a
-    # single line through it.
+    # The rich amine runs along the foot of the sheet.
     rich_y = 822.0
     letdown.pin(port="inlet", x=460, y=rich_y)
     cross.pin(x=620).pin(port="tube_in", y=rich_y)
@@ -210,8 +143,7 @@ def main():
     reflux_in_y = 290 + port_offset(regen, "reflux_in")[1]
     boilup_in_y = 290 + port_offset(regen, "boilup_in")[1]
 
-    # mirrored="y" puts the condenser's shell inlet underneath, so the
-    # overhead rises into it straight.
+    # mirrored="y" puts the condenser's shell inlet underneath.
     ovhd.pin(mirrored="y").pin(port="shell_in", x=regen_axis, y=201)
     ovhd_drain_y = pinned_y(ovhd, "shell_out")
     cw_ovhd_y = pinned_y(ovhd, "tube_in")
@@ -237,12 +169,7 @@ def main():
     cwr_ovhd.pin(port="inlet", x=1700, y=cw_ovhd_y)
     acid.pin(port="inlet", x=1700, y=60)
 
-    # The solvent return runs east to west, so the pump is mirrored end
-    # to end and the riser back up to the contactor is the westmost line
-    # on the sheet. The trim cooler is not mirrored: the amine is on its
-    # shell, which is the side whose nozzles run east to west, and the
-    # cooling water on its tubes, which is the side whose two are on the
-    # walls where a boundary flag can reach them without doubling back.
+    # The solvent return runs east to west, so the pump is mirrored.
     return_y = 900.0
     lean_pump.pin(mirrored=True).pin(port="suction", x=600, y=return_y)
     pump_out_y = pinned_y(lean_pump, "discharge")
@@ -256,9 +183,7 @@ def main():
     lean_return_y = 1040.0
 
     # --- Connections --------------------------------------------------
-    # Declared in stream-number order, which is the order the table
-    # reads. A number is drawn once, on the first segment declared, so
-    # each group starts with the run it belongs on.
+    # A number is drawn once, on the first segment declared with it.
     fs.connect(sour.outlet, contactor.feed_2, name="S-401")
     fs.connect(contactor.overhead, sweet.inlet, name="S-402")
 
@@ -284,18 +209,11 @@ def main():
     fs.connect(reboiler.shell_out, regen.boilup_in, name="S-411",
                draw_as_recycle=True).via([(boilup_x, boilup_in_y)])
 
-    # The kettle's weir draw is the lean amine: everything that does not
-    # boil off leaves over it, which is where a stripping column's
-    # bottoms product physically comes from.
+    # Lean amine leaves over the kettle's weir.
     fs.connect(reboiler.bottoms, cross.shell_in, name="S-412").via(
         [(lean_draw_x, lean_run_y), (cross_shell_in_x, lean_run_y)])
     fs.connect(cross.shell_out, lean_pump.suction, name="S-413").via(
         [(cross_shell_out_x, return_y)])
-    # The trim cooler is on the pump's discharge and not its suction: the
-    # lean amine leaves E-401 at 75 C and its bubble point at 1.6 bara is
-    # 113 C, so the pump has 38 C of subcooling to work with. Cooling it
-    # first would only add the cooler's pressure drop to the tightest
-    # suction on the sheet.
     fs.connect(lean_pump.discharge, trim.shell_in, name="S-414").via(
         [(trim_shell_in_x, pump_out_y)])
     fs.connect(trim.shell_out, contactor.feed_1, name="S-403",
@@ -318,8 +236,6 @@ def main():
     fs.stream_table_sections = [("Methane", "Mass Fraction")]
 
     # --- Title strip --------------------------------------------------
-    # date= and scale= are stated rather than left blank: left blank, the
-    # renderer fills in today's date and the ratio it fitted the sheet at.
     fs.title_block = TitleBlock(
         title="Amine Sweetening",
         subtitle="A400 Process Flow Diagram 1",
@@ -336,8 +252,7 @@ def main():
     )
 
     # --- Sheet furniture ----------------------------------------------
-    # include= names the rows in process order; LV-401 is a bulk item
-    # bought by the line and takes no equipment-list row.
+    # List every item but LV-401, in process order.
     fs.add_annotation(equipment_list(fs, align="top", include=[
         "T-401", "E-401", "T-402", "E-402", "V-401", "P-402A/B", "E-403",
         "P-401A/B", "E-404",
