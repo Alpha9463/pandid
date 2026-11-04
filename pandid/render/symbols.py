@@ -3179,8 +3179,9 @@ class SymbolRegistry:
         register_vendored(self)
 
         # ISO 10628-2 group 26-29 parts, then the ISO families.
-        from pandid.render.iso_parts import register_parts
-        register_parts(self)
+        from pandid.render.iso_parts import parts
+        for part in parts():
+            self.register_part(part)
         self._register_composed()
         self._register_crushing_machines()
         self._register_centrifuges()
