@@ -52,9 +52,6 @@ _NO_STROKE = "none"
 
 _LINE_INK = "#000000"
 
-# draw.io ``jumpStyle`` for each crossing style; ``"plain"`` has none.
-_JUMP_STYLES = {"arc": "arc", "gap": "gap"}
-
 # Style for edges that are not streams: they never hop.
 _NO_HOP = "noJump=1;"
 
@@ -72,7 +69,7 @@ def _hops(polylines: dict, direction: str,
     polylines : dict
         ``{key: points}`` for every stream, in write order.
     direction : str
-        ``"vertical"`` or ``"horizontal"``; other values hop nothing.
+        ``"vertical"`` or ``"horizontal"``.
     style : str, default="arc"
         ``crossing_style``; ``"plain"`` hops nothing.
 
@@ -86,7 +83,7 @@ def _hops(polylines: dict, direction: str,
         ``(hopper, crossed, x, y)`` for each sheet hop drawn flat.
     """
     keys = list(polylines)
-    if style not in _JUMP_STYLES or direction not in ("vertical", "horizontal"):
+    if style == "plain":
         return keys, set(), set()
     # The edges each edge must be written after.
     after: dict = {key: set() for key in keys}
@@ -378,32 +375,15 @@ _APPROXIMATIONS = {
     ("reactor", "tubular"): _Approximation(
         None, "the tube pass inside the shell"),
     # Composed bodies: the mark is a child cell.
-    ("separator", "gravity"): _Approximation(
-        None, "the V bottom the collected phase draws off through"),
-    ("separator", "electrostatic"): _Approximation(
-        None, "the V bottom the collected phase draws off through"),
-    ("separator", "electromagnetic"): _Approximation(
-        None, "the V bottom the collected phase draws off through"),
-    ("crusher", "default"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "cone"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "hammer"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "impact"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "jaw"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "roller"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("mill", "default"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
-    ("mill", "hammer"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
-    ("mill", "impact"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
-    ("mill", "roller"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
+    **{("separator", v): _Approximation(
+        None, "the V bottom the collected phase draws off through")
+       for v in ("gravity", "electrostatic", "electromagnetic")},
+    **{("crusher", v): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it")
+       for v in ("default", "cone", "hammer", "impact", "jaw", "roller")},
+    **{("mill", v): _Approximation(
+        None, "the trapezoid outline and its chamfered top corners")
+       for v in ("default", "hammer", "impact", "roller")},
     ("mill", "vibration"): _Approximation(
         None, "the trapezoid outline, its chamfered top corners and the drum"),
     ("crushing_machine", "default"): _Approximation(
@@ -1518,7 +1498,8 @@ class DrawioRenderer:
                 # draw.io's jumpSize for a hop of HOP_R on this line, at least 1.
                 weight = fit.length(_stream_rung(signal).width)
                 size = max(1, round(2.0 * (fit.length(HOP_R) - weight) + 2.0))
-                keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}", f"jumpSize={size}"]
+                # draw.io's jumpStyle takes the crossing style's name.
+                keys += [f"jumpStyle={crossing_style}", f"jumpSize={size}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
                 keys += ["endArrow=block", "endFill=1",

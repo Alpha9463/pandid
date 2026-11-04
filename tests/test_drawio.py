@@ -22,7 +22,6 @@ from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import (
     _APPROXIMATIONS,
-    _JUMP_STYLES,
     HOP_DROPPED,
     _hops,
     _PART_APPROXIMATIONS,
@@ -3221,7 +3220,7 @@ def test_each_marked_representative_accounts_for_every_drawio_hop(settled_galler
         )
     else:
         assert marked, f"{stem}: no run marked, so this case proves nothing"
-        assert set(jumps.values()) == {_JUMP_STYLES[style]}, (
+        assert set(jumps.values()) == {style}, (
             f"{stem}: exported as {sorted(set(jumps.values()))}, drawn as {style}"
         )
     drawn = _drawio_hops(edges)
