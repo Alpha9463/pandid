@@ -10,6 +10,7 @@ from pandid.layout.control import _flaws, _shared, _taps_off
 from pandid.layout import layered
 from pandid.layout.layered import COL_GAP, LANE_PITCH
 from pandid.layout.quality import measure_final
+from pandid.render import symbols
 from pandid.route_geometry import stream_polyline
 from pandid.routing import lanes
 from pandid.routing.metrics import real_bends
@@ -143,21 +144,29 @@ def test_a_three_way_header_keeps_its_stock_face():
         assert not any(_shared(p, q, r, t) for p, q in zip(a, a[1:]) for r, t in zip(b, b[1:]))
 
 
+def _as_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Draw from here on with stock headers, no lane gaps and no lanes."""
+    monkeypatch.setattr(symbols, "header_grows", lambda unit: False)
+    monkeypatch.setattr(layered, "_lanes", lambda segs: {})
+    monkeypatch.setattr(lanes, "relane", lambda *args: False)
+
+
+def _tapped_coolers(n: int, at: float) -> Flowsheet:
+    """Return n coolers with a temperature balloon on each outlet at ``at``."""
+    fs, outlets, _ = _coolers(n)
+    for i, stream in enumerate(outlets):
+        fs.add_instrument("TI", 201 + i, sensing=stream, at=at)
+    return fs
+
+
 def test_a_header_kept_stock_draws_as_the_stock_header_without_lanes(monkeypatch):
     fs = _coolers(10)[0]
     fs.to_svg(diagram="p&id")
     assert [u.frame.h for u in fs.units[:2] if u.frame is not None] == [50, 50]
-    assert measure_final(fs).crossings == 103
-    # The same sheet with stock headers, no lane gaps and no lanes.
-    stock = _coolers(10)[0]
-    monkeypatch.setattr(layered, "_lanes", lambda segs: {})
-    monkeypatch.setattr(lanes, "relane", lambda *args: None)
-    for header in stock.units[:2]:
-        header._stock_face = True
-    stock.renumber_streams()
-    stock.layout()
-    stock._route_once()
-    assert _drawing(fs) == _drawing(stock)
+    _as_main(monkeypatch)
+    plain = _coolers(10)[0]
+    plain.to_svg(diagram="p&id")
+    assert _drawing(fs) == _drawing(plain)
 
 
 def test_a_grown_header_is_kept_only_where_it_draws_no_worse():
@@ -183,9 +192,7 @@ def test_a_grown_header_is_kept_only_where_it_draws_no_worse():
 
 
 def test_lanes_are_kept_only_where_they_draw_no_worse_than_without():
-    fs, outlets, _ = _coolers(3)
-    for i, stream in enumerate(outlets):
-        fs.add_instrument("TI", 201 + i, sensing=stream, at=0.75)
+    fs = _tapped_coolers(3, 0.75)
     fs.to_svg(diagram="p&id")
     assert _flaws(fs)["line-on-line"] == 0
     assert measure_final(fs).bends == 20

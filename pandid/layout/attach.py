@@ -208,8 +208,64 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return _along(points, float(inst.at if inst.at is not None else 0.5))
     if host.frame is None:
         return None
-    (px, py), (nx, ny) = face_point(host, host.frame, inst.face or "E")
+    face = free_face(inst) or inst.face
+    (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
     return (px, py), (-ny, nx)
+
+
+def free_face(inst: "Instrument") -> str | None:
+    """Return the face a balloon takes off E, if any.
+
+    It takes one only while its sheet's ``_free_faces`` is set, with no
+    face stated, on equipment that is not itself a balloon.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    str or None
+        That face, or ``None`` if the balloon keeps its own.
+    """
+    from pandid.streams import Stream
+
+    host, fs = inst.host, inst.flowsheet
+    if (fs is None or not fs._free_faces or inst._face_stated or host is None
+            or isinstance(host, Stream) or is_attached(host) or host.frame is None):
+        return None
+    face = _free_face(host)
+    return None if face == "E" else face
+
+
+def _free_face(host: "Unit") -> str:
+    """Return the face an unfaced balloon hangs from.
+
+    This is E, unless a line leaves E; then it is the first of N, S
+    and W that no line leaves and that has a process nozzle at its
+    middle.
+
+    Parameters
+    ----------
+    host : Unit
+        Placed unit a balloon hangs from.
+
+    Returns
+    -------
+    str
+        That face, or ``"E"`` if none qualifies.
+    """
+    from pandid.portgeom import face_point, resolve_port
+
+    at = {name: resolve_port(host, host.frame, name) for name in host.ports}
+    used = {at[name].face for name, port in host.ports.items() if port.stream is not None}
+    process = [at[name].point for name, port in host.ports.items() if port.role != "signal"]
+    for face in "NSW" if "E" in used else "":
+        middle = face_point(host, host.frame, face)[0]
+        if face not in used and any(math.dist(point, middle) < 0.5 for point in process):
+            return face
+    return "E"
 
 
 def _intrusion(a: Box, b: Box, gap: float) -> float:

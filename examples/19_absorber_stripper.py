@@ -166,7 +166,9 @@ def main():
     steam.pin(port="outlet", x=1230, y=steam_y)
     condensate.pin(port="inlet", x=1700, y=condensate_y)
     cws_ovhd.pin(port="outlet", x=880, y=cw_ovhd_y)
-    cwr_ovhd.pin(port="inlet", x=1700, y=cw_ovhd_y)
+    # The cooling water return drops below the reflux drum and pump.
+    cw_return_x, cw_return_y = 1130.0, 310.0
+    cwr_ovhd.pin(port="inlet", x=1700, y=cw_return_y)
     acid.pin(port="inlet", x=1700, y=60)
 
     # The solvent return runs east to west, so the pump is mirrored.
@@ -225,7 +227,8 @@ def main():
     fs.connect(steam.outlet, reboiler.tube_in, name="S-415")
     fs.connect(reboiler.tube_out, condensate.inlet, name="S-416")
     fs.connect(cws_ovhd.outlet, ovhd.tube_in, name="S-417")
-    fs.connect(ovhd.tube_out, cwr_ovhd.inlet, name="S-418")
+    fs.connect(ovhd.tube_out, cwr_ovhd.inlet, name="S-418").via(
+        [(cw_return_x, cw_ovhd_y), (cw_return_x, cw_return_y)])
     fs.connect(cws_trim.outlet, trim.tube_in, name="S-419")
     fs.connect(trim.tube_out, cwr_trim.inlet, name="S-420")
 

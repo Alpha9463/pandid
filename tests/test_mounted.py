@@ -464,6 +464,68 @@ def test_an_actuator_needs_a_clear_exit() -> None:
     assert not _clear({valve: valve.frame}, [blocker], True, [], [])
 
 
+def test_an_actuator_exit_keeps_off_a_units_side() -> None:
+    """Check that an exit kept a lane clear refuses a spot beside a unit's side."""
+    from pandid import Instrument, Vessel
+    from pandid.geometry import Frame
+    from pandid.layout.mounted import _clear
+    from pandid.routing.visibility import MARGIN
+
+    fs = Flowsheet("Actuator beside a vessel")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    valve = fs.add(ControlValve("FV-101"), on=fs.connect(feed.outlet, product.inlet))
+    controller = fs.add(Instrument("FIC-101"))
+    fs.connect(controller.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+    assert valve.frame is not None
+    x, y = port_point(valve, valve.frame, "actuator")
+    vessel = fs.add(Vessel("V-101"))
+    # The vessel's west side runs half a pixel east of the exit.
+    vessel.frame = Frame(x=x + 0.5, y=y - 100, w=60, h=80)
+
+    assert _clear({valve: valve.frame}, [vessel], True, [], [])
+    assert not _clear({valve: valve.frame}, [vessel], True, [], [], (), MARGIN)
+    vessel.frame = Frame(x=x + 20, y=y - 100, w=60, h=80)
+    assert _clear({valve: valve.frame}, [vessel], True, [], [], (), MARGIN)
+
+
+@pytest.mark.parametrize(
+    ("drum_height", "cooler_at", "near_nozzle", "face"),
+    [
+        (140, (500, 160), 1, "E"),
+        (100, (420, 240), 2, "E"),
+        (80, (420, 140), 1, "E"),
+        (140, (400, 120), 3, None),
+    ],
+)
+def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows(
+    drum_height: float, cooler_at: tuple[float, float], near_nozzle: int, face: str | None
+) -> None:
+    """Check that no line crosses a unit, nor more arrowheads than main draws."""
+    from pandid import Pump, ShellAndTubeExchanger, Vessel
+
+    fs = Flowsheet("Cooling")
+    feed, drum = fs.add(Feed("Feed")), fs.add(Vessel("V-101", width=60, height=drum_height))
+    valve, pump = fs.add(ControlValve("LV-101")), fs.add(Pump("P-101"))
+    cooler, out = fs.add(ShellAndTubeExchanger("E-101")), fs.add(Product("Product"))
+    cws, cwr = fs.add(Feed("CWS")), fs.add(Product("CWR"))
+    drum.pin(x=280, y=180)
+    cooler.pin(x=cooler_at[0], y=cooler_at[1])
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, valve.inlet)
+    fs.connect(valve.outlet, pump.suction)
+    fs.connect(pump.discharge, cooler.tube_in)
+    fs.connect(cooler.tube_out, out.inlet)
+    fs.connect(cws.outlet, cooler.shell_in)
+    fs.connect(cooler.shell_out, cwr.inlet)
+    fs.add_control_loop("L", 101, measuring=drum, acting_on=valve, face=face)
+    fs.to_svg(diagram="p&id")
+    codes = [i.code for i in fs.validate(diagram="p&id")]
+    assert "route-crosses-unit" not in codes
+    assert codes.count("route-crosses-near-nozzle") <= near_nozzle
+
+
 def test_an_eccentric_reducer_is_set_on_its_pipe() -> None:
     """Check that a reducer with offset centrelines still runs straight through."""
     from pandid import Reducer

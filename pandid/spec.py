@@ -2198,7 +2198,8 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
         if by_name:
             entry["quadrants"] = by_name
     if inst._marks is not None:
-        entry["face"] = inst.face
+        if inst._face_stated:
+            entry["face"] = inst.face
         if inst.offset != 46.0:
             entry["offset"] = inst.offset
         if inst.angle != 90.0:
@@ -2212,7 +2213,7 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
         )
         if isinstance(inst.host, Stream):
             entry["at"] = inst.at
-        else:
+        elif inst._face_stated:
             entry["face"] = inst.face
         if inst.offset != 45.0:
             entry["offset"] = inst.offset

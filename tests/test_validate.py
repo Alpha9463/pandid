@@ -2002,7 +2002,7 @@ def test_a_crossing_an_arrowhead_length_clear_of_the_nozzle_is_not_reported():
 
 def _run_over_vessel(offset: float, balloon: bool = False, flag: bool = False) -> Flowsheet:
     """Build a run drawn *offset* px above V-1's box, its LT-1, or a corner-pinned flag Q."""
-    from pandid.portgeom import unit_box
+    from pandid.portgeom import drawn_box
 
     fs = Flowsheet("edge")
     v = fs.add(U.Vessel("V-1")).pin(x=300, y=200)
@@ -2018,7 +2018,7 @@ def _run_over_vessel(offset: float, balloon: bool = False, flag: bool = False) -
     run = fs.connect(a.outlet, ap.inlet)
     fs.layout()
     assert lt.frame is not None and a.frame is not None and ap.frame is not None
-    top = unit_box(lt, lt.frame)[1] - offset
+    top = drawn_box(lt, lt.frame)[1] - offset
     (ax, ay), (bx, by) = port_point(a, a.frame, "outlet"), port_point(ap, ap.frame, "inlet")
     run.via([(ax + 30, ay), (ax + 30, top), (bx - 30, top), (bx - 30, by)])
     return fs
@@ -2075,3 +2075,32 @@ def test_unit_overlap_advice_moves_a_corner_pinned_flag_by_its_corner():
 def test_a_line_clear_of_a_box_edge_is_not_reported():
     """Check that a run 10px off V-1's top edge is not reported."""
     assert _found(_run_over_vessel(10.0), "route-along-unit") == []
+
+
+def _run_over_flag(offset: float) -> Flowsheet:
+    """Build a run drawn *offset* px above the top of the Air flag's pennant."""
+    from pandid.render.svg import boundary_flag
+
+    fs = Flowsheet("flag edge")
+    air = fs.add(U.Feed("Air")).pin(x=300, y=200)
+    a = fs.add(U.Feed("A")).pin(x=60, y=100)
+    ap = fs.add(U.Product("AP")).pin(x=700, y=100)
+    run = fs.connect(a.outlet, ap.inlet)
+    fs.layout()
+    assert air.frame is not None and a.frame is not None and ap.frame is not None
+    top = boundary_flag(air, air.frame).box[1] - offset
+    (ax, ay), (bx, by) = port_point(a, a.frame, "outlet"), port_point(ap, ap.frame, "inlet")
+    run.via([(ax + 30, ay), (ax + 30, top), (bx - 30, top), (bx - 30, by)])
+    return fs
+
+
+def test_a_flag_is_measured_by_the_pennant_it_draws():
+    """Check that a run inside a flag's box but clear of its pennant is not reported."""
+    from pandid.portgeom import unit_box
+
+    fs = _run_over_flag(14.0)
+    air = next(u for u in fs.units if u.name == "Air")
+    # The run is a pixel inside the top of the flag's box.
+    assert air.frame is not None and unit_box(air, air.frame)[1] == 175.0
+    assert _found(fs, "route-along-unit") == []
+    assert len(_found(_run_over_flag(1.5), "route-along-unit")) == 1

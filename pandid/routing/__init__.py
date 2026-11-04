@@ -306,15 +306,33 @@ class DefaultRouter:
         UserWarning
             If an end has no frame or anchor; the stream is skipped.
         """
+        from pandid.portgeom import COMPASS, resolve_port
         from pandid.render.svg import tap_lines, tap_route
-        from pandid.routing.visibility import VisibilityGraph, share_escape_room
-        from pandid.routing.astar import CrossingIndex, find_path
+        from pandid.render.symbols import ARROWHEAD
+        from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
+        from pandid.routing.astar import TOUCH_PENALTY, CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
+        # Price arrowheads and lanes beside units where route() asks,
+        # but not on the routes layout sets pipe furniture on.
+        priced = fs._priced and not fs._laying_out
+        hugging = (hugging_edges(graph.edges, graph.xs, graph.ys, graph.body_obstacles)
+                   if priced else {})
+        # The first arrowhead length of each line out of each nozzle,
+        # but a balloon's, which moves with the routes.
+        heads = CrossingIndex()
+        for s in fs.streams if priced else ():
+            for port in (s.source, s.dest):
+                if port.owner.frame is not None and port.owner.kind != "instrument":
+                    (px, py), _, face = resolve_port(port.owner, port.owner.frame, port.name)
+                    dx, dy = COMPASS[face]
+                    heads.record([(px, py), (px + ARROWHEAD * dx, py + ARROWHEAD * dy)])
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float]
         edge_penalties = defaultdict(float)
+        for run in hugging:
+            edge_penalties[run] += TOUCH_PENALTY
         taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
         routed: list["Stream"] = []
         # Ends of each found route's stand-offs.
@@ -399,12 +417,19 @@ class DefaultRouter:
 
             is_recycle = getattr(stream, "is_recycle", False)
             crossing_index = crossable(stream)
+            # A run beside only the stream's own ends goes uncharged.
+            own = [run for run, units in hugging.items()
+                   if units <= {id(src_u), id(dst_u)}]
+            for run in own:
+                edge_penalties[run] -= TOUCH_PENALTY
             path = []
             if clear_stubs:
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
-                    edge_penalties, is_recycle, crossing_index,
+                    edge_penalties, is_recycle, crossing_index, heads if priced else None,
                 )
+            for run in own:
+                edge_penalties[run] += TOUCH_PENALTY
             path_found = bool(path)
 
             if path:
