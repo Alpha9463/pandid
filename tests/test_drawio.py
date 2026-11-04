@@ -2851,7 +2851,7 @@ def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
     tuple[dict, dict, list]
         Symbol boxes, tag boxes, and line-number boxes.
     """
-    from pandid.render.drawio import _LINE_BOX, _TEXT_INSET, _Fit
+    from pandid.render.drawio import _LINE_BOX, _Fit
     from pandid.render.furniture import text_width
 
     symbols, tags, numbers = {}, {}, []
@@ -2874,10 +2874,15 @@ def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
         offset = geometry.find("mxPoint[@as='offset']")
         dx = float(offset.get("x")) if offset is not None else 0.0
         dy = float(offset.get("y")) if offset is not None else 0.0
-        # The label box sits outside the cell, its text held _TEXT_INSET off it.
-        nx, ny = {"top": (0, -1), "bottom": (0, 1), "left": (-1, 0), "right": (1, 0)}[side]
-        cx = x + w / 2 + dx + nx * (w / 2 + _TEXT_INSET + lw / 2)
-        cy = y + h / 2 + dy + ny * (h / 2 + _TEXT_INSET + lh / 2)
+        # draw.io holds a side label 2 off the cell, and 1 more under and 5 over its text.
+        nx, ny, gap = {
+            "top": (0, -1, 3.0),
+            "bottom": (0, 1, 7.0),
+            "left": (-1, 0, 2.0),
+            "right": (1, 0, 2.0),
+        }[side]
+        cx = x + w / 2 + dx + nx * (w / 2 + gap + lw / 2)
+        cy = y + h / 2 + dy + ny * (h / 2 + gap + lh / 2)
         tags[f"u{i}"] = (cx - lw / 2, cy - lh / 2, cx + lw / 2, cy + lh / 2)
 
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)

@@ -13,8 +13,7 @@ from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 from xml.sax.saxutils import escape
 
-from pandid.layout.labels import _DIR_OF_SIDE
-from pandid.portgeom import COMPASS, _flag_reference, _xform, port_point, symbol_to_box, unit_box
+from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
@@ -1148,13 +1147,11 @@ class DrawioRenderer:
             lines.append(letters)
         side, dx, dy = tags.at.get(id(u), (
             (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0))
-        # draw.io already holds a side label _TEXT_INSET off the cell.
-        nx, ny = COMPASS[_DIR_OF_SIDE[side]] if id(u) in tags.at else (0, 0)
+        gx, gy = _SIDE_LABEL_GAP[side] if id(u) in tags.at else (0.0, 0.0)
         # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
-        ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx) - nx * _TEXT_INSET,
-                                            fit.length(dy) - ny * _TEXT_INSET)
+        ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx) - gx, fit.length(dy) - gy)
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
@@ -2193,6 +2190,11 @@ _BASELINE = 0.9
 
 # Inset draw.io applies on every side of a cell before its text.
 _TEXT_INSET = 2.0
+
+# Step from the middle of a cell's side to the middle of a side label's near
+# edge: the inset, and the 1 under and 5 over its text that draw.io adds.
+_SIDE_LABEL_GAP = {"top": (0.0, -_TEXT_INSET - 1), "bottom": (0.0, _TEXT_INSET + 5),
+                   "left": (-_TEXT_INSET, 0.0), "right": (_TEXT_INSET, 0.0)}
 
 # Style keys for TableBox column alignment.
 _ALIGN_KEY = {"l": f"align=left;spacingLeft={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
