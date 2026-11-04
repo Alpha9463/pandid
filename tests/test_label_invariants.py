@@ -8,7 +8,6 @@ import re
 
 import pytest
 
-from _render_cases import copy_settled_case
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
 from pandid.portgeom import unit_box
@@ -196,28 +195,20 @@ def _alongness(box, turned, runs) -> float:
 
 
 @pytest.fixture(scope="module")
-def sheets(settled_gallery):
-    """Render every visual-label corpus sheet once.
+def sheets(corpus_svg):
+    """Parse the line numbers of every corpus sheet once.
 
     Parameters
     ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared, routed gallery flowsheets and their render options.
+    corpus_svg : dict[str, tuple[Flowsheet, dict, str]]
+        Shared corpus flowsheets, render options and SVGs.
 
     Returns
     -------
     dict
         Flowsheets and parsed labels keyed by corpus name.
     """
-    out = {}
-    for name, build in CORPUS.items():
-        if name in settled_gallery:
-            fs, kwargs = copy_settled_case(settled_gallery, name)
-        else:
-            fs, kwargs = build()
-        svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS})
-        out[name] = (fs, _labels(svg))
-    return out
+    return {name: (fs, _labels(svg)) for name, (fs, _options, svg) in corpus_svg.items()}
 
 
 # --- §7.2.5: along, or led ---------------------------------------------------

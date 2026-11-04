@@ -11,7 +11,7 @@ from pandid import Flowsheet, units
 from pandid.render.svg import SvgRenderer, _placement_scale
 from pandid.render.symbols import Symbol, default_registry
 from pandid.render.weights import LineWeight
-from _render_cases import copy_settled_case, gallery
+from _render_cases import SCENARIOS, copy_settled_case
 
 Matrix = tuple[float, float, float, float]
 DrawnPen = tuple[str, float, float]
@@ -19,7 +19,7 @@ DrawnPen = tuple[str, float, float]
 _NS = "{http://www.w3.org/2000/svg}"
 _XFORM = re.compile(r"(translate|scale|rotate|matrix)\(([^)]*)\)")
 _IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0)
-_SHEETS = tuple(gallery.sheets())
+_SHEETS = tuple(SCENARIOS)
 
 
 def _mul(left: Matrix, right: Matrix) -> Matrix:
