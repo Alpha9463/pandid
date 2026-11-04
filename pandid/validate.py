@@ -7,7 +7,7 @@ but imperfect drawing, collected on ``fs.warnings``.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from pandid._checks import suggest
@@ -889,9 +889,14 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     reversed_in_line = (
                         f"A device in a line is drawn with its inlet upstream, so "
                         f"{u.name} is drawn end for end. Pin it with "
-                        f"mirrored={drawn_mirror} to draw it so, or with "
-                        f"orientation={(pin.orientation + 180) % 360:g} to keep "
-                        f"mirrored={stated}")
+                        f"mirrored={drawn_mirror} to draw it so")
+                    # Offer the half turn only where every stated face survives it.
+                    turned = replace(pin, orientation=(pin.orientation + 180) % 360)
+                    if all(face in port_faces(u, name, turned)
+                           for name, face in u._port_faces.items()):
+                        reversed_in_line += (
+                            f", or with orientation={turned.orientation:g} to keep "
+                            f"mirrored={stated}")
             # Compare pinned col/row with the frame's, skipping an axis
             # with an absolute pin.
             for axis, absolute in (("col", "x"), ("row", "y")) if pin is not None else ():

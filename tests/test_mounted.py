@@ -235,6 +235,52 @@ def test_a_turned_and_mirrored_valve_sits_on_its_pipe(
     assert all("end for end" in said for said in warned)
 
 
+def _reversed_valve(turn: int, mirrored: bool | str, face: bool) -> tuple[Flowsheet, ControlValve]:
+    """Return a sheet with a valve whose stated pose runs it against its line."""
+    from pandid.portgeom import port_faces
+
+    upright = turn in (90, 270)
+    fs = Flowsheet("Reversed")
+    start = fs.add(Valve("A")).pin(orientation=90 if upright else 0)
+    end = fs.add(Valve("B")).pin(orientation=90 if upright else 0)
+    if upright:
+        start.pin(port="outlet", x=300, y=100)
+        end.pin(port="inlet", x=300, y=500)
+    else:
+        start.pin(port="outlet", x=100, y=300)
+        end.pin(port="inlet", x=500, y=300)
+    valve = ControlValve("CV").pin(orientation=turn, mirrored=mirrored)
+    if face:
+        valve.nozzle("actuator", port_faces(valve, "actuator")[0])
+    fs.add(valve, on=fs.connect(start.outlet, end.inlet))
+    return fs, valve
+
+
+@pytest.mark.parametrize("face", [False, True])
+@pytest.mark.parametrize(
+    ("turn", "mirrored"), [(0, True), (0, "xy"), (180, False), (180, "y"), (90, True), (270, False)]
+)
+def test_each_pin_offered_for_a_reversed_valve_clears_the_warning(
+    turn: int, mirrored: bool | str, face: bool
+) -> None:
+    """Check that every pin the end-for-end advice offers is taken and draws as pinned."""
+    import ast
+    import re
+
+    fs, _ = _reversed_valve(turn, mirrored, face)
+    fs.route()
+    warned = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
+    assert len(warned) == 1 and "end for end" in warned[0]
+    offered = re.findall(r"(mirrored|orientation)=(\S+) to (?:draw|keep)", warned[0])
+    assert offered[0][0] == "mirrored"
+    assert face or [name for name, _ in offered] == ["mirrored", "orientation"]
+    for name, value in offered:
+        fs, valve = _reversed_valve(turn, mirrored, face)
+        valve.pin(**{name: ast.literal_eval(value)})
+        fs.route()
+        assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
 def test_a_line_between_two_devices_set_on_it_adds_no_bends() -> None:
     """Check that the lines either side of a reducer set after a valve on one pipe draw straight."""
     from pandid import Reducer
