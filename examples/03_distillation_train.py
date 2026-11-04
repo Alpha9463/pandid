@@ -164,7 +164,7 @@ def main():
     fs.stream_table_sections = [("Benzene", "Mass Fraction")]
 
     # --- Title block + revision history -------------------------------
-    from pandid.document import (TitleBlock, Revision, equipment_list, notes, legend)
+    from pandid.document import (TitleBlock, Revision, equipment_list, notes)
     fs.title_block = TitleBlock(
         title="Aromatics Recovery A100",
         subtitle="Process Flow Diagram 1",
@@ -194,11 +194,6 @@ def main():
         "All instruments field-mounted unless noted.",
         "Recycle valve FV-200 fails open.",
     ], align="top-right"))
-    fs.add_annotation(legend({
-        "PFD": "Process Flow Diagram",
-        "FV": "Flow Control Valve",
-        "NTS": "Not To Scale",
-    }, align="top-left"))
 
     # --- Render -------------------------------------------------------
     fs.render(out("distillation_train.svg"), show_stream_table=True, border="zone")
