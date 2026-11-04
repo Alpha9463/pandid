@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Devices and valve stations go in a line with `on=` (#564).** Type
   `fs.add(Valve("HV-101"), on=line)` or `fs.add_valve_station("CV-101",
   on=line)`, with `at=` for a rough position along the line.
+- **`validate()` reports lines that touch (#621).** `route-crosses-near-nozzle`
+  is a crossing within an arrowhead length of a nozzle and `route-along-unit`
+  a line drawn on a unit's box edge; the router also counts instrument tap
+  lines as crossings.
 
 ### Changed
 
