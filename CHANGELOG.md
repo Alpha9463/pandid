@@ -115,6 +115,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A device with a stated turn and mirror sits on its pipe, inlet upstream
+  (#642).** Where `pin(orientation=..., mirrored=...)` would run it against
+  its line, it is drawn end for end, and `validate()` reports the pin that
+  draws it so.
 - **Numbered nozzles type-check in mypy and pyright (#646).**
   `Mixer("M", n_inlets=3).in_1` and `GasHolder("G", inputs=("N", "S"))` pass
   both checkers, and a nozzle past the count, such as `.in_4`, fails at run
