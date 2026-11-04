@@ -1871,7 +1871,7 @@ class Docked(NamedTuple):
     h: float
 
 
-def dock(items, inner, *, sheet=None, too_small=None):
+def dock(items, inner, *, sheet=None):
     """Return ``(placed, frame, free)`` for the sheet furniture.
 
     Each box stacks flush to the frame edge its ``align`` names, inset
@@ -1885,8 +1885,6 @@ def dock(items, inner, *, sheet=None, too_small=None):
         Drawing bounds ``(x0, y0, x1, y1)``.
     sheet : _Sheet, optional
         Fixed page; without it the frame grows to fit.
-    too_small : callable, optional
-        Takes ``(need_w, need_h, culprit)``; returns the error to raise.
 
     Returns
     -------
@@ -1899,10 +1897,8 @@ def dock(items, inner, *, sheet=None, too_small=None):
 
     Raises
     ------
-    TypeError
-        If the furniture overflows ``sheet`` and ``too_small`` is None.
-    Exception
-        From ``too_small``, if the furniture overflows ``sheet``.
+    ValueError
+        If the furniture overflows ``sheet``.
     """
     from pandid.document import _ALIGN
 
@@ -1982,13 +1978,14 @@ def dock(items, inner, *, sheet=None, too_small=None):
                      stack_h(cols["left"]), stack_h(cols["right"]))
         too_wide = need_w >= sheet.width - 2 * edge
         if too_wide or need_h >= sheet.height - 2 * edge:
-            if too_small is None:
-                raise TypeError("dock() needs a too_small callback when sheet is given")
+            from pandid.render.svg import _furniture_name, _too_small
+
             # Blame the widest piece, or the tallest.
             dim = 1 if too_wide else 2
             entries = [it for col in cols.values() for it in col]
-            raise too_small(need_w + 2 * edge, need_h + 2 * edge,
-                            max(entries, key=lambda it: it[dim])[0] if entries else None)
+            culprit = max(entries, key=lambda it: it[dim])[0] if entries else None
+            raise _too_small(sheet, need_w + 2 * edge, need_h + 2 * edge,
+                             _furniture_name(culprit) if culprit else "")
         ix, iy = edge, edge
         ixr, iyb = sheet.width - edge, sheet.height - edge
     else:
