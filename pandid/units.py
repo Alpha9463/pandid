@@ -179,8 +179,6 @@ _LAYOUT_INPUTS = frozenset(
         "_pin_ports",
         "width",
         "height",
-        "_width",
-        "_height",
         "_length",
         "_diameter",
         "_large_end",
@@ -5142,10 +5140,6 @@ class Block(_FaceFamilies):
     DEFAULT_INPUT_FACE = "W"
     DEFAULT_OUTPUT_FACE = "E"
 
-    # Class defaults, read when Unit.__init__ first sets the size.
-    _width: float | None = None
-    _height: float | None = None
-
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
@@ -5207,91 +5201,34 @@ class Block(_FaceFamilies):
         self._faces[name] = face
         return port
 
-    @property
-    def width(self) -> float | None:
-        """Return the box width, or ``None`` to fit the connections.
-
-        Returns
-        -------
-        float or None
-            Width in pixels, or ``None``.
-        """
-        return self._width
-
-    @width.setter
-    def width(self, value: float | None) -> None:
-        """Set the box width.
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set an attribute, keeping the old size if the box is too small.
 
         Parameters
         ----------
-        value : float or None
-            Width in pixels, or ``None`` to fit the connections.
+        name : str
+            Attribute name.
+        value : Any
+            New value.
 
         Raises
         ------
         TypeError
-            If ``value`` is neither ``None`` nor a real number.
+            If ``width`` or ``height`` is neither ``None`` nor a real
+            number.
         ValueError
-            If ``value`` is not positive and finite, or the box is too
-            small for its connections.
+            If ``width`` or ``height`` is not positive and finite, or the
+            box is too small for its connections.
         """
-        self._resize("_width", value)
-
-    @property
-    def height(self) -> float | None:
-        """Return the box height, or ``None`` to fit the connections.
-
-        Returns
-        -------
-        float or None
-            Height in pixels, or ``None``.
-        """
-        return self._height
-
-    @height.setter
-    def height(self, value: float | None) -> None:
-        """Set the box height.
-
-        Parameters
-        ----------
-        value : float or None
-            Height in pixels, or ``None`` to fit the connections.
-
-        Raises
-        ------
-        TypeError
-            If ``value`` is neither ``None`` nor a real number.
-        ValueError
-            If ``value`` is not positive and finite, or the box is too
-            small for its connections.
-        """
-        self._resize("_height", value)
-
-    def _resize(self, attr: str, value: float | None) -> None:
-        """Set a box dimension, keeping the old one if refused.
-
-        Parameters
-        ----------
-        attr : str
-            ``"_width"`` or ``"_height"``.
-        value : float or None
-            New size, or ``None`` to fit the connections.
-
-        Raises
-        ------
-        ValueError
-            If the box is too small for its connections.
-        """
-        was = getattr(self, attr)
-        setattr(self, attr, value)
+        was = self.__dict__.get(name)
+        super().__setattr__(name, value)
         # Unit.__init__ sets the size before the connections exist.
-        if "_faces" not in self.__dict__:
-            return
-        try:
-            self._check_box()
-        except ValueError:
-            setattr(self, attr, was)
-            raise
+        if name in ("width", "height") and "_faces" in self.__dict__:
+            try:
+                self._check_box()
+            except ValueError:
+                super().__setattr__(name, was)
+                raise
 
     def pin(
         self,

@@ -542,7 +542,6 @@ class Flowsheet:
         self._route_stale = False
         # Last full numbering pass, for _number_appended().
         self._groups: "list[list[Stream]] | None" = None
-        self._group_names: list[str] = []
         self._group_of: dict[int, int] = {}  # id(Stream) -> group index
         self._tail: list[Stream] = []  # lines numbered after the runs
         self.title_block: "TitleBlock | None" = None
@@ -2279,14 +2278,13 @@ class Flowsheet:
         """
         with self._unchanged_if_it_raises():
             groups = self._stream_groups()
-            names = []
             for place, group in enumerate(groups, 1):
                 # Named groups still use up their place.
-                names.append(self._name_group(group, place))
+                self._name_group(group, place)
             self._tail = [s for s in self.streams if s.kind != "material"]
             self._number_tail(len(groups))
             # Cache for _number_appended().
-            self._groups, self._group_names = groups, names
+            self._groups = groups
             self._group_of = {id(s): i for i, g in enumerate(groups) for s in g}
 
     def _number_appended(self, stream: "Stream") -> bool:
@@ -2327,12 +2325,12 @@ class Flowsheet:
             groups[where] = group = [*groups[where], stream]
             index[id(stream)] = where
             # Rename the run; the new segment may add a line number.
-            self._group_names[where] = self._name_group(group, where + 1)
+            self._name_group(group, where + 1)
             return True
 
         groups.append([stream])
         index[id(stream)] = len(groups) - 1
-        self._group_names.append(self._name_group([stream], len(groups)))
+        self._name_group([stream], len(groups))
         # One more run shifts the non-material lines after it.
         self._number_tail(len(groups))
         return True
@@ -2375,7 +2373,7 @@ class Flowsheet:
                 found.append(where)
         return found
 
-    def _name_group(self, group: "list[Stream]", place: int) -> str:
+    def _name_group(self, group: "list[Stream]", place: int) -> None:
         """Number and name one group's segments for its place.
 
         Parameters
@@ -2384,11 +2382,6 @@ class Flowsheet:
             Segments of one run.
         place : int
             1-based position in the sequence.
-
-        Returns
-        -------
-        str
-            The name given.
 
         Raises
         ------
@@ -2413,7 +2406,6 @@ class Flowsheet:
             for s in group:
                 if s.auto_named:
                     s.name = name
-            return name
 
     def _number_tail(self, used: int) -> None:
         """Number non-material lines after the material runs.
