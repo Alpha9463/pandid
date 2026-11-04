@@ -18,7 +18,7 @@ def main():
     fs = Flowsheet("Transfer and Relief")
 
     # --- Equipment ----------------------------------------------------
-    feed = fs.add(Feed("Raw Feed", reference="PFD-100"))
+    feed = fs.add(Feed("Raw Feed", reference="P&ID-100"))
     hv = fs.add(Valve("HV-101", description="Suction Isolation Valve"))
     strainer = fs.add(Fitting("ST-101", variant="strainer",
                               description="Suction Strainer"))
@@ -29,8 +29,8 @@ def main():
                           description="Surge Vessel"))
     psv = fs.add(ReliefValve("PSV-101", variant="psv",
                              description="Vessel Relief Valve"))
-    flare = fs.add(Product("To Flare", reference="PFD-900"))
-    prod = fs.add(Product("To Unit 200", reference="PFD-200"))
+    flare = fs.add(Product("To Flare", reference="P&ID-900"))
+    prod = fs.add(Product("To Unit 200", reference="P&ID-200"))
 
     # The two spec breaks; everything else keeps its run whole.
     fv.new_line_number = True
