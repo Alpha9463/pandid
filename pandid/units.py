@@ -3336,9 +3336,11 @@ class Instrument(Unit):
         face : str, optional
             Face of a unit, ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or
             ``"top"``, ``"bottom"``, ``"left"`` or ``"right"``; default
-            ``"E"``, or, where a line leaves a unit's ``"E"``, the first
-            of ``"N"``, ``"S"`` and ``"W"`` with no line and a process
-            nozzle at its middle.
+            ``"E"``. Where a line leaves a unit's ``"E"`` and the sheet
+            draws a line along a unit or across an arrowhead,
+            :meth:`~pandid.Flowsheet.route` tries the first of ``"N"``,
+            ``"S"`` and ``"W"`` with no line and a process nozzle at its
+            middle, kept if no finding grows.
         offset : float, default=45.0
             Requested tap-to-centre distance in pixels; 0 on a stream
             draws the balloon in the line.

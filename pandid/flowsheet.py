@@ -535,8 +535,10 @@ class Flowsheet:
         self._exit_tight = False
         # Engine the last layout ran.
         self._engine = None
-        # Whether the router prices arrowheads and lanes beside units.
+        # Whether the router prices arrowheads and lanes beside units, and
+        # whether an unfaced balloon on equipment may leave its E face.
         self._priced = False
+        self._free_faces = False
         # Whether route() may hang a controller off its actuator, the
         # controllers it hung, and the sheet as routed without them.
         self._may_hang = False
@@ -2044,8 +2046,8 @@ class Flowsheet:
         has a tap off its line that was on it before hanging, the sheet is
         placed as if no controller could hang. Where the result draws a
         line along a unit or across an arrowhead, the sheet is routed again
-        pricing both, kept only if no tap leaves its line and no finding or
-        clash grows. Where the last layout drew a valve's signal exit
+        pricing both, with each unfaced balloon on equipment on a free face,
+        kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
 
@@ -2061,13 +2063,16 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
+        # Start from main's faces for unfaced balloons.
+        self._free_faces = False
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         from pandid.routing import DefaultRouter
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
+        from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
         from pandid.validate import geometry_issues
 
@@ -2147,6 +2152,7 @@ class Flowsheet:
                 Findings and clashes of the sheet as it stands.
             """
             prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
+            free = self._free_faces
             try:
                 redo()
                 kept = _taps_off(self) <= off and not any(
@@ -2154,13 +2160,17 @@ class Flowsheet:
             except Exception:
                 kept = False
             if not kept:
+                self._free_faces = free
                 self._put_geometry(prior, keep_manual=False)
                 self._unhung = unhung
 
         def priced() -> None:
-            """Settle the sheet with arrowheads and lanes beside units priced."""
-            self._priced = True
+            """Settle the sheet with arrowheads and lanes beside units priced
+            and unfaced balloons on free faces, laid out again if one moves."""
+            self._priced = self._free_faces = True
             try:
+                if any(isinstance(u, Instrument) and free_face(u) for u in self.units):
+                    self.layout(self._engine)
                 settle()
             finally:
                 self._priced = False

@@ -491,11 +491,16 @@ def test_an_actuator_exit_keeps_off_a_units_side() -> None:
 
 
 @pytest.mark.parametrize(
-    ("drum_height", "cooler_at", "near_nozzle"),
-    [(140, (500, 160), 1), (100, (420, 240), 2), (80, (420, 140), 1)],
+    ("drum_height", "cooler_at", "near_nozzle", "face"),
+    [
+        (140, (500, 160), 1, "E"),
+        (100, (420, 240), 2, "E"),
+        (80, (420, 140), 1, "E"),
+        (140, (400, 120), 3, None),
+    ],
 )
 def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows(
-    drum_height: float, cooler_at: tuple[float, float], near_nozzle: int
+    drum_height: float, cooler_at: tuple[float, float], near_nozzle: int, face: str | None
 ) -> None:
     """Check that no line crosses a unit, nor more arrowheads than main draws."""
     from pandid import Pump, ShellAndTubeExchanger, Vessel
@@ -514,7 +519,7 @@ def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows(
     fs.connect(cooler.tube_out, out.inlet)
     fs.connect(cws.outlet, cooler.shell_in)
     fs.connect(cooler.shell_out, cwr.inlet)
-    fs.add_control_loop("L", 101, measuring=drum, acting_on=valve, face="E")
+    fs.add_control_loop("L", 101, measuring=drum, acting_on=valve, face=face)
     fs.to_svg(diagram="p&id")
     codes = [i.code for i in fs.validate(diagram="p&id")]
     assert "route-crosses-unit" not in codes

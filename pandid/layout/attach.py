@@ -208,9 +208,35 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return _along(points, float(inst.at if inst.at is not None else 0.5))
     if host.frame is None:
         return None
-    face = inst.face if inst._face_stated or is_attached(host) else _free_face(host)
+    face = free_face(inst) or inst.face
     (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
     return (px, py), (-ny, nx)
+
+
+def free_face(inst: "Instrument") -> str | None:
+    """Return the face a balloon takes off E, if any.
+
+    It takes one only while its sheet's ``_free_faces`` is set, with no
+    face stated, on equipment that is not itself a balloon.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    str or None
+        That face, or ``None`` if the balloon keeps its own.
+    """
+    from pandid.streams import Stream
+
+    host, fs = inst.host, inst.flowsheet
+    if (fs is None or not fs._free_faces or inst._face_stated or host is None
+            or isinstance(host, Stream) or is_attached(host) or host.frame is None):
+        return None
+    face = _free_face(host)
+    return None if face == "E" else face
 
 
 def _free_face(host: "Unit") -> str:
