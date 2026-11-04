@@ -44,14 +44,17 @@ def break_cycles(fs: "Flowsheet") -> None:
     visited: set["Unit"] = set()
     stack: set["Unit"] = set()
 
-    def dfs(start: "Unit") -> None:
-        """Walk depth first from one unit, marking back edges.
+    feeds = [u for u in units if in_degree[u] == 0]
 
-        Parameters
-        ----------
-        start : Unit
-            Unit to start from.
-        """
+    # With no feed, start from the highest out-degree.
+    if not feeds:
+        highest = max(units, key=lambda x: len(adj[x]))
+        feeds = [highest]
+
+    # Walk depth first from each feed, then from each unit not yet reached.
+    for start in [*feeds, *units]:
+        if start in visited:
+            continue
         visited.add(start)
         stack.add(start)
         frames: list[tuple["Unit", int]] = [(start, 0)]
@@ -71,18 +74,3 @@ def break_cycles(fs: "Flowsheet") -> None:
             else:
                 stack.remove(u)
                 frames.pop()
-
-    feeds = [u for u in units if in_degree[u] == 0]
-
-    # With no feed, start from the highest out-degree.
-    if not feeds:
-        highest = max(units, key=lambda x: len(adj[x]))
-        feeds = [highest]
-
-    for f in feeds:
-        if f not in visited:
-            dfs(f)
-
-    for u in units:
-        if u not in visited:
-            dfs(u)

@@ -26,7 +26,8 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
                                label_findings,
-                               draws_arrowheads, flange_marks, impulse_tap,
+                               draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
+                               quadrant_labels,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
@@ -575,12 +576,9 @@ class _Tags(NamedTuple):
         of the tag halo's near edge, or ``None`` with no halo.
     plates : list
         Opaque boxes of tags and ``NC``/fail letters.
-    codes : list
-        Quadrant label items.
     """
     at: dict
     plates: list
-    codes: list
 
 
 def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
@@ -600,7 +598,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     Returns
     -------
     _Tags
-        Tag placements, plates and quadrant codes.
+        Tag placements and plates.
     """
     from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
                                    flange_boxes, quadrant_labels)
@@ -640,8 +638,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
         if letters:
             items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
                                                 ink, symbols))
-    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None],
-                 codes)
+    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None])
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
@@ -770,6 +767,8 @@ class DrawioRenderer:
         self.registry = registry or default_registry
         # Findings put on fs.warnings at the end of render().
         self._findings: list = []
+        # Whether a side label is laid out by draw.io off the sheet's plates.
+        self._loose_label = False
 
     # --------------------------------------------------- document
 
@@ -821,6 +820,7 @@ class DrawioRenderer:
         reject_unknown_options("DrawioRenderer.render()", opts)
         arrows = draws_arrowheads(diagram)
         self._findings = []
+        self._loose_label = False
         check_render_arguments(
             fs, show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, connections=connections,
@@ -849,7 +849,11 @@ class DrawioRenderer:
                                 crossing_style))
         body.extend(self._taps(fs, fit))
         body.extend(balloons)
-        for n, code in enumerate(tags.codes):
+        # shortcut: draw.io keeps main's codes on a sheet with a stacked or wrapped
+        # side label, whose box draw.io lays out; box those labels if that is common.
+        codes = (quadrant_labels(fs, jump_direction) if self._loose_label
+                 else drawn_codes(fs, joints, jump_direction, tags.plates))
+        for n, code in enumerate(codes):
             body.extend(_quadrant_cell(f"q{n}", code, fit))
 
         return self._document(fs, sheet, frame, body)
@@ -1126,6 +1130,8 @@ class DrawioRenderer:
             # A one-line tag sits on its halo; any other label keeps draw.io's spot.
             gx, gy = _SIDE_LABEL_GAP[side]
             offset = (fit.length(near[0]) - gx, fit.length(near[1]) - gy)
+        elif lines and side in _SIDE_LABEL_GAP:
+            self._loose_label = True
         # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
@@ -1439,7 +1445,8 @@ class DrawioRenderer:
             Cell XML lines: edges in hop order, then number enclosures.
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
-        placed = stream_numbers(fs, list(tags.plates), joints, direction)
+        # The numbers' boxes join the tag plates, which the codes keep off.
+        placed = stream_numbers(fs, tags.plates, joints, direction)
         numbers = {number.name: number for number in placed}
         shape = enclosure_shape(fs)
         self._findings += label_findings(fs, shape, placed, direction)

@@ -376,6 +376,74 @@ def quadrant_labels(fs, direction: str) -> list:
     list
         Label items ``(x, y, anchor, baseline, lpos, text)``.
     """
+    return [item for pair in _quadrant_pairs(fs, direction) for item in pair[3]]
+
+
+def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
+    """Return the letter codes as drawn, after every other label is placed.
+
+    A pair from :func:`quadrant_labels` on a flange mark moves to a spot
+    clear of the symbols, lines, flange marks, pneumatic hatches, every
+    other code and ``labels``; with no such spot it stays.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    joints : str or None
+        :func:`sheet_connections` result.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+    labels : Sequence[tuple[float, float, float, float]]
+        Every other label's final box.
+
+    Returns
+    -------
+    list
+        Label items ``(x, y, anchor, baseline, lpos, text)``.
+    """
+    from pandid.portgeom import unit_box
+
+    pairs = _quadrant_pairs(fs, direction)
+    flanges = [_obstacle(b) for b in flange_boxes(fs, joints)]
+    if pairs and flanges:
+        ink = _ink(fs, direction)
+        held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+        held += flanges + [_obstacle(b) for b in labels]
+        # The hatch strokes stand off a pneumatic line, outside its ink.
+        pad = _ink_pad(LineWeight.DETAIL)
+        held += [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
+                 for s in fs.streams if s.kind == "pneumatic"
+                 for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+        for pair in pairs:
+            box, codes, prefers, placed = pair
+            if not any(boxes_overlap(b, f) for b in map(_unit_label_box, placed)
+                       if b is not None for f in flanges):
+                continue
+            others = [b for other in pairs if other is not pair
+                      for b in map(_unit_label_box, other[3]) if b is not None]
+            damage, moved = _quadrant_side(box, codes, prefers, ink, held + others)
+            if damage == (0, 0, 0):
+                pair[3] = moved
+    return [item for pair in pairs for item in pair[3]]
+
+
+def _quadrant_pairs(fs, direction: str) -> list:
+    """Return every symbol's pairs of letter codes, placed in turn.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+
+    Returns
+    -------
+    list
+        ``[box, codes, prefers, items]`` for each pair: the symbol box, the
+        codes by quadrant, the preferred side and the placed label items.
+    """
     from pandid.portgeom import unit_box
 
     annotated = [u for u in fs.units
@@ -385,28 +453,53 @@ def quadrant_labels(fs, direction: str) -> list:
     ink = _ink(fs, direction)
     symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
 
-    out: list = []
+    pairs: list = []
     for u in annotated:
         box = unit_box(u, u.frame)
         for names, prefers in _QUADRANT_PAIRS:
             codes = {name: u.quadrants.get(name) or () for name in names}
             if not any(codes.values()):
                 continue
-            # The other side wins only if it is cleaner.
-            best = None
-            for side in (prefers, -prefers):
-                block = _quadrant_block(box, codes, side)
-                shift, damage = _quadrant_stand_off(block, side, ink, symbols)
-                if best is None or damage < best[0]:
-                    best = (damage, [(x + side * shift, y, *rest)
-                                     for x, y, *rest in block])
-                if damage == (0, 0, 0):
-                    break
-            assert best is not None
-            out.extend(best[1])
+            _damage, placed = _quadrant_side(box, codes, prefers, ink, symbols)
+            pairs.append([box, codes, prefers, placed])
             # Placed codes become obstacles for later pairs.
-            symbols += [b for b in map(_unit_label_box, best[1]) if b is not None]
-    return out
+            symbols += [b for b in map(_unit_label_box, placed) if b is not None]
+    return pairs
+
+
+def _quadrant_side(box, codes, prefers: int, ink, symbols):
+    """Return a pair of codes placed on the cleaner side of a symbol.
+
+    The other side wins only if it is cleaner.
+
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Symbol box.
+    codes : dict[str, tuple[str, ...]]
+        Codes keyed by quadrant letter.
+    prefers : int
+        Preferred side: ``1`` for right, ``-1`` for left.
+    ink : list[_Ink]
+        Drawn lines.
+    symbols : list[tuple[float, float, float, float]]
+        Obstacle boxes.
+
+    Returns
+    -------
+    tuple[tuple[int, int, int], list]
+        The :func:`_erases` score and the placed label items.
+    """
+    best = None
+    for side in (prefers, -prefers):
+        block = _quadrant_block(box, codes, side)
+        shift, damage = _quadrant_stand_off(block, side, ink, symbols)
+        if best is None or damage < best[0]:
+            best = (damage, [(x + side * shift, y, *rest) for x, y, *rest in block])
+        if damage == (0, 0, 0):
+            break
+    assert best is not None
+    return best
 
 
 def _quadrant_block(box, codes, side: int) -> list:
@@ -1692,6 +1785,30 @@ def pneumatic_marks(points) -> "list[Hatch]":
             out.append(Hatch(px1 + (px2 - px1) * t, py1 + (py2 - py1) * t,
                              horiz, walked + span * t))
         walked += span
+    return out
+
+
+def _hatch_strokes(points) -> list:
+    """Return the strokes of every double cross-hatch on a pneumatic line.
+
+    Parameters
+    ----------
+    points : sequence of tuple[float, float]
+        Line polyline.
+
+    Returns
+    -------
+    list[tuple[tuple[float, float], tuple[float, float]]]
+        Stroke end points, in drawing order.
+    """
+    along, across = HATCH_ARM
+    out = []
+    for mx, my, horiz, _at in pneumatic_marks(points):
+        for off in HATCH_ALONG:
+            if horiz:
+                out.append(((mx + off - along, my + across), (mx + off + along, my - across)))
+            else:
+                out.append(((mx - across, my + off - along), (mx + across, my + off + along)))
     return out
 
 
@@ -3441,9 +3558,8 @@ class SvgRenderer:
         ink = _ink(fs, jump_direction)
         quadrants = quadrant_labels(fs, jump_direction)
         drawing: list[str] = []
-        # Opaque plates, collected for the debug overlay.
-        plates: "list[tuple[float, float, float, float]] | None" = (
-            [] if grid is not None else None)
+        # Opaque plates, for the debug overlay and the codes drawn last.
+        plates: "list[tuple[float, float, float, float]]" = []
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints,
                                         quadrants))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
@@ -3455,12 +3571,12 @@ class SvgRenderer:
             drawing.extend(balloons)
             drawing.append('  </g>')
         # Tags and quadrant codes go last, on halos, over every line.
-        drawing.extend(self._draw_unit_labels(unit_labels + quadrants))
+        drawing.extend(self._draw_unit_labels(
+            unit_labels + drawn_codes(fs, joints, jump_direction, plates)))
         fs.warnings = fs.warnings + self._findings
 
         # The debug overlay is drawn first, under the sheet's ink.
         if grid is not None:
-            assert plates is not None
             drawing[:0] = _debug.overlay(
                 fs, (dx0, dy0, dx1, dy1), grid,
                 _fit_scale(dx1 - dx0, dy1 - dy0, free) if free is not None else 1.0,
@@ -4216,18 +4332,10 @@ class SvgRenderer:
 
             if s.kind == "pneumatic":
                 # Pneumatic hatching (ISO 15519-2 Annex A.1.09).
-                along, across = HATCH_ARM
-                for mx, my, horiz, _at in pneumatic_marks(points):
-                    for off in HATCH_ALONG:
-                        if horiz:
-                            x1, y1 = mx + off - along, my + across
-                            x2, y2 = mx + off + along, my - across
-                        else:
-                            x1, y1 = mx - across, my + off - along
-                            x2, y2 = mx + across, my + off + along
-                        lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
-                                     f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
-                                     f'stroke-width="{LineWeight.DETAIL.width:g}" />')
+                for (x1, y1), (x2, y2) in _hatch_strokes(points):
+                    lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
+                                 f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
+                                 f'stroke-width="{LineWeight.DETAIL.width:g}" />')
 
         # Final pass: stream numbers on white halos.
         placed: list[tuple[float, float, float, float]] = [

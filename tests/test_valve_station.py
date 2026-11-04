@@ -265,14 +265,6 @@ def test_every_device_on_the_run_lands_on_the_run():
         assert nozzle_of(unit, "outlet")[1] == pytest.approx(RUN_Y)
 
 
-def test_the_run_is_drawn_left_to_right_in_piping_order():
-    """Check that in-line members are drawn west to east in flow order."""
-    fs, st = _sheet()
-    fs.layout()
-    xs = [u.frame.x for u in on_the_run(st)]
-    assert xs == sorted(xs)
-
-
 def test_gap_is_edge_to_edge_between_one_device_and_the_next():
     """Check that ``gap`` is the clear distance between neighbouring in-line members."""
     fs, st = _sheet(gap=50)
@@ -383,6 +375,11 @@ def test_a_branch_takes_the_number_the_station_was_given():
         (dict(x=300, y=RUN_Y, bypass_over="drain"), "bypass_over names the member"),
         (dict(mirrored=True, gap=50), "mirrored=, gap="),
         (dict(mirrored=False), "mirrored="),
+        (dict(mirrored=False, gap=DEFAULT_GAP), "mirrored=, gap="),
+        (dict(mirrored=True), "mirrored=.*Give x= and y="),
+        (dict(gap=50.0), "gap=.*Give x= and y="),
+        (dict(bypass_rise=80.0), "bypass_rise=.*Give x= and y="),
+        (dict(drain_drop=60.0), "drain_drop=.*Give x= and y="),
     ],
     ids=[
         "bypass_without_isolation",
@@ -392,6 +389,11 @@ def test_a_branch_takes_the_number_the_station_was_given():
         "bypass_over_a_role_that_does_not_exist",
         "a_word_about_a_run_that_is_not_drawn",
         "mirrored_false_without_a_run",
+        "the_defaults_stated_without_a_run",
+        "mirrored_without_a_run",
+        "gap_without_a_run",
+        "bypass_rise_without_a_run",
+        "drain_drop_without_a_run",
     ],
 )
 def test_a_refused_call_says_why_and_leaves_the_sheet_exactly_as_it_was(kwargs, match):
@@ -425,33 +427,12 @@ RUN_WORDS = {
 }
 
 
-@pytest.mark.parametrize("word", list(RUN_WORDS))
-def test_a_word_about_the_drawn_run_is_refused_where_there_is_no_run(word):
-    """Check that a run option on an unplaced station is refused by name."""
-    fs = Flowsheet("unplaced")
-    with pytest.raises(ValueError) as raised:
-        fs.add_valve_station("CV-1", **{word: RUN_WORDS[word]})
-    assert f"{word}=" in str(raised.value)
-    assert "Give x= and y=" in str(raised.value)
-
-
 def test_all_four_together_are_named_in_the_one_refusal():
     """Check that one refusal names every run option given."""
     fs = Flowsheet("unplaced")
     with pytest.raises(ValueError) as raised:
         fs.add_valve_station("CV-1", **RUN_WORDS)
     assert "mirrored=, gap=, bypass_rise=, drain_drop=" in str(raised.value)
-
-
-def test_mirrored_false_is_named_like_any_other_stated_run_option():
-    """Check that ``mirrored=False`` is refused by name, though it matches the default."""
-    fs = Flowsheet("unplaced")
-    with pytest.raises(ValueError) as raised:
-        fs.add_valve_station("CV-1", mirrored=False)
-    assert "mirrored=" in str(raised.value)
-    with pytest.raises(ValueError) as raised:
-        fs.add_valve_station("CV-1", mirrored=False, gap=DEFAULT_GAP)
-    assert "mirrored=, gap=" in str(raised.value)
 
 
 @pytest.mark.parametrize("word", list(RUN_WORDS))

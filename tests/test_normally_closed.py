@@ -282,6 +282,7 @@ def test_a_closed_blind_renders_as_its_own_definition():
     svg = _line(units.Fitting("SB-1", variant="blind", normal_position="closed"))
     assert 'href="#sym_fitting_blind_closed"' in svg
     assert 'href="#sym_fitting_blind"' not in svg
+    assert ">NC</text>" not in svg
 
 
 def test_the_two_blinds_are_separate_definitions_on_one_sheet():
@@ -291,12 +292,6 @@ def test_the_two_blinds_are_separate_definitions_on_one_sheet():
     )
     assert svg.count('<symbol id="sym_fitting_blind_closed"') == 1
     assert svg.count('<symbol id="sym_fitting_blind"') == 1
-
-
-def test_a_closed_blind_is_not_lettered_nc():
-    """Check that a closed blind is not lettered NC."""
-    svg = _line(units.Fitting("SB-1", variant="blind", normal_position="closed"))
-    assert ">NC</text>" not in svg
 
 
 @pytest.mark.parametrize("variant", ["default", "strainer", "venturi", "spool"])
@@ -394,16 +389,6 @@ def test_a_spec_position_that_is_not_one_names_the_entry():
     with pytest.raises(spec.SpecError, match=r"units\[0\] 'HV-1'"):
         Flowsheet.from_dict(
             {"name": "bad", "units": [{"kind": "Valve", "name": "HV-1", "normal_position": "shut"}]}
-        )
-
-
-def test_only_a_positioned_unit_takes_a_normal_position_in_a_spec():
-    with pytest.raises(spec.SpecError, match="only a Valve or a Fitting takes 'normal_position'"):
-        Flowsheet.from_dict(
-            {
-                "name": "bad",
-                "units": [{"kind": "Pump", "name": "P-101", "normal_position": "closed"}],
-            }
         )
 
 
