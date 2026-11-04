@@ -298,8 +298,8 @@ def find_path(
     crossing_index : CrossingIndex or None, optional
         Routes drawn before this one.
     nozzle_index : CrossingIndex or None, optional
-        The first arrowhead length of every other line from each of
-        its nozzles.
+        The first arrowhead length of each line from each of its
+        nozzles, each on a lane of the graph.
 
     Returns
     -------
@@ -405,10 +405,9 @@ def find_path(
                                 if lo < x < hi
                             )
 
-            if nozzle_index is not None:
-                cost += NOZZLE_PENALTY * nozzle_index.crossings_along(current, neighbor)
-                if cur_dir and ndir == cur_dir:
-                    cost += NOZZLE_PENALTY * nozzle_index.crosses(current, _AXIS[cur_dir])
+            # Charge passing straight through another line's arrowhead.
+            if nozzle_index is not None and cur_dir and ndir == cur_dir:
+                cost += NOZZLE_PENALTY * nozzle_index.crosses(current, _AXIS[cur_dir])
 
             bend_cost = BEND_PENALTY
             if is_recycle:

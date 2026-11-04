@@ -311,16 +311,19 @@ class DefaultRouter:
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
-        # The first arrowhead length of each line out of each nozzle.
-        heads: list[tuple["Stream", list[tuple[float, float]]]] = []
+        # The first arrowhead length of each line out of each nozzle,
+        # but a balloon's, which moves with the routes.
+        nozzle_index = CrossingIndex()
         for s in fs.streams:
             for port in (s.source, s.dest):
-                if port.owner.frame is not None:
+                if port.owner.frame is not None and port.owner.kind != "instrument":
                     (px, py), _, face = resolve_port(port.owner, port.owner.frame, port.name)
                     dx, dy = COMPASS[face]
-                    heads.append((s, [(px, py), (px + ARROWHEAD * dx, py + ARROWHEAD * dy)]))
+                    nozzle_index.record([(px, py), (px + ARROWHEAD * dx, py + ARROWHEAD * dy)])
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float]
         edge_penalties = defaultdict(float)
+        for run in graph.hugging:
+            edge_penalties[run] += TOUCH_PENALTY
         taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
         routed: list["Stream"] = []
 
@@ -403,21 +406,19 @@ class DefaultRouter:
 
             is_recycle = getattr(stream, "is_recycle", False)
             crossing_index = crossable(stream)
-            nozzle_index = CrossingIndex()
-            for s, head in heads:
-                if s is not stream:
-                    nozzle_index.record(head)
-            # Charge a run beside any unit but the stream's own ends.
-            penalties = defaultdict(float, edge_penalties)
-            for run, units in graph.hugging.items():
-                if units - {id(src_u), id(dst_u)}:
-                    penalties[run] += TOUCH_PENALTY
+            # A run beside only the stream's own ends goes uncharged.
+            own = [run for run, units in graph.hugging.items()
+                   if units <= {id(src_u), id(dst_u)}]
+            for run in own:
+                edge_penalties[run] -= TOUCH_PENALTY
             path = []
             if clear_stubs:
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
-                    penalties, is_recycle, crossing_index, nozzle_index,
+                    edge_penalties, is_recycle, crossing_index, nozzle_index,
                 )
+            for run in own:
+                edge_penalties[run] += TOUCH_PENALTY
             path_found = bool(path)
 
             if path:
