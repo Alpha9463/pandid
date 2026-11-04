@@ -345,18 +345,53 @@ def _codes_beside_a_closed_valve() -> "tuple[Flowsheet, dict]":
     return fs, kwargs
 
 
+def _codes_beside_a_pneumatic_line() -> "tuple[Flowsheet, dict]":
+    """Build a flanged sheet whose codes could leave a flange only for a pneumatic hatch."""
+    fs = Flowsheet("pneumatic hatch")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=400, y=200)
+    valve = fs.add(U.Valve("HV-1")).pin(port="inlet", x=480, y=140)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=680, y=140)
+    riser = fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    pi = fs.add_instrument("PI", 1, sensing=riser, at=0.6)
+    pi.annotate(high="PAH", low="PAL").pin(x=401.18, y=117.18)
+    relay = fs.add_instrument("PY", 2).pin(port="sig_out", x=350, y=119.5)
+    controller = fs.add_instrument("PIC", 3).pin(port="sig_in", x=600, y=40)
+    signal = fs.connect(relay.sig_out, controller.sig_in, kind="pneumatic")
+    signal.via([(400, 119.5), (400, 40)])
+    return fs, {"diagram": "p&id", "connections": "flanged"}
+
+
+def _hatch_bars(fs) -> "list[tuple[float, float, float, float]]":
+    """Return the box of every pneumatic hatch stroke on a sheet."""
+    from pandid.render.svg import HATCH_ALONG, HATCH_ARM, pneumatic_marks, stream_polyline
+
+    along, across = HATCH_ARM
+    out = []
+    for s in fs.streams:
+        if s.kind != "pneumatic":
+            continue
+        for mark in pneumatic_marks(stream_polyline(s)):
+            for off in HATCH_ALONG:
+                dx, dy = (off - along, off + along), (-across, across)
+                xs, ys = (dx, dy) if mark.horizontal else (dy, dx)
+                out.append((mark.x + xs[0], mark.y + ys[0], mark.x + xs[1], mark.y + ys[1]))
+    return out
+
+
 #: Flanged sheets where a letter code by a flange mark has nowhere better to go.
 CROWDED_CODES = {
     "a_flange_and_a_line": _codes_between_a_flange_and_a_line,
     "a_fixed_tag": _codes_beside_a_fixed_tag,
     "another_balloon": _codes_beside_another_balloon,
     "a_closed_valve": _codes_beside_a_closed_valve,
+    "a_pneumatic_line": _codes_beside_a_pneumatic_line,
 }
 
 
 @pytest.mark.parametrize("build", list(CROWDED_CODES.values()), ids=list(CROWDED_CODES))
 def test_a_letter_code_by_a_flange_mark_lands_on_no_line_or_label(build):
-    """Check that a letter code by a flange mark lands on no line and no other label."""
+    """Check that a letter code by a flange mark lands on no line, hatch or other label."""
     fs, kwargs = build()
     svg = fs.to_svg(**kwargs)
     codes = _code_boxes(svg, fs)
@@ -365,17 +400,26 @@ def test_a_letter_code_by_a_flange_mark_lands_on_no_line_or_label(build):
         for h in _halos(svg)
         if not any(all(abs(a - b) < 0.2 for a, b in zip(h, code)) for code in codes)
     ]
-    struck = [
-        f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
-        for box in codes
-        for line in _ink(fs, "vertical")
-        if overlaps(box, line.box)
-    ] + [
-        f"({box[0]:.0f}, {box[1]:.0f}) on a label"
-        for box in codes
-        for h in labels
-        if overlaps(box, h)
-    ]
+    struck = (
+        [
+            f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
+            for box in codes
+            for line in _ink(fs, "vertical")
+            if overlaps(box, line.box)
+        ]
+        + [
+            f"({box[0]:.0f}, {box[1]:.0f}) on a label"
+            for box in codes
+            for h in labels
+            if overlaps(box, h)
+        ]
+        + [
+            f"({box[0]:.0f}, {box[1]:.0f}) on a hatch"
+            for box in codes
+            for bar in _hatch_bars(fs)
+            if overlaps(box, bar)
+        ]
+    )
     assert not struck, "a letter code lies " + "; ".join(sorted(set(struck)))
 
 

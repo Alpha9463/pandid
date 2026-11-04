@@ -383,8 +383,8 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
     """Return the letter codes as drawn, after every other label is placed.
 
     A pair from :func:`quadrant_labels` on a flange mark moves to a spot
-    clear of the symbols, lines, flange marks, every other code and
-    ``labels``; with no such spot it stays.
+    clear of the symbols, lines, flange marks, pneumatic hatches, every
+    other code and ``labels``; with no such spot it stays.
 
     Parameters
     ----------
@@ -410,6 +410,11 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
         ink = _ink(fs, direction)
         held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         held += flanges + [_obstacle(b) for b in labels]
+        # The hatch strokes stand off a pneumatic line, outside its ink.
+        pad = _ink_pad(LineWeight.DETAIL)
+        held += [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
+                 for s in fs.streams if s.kind == "pneumatic"
+                 for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
         for pair in pairs:
             box, codes, prefers, placed = pair
             if not any(boxes_overlap(b, f) for b in map(_unit_label_box, placed)
@@ -1780,6 +1785,30 @@ def pneumatic_marks(points) -> "list[Hatch]":
             out.append(Hatch(px1 + (px2 - px1) * t, py1 + (py2 - py1) * t,
                              horiz, walked + span * t))
         walked += span
+    return out
+
+
+def _hatch_strokes(points) -> list:
+    """Return the strokes of every double cross-hatch on a pneumatic line.
+
+    Parameters
+    ----------
+    points : sequence of tuple[float, float]
+        Line polyline.
+
+    Returns
+    -------
+    list[tuple[tuple[float, float], tuple[float, float]]]
+        Stroke end points, in drawing order.
+    """
+    along, across = HATCH_ARM
+    out = []
+    for mx, my, horiz, _at in pneumatic_marks(points):
+        for off in HATCH_ALONG:
+            if horiz:
+                out.append(((mx + off - along, my + across), (mx + off + along, my - across)))
+            else:
+                out.append(((mx - across, my + off - along), (mx + across, my + off + along)))
     return out
 
 
@@ -4408,18 +4437,10 @@ class SvgRenderer:
 
             if s.kind == "pneumatic":
                 # Pneumatic hatching (ISO 15519-2 Annex A.1.09).
-                along, across = HATCH_ARM
-                for mx, my, horiz, _at in pneumatic_marks(points):
-                    for off in HATCH_ALONG:
-                        if horiz:
-                            x1, y1 = mx + off - along, my + across
-                            x2, y2 = mx + off + along, my - across
-                        else:
-                            x1, y1 = mx - across, my + off - along
-                            x2, y2 = mx + across, my + off + along
-                        lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
-                                     f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
-                                     f'stroke-width="{LineWeight.DETAIL.width:g}" />')
+                for (x1, y1), (x2, y2) in _hatch_strokes(points):
+                    lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
+                                 f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
+                                 f'stroke-width="{LineWeight.DETAIL.width:g}" />')
 
         # Final pass: stream numbers on white halos.
         placed: list[tuple[float, float, float, float]] = [
