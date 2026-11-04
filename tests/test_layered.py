@@ -353,8 +353,9 @@ def test_a_stack_holds_where_unstacking_would_draw_lines_through_units() -> None
     assert "pin-not-honored" in codes and "route-crosses-unit" not in codes
 
 
-def test_a_second_route_redraws_a_sheet_whose_unstacking_was_refused() -> None:
-    """Draw the same sheet on a second route() after an unstacked layout was refused."""
+@pytest.mark.parametrize("unstacked", [False, True])
+def test_a_second_route_redraws_a_sheet_that_tried_unstacking(unstacked: bool) -> None:
+    """Draw the same sheet on a second route() after an unstacked layout was refused or kept."""
     fs = Flowsheet("Recovery")
     a = fs.add(U.Column("T-101")).pin(col=0, row=0)
     b = fs.add(U.Tank("V-101").nozzle("in_1", "N")).pin(col=0, row=2)
@@ -369,8 +370,18 @@ def test_a_second_route_redraws_a_sheet_whose_unstacking_was_refused() -> None:
     fs.connect(b.ports["out_1"], bottoms.ports["inlet"])
     valve = fs.add(D.ControlValve("FV-101"), on=line)
     fs.add_control_loop("F", 101, measuring=line, acting_on=valve)
+    if unstacked:
+        feed.pin(row=1)
+        bottoms.pin(col=-1, row=None)
+        fs.add_instrument("PI", 201, sensing=fs.streams[0])
     fs.route()
     fingerprint = _fingerprint(fs)
+    assert (
+        a.frame is not None
+        and b.frame is not None
+        and c.frame is not None
+        and (b.frame.cy > c.frame.cy) is unstacked
+    )
     fs.route()
 
     assert _fingerprint(fs) == fingerprint

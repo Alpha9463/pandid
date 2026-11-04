@@ -569,10 +569,12 @@ class Flowsheet:
         self._exit_clear = False
         self._exit_tight = False
         # Whether layout leaves two units unstacked where another unit in
-        # their column is pinned to a row between theirs, and whether the
-        # last layout stacked any such pair.
+        # their column is pinned to a row between theirs, whether the last
+        # layout stacked any such pair, and the stacked drawing route()
+        # held where it kept them unstacked.
         self._split_stacks = False
         self._stack_spans = False
+        self._stacked: tuple | None = None
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -2074,6 +2076,7 @@ class Flowsheet:
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = False
+        self._stacked = None
         if engine is None:
             engine = default_layout_engine
         self._engine = engine
@@ -2106,7 +2109,9 @@ class Flowsheet:
         Where the last layout stacked two units in a column with another
         unit pinned to a row between theirs, the sheet is laid out and
         routed again with those two unstacked, kept only if no tap leaves
-        its line and no finding, clash, crossing or fallback route grows.
+        its line and no finding, clash, crossing or fallback route grows;
+        where kept, the next route() starts from the stacked drawing and
+        tries again.
 
         Where a mixer's or splitter's face grows to hold its nozzles, or
         laterals are laid on lanes, the sheet is also drawn as route() would
@@ -2183,7 +2188,7 @@ class Flowsheet:
             State for :meth:`_put_state`.
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
-                        self._mounted_layout, self._widened))
+                        self._mounted_layout, self._widened, self._stack_spans, self._stacked))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2194,7 +2199,7 @@ class Flowsheet:
             What :meth:`_state` returned.
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
-         self._mounted_layout, self._widened) = _copied(state)
+         self._mounted_layout, self._widened, self._stack_spans, self._stacked) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2381,13 +2386,21 @@ class Flowsheet:
 
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
+        # Route the stacked drawing held where unstacking was kept, and
+        # try unstacking again.
+        held, self._stacked = self._stacked, None
+        if tries and held is not None:
+            self._put_state(held)
+            self._free_faces = False
         settle_best()
         clear = False
         if tries and self._exit_tight:
             clear = keep_if_better(lambda: relaid(clear=True, split=False), _flaws(self))
             self._exit_tight = False
         if tries and self._stack_spans:
-            keep_if_better(lambda: relaid(clear=clear, split=True), strict(self), strict)
+            stacked = self._state()
+            if keep_if_better(lambda: relaid(clear=clear, split=True), strict(self), strict):
+                self._stacked = stacked
             self._exit_tight = self._stack_spans = False
         self._route_stale = False
 
