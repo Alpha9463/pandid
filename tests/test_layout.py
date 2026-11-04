@@ -449,12 +449,10 @@ def test_a_condenser_is_not_drawn_below_the_column_it_serves() -> None:
     assert condenser.frame is not None
     assert reboiler.frame is not None
     assert reboiler.frame.cy > tower.frame.cy, (
-        f"the reboiler is drawn at y={reboiler.frame.cy}, above the column "
-        f"it boils at y={tower.frame.cy}"
+        f"reboiler y={reboiler.frame.cy} is above column y={tower.frame.cy}"
     )
     assert condenser.frame.cy < reboiler.frame.cy, (
-        f"the overhead condenser (y={condenser.frame.cy}) is drawn below "
-        f"the reboiler (y={reboiler.frame.cy}); the sheet is upside down"
+        f"condenser y={condenser.frame.cy} is below reboiler y={reboiler.frame.cy}"
     )
     assert condenser.frame.cx > tower.frame.cx
     assert reboiler.frame.cx > tower.frame.cx
@@ -1260,7 +1258,4 @@ def test_a_balloon_does_not_move_the_lane_the_next_balloon_is_measured_against()
         "this test needs a balloon wider than the column it stands in"
     )
     assert first.frame.x == valve.frame.x
-    assert second.frame.x == valve.frame.x + valve.frame.w + COL_GAP, (
-        f"XI-1 is at x={second.frame.x}; column 1 of a sheet whose only column "
-        f"is the valve's is at x={valve.frame.x + valve.frame.w + COL_GAP}"
-    )
+    assert second.frame.x == valve.frame.x + valve.frame.w + COL_GAP, f"XI-1 x={second.frame.x}"
