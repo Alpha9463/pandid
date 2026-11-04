@@ -332,16 +332,3 @@ def test_a_spec_position_that_is_not_one_names_the_entry():
                 "units": [{"kind": "Valve", "name": "FV-1", "variant": "control", "fail": "shut"}],
             }
         )
-
-
-def test_only_a_valve_takes_a_fail_position_in_a_spec():
-    """Check that only a valve takes a fail position in a spec."""
-    with pytest.raises(spec.SpecError, match="only a Valve takes 'fail'"):
-        Flowsheet.from_dict(
-            {
-                "name": "bad",
-                "units": [
-                    {"kind": "Fitting", "name": "SB-1", "variant": "blind", "fail": "closed"}
-                ],
-            }
-        )

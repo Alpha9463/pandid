@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from pandid import Flowsheet, units as U
-from pandid.render import preview as P
+from pandid.render import export, preview as P
 
 #: A 1x1 PNG for tests that need an image but not a drawing.
 _PNG = (
@@ -156,7 +156,7 @@ def test_a_machine_with_no_rasteriser_falls_back_and_names_the_extra(monkeypatch
         Captured standard output.
     """
     monkeypatch.setattr(P, "_no_display", lambda: "")
-    monkeypatch.setattr(P, "_raster", lambda svg: (_ for _ in ()).throw(ImportError("no")))
+    monkeypatch.setattr(export, "to_png", lambda svg: (_ for _ in ()).throw(ImportError("no")))
     assert P.preview("<svg/>") == "browser"
     assert "pandid[pdf]" in capsys.readouterr().out
     assert len(browsed) == 1
@@ -191,7 +191,7 @@ def test_a_rasteriser_that_fails_falls_back_rather_than_raising(monkeypatch, bro
         """
         raise RuntimeError("the PDF backend could not read the rendered SVG")
 
-    monkeypatch.setattr(P, "_raster", boom)
+    monkeypatch.setattr(export, "to_png", boom)
     assert P.preview("<svg/>") == "browser"
     assert "could not read the rendered SVG" in capsys.readouterr().out
 
@@ -480,7 +480,7 @@ def test_the_module_never_writes_a_file_for_a_window(monkeypatch, tmp_path):
     """
     monkeypatch.setattr(P, "_dir", None)
     monkeypatch.setattr(P, "_no_display", lambda: "")
-    monkeypatch.setattr(P, "_raster", lambda svg: _PNG)
+    monkeypatch.setattr(export, "to_png", lambda svg: _PNG)
     monkeypatch.setattr(P, "_window", lambda root, png, title: None)
 
     class Root:
