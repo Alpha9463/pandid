@@ -2266,7 +2266,8 @@ class Flowsheet:
                 self.route_converged)
 
     def _put_geometry(self, state: tuple, keep_manual: bool) -> None:
-        """Put back what :meth:`_geometry` returned, for what is still here.
+        """Put back copies of what :meth:`_geometry` returned, for what is
+        still here.
 
         Parameters
         ----------
@@ -2280,13 +2281,13 @@ class Flowsheet:
         streams = {id(st) for st in self.streams}
         for u, frame, tap in frames:
             if id(u) in units:
-                u.frame = frame
+                u.frame = copy.deepcopy(frame)
                 if hasattr(u, "tap"):
-                    u.tap = tap
+                    u.tap = copy.deepcopy(tap)
         for st, route in routes:
             manual = st.route is not None and st.route.manual
             if id(st) in streams and not (keep_manual and manual):
-                st.route = route
+                st.route = copy.deepcopy(route)
         self.route_converged = converged
 
     def _unhang(self) -> None:
