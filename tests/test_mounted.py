@@ -232,6 +232,7 @@ def test_a_turned_and_mirrored_valve_sits_on_its_pipe(
     assert drawn.mirrored == (stated.mirrored != backwards)
     warned = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
     assert bool(warned) == backwards
+    assert all("end for end" in said for said in warned)
 
 
 def test_a_line_between_two_devices_set_on_it_adds_no_bends() -> None:
