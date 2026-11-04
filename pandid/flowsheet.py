@@ -336,7 +336,7 @@ def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) 
     Raises
     ------
     ValueError
-        If ``stated`` is blank or invalid for the loop.
+        If ``stated`` is blank or only the loop's measured variable.
     """
     if stated is None:
         return default
@@ -354,7 +354,6 @@ def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) 
             f"{loop.variable}-{loop.number} -- a tag no instrument carries. It is the "
             f"whole functional code that is wanted, e.g. {default!r}"
         )
-    loop.check(letters)
     return letters
 
 
