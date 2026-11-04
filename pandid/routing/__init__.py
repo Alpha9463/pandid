@@ -5,6 +5,7 @@ import warnings
 from collections import defaultdict
 from typing import Protocol, TYPE_CHECKING
 
+from pandid.deprecation import Deprecation
 from pandid.geometry import Route
 
 if TYPE_CHECKING:
@@ -12,10 +13,26 @@ if TYPE_CHECKING:
     from pandid.routing.astar import CrossingIndex
     from pandid.streams import Stream
 
-__all__ = ["Router", "DefaultRouter"]
+__all__ = ["DefaultRouter"]
 
 
-class Router(Protocol):
+#: Deprecation of the Router protocol.
+_ROUTER = Deprecation(
+    what="pandid.routing.Router",
+    instead="any object with a route(fs) method",
+    removed_in="0.1.7",
+)
+
+#: Deprecation of DefaultRouter(recover_exits=).
+_RECOVER_EXITS = Deprecation(
+    what="DefaultRouter(recover_exits=...)",
+    instead="DefaultRouter()",
+    removed_in="0.1.7",
+    note="the router will always recover a blocked stub's exit",
+)
+
+
+class _Router(Protocol):
     """Define the interface ``Flowsheet.route`` requires of a router."""
 
     def route(self, fs: "Flowsheet") -> None:
@@ -26,6 +43,35 @@ class Router(Protocol):
         fs : Flowsheet
             Sheet with resolved unit frames.
         """
+
+
+def __getattr__(name: str) -> object:
+    """Return the deprecated ``Router`` protocol, with a warning.
+
+    Parameters
+    ----------
+    name : str
+        Attribute looked up on the module.
+
+    Returns
+    -------
+    object
+        The ``Router`` protocol.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not ``"Router"``.
+
+    Warns
+    -----
+    DeprecationWarning
+        Always.
+    """
+    if name != "Router":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(_ROUTER.message(), DeprecationWarning, stacklevel=2)
+    return _Router
 
 
 def _clamp_projection(
@@ -216,17 +262,25 @@ class DefaultRouter:
 
     Parameters
     ----------
-    recover_exits : bool, default=True
-        Use the furthest reachable node on each stub, else an L route.
+    recover_exits : bool, optional
+        Use the furthest reachable node on each stub, else an L route;
+        ``True`` when omitted.
 
     Attributes
     ----------
     recover_exits : bool
         Escape-node recovery option.
+
+    Warns
+    -----
+    DeprecationWarning
+        If ``recover_exits`` is passed.
     """
 
-    def __init__(self, *, recover_exits: bool = True) -> None:  # numpydoc ignore=GL08
-        self.recover_exits = recover_exits
+    def __init__(self, *, recover_exits: bool | None = None) -> None:  # numpydoc ignore=GL08
+        if recover_exits is not None:
+            warnings.warn(_RECOVER_EXITS.message(), DeprecationWarning, stacklevel=2)
+        self.recover_exits = True if recover_exits is None else recover_exits
 
     def route(self, fs: "Flowsheet") -> None:
         """Route and separate the sheet's automatic streams.
@@ -239,8 +293,7 @@ class DefaultRouter:
         Raises
         ------
         ValueError
-            If a frame is non-finite, a port has no owner, or a face is
-            unreachable.
+            If a frame is non-finite or a face is unreachable.
         RuntimeError
             If a path search exceeds its expansion budget.
 
@@ -296,13 +349,6 @@ class DefaultRouter:
 
             src_u = stream.source.owner
             dst_u = stream.dest.owner
-            if src_u is None or dst_u is None:
-                orphan = stream.source if src_u is None else stream.dest
-                raise ValueError(
-                    f"stream {stream.name!r} cannot be routed: port "
-                    f"{orphan.name!r} belongs to no unit."
-                )
-
             if src_u.frame is None or dst_u.frame is None:
                 unplaced = src_u if src_u.frame is None else dst_u
                 warnings.warn(

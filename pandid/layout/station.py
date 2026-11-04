@@ -93,7 +93,6 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
         incoming = drain.inlet.stream
         assert incoming is not None
         junction = incoming.source.owner
-        assert junction is not None
         x = port_point(junction, frames[junction], "branch")[0]
         probe = _frame(drain, 0, 0, orientation=90)
         inlet = port_point(drain, probe, "inlet")
@@ -295,7 +294,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly]) -> None:
         if dest_port is None:
             continue
         source, dest = source_port.owner, dest_port.owner
-        if source is None or dest is None or source.frame is None or dest.frame is None:
+        if source.frame is None or dest.frame is None:
             continue
         start = port_point(source, source.frame, source_port.name)
         end = port_point(dest, dest.frame, dest_port.name)

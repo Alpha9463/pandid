@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`validate()` reports lines that touch (#621).** `route-crosses-near-nozzle`
   flags a crossing within an arrowhead length of a nozzle and `route-along-unit`
   a line on a unit's box edge; the router counts tap lines as crossings.
+- **`help(pandid)` is a guide to using the package (#174).** It gives the
+  model, a runnable example, port names, common mistakes and how to check a
+  sheet; `pandid --help`, `help(pandid.Flowsheet)` and `AGENTS.md` point to it.
 
 ### Changed
 
@@ -47,11 +50,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standoff, unless that adds a finding or a clash.
 - **The alumina refinery example draws three sheets (#622).** Its areas are
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
+- **Unit options are keyword-only on 23 classes (#646).** `Feed`, `Product`,
+  `Valve`, `Fitting`, `Vessel`, `Tank`, `HeatExchanger`, `Evaporator`,
+  `Thickener`, `Reactor`, `Separator`, `Column`, `DistillationColumn`,
+  `Absorber`, `Stripper`, `Mixer`, `Splitter`, `Tee`, `Reducer`, `Filter`,
+  `Conveyor`, `Instrument` and `Block`, and the device classes built on them,
+  take `width`, `height`, `label_pos`, `description` and `reference` by keyword
+  only, such as `Block("B-1", width=120)`; a positional value raises `TypeError`.
+- **A conveyor's `variant` is checked when it is reassigned.** Setting it to
+  a variant the conveyor's length is too short for raises `ValueError` at
+  once and keeps the old variant, instead of failing when the sheet is drawn.
 - **`to_svg()` writes its `<defs>` entries in id order (#646).** The drawing
   is unchanged, but a saved SVG may list its markers and symbols in a new order.
 
 ### Deprecated
 
+- **`routing.Router`, `DefaultRouter(recover_exits=)` and
+  `Stream.line_components()` (#646).** Pass `fs.route()` any object with a
+  `route(fs)` method, build `DefaultRouter()`, which always recovers a blocked
+  exit, and read a stream's `size`, `service` and other fields directly.
 - **`PLACES` and `LAYOUT_CONFIDENCE` on a unit class (#564).** Layout no
   longer reads them, and a subclass that sets them is reported. Point a
   nozzle with `nozzle(port, face)` or `pin(orientation=..., mirrored=...)`.
@@ -98,6 +115,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Numbered nozzles type-check in mypy and pyright (#646).**
+  `Mixer("M", n_inlets=3).in_1` and `GasHolder("G", inputs=("N", "S"))` pass
+  both checkers, and a nozzle past the count, such as `.in_4`, fails at run
+  time instead of in the checker.
+- **An alignment set on an `Annotation` or `TableBox` after construction is
+  checked (#646).** A bad `align` or `col_align` raises `ValueError` where it
+  is assigned, not a `KeyError` inside `to_svg()`.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an
