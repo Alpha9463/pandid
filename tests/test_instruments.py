@@ -2673,14 +2673,8 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
         ), (tt.name, tt.tap, points)
 
 
-def test_no_signal_line_leaves_a_balloon_into_a_unit():
-    """Draw each signal line of a valved pump bank clear of every unit.
-
-    Returns
-    -------
-    None
-        No signal line takes the fallback path or crosses a unit.
-    """
+def _valved_bank(**loop_kw: object) -> tuple[Flowsheet, list[Stream]]:
+    """Route three pumps in parallel, each with a flow loop on its valved suction line."""
     from pandid.devices import ControlValve
 
     fs = Flowsheet("valved loops")
@@ -2695,12 +2689,62 @@ def test_no_signal_line_leaves_a_balloon_into_a_unit():
         fs.connect(pump.discharge, inlet)
         pairs.append((line, fs.add(ControlValve(f"FV-{200 + i}"), on=line, at=0.5)))
     loops = [
-        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve)
+        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve, **loop_kw)  # pyright: ignore[reportArgumentType]
         for i, (line, valve) in enumerate(pairs)
     ]
     fs.route()
+    return fs, [s for loop in loops for s in (loop.measurement, loop.output)]
 
-    signals = [s for loop in loops for s in (loop.measurement, loop.output)]
+
+def test_no_signal_line_leaves_a_balloon_into_a_unit():
+    """Draw each signal line of a valved pump bank clear of every unit.
+
+    Returns
+    -------
+    None
+        No signal line takes the fallback path or crosses a unit.
+    """
+    fs, signals = _valved_bank()
+
     assert [s.name for s in signals if s.route is None or s.route.used_fallback] == []
     crossed = [i.message for i in fs.validate() if i.code == "route-crosses-unit"]
     assert [m for m in crossed for s in signals if m.startswith(f"stream {s.name} ")] == []
+
+
+def test_turning_a_blocked_nozzle_takes_no_tap_off_its_line():
+    """Keep every tap of a valved pump bank on its line.
+
+    Returns
+    -------
+    None
+        No balloon's tap is off its host's drawn line.
+    """
+    from pandid.layout.control import _taps_off
+
+    fs, _ = _valved_bank(at=0.75, offset=40, controller_variant="default")
+
+    assert _taps_off(fs) == set()
+
+
+def test_a_hand_drawn_signal_line_keeps_its_nozzle_faces():
+    """Route a signal line drawn by hand from a turned nozzle as drawn.
+
+    Returns
+    -------
+    None
+        The line keeps its points and is drawn square.
+    """
+    fs = Flowsheet("Receiver pressure")
+    v = fs.add(U.Vessel("V-101", width=60, height=100)).pin(x=150, y=80)
+    pt = fs.add_instrument("PT", 101, sensing=v, face="W").pin(x=100, y=100)
+    pic = fs.add(U.Instrument("PIC-101")).pin(x=350, y=100)
+    s = fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    fs.route()
+    assert s.route is not None
+    x, y = s.route.waypoints[0]
+    points = [(x, y), (x, 45.0), (325.0, 45.0), (325.0, 122.0)]
+    s.via(points)
+    fs.route()
+
+    assert s.route.waypoints == points
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
