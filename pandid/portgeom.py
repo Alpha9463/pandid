@@ -271,6 +271,35 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     return (frame.x, frame.y, frame.x + frame.w, frame.y + frame.h)
 
 
+#: Inset of a flag's pennant from its box's top and bottom, without and
+#: with a reference under the tag.
+FLAG_INSET, FLAG_INSET_REF = 15, 12
+
+
+def drawn_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
+    """Return the box a unit's symbol is drawn in.
+
+    A Feed or Product is its pennant, inset from its unit box.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to measure.
+    frame : Frame or _Slot
+        Its placement.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x_min, y_min, x_max, y_max)``.
+    """
+    x0, y0, x1, y1 = unit_box(unit, frame)
+    if unit.kind not in ("feed", "product"):
+        return x0, y0, x1, y1
+    inset = FLAG_INSET_REF if _flag_reference(unit) else FLAG_INSET
+    return x0, y0 + inset, x1, y1 - inset
+
+
 def tag_width(tag: str) -> float:
     """Return the width of the halo an equipment tag is drawn on.
 
@@ -292,7 +321,7 @@ def tag_width(tag: str) -> float:
 
 def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
                                                         tuple[float, float]]:
-    """Return a unit box face's midpoint and outward normal.
+    """Return the midpoint and outward normal of a drawn box's face.
 
     Parameters
     ----------
@@ -313,7 +342,7 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     KeyError
         If ``face.upper()`` is not ``N``, ``S``, ``E`` or ``W``.
     """
-    x0, y0, x1, y1 = unit_box(unit, frame)
+    x0, y0, x1, y1 = drawn_box(unit, frame)
     return {
         "N": (((x0 + x1) / 2, y0), (0.0, -1.0)),
         "S": (((x0 + x1) / 2, y1), (0.0, 1.0)),

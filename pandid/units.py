@@ -3336,8 +3336,9 @@ class Instrument(Unit):
         face : str, optional
             Face of a unit, ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or
             ``"top"``, ``"bottom"``, ``"left"`` or ``"right"``; default
-            ``"E"``, or on equipment the first of ``"N"``, ``"S"`` and
-            ``"W"`` that no line leaves when one leaves ``"E"``.
+            ``"E"``, or, where a line leaves a unit's ``"E"``, the first
+            of ``"N"``, ``"S"`` and ``"W"`` with no line and a process
+            nozzle at its middle.
         offset : float, default=45.0
             Requested tap-to-centre distance in pixels; 0 on a stream
             draws the balloon in the line.

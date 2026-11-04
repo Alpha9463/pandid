@@ -124,9 +124,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Automatic lines keep off units and arrowheads (#640, #661).** The router
-  keeps lines a line width off unit boxes and crosses others clear of their
-  arrowheads, and a balloon with no `face=` hangs from a face no line leaves;
-  `validate()` measures a flag by its drawn pennant.
+  prefers lanes a line width clear of unit boxes and crossings clear of other
+  lines' arrowheads, and a balloon with no `face=` on equipment whose east face
+  carries a line hangs from a free nozzle's face; a flag is measured, and
+  tapped, at its drawn pennant.
 - **A device with a stated turn and mirror sits on its pipe, inlet upstream
   (#642).** Where `pin(orientation=..., mirrored=...)` would run it against
   its line, it is drawn end for end, and `validate()` reports the pin that

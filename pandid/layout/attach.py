@@ -214,7 +214,11 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
 
 
 def _free_face(host: "Unit") -> str:
-    """Return the first of E, N, S and W that no line leaves.
+    """Return the face an unfaced balloon hangs from.
+
+    This is E, unless a line leaves E; then it is the first of N, S
+    and W that no line leaves and that has a process nozzle at its
+    middle.
 
     Parameters
     ----------
@@ -224,13 +228,18 @@ def _free_face(host: "Unit") -> str:
     Returns
     -------
     str
-        That face, or ``"E"`` if a line leaves every face.
+        That face, or ``"E"`` if none qualifies.
     """
-    from pandid.portgeom import resolve_port
+    from pandid.portgeom import face_point, resolve_port
 
-    used = {resolve_port(host, host.frame, name).face
-            for name, port in host.ports.items() if port.stream is not None}
-    return next((face for face in "ENSW" if face not in used), "E")
+    at = {name: resolve_port(host, host.frame, name) for name in host.ports}
+    used = {at[name].face for name, port in host.ports.items() if port.stream is not None}
+    process = [at[name].point for name, port in host.ports.items() if port.role != "signal"]
+    for face in "NSW" if "E" in used else "":
+        middle = face_point(host, host.frame, face)[0]
+        if face not in used and any(math.dist(point, middle) < 0.5 for point in process):
+            return face
+    return "E"
 
 
 def _intrusion(a: Box, b: Box, gap: float) -> float:
