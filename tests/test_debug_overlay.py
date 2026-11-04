@@ -361,6 +361,7 @@ _CROWDED = {
     "18_fixed_bed_recycle": 7,
     "19_absorber_stripper": 4,
     "20_molecular_sieve_dryer": 5,
+    "codes_beside_a_flange": 1,
 }
 
 

@@ -380,6 +380,8 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
     for finding in findings:
         assert finding.severity == "warning"
         assert "S1" in finding.message and "S2" in finding.message
+        assert "crosses" in finding.message
+        assert f"under {HOP_R:g}px of itself either side" in finding.message
         assert "175" in finding.message, "the point a reader has to go and look at"
         assert f"the {mark} marking a crossing" in finding.message, (
             "the finding names the mark the sheet was drawing, not the arc"
