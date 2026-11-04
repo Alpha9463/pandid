@@ -1,64 +1,12 @@
 """
 Example 21: Alumina Refinery A900, the Bayer process as a set of three PFDs
 
-Bauxite in at the west of the first sheet, smelter-grade alumina out at
-the east of the third, and a caustic liquor circuit that closes on itself
-across all three. That circuit is the process: soda dissolves the
-gibbsite out of the ore at temperature, the mud is settled and washed out
-of it, the alumina is crystallised back out as hydrate, and the liquor --
-minus its alumina and plus the water the washing added -- is concentrated
-and sent round to the mill again. Nothing in the set is drawn as leaving
-the liquor circuit except with the residue, with the product, or up an
-evaporator's vapour line.
-
-**One script, three sheets.** A plant this size is drawn across several
-sheets, so this script builds one ``Flowsheet`` per area and renders each
-to its own file:
-
-- ``PFD-901``, grinding and digestion: ore to the blow-off;
-- ``PFD-902``, clarification: the red side, where the mud is settled,
-  washed and filtered out of the liquor;
-- ``PFD-903``, precipitation and calcination: the white side, from the
-  pregnant liquor to the alumina, with the evaporator that sends the
-  spent liquor home.
-
-Each cut is where the plant itself divides: one line, and a stream every
-refinery names -- the blow-off slurry, the pregnant liquor and the spent
-liquor. The sending sheet ends that line at a ``Product`` and the
-receiving sheet starts it at a ``Feed``. Both flags carry the same
-service name and the same stream number, and each flag's ``reference=``
-is the other sheet's drawing number.
-
-**What is simplified, and it is a lot.** A refinery is far bigger than
-three drawings, so each item below stands for the train it belongs to:
-
-- one digester for the six to ten in series that a real charge passes
-  through, and two flash stages for the eight to twelve of a blow-off
-  train;
-- one settler and one washer for a five- or six-stage counter-current
-  decantation circuit;
-- two precipitators for a tank farm of ten to fourteen, and two
-  hydrocyclones for the three classification stages that separate
-  product hydrate from coarse and fine seed;
-- ``EV-901`` for a multiple-effect falling-film evaporation train, drawn
-  at its last effect's conditions.
-
-Left out of the set entirely, because each is a plant of its own: lime
-burning and causticisation, oxalate and organics removal, residue
-disposal, product cooling and gas cleaning downstream of ``CY-903``, and
-every utility distribution header.
-
-**There is no bucket elevator in this set**, though pandid draws two.
-A Bayer circuit moves wet solids by pump and dry solids by belt and air
-slide; the one place a lift would go -- hydrate to a calciner feed bin
--- is a belt in every refinery drawn here. A machine put on a sheet
-because the library owns the symbol is a machine an engineer has to ask
-about.
-
-The stream tables are a coherent mass balance rather than plausible
-numbers: 212 t/h of dry bauxite makes 100 t/h of alumina, the caustic
-and the dissolved alumina both return to the values they left the
-evaporator with, and every unit's inlets add up to its outlets.
+One ``Flowsheet`` per area, each rendered to its own file: grinding and
+digestion (PFD-901), clarification (PFD-902), and precipitation and
+calcination (PFD-903). The caustic liquor circuit closes across all
+three. A line that crosses sheets ends at a ``Product`` and starts again
+at a ``Feed`` with the same name and stream number, each flag's
+``reference=`` naming the other sheet. Each item stands for its train.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -89,11 +37,7 @@ from pandid.document import Revision, TableBox, TitleBlock, equipment_list, note
 from pandid.portgeom import pinned_x, pinned_y
 
 # --- Stream property table --------------------------------------------
-# Rows render in first-seen key order, so every stream below carries the
-# same keys and an empty value renders as "-". The composition rows are
-# mass fractions of the total flow above them; "Caustic (Na2O)" is the
-# refinery's own unit for soda, since every liquor concentration in a
-# Bayer plant is quoted as Na2O and not as NaOH.
+# Compositions are mass fractions; an empty value renders as "-".
 PROPERTY_ROWS = (
     "Temperature (C)", "Pressure (bara)", "Total Flow (t/h)", "Solids (% w/w)",
     "Water", "Caustic (Na2O)", "Dissolved Al2O3", "Bauxite / Residue",
@@ -162,9 +106,7 @@ PROPERTIES = {
 
 
 # --- The drawing set --------------------------------------------------
-# Each area's drawing number, and the service of each line that crosses
-# from one area to another. Both flags on a crossing are named from here,
-# so the Product that ends a line and the Feed that starts it agree.
+# Drawing numbers, and the names of the lines that cross sheets.
 DIGESTION = "PFD-901"
 CLARIFICATION = "PFD-902"
 PRECIPITATION = "PFD-903"
@@ -172,10 +114,7 @@ BLOW_OFF = "Blow-off Slurry"
 PREGNANT_LIQUOR = "Pregnant Liquor"
 SPENT_LIQUOR = "Spent Liquor"
 
-# A tee is a 12-unit square with a port on the middle of each face it
-# uses, so half its width is the offset from a junction to the corner it
-# is pinned by.
-TEE_W = 12.0
+TEE_W = 12.0  # a tee is a 12-unit square
 
 NOT_DRAWN = ("Lime burning, causticisation, oxalate removal, residue disposal "
              "and product cooling are not in this set of drawings.")
@@ -186,47 +125,26 @@ def digestion():
     fs = Flowsheet("Alumina Refinery A900 Grinding and Digestion")
 
     # --- Grinding -----------------------------------------------------
-    # Ore in at the top and product out of the bottom on both machines:
-    # ISO 10628-2's group 11 draws one connection tick above the top edge
-    # and one below the bottom edge on every one of its twelve rows, and
-    # nothing here turns them.
     bauxite = fs.add(Feed("ROM Bauxite", reference="PFD-101"))
     crusher = fs.add(JawCrusher("CR-901",
                                 description="Bauxite Jaw Crusher"))
-    # Cake and ore are dropped onto a belt rather than piped into it, so
-    # the tail nozzle comes off the top face rather than off the end.
+    # Ore drops onto the belt, so its feed is on the top face.
     ore_belt = fs.add(Conveyor("CV-901", length=200,
                                description="Crushed Bauxite Conveyor"))
     ore_belt.nozzle("feed", "N")
-    # The mill feed chute takes ore over its lip and spent liquor through
-    # a spray bar, and the two arrive at one connection on the drawing:
-    # wet grinding is what makes the liquor circuit start here rather
-    # than at digestion. The spent liquor comes home from PFD-903.
+    # Spent liquor from PFD-903 joins the ore at the mill feed.
     spent_liquor = fs.add(Feed(SPENT_LIQUOR, reference=PRECIPITATION))
     mill_tee = fs.add(Tee(branch="inlet"))
-    # ``Mill`` and not ``Mill(variant="roller")``: a Bayer circuit grinds
-    # in a rod or ball mill, ISO 10628-2 has an item for neither, and the
-    # general mill body (11.8 X8086) is what the standard leaves for
-    # them. The four characteristics it does give -- hammer, impact,
-    # roller, vibration -- would each be a claim about the machine that
-    # is not true of a tumbling mill.
     mill = fs.add(Mill("ML-901", description="Bauxite Ball Mill"))
 
     # --- Digestion ----------------------------------------------------
-    # Two interchangers ahead of the desilication tanks and one live
-    # steam heater behind the charge pump, which is where the pressure
-    # break really is: desilication is an eight-hour atmospheric hold and
-    # only what leaves it is pumped to digestion pressure.
     interchanger_1 = fs.add(ShellAndTubeExchanger(
         "E-901", variant="straight_tubes", width=150, height=45,
         description="Digestion Heat Interchanger No. 1"))
     interchanger_2 = fs.add(ShellAndTubeExchanger(
         "E-902", variant="straight_tubes", width=150, height=45,
         description="Digestion Heat Interchanger No. 2"))
-    # ``Reactor`` rather than ``Tank``: a desilication tank is stirred,
-    # and ISO composes a stirred vessel out of a shell, a group-28
-    # agitator and the item 20.6 drive motor above it -- which is what
-    # ``agitator=`` draws and what ``Tank`` has no way to ask for.
+    # A ``Reactor`` draws the stirred tank's agitator.
     desilication = fs.add(Reactor(
         "TK-901", agitator="turbine", width=80, height=170,
         description="Desilication Tank"))
@@ -234,31 +152,18 @@ def digestion():
     steam_heater = fs.add(ShellAndTubeExchanger(
         "E-903", variant="straight_tubes", width=150, height=45,
         description="Live Steam Digestion Heater"))
-    # 145 C and 5 bara: the low-temperature route, which is what a
-    # gibbsitic bauxite is digested at. ``variant="jacketed"`` is the
-    # heated body, and the agitator is named so the vessel keeps the
-    # slurry in suspension at the residence time the reaction needs.
     digester = fs.add(Reactor(
         "D-901", variant="jacketed", agitator="turbine", width=90,
         height=210, description="Digester"))
 
     # --- Flash train --------------------------------------------------
-    # Counter-current, and that is the whole of the arrangement: the
-    # hotter flash heats the feed nearer the digester and the cooler one
-    # heats it further back. Drawn the other way round each vapour would
-    # arrive at a stream already hotter than itself.
+    # Counter-current: the hotter flash heats the feed nearer the digester.
     flash_1 = fs.add(Separator("V-901", width=70, height=130,
                                description="First Flash Tank"))
     flash_2 = fs.add(Separator("V-902", width=70, height=130,
                                description="Second Flash Tank"))
     mp_steam = fs.add(Feed("MP Steam", reference="PCD-903"))
-    # ``header=True`` on the condensate flags: a return header takes from
-    # wherever it is tapped and is lettered the same way at each tap,
-    # which is why the same flag may be drawn more than once. The two are
-    # different headers and not one -- what drains the flash vapour
-    # heaters is process condensate the refinery washes with, and what
-    # drains the live steam heater is boiler condensate that goes back to
-    # the power station.
+    # header=True lets several flags name the same header.
     steam_condensate = fs.add(Product("Steam Condensate", header=True,
                                       reference="PCD-903"))
     flash_condensate_1 = fs.add(Product("Process Condensate", header=True,
@@ -271,8 +176,7 @@ def digestion():
     # --- Placement ----------------------------------------------------
     slurry_y = 480.0        # the two interchangers' elevation
     digest_y = 600.0        # the live steam heater and the digester
-    # The lanes the flash vapours climb over the digester on, the spent
-    # liquor's run under the belt, and the blow-off's run out of the sheet.
+    # Lanes for the flash vapours, the spent liquor and the blow-off.
     lane_vapour_1, lane_vapour_2 = 300.0, 250.0
     lane_return_y = 340.0
     lane_blowoff_y = 1000.0
@@ -281,10 +185,7 @@ def digestion():
     spent_liquor.pin(port="outlet", x=180, y=lane_return_y)
     crusher.pin(port="feed", x=210, y=150)
     ore_belt.pin(port="feed", x=210, y=280)
-    # A belt whose tail nozzle has been moved onto the top face is
-    # positioned by that nozzle, and its head is then a roller's radius
-    # below the drop -- so the run out of it is on the *head's*
-    # elevation, which is what everything downstream is pinned to.
+    # The run out of the belt is on its discharge's elevation.
     ore_run_y = pinned_y(ore_belt, "discharge")
     mill_tee.pin(port="inlet", x=460, y=ore_run_y)
     mill.pin(port="feed", x=570, y=340)
@@ -299,9 +200,6 @@ def digestion():
     flash_2.pin(port="feed", x=2320, y=880)
     blow_off.pin(port="inlet", x=2440, y=lane_blowoff_y)
 
-    # Read off the artwork rather than written down: every one of these
-    # is a nozzle position the symbol owns, so nothing here has to be
-    # re-derived when a box changes size or a train is spread out.
     hx1_shell_in_x = pinned_x(interchanger_1, "shell_in")
     hx2_shell_in_x = pinned_x(interchanger_2, "shell_in")
     hx1_drain_x = pinned_x(interchanger_1, "shell_out")
@@ -319,10 +217,7 @@ def digestion():
     flash_condensate_2.pin(port="inlet", x=920, y=790)
 
     # --- Grinding and digestion ---------------------------------------
-    # Declared in stream-number order, which is the order the table
-    # reads. A number is drawn once, on the first segment declared, so a
-    # service running through more than one item starts with the run it
-    # belongs on.
+    # A number is drawn once, on the first segment declared with it.
     fs.connect(bauxite.outlet, crusher.feed, name="S-901")
     fs.connect(crusher.discharge, ore_belt.feed, name="S-902")
     fs.connect(ore_belt.discharge, mill_tee.inlet, name="S-902")
@@ -342,12 +237,7 @@ def digestion():
     # --- The flash train and the interchange --------------------------
     fs.connect(digester.outlet, flash_1.feed, name="S-911").via(
         [(digester_draw_x, 740)])
-    # Pinned by hand: the vapour has to climb over the digester and the
-    # desilication tank to reach the heater it belongs to, and left to
-    # itself the router takes it through both. The two lanes cross, and
-    # they cross because the interchange is counter-current: the hotter
-    # flash serves the heater nearer the digester and the cooler one the
-    # heater further back.
+    # Route each flash vapour by hand, over the digester to its heater.
     fs.connect(flash_1.vapor, interchanger_2.port("shell_in"),
                name="S-912").via([(flash_1_axis_x, lane_vapour_1),
                                   (hx2_shell_in_x, lane_vapour_1)])
@@ -389,22 +279,12 @@ def clarification():
     # --- Dilution, settling and mud washing ---------------------------
     # The flashed slurry arrives from PFD-901.
     blow_off = fs.add(Feed(BLOW_OFF, reference=DIGESTION))
-    # A ``Tank`` and not three tees: the blow-off, the washer overflow
-    # that dilutes it and the returning filter residue meet in a tank
-    # with hold-up, which is a tagged item on any refinery's equipment
-    # list. Its box is drawn larger than the default so the three inlets
-    # clear ISO 128-20's spacing between parallel lines.
+    # The blow-off, washer overflow and filter residue meet in M-901.
     dilution = fs.add(Tank("M-901", inputs=3, width=70, height=90,
                            description="Blow-off Dilution Tank"))
     floc_tee = fs.add(Tee(branch="inlet"))
     flocculant = fs.add(Feed("Flocculant", reference="PCD-904"))
-    # A thickener, drawn as one: wide and shallow with a raked floor.
-    # ``rake=`` draws the rake, defaulting to ISO item 28.4 C2021's
-    # cross-beam.
-    #
-    # 150 x 120 and not the default 100 x 80: the two settling machines
-    # are the largest items in a Bayer plant and they are drawn like it,
-    # at the artwork's own 5:4 so nothing in the drawing is stretched.
+    # Thickeners drawn large, in the symbol's own 5:4.
     settler = fs.add(Thickener("TH-901", width=150, height=120,
                                description="Red Mud Settler"))
     wash_tee = fs.add(Tee(branch="inlet"))
@@ -415,20 +295,11 @@ def clarification():
                              reference="PFD-905"))
 
     # --- Security filtration ------------------------------------------
-    # A filter press makes **two products** and this one uses both of the
-    # nozzles that say so: ``cake`` is the residue and the lime precoat
-    # it was laid on, and it goes back to the dilution tank rather than
-    # off the sheet. ``wash_in`` is the displacement wash that pushes
-    # pregnant liquor out of the cake before the plates are opened --
-    # 20 t/h of caustic liquor is worth recovering and worth drawing.
+    # The cake returns to M-901; ``wash_in`` takes a displacement wash.
     security_filter = fs.add(FilterPress(
         "F-901", width=140, height=70,
         description="Security Filter"))
     filter_wash = fs.add(Feed("Hot Condensate", reference="PCD-902"))
-    # A single-stream cooler: the cooling water is a connection on the
-    # symbol rather than a side of it, so the sheet draws one line and
-    # not three. The real duty is done by flash cooling against the
-    # returning spent liquor, which is a train of its own.
     liquor_cooler = fs.add(Cooler("E-904",
                                   description="Pregnant Liquor Cooler"))
     # The cooled liquor leaves for precipitation on PFD-903.
@@ -436,8 +307,7 @@ def clarification():
 
     # --- Placement ----------------------------------------------------
     settle_y = 1130.0       # dilution to the liquor cooler, one elevation
-    # The lanes west of M-901 that its three inlets are reached by, and
-    # the runs back to them from the washer and the filter.
+    # Lanes to M-901's three inlets.
     lane_blowoff, lane_dilution, lane_residue = 140.0, 110.0, 170.0
     lane_blowoff_y = 965.0
     lane_dilution_y, lane_residue_y = 1350.0, 1330.0
@@ -445,10 +315,7 @@ def clarification():
     blow_off.pin(port="outlet", x=lane_blowoff - 50, y=lane_blowoff_y)
     dilution.pin(port="in_2", x=200, y=settle_y)
     floc_tee.pin(port="inlet", x=400, y=settle_y)
-    # East of the three lanes that reach M-901's inlets: a flag's drawn
-    # box is its arrow *and its lettering*, and the lettering runs back
-    # the way the flag points, so a flag pinned over a lane is crossed by
-    # a line that misses the arrow entirely.
+    # East of the lanes, so they clear the flag's lettering.
     flocculant.pin(port="outlet", x=330, y=1250)
     settler.pin(port="feed", x=460, y=settle_y)
     security_filter.pin(port="inlet", x=700, y=settle_y)
@@ -478,10 +345,7 @@ def clarification():
                     (lane_residue,
                      pinned_y(dilution, "in_3"))])
     fs.connect(dilution.outlet, floc_tee.inlet, name="S-922")
-    # East along the flag's own elevation and then up the riser: one
-    # waypoint short of that and the two ends are joined by a slope,
-    # which ISO 15519-1 12.1 does not allow a connecting line and
-    # tests/test_route_invariants.py catches.
+    # East along the flag's elevation, then up the riser.
     fs.connect(flocculant.outlet, floc_tee.branch, name="S-923").via(
         [(pinned_x(floc_tee) + TEE_W / 2, 1250)])
     fs.connect(floc_tee.outlet, settler.feed, name="S-924")
@@ -530,10 +394,7 @@ def precipitation():
     # The pregnant liquor arrives from PFD-902.
     pregnant_liquor = fs.add(Feed(PREGNANT_LIQUOR, reference=CLARIFICATION))
     seed_tee = fs.add(Tee(branch="inlet"))
-    # 85 x 180 and not 80 x 180: the stirred vessel carries the item 20.6
-    # drive motor, a circle the composition sizes off the box above it,
-    # so a box out of the artwork's own shape draws that circle as an
-    # oval. validate() reports it, and this is the shape it asks for.
+    # Sized in the symbol's proportions so the drive motor stays round.
     precipitator_1 = fs.add(Reactor(
         "PR-901", agitator="turbine", width=85, height=180,
         description="Precipitator No. 1"))
@@ -542,15 +403,7 @@ def precipitation():
         description="Precipitator No. 2"))
 
     # --- Classification -----------------------------------------------
-    # ``variant="cyclone"`` and not a characteristic: ISO 14617-1 4.5
-    # names X2618 by registration number as a symbol in its own right,
-    # and the helical vortex inside it appears nowhere in group 29, so
-    # there is nothing to compose a hydrocyclone out of.
-    #
-    # Two stages where a refinery has three: the primary takes the
-    # product-size hydrate out of the bottom and the secondary sends the
-    # fines back as seed, which is what makes precipitation a crystalliser
-    # rather than a once-through vessel.
+    # The primary takes out the product hydrate, the secondary the seed.
     classifier_1 = fs.add(Cyclone(
         "CY-901", width=90, height=140,
         description="Primary Classifying Cyclone"))
@@ -559,10 +412,6 @@ def precipitation():
         description="Secondary Classifying Cyclone"))
 
     # --- Hydrate filtration and calcination ---------------------------
-    # Like F-901 on PFD-902 this machine uses ``wash_in`` and ``cake``,
-    # and it is the one the product specification depends on: soda left
-    # in the cake is soda in the alumina, so the wash here is a duty
-    # rather than a recovery.
     hydrate_filter = fs.add(RotaryDrumFilter(
         "F-902", width=140, height=80,
         description="Hydrate Filter"))
@@ -570,31 +419,18 @@ def precipitation():
     hydrate_belt = fs.add(Conveyor("CV-902", length=200,
                                    description="Washed Hydrate Conveyor"))
     hydrate_belt.nozzle("feed", "N")
-    # The fuel is burned in a chamber of its own and the hot gas
-    # fluidises the bed, so the fuel and the combustion air land on
-    # ``FH-901`` and the duct goes to the calciner's own ``air`` nozzle,
-    # under the distributor grid.
+    # FH-901 burns the fuel; its hot gas enters the calciner's ``air``.
     combustion = fs.add(Furnace("FH-901", width=100, height=120,
                                 description="Calciner Combustion Chamber"))
     air = fs.add(Feed("Combustion Air"))
     fuel = fs.add(Feed("Fuel Gas", reference="PCD-905"))
-    # A calciner, drawn as one. ``CA-901.product`` is the bed's own draw
-    # and ``CA-901.offgas`` the freeboard's, so the cyclone below is on
-    # the gas line -- catching the two tonnes an hour of alumina the gas
-    # carries out with it.
-    #
-    # ``CA-901.fuel`` is left unpiped on purpose: this calciner has no
-    # burner of its own, and the nozzle is there for the fired kilns that
-    # do.
+    # ``CA-901.fuel`` is left unpiped.
     calciner = fs.add(FluidizedBedCalciner(
         "CA-901", width=120, height=200, description="Alumina Calciner"))
     product_cyclone = fs.add(Cyclone(
         "CY-903", width=90, height=140,
         description="Calciner Product Cyclone"))
-    # The catch is product, so it rejoins the product line at a junction
-    # rather than reaching the flag on a second run of its own: two lines
-    # onto one flag arrive at the same point and share the last of it,
-    # which reads as a tee drawn without one.
+    # The cyclone's catch rejoins the product line.
     product_tee = fs.add(Tee(branch="inlet"))
     offgas = fs.add(Product("Calciner Off-Gas to Gas Cleaning",
                             reference="PFD-904"))
@@ -602,40 +438,27 @@ def precipitation():
                              reference="PFD-904"))
 
     # --- Spent liquor -------------------------------------------------
-    # Where the circuit closes. The classifier overflow and the hydrate
-    # filtrate are one liquor, the make-up replaces the soda that leaves
-    # chemically bound in the residue, and the evaporator takes off
-    # exactly the water the washing put in -- 329 t/h of it, which is
-    # what makes the returning stream the same 2300 t/h the mill was fed.
+    # The circuit closes here: overflow, filtrate and make-up meet in
+    # M-902 and the evaporator takes off the wash water.
     spent_tank = fs.add(Tank("M-902", inputs=3, width=70, height=90,
                               description="Spent Liquor Tank"))
     caustic = fs.add(Feed("Caustic Soda Make-up", reference="PCD-906"))
-    # An effect of a falling-film train, drawn as one. Its vapour is
-    # 329 t/h of water leaving the circuit, on ``EV-901.vapor``.
-    #
-    # 100 x 200, the artwork's own 1:2: a falling-film body is tall
-    # because the tubes are, which is the point of the machine.
     evaporator = fs.add(FallingFilmEvaporator(
         "EV-901", width=100, height=200,
         description="Spent Liquor Evaporator"))
     lp_steam = fs.add(Feed("LP Steam", reference="PCD-903"))
-    # A return header, lettered the same way as the one on PFD-901.
     evap_condensate = fs.add(Product("Steam Condensate", header=True,
                                      reference="PCD-903"))
     evap_vapour = fs.add(Product("Evaporator Vapour", reference="PCD-902"))
     liquor_pump = fs.add(Pump("P-902", description="Spent Liquor Pump"))
-    # The concentrated liquor goes home to the mill on PFD-901, leaving
-    # west along the bottom of the sheet.
+    # The concentrated liquor returns to the mill on PFD-901.
     spent_liquor = fs.add(Product(SPENT_LIQUOR, reference=DIGESTION))
 
     # --- Placement ----------------------------------------------------
     settle_y = 1130.0       # the pregnant liquor and the first precipitator
     calcine_y = 1840.0      # the calcination train
-    # Every lane a line takes when it runs back the way it came, written
-    # down once: the spent liquor, the seed and the hydrate filtrate out
-    # of the precipitation area, and the run the circuit leaves the sheet
-    # on. A number here is a promise to every other route on the sheet
-    # that this strip of paper is taken.
+    # Lanes for the lines that run back: spent liquor, seed, filtrate and
+    # the return to PFD-901.
     lane_spent_y, lane_spent_x = 940.0, 1215.0
     lane_seed_y = 1560.0
     lane_filtrate_y, lane_filtrate_x = 1620.0, 1290.0
@@ -653,14 +476,8 @@ def precipitation():
     hydrate_belt.pin(port="feed", x=2220, y=calcine_y)
     hydrate_run_y = pinned_y(hydrate_belt, "discharge")
     calciner.pin(port="feed", x=2520, y=hydrate_run_y)
-    # On the calciner's own off-gas elevation rather than on the hydrate
-    # run: the cyclone is on the gas line, and a machine pinned to
-    # the line it is not on is a machine the router has to reach round.
     product_cyclone.pin(port="feed", x=2790, y=1720)
-    # Under the cyclone's own apex and on the calciner's product
-    # elevation, so the catch falls straight into the run and the run is
-    # straight. ``mirrored="y"`` turns the branch onto the north face,
-    # which is the one thing a tee's placement says.
+    # Under the cyclone's apex, on the product run, branch north.
     product_tee.pin(port="inlet",
                     x=pinned_x(product_cyclone, "underflow") - TEE_W / 2,
                     y=pinned_y(calciner, "product"), mirrored="y")
@@ -672,10 +489,7 @@ def precipitation():
     alumina.pin(port="inlet", x=2980, y=pinned_y(calciner, "product"))
 
     spent_tank.pin(port="in_1", x=1350, y=1800)
-    # Level with the nozzle it feeds rather than at a height of its own:
-    # 1863 was 25 below M-902's third inlet, which is under the 50 the
-    # flag measures across the run, so the line stepped into the flag's
-    # own box and back out of it instead of running straight in.
+    # Level with the inlet it feeds.
     caustic.pin(port="outlet", x=1230, y=pinned_y(spent_tank, "in_3"))
     evaporator.pin(port="feed", x=1550, y=1980)
     lp_steam.pin(port="outlet", x=1330,
@@ -697,8 +511,7 @@ def precipitation():
     spent_draw_x = pinned_x(spent_tank, "outlet")
 
     # --- Precipitation and classification -----------------------------
-    # The return to PFD-901 is declared first, so the table reads in
-    # number order.
+    # Declare the return to PFD-901 first, so the table reads in order.
     fs.connect(liquor_pump.discharge, spent_liquor.inlet, name="S-903").via(
         [(pinned_x(liquor_pump, "discharge"), lane_home_y)])
     fs.connect(pregnant_liquor.outlet, seed_tee.inlet, name="S-932")
@@ -716,9 +529,7 @@ def precipitation():
                name="S-937").via([(classifier_1_axis_x, 1700)])
     fs.connect(classifier_1.port("overflow"), classifier_2.feed,
                name="S-938").via([(classifier_1_axis_x, 1180)])
-    # Up over the precipitators and down the far side of them: the spent
-    # liquor is leaving the area it was made in, and the lane it takes is
-    # the one the seed return does not.
+    # Up over the precipitators and down to M-902.
     fs.connect(classifier_2.port("overflow"), spent_tank.port("in_1"),
                name="S-939").via([(classifier_2_axis_x, lane_spent_y),
                                   (lane_spent_x, lane_spent_y),
@@ -738,10 +549,6 @@ def precipitation():
 
     # --- Spent liquor -------------------------------------------------
     fs.connect(caustic.outlet, spent_tank.port("in_3"), name="S-943")
-    # Round the outside of the shell rather than into the top of it: the
-    # evaporator's process side is fed at the bottom, which is where a
-    # kettle body puts its shell nozzle and where an effect of a
-    # falling-film train is fed in any case.
     fs.connect(spent_tank.outlet, evaporator.feed,
                name="S-944").via([(spent_draw_x, 1980)])
     fs.connect(lp_steam.outlet, evaporator.heating_in, name="S-945")
@@ -755,20 +562,13 @@ def precipitation():
     fs.connect(air.outlet, combustion.inlet, name="S-949")
     fs.connect(fuel.outlet, combustion.fuel, name="S-950").via(
         [(pinned_x(combustion, "fuel"), 2230)])
-    # Into the windbox from below, which is where a fluidised bed's gas
-    # goes in and where the symbol draws the nozzle. The chamber sits
-    # lower than the calciner's floor on purpose, so the duct is one
-    # corner rather than a loop under the machine.
+    # Into the windbox from below.
     fs.connect(combustion.outlet, calciner.air, name="S-951").via(
         [(pinned_x(calciner, "air"), combustion_gas_y)])
-    # The product leaves the bed over its own weir on a nozzle of its
-    # own, which is what a calciner symbol bought this sheet.
     fs.connect(calciner.product, product_tee.inlet, name="S-952")
     fs.connect(calciner.offgas, product_cyclone.feed, name="S-953")
     fs.connect(product_cyclone.port("overflow"), offgas.inlet,
                name="S-954").via([(product_axis_x, 1680)])
-    # Two tonnes an hour of alumina the gas carried out of the freeboard
-    # with it, dropped back into the product.
     fs.connect(product_cyclone.port("underflow"), product_tee.branch,
                name="S-955")
     fs.connect(product_tee.outlet, alumina.inlet, name="S-956")
@@ -804,9 +604,6 @@ def _furnish(fs, number, sheet, area, equipment, utilities, general_notes):
     fs.stream_table_sections = [("Water", "Mass Fraction")]
 
     # --- Title strip --------------------------------------------------
-    # Each sheet has a drawing number of its own and counts itself in the
-    # set. date= is stated rather than left blank: left blank, the
-    # renderer fills in today's.
     fs.title_block = TitleBlock(
         title="Alumina Refinery",
         subtitle=f"A900 {area}",
@@ -825,9 +622,6 @@ def _furnish(fs, number, sheet, area, equipment, utilities, general_notes):
     )
 
     # --- Sheet furniture ----------------------------------------------
-    # include= is named row by row in process order. The tees are left
-    # out: a junction in the piping is bought by the line and has no tag
-    # to schedule.
     fs.add_annotation(equipment_list(fs, align="top-right", include=equipment))
     fs.add_annotation(TableBox(
         title="UTILITIES SUMMARY",
