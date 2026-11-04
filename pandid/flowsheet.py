@@ -7,11 +7,11 @@ from __future__ import annotations
 import copy
 from contextlib import contextmanager
 from math import isfinite
-from numbers import Integral
 from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
 
+from pandid._checks import check_whole
 from pandid.deprecation import Deprecation
 from pandid.document import StreamLabelOptions, StreamTableOptions
 from pandid.stations import (
@@ -422,34 +422,6 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
 _UnitT = TypeVar("_UnitT", bound="Unit")
 
 
-def _whole_number(value: Any, name: str) -> int:
-    """Return an integral value as an ``int``.
-
-    Parameters
-    ----------
-    value : Any
-        Value to check.
-    name : str
-        Attribute name, for the message.
-
-    Returns
-    -------
-    int
-        The value as a built-in ``int``.
-
-    Raises
-    ------
-    TypeError
-        If ``value`` is a bool or not an integer.
-    """
-    if isinstance(value, bool) or not isinstance(value, Integral):
-        raise TypeError(
-            f"{name} must be a whole number (an int), got {value!r}; stream, line "
-            f"and loop numbers are integers"
-        )
-    return int(value)
-
-
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
 
@@ -566,7 +538,6 @@ class Flowsheet:
         self._route_stale = False
         # Last full numbering pass, for _number_appended().
         self._groups: "list[list[Stream]] | None" = None
-        self._group_names: list[str] = []
         self._group_of: dict[int, int] = {}  # id(Stream) -> group index
         self._tail: list[Stream] = []  # lines numbered after the runs
         self.title_block: "TitleBlock | None" = None
@@ -647,20 +618,9 @@ class Flowsheet:
         return self._stream_number_start
 
     @stream_number_start.setter
-    def stream_number_start(self, value: int) -> None:
-        """Set the first generated stream number.
-
-        Parameters
-        ----------
-        value : int
-            Whole number.
-
-        Raises
-        ------
-        TypeError
-            If ``value`` is a bool or not an integer.
-        """
-        self._stream_number_start = _whole_number(value, "stream_number_start")
+    def stream_number_start(self, value: int) -> None:  # numpydoc ignore=GL08
+        check_whole(value, "stream_number_start")
+        self._stream_number_start = int(value)
 
     @property
     def line_number_start(self) -> int:
@@ -674,20 +634,9 @@ class Flowsheet:
         return self._line_number_start
 
     @line_number_start.setter
-    def line_number_start(self, value: int) -> None:
-        """Set the first generated line sequence number.
-
-        Parameters
-        ----------
-        value : int
-            Whole number.
-
-        Raises
-        ------
-        TypeError
-            If ``value`` is a bool or not an integer.
-        """
-        self._line_number_start = _whole_number(value, "line_number_start")
+    def line_number_start(self, value: int) -> None:  # numpydoc ignore=GL08
+        check_whole(value, "line_number_start")
+        self._line_number_start = int(value)
 
     @property
     def loop_number_start(self) -> int:
@@ -701,20 +650,9 @@ class Flowsheet:
         return self._loop_number_start
 
     @loop_number_start.setter
-    def loop_number_start(self, value: int) -> None:
-        """Set the first number :meth:`add_loop` allocates.
-
-        Parameters
-        ----------
-        value : int
-            Whole number.
-
-        Raises
-        ------
-        TypeError
-            If ``value`` is a bool or not an integer.
-        """
-        self._loop_number_start = _whole_number(value, "loop_number_start")
+    def loop_number_start(self, value: int) -> None:  # numpydoc ignore=GL08
+        check_whole(value, "loop_number_start")
+        self._loop_number_start = int(value)
 
     def add_annotation(self, annotation):
         """Add an annotation or table box to the sheet.
@@ -2330,14 +2268,13 @@ class Flowsheet:
         """
         with self._unchanged_if_it_raises():
             groups = self._stream_groups()
-            names = []
             for place, group in enumerate(groups, 1):
                 # Named groups still use up their place.
-                names.append(self._name_group(group, place))
+                self._name_group(group, place)
             self._tail = [s for s in self.streams if s.kind != "material"]
             self._number_tail(len(groups))
             # Cache for _number_appended().
-            self._groups, self._group_names = groups, names
+            self._groups = groups
             self._group_of = {id(s): i for i, g in enumerate(groups) for s in g}
 
     def _number_appended(self, stream: "Stream") -> bool:
@@ -2378,12 +2315,12 @@ class Flowsheet:
             groups[where] = group = [*groups[where], stream]
             index[id(stream)] = where
             # Rename the run; the new segment may add a line number.
-            self._group_names[where] = self._name_group(group, where + 1)
+            self._name_group(group, where + 1)
             return True
 
         groups.append([stream])
         index[id(stream)] = len(groups) - 1
-        self._group_names.append(self._name_group([stream], len(groups)))
+        self._name_group([stream], len(groups))
         # One more run shifts the non-material lines after it.
         self._number_tail(len(groups))
         return True
@@ -2426,7 +2363,7 @@ class Flowsheet:
                 found.append(where)
         return found
 
-    def _name_group(self, group: "list[Stream]", place: int) -> str:
+    def _name_group(self, group: "list[Stream]", place: int) -> None:
         """Number and name one group's segments for its place.
 
         Parameters
@@ -2435,11 +2372,6 @@ class Flowsheet:
             Segments of one run.
         place : int
             1-based position in the sequence.
-
-        Returns
-        -------
-        str
-            The name given.
 
         Raises
         ------
@@ -2464,7 +2396,6 @@ class Flowsheet:
             for s in group:
                 if s.auto_named:
                     s.name = name
-            return name
 
     def _number_tail(self, used: int) -> None:
         """Number non-material lines after the material runs.
