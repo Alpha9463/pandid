@@ -14,7 +14,7 @@ import math
 import re
 import warnings
 from dataclasses import dataclass, field, replace
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Callable
 
 from pandid._checks import suggest
@@ -1866,30 +1866,47 @@ _SEPARATING_VESSEL = Symbol(
 )
 
 
+def _family(outline: str, width: float, height: float, ports: dict, prefix: str,
+            name: str, reg: str, *detail: str, gravity_fixed: bool = True) -> Symbol:
+    """Return one member of an ISO family: the shared outline plus its marks.
+
+    Parameters
+    ----------
+    outline : str
+        The family's outline.
+    width, height : float
+        Symbol box.
+    ports : dict
+        Port positions.
+    prefix : str
+        Start of the SVG id after ``sym_``.
+    name : str
+        Rest of the SVG id.
+    reg : str
+        ISO registration number, or ``""``.
+    *detail : str
+        Marks drawn over the outline.
+    gravity_fixed : bool, default=True
+        Whether the symbol keeps its way up.
+
+    Returns
+    -------
+    Symbol
+        The member's symbol.
+    """
+    return Symbol(
+        svg=f'<g id="sym_{prefix}{name}">{outline}' + "".join(detail) + "</g>",
+        width=width, height=height, ports=dict(ports),
+        gravity_fixed=gravity_fixed, iso_reg=reg,
+    )
+
+
 # Side of the ISO 10628-2 group-9 square outline: 8 modules.
 _CENTRIFUGE_SQ = 80.0
 
 # Ink outside the square: a shaft below it (9.1-9.4) or a feed pipe
 # through the west wall (9.5-9.8).
 _CENTRIFUGE_MARGIN = 10.0
-
-
-def _centrifuge_outline(ox: float) -> str:
-    """Return the bare group-9 square with its west wall at ``ox``.
-
-    Parameters
-    ----------
-    ox : float
-        West wall offset.
-
-    Returns
-    -------
-    str
-        SVG ``<path>``.
-    """
-    return (f'<path d="M {ox:g} 0 L {ox + _CENTRIFUGE_SQ:g} 0 '
-            f'L {ox + _CENTRIFUGE_SQ:g} {_CENTRIFUGE_SQ:g} '
-            f'L {ox:g} {_CENTRIFUGE_SQ:g} Z" {_OUTLINE}/>')
 
 
 # Ink runs of a perforated wall, as (start, end) offsets from the
@@ -1995,37 +2012,6 @@ _CENTRIFUGE_SKIMMER = (
 )
 
 
-def _centrifuge(name: str, reg: str, width: float, height: float, ox: float,
-               detail: str, ports: dict) -> Symbol:
-    """Return a group-9 centrifuge: the shared square plus its mark.
-
-    Parameters
-    ----------
-    name : str
-        Variant, used in the SVG id.
-    reg : str
-        ISO registration number.
-    width, height : float
-        Symbol box.
-    ox : float
-        West wall offset.
-    detail : str
-        The item's mark.
-    ports : dict
-        Port positions.
-
-    Returns
-    -------
-    Symbol
-        Centrifuge symbol.
-    """
-    return Symbol(
-        svg=f'<g id="sym_centrifuge_{name}">{_centrifuge_outline(ox)}{detail}</g>',
-        width=width, height=height, ports=dict(ports),
-        iso_reg=reg,
-    )
-
-
 # Box of the ISO 10628-2 group-11 trapezoid outline.
 _CRUSHER_W, _CRUSHER_H = 100.0, 60.0
 
@@ -2043,31 +2029,8 @@ _CRUSHER_PORTS = {"feed": (_CRUSHER_W / 2, 0.0),
                   "discharge": (_CRUSHER_W / 2, _CRUSHER_H)}
 
 
-def _crushing_machine(name: str, reg: str, *detail: str) -> Symbol:
-    """Return one group-11 body: the shared trapezoid plus its mark.
-
-    Parameters
-    ----------
-    name : str
-        Name used in the SVG id.
-    reg : str
-        Registration number of the item, or ``""``.
-    *detail : str
-        Marks drawn inside the outline.
-
-    Returns
-    -------
-    Symbol
-        Crushing machine symbol.
-    """
-    return Symbol(
-        svg=f'<g id="sym_{name}">{_CRUSHER_OUTLINE}'
-            + "".join(detail) + "</g>",
-        width=_CRUSHER_W, height=_CRUSHER_H,
-        ports=dict(_CRUSHER_PORTS),
-        gravity_fixed=True,
-        iso_reg=reg,
-    )
+# One group-11 body: the shared trapezoid plus its marks.
+_crushing_machine = partial(_family, _CRUSHER_OUTLINE, _CRUSHER_W, _CRUSHER_H, _CRUSHER_PORTS, "")
 
 
 # Crusher mark, ISO item 11.2 X8085: two full-depth verticals.
@@ -2103,32 +2066,9 @@ _DRIER_PORTS = {
 }
 
 
-def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Symbol:
-    """Return one group-10 dryer: the shared casing plus its mark.
-
-    Parameters
-    ----------
-    name : str
-        Name used in the SVG id.
-    reg : str
-        ISO registration number.
-    *detail : str
-        Marks drawn inside the casing.
-    gravity_fixed : bool, default=False
-        Whether the mark relies on gravity, as shelves do.
-
-    Returns
-    -------
-    Symbol
-        Dryer symbol.
-    """
-    return Symbol(
-        svg=f'<g id="sym_drier_{name}">{_DRIER_OUTLINE}' + "".join(detail) + "</g>",
-        width=_DRIER_W, height=_DRIER_H,
-        ports=dict(_DRIER_PORTS),
-        gravity_fixed=gravity_fixed,
-        iso_reg=reg,
-    )
+# One group-10 dryer: the shared casing plus its marks.
+_drier = partial(_family, _DRIER_OUTLINE, _DRIER_W, _DRIER_H, _DRIER_PORTS, "drier_",
+                 gravity_fixed=False)
 
 
 # Item 10.2 X8083: three shelves.
@@ -2246,31 +2186,9 @@ _FEEDER_CIRCLE = 40.0
 _FEEDER_CIRCLE_PORTS = {"feed": (20.0, 0.0), "discharge": (20.0, 40.0)}
 
 
-def _feeder_circle(name: str, reg: str, mark: str) -> Symbol:
-    """Return a group-19 circle body: the shared rim plus its mark.
-
-    Parameters
-    ----------
-    name : str
-        Name used in the SVG id.
-    reg : str
-        ISO registration number.
-    mark : str
-        The item's mark.
-
-    Returns
-    -------
-    Symbol
-        Feeder symbol.
-    """
-    return Symbol(
-        svg=f'<g id="sym_feeder_{name}">'
-            f'<circle cx="20" cy="20" r="20" {_OUTLINE}/>{mark}</g>',
-        width=_FEEDER_CIRCLE, height=_FEEDER_CIRCLE,
-        ports=dict(_FEEDER_CIRCLE_PORTS),
-        gravity_fixed=True,
-        iso_reg=reg,
-    )
+# A group-19 circle body: the shared rim plus its mark.
+_feeder_circle = partial(_family, f'<circle cx="20" cy="20" r="20" {_OUTLINE}/>',
+                         _FEEDER_CIRCLE, _FEEDER_CIRCLE, _FEEDER_CIRCLE_PORTS, "feeder_")
 
 
 # Item 19.1 C2056: a Z in one stroke.
@@ -2487,30 +2405,8 @@ _SCREEN_PORTS = {"feed": (30.0, 0.0), "oversize": (60.0, 50.0), "undersize": (30
 _SCREEN_MESH = f'<line x1="0" y1="0" x2="60" y2="60" {_INK} {_DASH_LONG}/>'
 
 
-def _screen(name: str, reg: str, mark: str) -> Symbol:
-    """Return a group-7 screen: the shared outline plus its mark.
-
-    Parameters
-    ----------
-    name : str
-        Name used in the SVG id.
-    reg : str
-        ISO registration number.
-    mark : str
-        The item's mark.
-
-    Returns
-    -------
-    Symbol
-        Screen symbol.
-    """
-    return Symbol(
-        svg=f'<g id="sym_screen_{name}">{_SCREEN_OUTLINE}{mark}</g>',
-        width=_SCREEN_W, height=_SCREEN_H,
-        ports=dict(_SCREEN_PORTS),
-        gravity_fixed=True,
-        iso_reg=reg,
-    )
+# A group-7 screen: the shared outline plus its mark.
+_screen = partial(_family, _SCREEN_OUTLINE, _SCREEN_W, _SCREEN_H, _SCREEN_PORTS, "screen_")
 
 
 def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
@@ -2604,13 +2500,8 @@ _REEL_MARK = (
     f'<line x1="50" y1="30" x2="50" y2="90" {_INK} {_DASH_LONG}/>'
 )
 
-_REEL_BODY = Symbol(
-    svg=f'<g id="sym_screen_basket_reel">{_REEL_OUTLINE}{_REEL_MARK}</g>',
-    width=_REEL_W, height=_REEL_H,
-    ports=dict(_REEL_PORTS),
-    gravity_fixed=True,
-    iso_reg="X8030",
-)
+_REEL_BODY = _family(_REEL_OUTLINE, _REEL_W, _REEL_H, _REEL_PORTS, "screen_", "basket_reel",
+                     "X8030", _REEL_MARK)
 
 
 # Evaporators and kilns: original drawings with no registration number.
@@ -3453,7 +3344,11 @@ class SymbolRegistry:
         )
         by_name: dict[str, Symbol] = {}
         for name, reg, width, height, ox, detail, ports in rows:
-            sym = _centrifuge(name, reg, width, height, ox, detail, ports)
+            # The bare square, its west wall at ox.
+            outline = (f'<path d="M {ox:g} 0 L {ox + sq:g} 0 L {ox + sq:g} {sq:g} '
+                       f'L {ox:g} {sq:g} Z" {_OUTLINE}/>')
+            sym = _family(outline, width, height, ports, "centrifuge_", name, reg, detail,
+                          gravity_fixed=False)
             self.register("centrifuge", sym, name)
             by_name[name] = sym
         # The default is the decanter.
@@ -3473,13 +3368,8 @@ class SymbolRegistry:
 
     def _register_cooling_towers(self):
         """Register ISO 10628-2 group 5 except the spray cooler."""
-        self.register("cooling_tower", Symbol(
-            svg=f'<g id="sym_cooling_tower_general">{_TOWER_OUTLINE}</g>',
-            width=_TOWER_W, height=_TOWER_H, ports=dict(_TOWER_PORTS),
-            gravity_fixed=True, iso_reg="2521",
-        ), "general")
-
         for name, fill, fan, reg in (
+            ("general", "", "", "2521"),
             ("dry_natural", _TOWER_DRY, "", "X8109"),
             ("dry_forced", _TOWER_DRY, _TOWER_FAN_FORCED, "X8110"),
             ("dry_induced", _TOWER_DRY, _TOWER_FAN_INDUCED, "X8111"),
@@ -3488,12 +3378,9 @@ class SymbolRegistry:
             ("wet_induced", _TOWER_WET, _TOWER_FAN_INDUCED, "X8114"),
             ("wet_dry_natural", _TOWER_DRY + _TOWER_WET, "", "X8115"),
         ):
-            self.register("cooling_tower", Symbol(
-                svg=f'<g id="sym_cooling_tower_{name}">{_TOWER_OUTLINE}'
-                    f'{fill}{fan}</g>',
-                width=_TOWER_W, height=_TOWER_H, ports=dict(_TOWER_PORTS),
-                gravity_fixed=True, iso_reg=reg,
-            ), name)
+            self.register("cooling_tower", _family(
+                _TOWER_OUTLINE, _TOWER_W, _TOWER_H, _TOWER_PORTS, "cooling_tower_", name, reg,
+                fill, fan), name)
 
     def _register_feeders(self):
         """Register the ISO 10628-2 group 19 symbols."""
