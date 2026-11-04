@@ -1582,8 +1582,7 @@ def _drawio_cells(fs, kwargs) -> dict:
     dict[str, ET.Element]
         Exported cells keyed by identifier.
     """
-    root = _drawio_root(fs.to_drawio(**_drawio_options(kwargs)))
-    return {cell.get("id"): cell for cell in root.iter("mxCell")}
+    return _drawio_cells_from_document(fs.to_drawio(**_drawio_options(kwargs)))
 
 
 def _drawio_options(kwargs: dict) -> dict:
@@ -2613,6 +2612,22 @@ def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path,
 # Shipped gallery examples.
 
 
+def _drawio_cells_from_document(document: str) -> dict:
+    """Index cells from an already-rendered Draw.io document.
+
+    Parameters
+    ----------
+    document : str
+        Draw.io XML document.
+
+    Returns
+    -------
+    dict[str, ET.Element]
+        Exported cells keyed by identifier.
+    """
+    return {cell.get("id"): cell for cell in _drawio_root(document).iter("mxCell")}
+
+
 #: Representative sheets for cross-backend Draw.io export checks.
 DRAWIO_REPRESENTATIVES = (
     "03_distillation_train",
@@ -2700,8 +2715,7 @@ def _gallery_cells(rendered_gallery: dict[str, _GalleryArtifacts], stem: str) ->
     dict[str, ET.Element]
         Fresh XML cells from the named Draw.io artifact.
     """
-    root = _drawio_root(rendered_gallery[stem].drawio)
-    return {cell.get("id"): cell for cell in root.iter("mxCell")}
+    return _drawio_cells_from_document(rendered_gallery[stem].drawio)
 
 
 @pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
