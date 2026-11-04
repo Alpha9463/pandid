@@ -219,6 +219,21 @@ class _Fit(NamedTuple):
         """
         return (self.dx + self.scale * x, self.dy + self.scale * y)
 
+    def box(self, b) -> "tuple[float, float, float, float]":
+        """Return a drawing box on the page.
+
+        Parameters
+        ----------
+        b : tuple
+            Drawing box ``(x0, y0, x1, y1)``.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Page box ``(x0, y0, x1, y1)``.
+        """
+        return (*self.at(b[0], b[1]), *self.at(b[2], b[3]))
+
     def length(self, v: float) -> float:
         """Return a length scaled to the page.
 
@@ -1171,8 +1186,7 @@ class DrawioRenderer:
                 f"{u.name} has no draw.io stencil and is exported as a stand-in, "
                 f"which loses {approx.lost}"))
         self._report_reshape(u, sym, approx)
-        cx0, cy0, cx1, cy1 = self._cell_box(u)
-        (x0, y0), (x1, y1) = fit.at(cx0, cy0), fit.at(cx1, cy1)
+        x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         shape = self._shape(u, sym, fit)
         text, label_keys, (dx, dy) = self._label(u, fit, tags, "whiteSpace=wrap" in shape)
