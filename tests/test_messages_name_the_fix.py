@@ -11,16 +11,13 @@ from pandid import (
     ControlValve,
     Feed,
     Flowsheet,
-    Instrument,
     Port,
     Product,
     Pump,
     Splitter,
     Stream,
     Tee,
-    Unit,
     Valve,
-    ValveStation,
     Vessel,
 )
 from pandid import units
@@ -158,107 +155,47 @@ def _leaving(port: Port) -> Stream:
     return port.stream
 
 
-def _carry(fs: Flowsheet, on: Callable[[str], Stream]) -> tuple[ValveStation, Valve]:
-    """Put FV-101, HV-1 and two balloons on the lines *on* names, and a balloon after each."""
-    station = fs.add_valve_station("FV-101", on=on("FV-101"), at=0.1)
-    valve = fs.add(Valve("HV-1"), on=on("HV-1"), at=0.7)
-    fs.add_instrument("FT", 101, sensing=on("FT-101"), at=0.8)
-    fs.add_instrument("PT", 102, sensing=on("PT-102"), at=0.2)
-    fs.add_instrument("PT", 103, sensing=_leaving(station.outlet), at=0.2)
-    fs.add_instrument("PT", 104, sensing=_leaving(valve.outlet), at=0.1)
-    return station, valve
+def _carry(fs: Flowsheet, line: Stream) -> None:
+    """Put a station, two valves and three balloons on *line* and its parts."""
+    valve = fs.add(Valve("HV-1"), on=line, at=0.7)
+    station = fs.add_valve_station("FV-101", on=line, at=0.1)
+    fs.add(Valve("HV-2"), on=line)
+    fs.add_instrument("FT", 101, sensing=line, at=0.4)
+    fs.add_instrument("PT", 102, sensing=_leaving(station.outlet), at=0.2)
+    fs.add_instrument("PT", 103, sensing=_leaving(valve.outlet), at=0.1)
 
 
-#: What each balloon taps once the new item, at 0.5, is piped in.
-_HOSTS = {"FT-101": "out of", "PT-102": "into", "PT-103": "after FV-101", "PT-104": "after HV-1"}
-
-#: What the advice says of the balloons on the parts after FV-101 and HV-1.
-_KEPT = (
-    "PT-103's call stays as it is: its host moves with valve station FV-101",
-    "PT-104's call stays as it is: its host moves with HV-1",
-)
+#: What the advice lists, devices in flow order and then the balloons.
+_CARRIED = "valve station FV-101, HV-1, HV-2 (in flow order), FT-101, PT-102 and PT-103"
 
 
-def _sides(message: str, item: str) -> dict[str, str]:
-    """Return the line, into or out of *item*, the advice puts each named thing on."""
-    found = {}
-    pattern = rf"(?:put |, and )(.+?) on the line (into|out of) {re.escape(item)}"
-    for names, where in re.findall(pattern, message[message.index("Then put ") :]):
-        for name in re.split(r", | and ", names):
-            found[name.removeprefix("valve station ")] = where
-    return found
-
-
-def _drawn(start: Port, stop: Unit) -> list[str]:
-    """Return the HV-1, FV-101, T and V met walking the run from *start* to *stop*."""
-    order, port = [], start
-    while port.stream is not None and port.stream.dest.owner is not stop:
-        order.append(port.stream.dest.owner.name)
-        port = port.stream.dest.owner.port("outlet")
-    return [name for name in order if name in ("HV-1", "FV-101", "T", "V")]
-
-
-def _hosts(fs: Flowsheet, lines: dict[str, Stream | None]) -> dict[str, str]:
-    """Return which of *lines* each balloon taps."""
-    return {
-        u.name: next((side for side, line in lines.items() if u.host is line), "elsewhere")
-        for u in fs.units
-        if isinstance(u, Instrument)
-    }
-
-
-def test_following_the_tee_advice_keeps_every_item_on_its_side() -> None:
-    """Check that the hand-piped tee keeps each device and balloon on its side of the branch."""
+def test_the_tee_advice_lists_everything_the_line_carries() -> None:
+    """Check that a tee refused on a line names its connect() calls and every item to put back."""
     fs, feed, product = _line()
     line = fs.connect(feed.outlet, product.inlet)
-    _carry(fs, lambda name: line)
+    _carry(fs, line)
     with pytest.raises(ValueError) as refused:
         fs.add(Tee("T"), on=line, at=0.5)
-    sides = _sides(str(refused.value), "T")
-    assert all(kept in str(refused.value) for kept in _KEPT)
+    assert (
+        "fs.connect(F.outlet, T.inlet), fs.connect(T.outlet, P.inlet) and "
+        "fs.connect(T.branch, ...). Then put back what S1 carries, each where it sits now: "
+        + _CARRIED
+    ) in str(refused.value)
 
+
+def test_the_recycle_advice_lists_everything_the_line_carries() -> None:
+    """Check that a recycle line refused to on= names its connect() calls and every item."""
     fs, feed, product = _line()
-    tee = fs.add(Tee("T"))
-    lines = {
-        "into": fs.connect(feed.outlet, tee.inlet),
-        "out of": fs.connect(tee.outlet, product.inlet),
-    }
-    fs.connect(tee.branch, fs.add(Product("B")).inlet)
-    station, valve = _carry(fs, lambda name: lines[sides[name]])
-    after = {"after FV-101": station.outlet.stream, "after HV-1": valve.outlet.stream}
-
-    assert _drawn(feed.outlet, product) == ["FV-101", "T", "HV-1"]
-    assert _hosts(fs, {**lines, **after}) == _HOSTS
-
-
-def test_following_the_recycle_advice_keeps_every_item_on_its_side() -> None:
-    """Check that the hand-piped device keeps each device and balloon on its side of it."""
-
-    def loop() -> tuple[Flowsheet, Splitter, Vessel]:
-        fs, feed, product = _line()
-        drum, split = fs.add(Vessel("R", inputs=2)), fs.add(Splitter("SP"))
-        fs.connect(feed.outlet, drum.port("in_1"))
-        fs.connect(drum.port("out_1"), split.inlet)
-        fs.connect(split.out_1, product.inlet)
-        return fs, split, drum
-
-    fs, split, drum = loop()
+    drum, split = fs.add(Vessel("R", inputs=2)), fs.add(Splitter("SP"))
+    fs.connect(feed.outlet, drum.port("in_1"))
+    fs.connect(drum.port("out_1"), split.inlet)
+    fs.connect(split.out_1, product.inlet)
     back = fs.connect(split.out_2, drum.port("in_2"))
-    _carry(fs, lambda name: back)
+    _carry(fs, back)
     fs.route()
     with pytest.raises(ValueError, match="recycle") as refused:
         fs.add(Valve("V"), on=back, at=0.5)
-    sides = _sides(str(refused.value), "<device>")
-    assert all(kept in str(refused.value) for kept in _KEPT)
-
-    fs, split, drum = loop()
-    valve = fs.add(Valve("V"))
-    lines = {
-        "into": fs.connect(split.out_2, valve.inlet),
-        "out of": fs.connect(valve.outlet, drum.port("in_2")),
-    }
-    station, valve = _carry(fs, lambda name: lines[sides[name]])
-    after = {"after FV-101": station.outlet.stream, "after HV-1": valve.outlet.stream}
-
-    assert _drawn(split.out_2, drum) == ["FV-101", "V", "HV-1"]
-    assert _hosts(fs, {**lines, **after}) == _HOSTS
+    assert (
+        "fs.connect(SP.out_2, <device>.inlet) and fs.connect(<device>.outlet, R.in_2). "
+        f"Then put back what {back.name} carries, each where it sits now: " + _CARRIED
+    ) in str(refused.value)
