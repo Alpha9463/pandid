@@ -1559,3 +1559,26 @@ def test_a_joint_the_package_cannot_draw_is_refused_with_the_ones_it_can(value, 
     with pytest.raises((SpecError, ValueError)) as e:
         Flowsheet.from_dict(_two_vessels(ends=value))
     assert expected in str(e.value)
+
+
+def test_an_ion_exchangers_regenerant_round_trips():
+    """Check that an ion exchanger's regenerant nozzles round-trip with their streams."""
+    fs = Flowsheet("demin")
+    regen = fs.add(units.Feed("Caustic"))
+    ix = fs.add(units.Filter("F-802", variant="ion_exchange"))
+    waste = fs.add(units.Product("To Neutralisation"))
+    fs.connect(regen.outlet, ix.port("regenerant_in"))
+    fs.connect(ix.port("spent_regenerant"), waste.inlet)
+
+    spec = fs.to_dict()
+    rebuilt = Flowsheet.from_dict(spec)
+    back = next(u for u in rebuilt.units if u.name == "F-802")
+    assert sorted(back.ports) == [
+        "inlet",
+        "outlet",
+        "regenerant_in",
+        "spent_regenerant",
+    ]
+    assert back.port("regenerant_in").stream is not None
+    assert back.port("spent_regenerant").stream is not None
+    assert rebuilt.to_dict() == spec
