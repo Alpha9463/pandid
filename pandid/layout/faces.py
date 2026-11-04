@@ -116,13 +116,13 @@ def _frozen(unit: "Unit", frame, menus: dict[str, list[str]]) -> dict[str, str]:
     dict[str, str]
         For each port whose line is drawn by hand, the first face whose
         point or anchor lies within ``_SQUARE_TOL`` of the line's end
-        there.
+        there, and beyond which the line's next point lies.
     """
     import math
     from dataclasses import replace
 
     from pandid.layout.conflicts import _SQUARE_TOL
-    from pandid.portgeom import resolve_port
+    from pandid.portgeom import face_point, resolve_port
 
     out = {}
     for name, menu in menus.items():
@@ -131,11 +131,18 @@ def _frozen(unit: "Unit", frame, menus: dict[str, list[str]]) -> dict[str, str]:
         route = stream.route if stream is not None else None
         if stream is None or route is None or not route.manual or not route.waypoints:
             continue
-        end = route.waypoints[0] if stream.source is port else route.waypoints[-1]
+        points = route.waypoints if stream.source is port else route.waypoints[::-1]
+        end = points[0]
+        beyond = next((p for p in points[1:] if math.dist(p, end) > _SQUARE_TOL), None)
+        if beyond is None:
+            continue
         for face in menu:
             probe = replace(frame, port_faces={**frame.port_faces, name: face})
             resolved = resolve_port(unit, probe, name)
-            if min(math.dist(resolved.point, end), math.dist(resolved.anchor, end)) <= _SQUARE_TOL:
+            nx, ny = face_point(unit, probe, resolved.face)[1]
+            if ((beyond[0] - end[0]) * nx + (beyond[1] - end[1]) * ny > 0
+                    and min(math.dist(resolved.point, end),
+                            math.dist(resolved.anchor, end)) <= _SQUARE_TOL):
                 out[name] = face
                 break
     return out
