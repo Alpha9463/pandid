@@ -189,7 +189,7 @@ splitter, tee and block, and the ISO 10628-2 equipment the stencil set lacks.
 
 `_BUILT_TO_SIZE` in `pandid/render/symbols.py` lists the symbols built for each
 unit rather than registered once: the belt and screw conveyors, the block, the
-tank and the vessel. A builder adapted from a stencil names the stencil file and
+mixer and splitter, the tank and the vessel. A builder adapted from a stencil names the stencil file and
 shape in a comment and in `NOTICE` section 2. A symbol with a fixed size goes
 through `KIND_MAP`.
 

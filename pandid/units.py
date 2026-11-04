@@ -4337,7 +4337,8 @@ class Stripper(Column):
 class Mixer(Unit):
     """Mixer: combines several inlet streams into one outlet.
 
-    Drawn as a triangle.
+    Drawn as a triangle whose inlet face grows to keep the inlets 20
+    apart.
 
     Parameters
     ----------
@@ -4396,7 +4397,8 @@ class Mixer(Unit):
 class Splitter(Unit):
     """Splitter: divides one inlet stream into several outlets.
 
-    Drawn as a triangle.
+    Drawn as a triangle whose outlet face grows to keep the outlets 20
+    apart.
 
     Parameters
     ----------

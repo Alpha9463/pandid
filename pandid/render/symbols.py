@@ -1056,6 +1056,54 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
     )
 
 
+# Mixer and splitter triangles, their many-nozzle face sized to its count.
+
+#: Depth of a mixer or splitter, and its least face length.
+JUNCTION_SIZE = 50.0
+
+#: Spacing of the nozzles on a mixer's or splitter's many-nozzle face.
+JUNCTION_PITCH = 20.0
+
+#: Face beyond the end nozzles of a mixer or splitter.
+JUNCTION_END = 15.0
+
+
+@lru_cache(maxsize=None)
+def junction_symbol(kind: str, count: int) -> Symbol:
+    """Return a mixer or splitter triangle with a face for its nozzles.
+
+    The face holds ``count`` nozzles :data:`JUNCTION_PITCH` apart with
+    :data:`JUNCTION_END` beyond each end, and is at least
+    :data:`JUNCTION_SIZE` long.
+
+    Parameters
+    ----------
+    kind : str
+        ``"mixer"`` or ``"splitter"``.
+    count : int
+        Inlets of a mixer, or outlets of a splitter.
+
+    Returns
+    -------
+    Symbol
+        Triangle pointing east for a mixer, west for a splitter.
+    """
+    w = JUNCTION_SIZE
+    h = max(JUNCTION_SIZE, (count - 1) * JUNCTION_PITCH + 2 * JUNCTION_END)
+    mixer = kind == "mixer"
+    points = f"0,0 {w:g},{h / 2:g} 0,{h:g}" if mixer else f"0,{h / 2:g} {w:g},0 {w:g},{h:g}"
+    return Symbol(
+        svg=f'<g id="sym_{kind}"><polygon points="{points}" fill="none" stroke="black" '
+            f'stroke-width="2"/></g>',
+        width=w, height=h,
+        ports={"outlet": (w, h / 2)} if mixer else {"inlet": (0.0, h / 2)},
+        port_series=(PortSeries("in_" if mixer else "out_", "W" if mixer else "E",
+                                pitch=JUNCTION_PITCH, extent=1.0),),
+        # Each face length is its own <defs> entry.
+        id_suffix="" if h == JUNCTION_SIZE else f"_{h:g}",
+    )
+
+
 def _face_local(face: str, x: float, y: float, width: float, height: float
                 ) -> tuple[float, float]:
     """Return ``(along, inset)`` of a symbol-space point on a face.
@@ -1200,6 +1248,8 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length,
                                                               unit.diameter),
     ("block", None): lambda unit: unit.symbol(),
+    ("mixer", "default"): lambda unit: junction_symbol("mixer", len(unit.inlets)),
+    ("splitter", "default"): lambda unit: junction_symbol("splitter", len(unit.outlets)),
     ("tank", None): lambda unit: unit.symbol(),
     ("vessel", None): lambda unit: unit.symbol(),
 }
@@ -3005,12 +3055,7 @@ class SymbolRegistry:
         ))
 
         # Mixer: a triangle pointing right.
-        self.register("mixer", Symbol(
-            svg='<g id="sym_mixer"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></g>',
-            width=50.0, height=50.0,
-            ports={'outlet': (50.0, 25.0)},
-            port_series=(PortSeries("in_", "W"),),
-        ))
+        self.register("mixer", junction_symbol("mixer", 2))
 
         # Belt and screw conveyors at their default length.
         self.register("conveyor", conveyor_symbol())
@@ -3038,12 +3083,7 @@ class SymbolRegistry:
         self.register("block", block_symbol((("in_1", "W"), ("out_1", "E"))))
 
         # Splitter: a triangle pointing left.
-        self.register("splitter", Symbol(
-            svg='<g id="sym_splitter"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></g>',
-            width=50.0, height=50.0,
-            ports={'inlet': (0.0, 25.0)},
-            port_series=(PortSeries("out_", "E"),),
-        ))
+        self.register("splitter", junction_symbol("splitter", 2))
 
         # ISA-5.1 instrument balloons, lettered by the renderer. Every
         # port offers all four faces.
