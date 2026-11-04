@@ -19,7 +19,8 @@ def select_faces(fs: "Flowsheet") -> None:
     """Choose a face for every movable port.
 
     A connected port can move when it has two or more faces and neither
-    ``nozzle()`` nor a pin names it.
+    ``nozzle()`` nor a pin names it. One a ``via()`` line leaves takes
+    the face :func:`_frozen` finds.
 
     Parameters
     ----------
@@ -27,7 +28,6 @@ def select_faces(fs: "Flowsheet") -> None:
         Sheet with placed units.
     """
     from pandid.layout.stages import is_control
-    from pandid.portgeom import pin_intent, port_faces
 
     for unit in fs.units:
         frame = unit.frame
@@ -37,14 +37,15 @@ def select_faces(fs: "Flowsheet") -> None:
         if not fs.auto_faces:
             continue
         live = [name for name, port in unit.ports.items() if port.stream is not None]
-        fixed = {*unit._port_faces, *(port for port, _ in pin_intent(unit).values())}
-        menus = {name: menu for name in live if name not in fixed
-                 and len(menu := port_faces(unit, name, frame)) > 1}
+        menus = _menus(unit, frame)
+        frozen = _frozen(unit, frame, menus)
+        frame.port_faces.update(frozen)
         # Points of fixed ports; no choice may land on a taken point.
-        taken = {_point(unit, frame, name) for name in live if name not in menus}
+        taken = {_point(unit, frame, name) for name in live
+                 if name not in menus or name in frozen}
         for name, menu in menus.items():
             target = _reference(unit.ports[name])
-            if target is None:
+            if target is None or name in frozen:
                 continue
             face = None
             if not is_control(unit):
@@ -57,6 +58,255 @@ def select_faces(fs: "Flowsheet") -> None:
                 continue
             frame.port_faces[name] = face
             taken.add(_point(unit, frame, name))
+
+
+def freeze_faces(fs: "Flowsheet") -> None:
+    """Put each movable port a ``via()`` line leaves on the face it leaves from.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+    """
+    if not fs.auto_faces:
+        return
+    for unit in fs.units:
+        if unit.frame is not None:
+            unit.frame.port_faces.update(_frozen(unit, unit.frame, _menus(unit, unit.frame)))
+
+
+def _menus(unit: "Unit", frame) -> dict[str, list[str]]:
+    """Return the faces each movable port may take.
+
+    Parameters
+    ----------
+    unit : Unit
+        Placed unit.
+    frame : Frame
+        The unit's frame.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Faces of each connected port with two or more, that neither
+        ``nozzle()`` nor a pin names.
+    """
+    from pandid.portgeom import pin_intent, port_faces
+
+    fixed = {*unit._port_faces, *(port for port, _ in pin_intent(unit).values())}
+    return {name: menu for name, port in unit.ports.items()
+            if port.stream is not None and name not in fixed
+            and len(menu := port_faces(unit, name, frame)) > 1}
+
+
+def _frozen(unit: "Unit", frame, menus: dict[str, list[str]]) -> dict[str, str]:
+    """Return the face each port leaves its ``via()`` line from.
+
+    Parameters
+    ----------
+    unit : Unit
+        Placed unit.
+    frame : Frame
+        The unit's frame.
+    menus : dict[str, list[str]]
+        Faces each port may take.
+
+    Returns
+    -------
+    dict[str, str]
+        For each port whose line is drawn by hand, the first face whose
+        point or anchor lies within ``_SQUARE_TOL`` of the line's end
+        there, and beyond which the line's next point lies.
+    """
+    import math
+    from dataclasses import replace
+
+    from pandid.layout.conflicts import _SQUARE_TOL
+    from pandid.portgeom import face_point, resolve_port
+
+    out = {}
+    for name, menu in menus.items():
+        port = unit.ports[name]
+        stream = port.stream
+        route = stream.route if stream is not None else None
+        if stream is None or route is None or not route.manual or not route.waypoints:
+            continue
+        points = route.waypoints if stream.source is port else route.waypoints[::-1]
+        end = points[0]
+        beyond = next((p for p in points[1:] if math.dist(p, end) > _SQUARE_TOL), None)
+        if beyond is None:
+            continue
+        for face in menu:
+            probe = replace(frame, port_faces={**frame.port_faces, name: face})
+            resolved = resolve_port(unit, probe, name)
+            nx, ny = face_point(unit, probe, resolved.face)[1]
+            if ((beyond[0] - end[0]) * nx + (beyond[1] - end[1]) * ny > 0
+                    and min(math.dist(resolved.point, end),
+                            math.dist(resolved.anchor, end)) <= _SQUARE_TOL):
+                out[name] = face
+                break
+    return out
+
+
+def blocked_nozzles(fs: "Flowsheet") -> list[tuple["Unit", str]]:
+    """Return the blocked balloon nozzles that may turn.
+
+    A nozzle may turn when neither ``nozzle()`` nor a pin names its
+    face.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    list[tuple[Unit, str]]
+        Each balloon and the name of a nozzle :func:`_blocked` holds for.
+    """
+    from pandid.layout.stages import is_control
+    from pandid.portgeom import pin_intent
+
+    if not fs.auto_faces:
+        return []
+    out = []
+    for unit in fs.units:
+        if not is_control(unit):
+            continue
+        fixed = {*unit._port_faces, *(port for port, _ in pin_intent(unit).values())}
+        out += [(unit, name) for name in unit.ports
+                if name not in fixed and _blocked(fs, unit, name)]
+    return out
+
+
+def clear_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> list[str]:
+    """Return the faces a blocked nozzle may turn to, cheapest first.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    unit : Unit
+        Balloon owning the nozzle.
+    port_name : str
+        Nozzle to turn.
+
+    Returns
+    -------
+    list[str]
+        Faces clear of what :func:`_blocking` returns, on no point
+        another line on the balloon takes, in :func:`_best` order;
+        none if the nozzle is not blocked.
+    """
+    from dataclasses import replace
+
+    from pandid.portgeom import port_faces
+
+    frame = unit.frame
+    port = unit.ports[port_name]
+    target = _reference(port)
+    if frame is None or target is None or not _blocked(fs, unit, port_name):
+        return []
+    blocking = _blocking(fs, port)
+    menu = [face for face in port_faces(unit, port_name, frame) if _clear(
+        unit, replace(frame, port_faces={**frame.port_faces, port_name: face}),
+        port_name, blocking)]
+    taken = {_point(unit, frame, name) for name, other in unit.ports.items()
+             if other.stream is not None and name != port_name}
+    order: list[str] = []
+    while (face := _best(unit, replace(frame, port_faces=dict(frame.port_faces)),
+                         port_name, menu, target, taken)) is not None:
+        order.append(face)
+        menu.remove(face)
+    return order
+
+
+def _blocked(fs: "Flowsheet", unit: "Unit", port_name: str) -> bool:
+    """Return whether the router gave up on a line at a blocked nozzle.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    unit : Unit
+        Unit owning the nozzle.
+    port_name : str
+        Nozzle to test.
+
+    Returns
+    -------
+    bool
+        True if the nozzle's automatic line takes the fallback path and
+        its outward stub enters a box :func:`_blocking` returns.
+    """
+    port = unit.ports[port_name]
+    route = port.stream.route if port.stream is not None else None
+    if unit.frame is None or route is None or route.manual or not route.used_fallback:
+        return False
+    return not _clear(unit, unit.frame, port_name, _blocking(fs, port))
+
+
+def _blocking(fs: "Flowsheet", port: "Port") -> list[tuple[float, float, float, float]]:
+    """Return the boxes a balloon nozzle's outward stub must miss.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+    port : Port
+        Connected nozzle.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Bodies of units other than its own and its line's other end,
+        and tag halos of units other than its own.
+    """
+    from pandid.portgeom import unit_box
+    from pandid.routing.visibility import _tag_halo
+
+    stream = port.stream
+    assert stream is not None
+    far = (stream.dest if stream.source is port else stream.source).owner
+    out = []
+    for u in fs.units:
+        if u.frame is None or u is port.owner:
+            continue
+        if u is not far:
+            out.append(unit_box(u, u.frame))
+        halo = _tag_halo(u, u.frame)
+        if halo is not None:
+            out.append((halo.x_min, halo.y_min, halo.x_max, halo.y_max))
+    return out
+
+
+def _clear(unit: "Unit", frame, port_name: str,
+           boxes: list[tuple[float, float, float, float]]) -> bool:
+    """Return whether a port's outward stub misses every box.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit owning the port.
+    frame : Frame
+        The unit's frame, with the face to test.
+    port_name : str
+        Port to test.
+    boxes : list[tuple[float, float, float, float]]
+        Boxes as left, top, right, bottom.
+
+    Returns
+    -------
+    bool
+        True if the stub, :data:`MIN_ESCAPE` long, enters no box.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import face_point, resolve_port
+
+    _, anchor, landed = resolve_port(unit, frame, port_name)
+    normal = face_point(unit, frame, landed)[1]
+    tip = (anchor[0] + MIN_ESCAPE * normal[0], anchor[1] + MIN_ESCAPE * normal[1])
+    return not any(segment_crosses_box(anchor, tip, box) for box in boxes)
 
 
 def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
@@ -87,8 +337,7 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
         Usable faces, in menu order.
     """
     from pandid.layout.attach import is_attached
-    from pandid.layout.conflicts import segment_crosses_box
-    from pandid.portgeom import face_point, port_faces, resolve_port, unit_box
+    from pandid.portgeom import port_faces, resolve_port, unit_box
     from pandid.routing.metrics import min_bends
 
     port = unit.ports[port_name]
@@ -112,11 +361,9 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
     bends: dict[str, int | None] = {}
     for face in menu:
         frame.port_faces[port_name] = face
-        _, anchor, landed = resolve_port(unit, frame, port_name)
-        normal = face_point(unit, frame, landed)[1]
-        tip = (anchor[0] + MIN_ESCAPE * normal[0], anchor[1] + MIN_ESCAPE * normal[1])
-        if not any(segment_crosses_box(anchor, tip, box) for box in boxes):
+        if _clear(unit, frame, port_name, boxes):
             clear.append(face)
+        _, anchor, landed = resolve_port(unit, frame, port_name)
         bends[face] = (
             None if fixed_peer is None
             else min_bends(anchor, landed, fixed_peer.anchor, fixed_peer.face)

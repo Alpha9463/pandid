@@ -128,6 +128,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A signal line leaves its balloon clear of other units (#700).** Where a unit
+  body or tag blocks a balloon's nozzle so its line cannot be routed, `route()`
+  turns the nozzle to a clear face unless `nozzle()` or a pin states it, and
+  keeps that if no finding grows.
 - **A parallel bank draws without crossings (#458).** From four nozzles, a
   `Mixer` or `Splitter` face grows to keep them 20 apart where the sheet draws
   no worse for it, and the laterals from one face to a column of units turn on

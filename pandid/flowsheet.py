@@ -2108,6 +2108,11 @@ class Flowsheet:
         by them; otherwise, and wherever lanes changed no route and no face
         grew, the sheet is drawn without them.
 
+        Last, each balloon nozzle where a unit blocks a line the router
+        could not route is turned to the cheapest clear face with which the
+        routed sheet takes no tap off its line and grows no finding or
+        clash.
+
         Parameters
         ----------
         router : object or None, optional
@@ -2143,6 +2148,7 @@ class Flowsheet:
             laned = bool(grown) or self._relaned
             if ((not (laned or self._widened) and held is None) or self._laying_out
                     or not (router is None or type(router) is DefaultRouter)):
+                self._turn(router)
                 return
             kept, judged = self._state(), _score(self)
             # Draw the sheet without grown faces or lanes as route() would
@@ -2162,6 +2168,7 @@ class Flowsheet:
                     u._stock_face = False
                 self._put_state(kept)
                 self._lanes = True
+            self._turn(router)
         finally:
             self._routing = False
 
@@ -2340,6 +2347,41 @@ class Flowsheet:
             self._exit_tight = False
         self._route_stale = False
 
+    def _turn(self, router=None) -> None:
+        """Turn each blocked balloon nozzle to the cheapest clear face with
+        which the sheet, routed again, takes no tap off its line and grows
+        no finding or clash.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router the sheet was routed with; ``None`` is the default.
+        """
+        from pandid.layout.control import _flaws, _taps_off
+        from pandid.layout.faces import blocked_nozzles, clear_faces
+        from pandid.routing import DefaultRouter
+
+        if router is None:
+            router = DefaultRouter()
+        if type(router) is not DefaultRouter or self._laying_out:
+            return
+        for unit, name in blocked_nozzles(self):
+            for face in clear_faces(self, unit, name):
+                prior = self._geometry()
+                before, off = _flaws(self), _taps_off(self)
+                assert unit.frame is not None
+                unit.frame.port_faces[name] = face
+                try:
+                    router.route(self)
+                    kept = _taps_off(self) <= off and not any(
+                        n > before[k] for k, n in _flaws(self).items())
+                except Exception:
+                    kept = False
+                if kept:
+                    self._unhung = self._unhung or prior
+                    break
+                self._put_geometry(prior, keep_manual=False)
+
     def _geometry(self) -> tuple:
         """Return each unit's frame and tap, each automatic route, and
         whether routing settled.
@@ -2363,8 +2405,11 @@ class Flowsheet:
         state : tuple
             What :meth:`_geometry` returned.
         keep_manual : bool
-            Keep a route now drawn by hand rather than the saved one.
+            Keep a route now drawn by hand rather than the saved one, and
+            the face each of its ends leaves from.
         """
+        from pandid.layout.faces import freeze_faces
+
         frames, routes, converged = state
         units = {id(u) for u in self.units}
         streams = {id(st) for st in self.streams}
@@ -2377,6 +2422,8 @@ class Flowsheet:
             manual = st.route is not None and st.route.manual
             if id(st) in streams and not (keep_manual and manual):
                 st.route = route
+        if keep_manual:
+            freeze_faces(self)
         self.route_converged = converged
 
     def _unhang(self) -> None:

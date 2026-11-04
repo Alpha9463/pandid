@@ -2671,3 +2671,209 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
             min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
             for (ax, ay), (bx, by) in zip(points, points[1:])
         ), (tt.name, tt.tap, points)
+
+
+def _valved_bank(
+    at: float | None = None, offset: float | None = None, controller_variant: str = "shared"
+) -> tuple[Flowsheet, list[Stream]]:
+    """Route three pumps in parallel, each with a flow loop on its valved suction line."""
+    from pandid.devices import ControlValve
+
+    fs = Flowsheet("valved loops")
+    sp = fs.add(U.Splitter("SP", n_outlets=3))
+    mx = fs.add(U.Mixer("MX", n_inlets=3))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    pairs = []
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        line = fs.connect(outlet, pump.suction)
+        fs.connect(pump.discharge, inlet)
+        pairs.append((line, fs.add(ControlValve(f"FV-{200 + i}"), on=line, at=0.5)))
+    loops = [
+        fs.add_control_loop(
+            "F",
+            200 + i,
+            measuring=line,
+            acting_on=valve,
+            at=at,
+            offset=offset,
+            controller_variant=controller_variant,
+        )
+        for i, (line, valve) in enumerate(pairs)
+    ]
+    fs.route()
+    return fs, [s for loop in loops for s in (loop.measurement, loop.output)]
+
+
+def test_no_signal_line_leaves_a_balloon_into_a_unit():
+    """Draw each signal line of a valved pump bank clear of every unit.
+
+    Returns
+    -------
+    None
+        No signal line takes the fallback path or crosses a unit.
+    """
+    fs, signals = _valved_bank()
+
+    assert [s.name for s in signals if s.route is None or s.route.used_fallback] == []
+    crossed = [i.message for i in fs.validate() if i.code == "route-crosses-unit"]
+    assert [m for m in crossed for s in signals if m.startswith(f"stream {s.name} ")] == []
+
+
+def test_turning_a_blocked_nozzle_takes_no_tap_off_its_line():
+    """Keep every tap of a valved pump bank on its line.
+
+    Returns
+    -------
+    None
+        No balloon's tap is off its host's drawn line.
+    """
+    from pandid.layout.control import _taps_off
+
+    fs, _ = _valved_bank(at=0.75, offset=40, controller_variant="default")
+
+    assert _taps_off(fs) == set()
+
+
+def test_a_hand_drawn_signal_line_keeps_its_nozzle_faces():
+    """Route a signal line drawn by hand from a turned nozzle as drawn.
+
+    Returns
+    -------
+    None
+        The line keeps its points and is drawn square.
+    """
+    fs = Flowsheet("Receiver pressure")
+    v = fs.add(U.Vessel("V-101", width=60, height=100)).pin(x=150, y=80)
+    pt = fs.add_instrument("PT", 101, sensing=v, face="W").pin(x=100, y=100)
+    pic = fs.add(U.Instrument("PIC-101")).pin(x=350, y=100)
+    s = fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    fs.route()
+    assert s.route is not None
+    x, y = s.route.waypoints[0]
+    points = [(x, y), (x, 45.0), (325.0, 45.0), (325.0, 122.0)]
+    s.via(points)
+    fs.route()
+
+    assert s.route.waypoints == points
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def _receiver_with_frozen_signal() -> tuple[Flowsheet, Stream, list[tuple[float, float]]]:
+    """Route PT-101 beside V-101 to PIC-101, then freeze the signal line as drawn."""
+    fs = Flowsheet("Receiver pressure")
+    v = fs.add(U.Vessel("V-101", width=60, height=100)).pin(x=150, y=80)
+    pt = fs.add_instrument("PT", 101, sensing=v, face="W").pin(x=100, y=100)
+    pic = fs.add(U.Instrument("PIC-101")).pin(x=350, y=100)
+    s = fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    fs.route()
+    assert s.route is not None
+    x, y = s.route.waypoints[0]
+    points = [(x, y), (x, 45.0), (325.0, 45.0), (325.0, 122.0)]
+    s.via(points)
+    return fs, s, points
+
+
+def test_a_frozen_turned_line_keeps_its_faces_through_a_new_layout():
+    """Draw a line frozen from a turned nozzle square after layout() and route().
+
+    Returns
+    -------
+    None
+        The line keeps its points and is drawn square.
+    """
+    fs, s, points = _receiver_with_frozen_signal()
+    fs.layout()
+    fs.route()
+
+    assert s.route is not None
+    assert s.route.waypoints == points
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_frozen_signal_line_keeps_its_faces_when_a_controller_is_hung_again():
+    """Draw a frozen signal line square when route() hangs its controller again.
+
+    Returns
+    -------
+    None
+        The line keeps its points and is drawn square.
+    """
+    from pandid import ControlValve, Feed, Instrument, Product, Vessel
+
+    fs = Flowsheet("Receiver pressure")
+    valve = fs.add(ControlValve("PV-101")).pin(x=180, y=230)
+    vessel = fs.add(Vessel("V-101", width=80, height=120)).pin(x=400, y=170)
+    fs.connect(fs.add(Feed("F")).pin(x=100, y=230).outlet, valve.inlet)
+    fs.connect(valve.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, fs.add(Product("P")).pin(x=650, y=230).inlet)
+    pt = fs.add_instrument("PT", 101, sensing=vessel, face="E", offset=25)
+    pic = fs.add(Instrument("PIC-101"))
+    signal = fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    fs.connect(pic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+    assert signal.route is not None
+    points = list(signal.route.waypoints)
+    signal.via(points)
+    fs.route()
+
+    assert signal.route.waypoints == points
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def _receiver_feed() -> tuple[Flowsheet, U.Vessel, Stream]:
+    """Route a feed into a horizontal V-101 and return the sheet, vessel and line."""
+    fs = Flowsheet("Receiver feed")
+    v = fs.add(U.Vessel("V-101", variant="horizontal", width=120, height=50)).pin(x=300, y=200)
+    f = fs.add(U.Feed("Feed")).pin(x=50, y=225)
+    s = fs.connect(f.outlet, v.inlet)
+    fs.route()
+    return fs, v, s
+
+
+def test_a_frozen_line_into_a_moved_unit_takes_the_face_it_reaches():
+    """End a frozen line at the near nozzle of a unit moved under its old end.
+
+    Returns
+    -------
+    None
+        The line meets V-101 on its west face and crosses no unit.
+    """
+    from pandid.portgeom import resolve_port
+
+    fs, v, s = _receiver_feed()
+    assert s.route is not None
+    s.via(list(s.route.waypoints))
+    v.pin(x=180, y=200)
+    fs.route()
+
+    assert resolve_port(v, frame_of(v), "inlet").face == "W"
+    assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_frozen_line_keeps_the_face_it_reaches_from_outside():
+    """Keep a frozen line on the face it enters once its unit is back under it.
+
+    Returns
+    -------
+    None
+        The line meets V-101 on its north face, square.
+    """
+    from dataclasses import replace
+
+    from pandid.portgeom import resolve_port
+
+    fs, v, s = _receiver_feed()
+    assert s.route is not None
+    start, escape = s.route.waypoints[:2]
+    north = replace(frame_of(v), port_faces={"in_1": "N"})
+    x, y = resolve_port(v, north, "inlet").point
+    s.via([start, escape, (escape[0], 150.0), (x, 150.0), (x, y)])
+    v.pin(x=180, y=200)
+    fs.route()
+    v.pin(x=300, y=200)
+    fs.route()
+
+    assert resolve_port(v, frame_of(v), "inlet").face == "N"
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
