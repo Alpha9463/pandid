@@ -2820,3 +2820,60 @@ def test_a_frozen_signal_line_keeps_its_faces_when_a_controller_is_hung_again():
 
     assert signal.route.waypoints == points
     assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def _receiver_feed() -> tuple[Flowsheet, U.Vessel, Stream]:
+    """Route a feed into a horizontal V-101 and return the sheet, vessel and line."""
+    fs = Flowsheet("Receiver feed")
+    v = fs.add(U.Vessel("V-101", variant="horizontal", width=120, height=50)).pin(x=300, y=200)
+    f = fs.add(U.Feed("Feed")).pin(x=50, y=225)
+    s = fs.connect(f.outlet, v.inlet)
+    fs.route()
+    return fs, v, s
+
+
+def test_a_frozen_line_into_a_moved_unit_takes_the_face_it_reaches():
+    """End a frozen line at the near nozzle of a unit moved under its old end.
+
+    Returns
+    -------
+    None
+        The line meets V-101 on its west face and crosses no unit.
+    """
+    from pandid.portgeom import resolve_port
+
+    fs, v, s = _receiver_feed()
+    assert s.route is not None
+    s.via(list(s.route.waypoints))
+    v.pin(x=180, y=200)
+    fs.route()
+
+    assert resolve_port(v, frame_of(v), "inlet").face == "W"
+    assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_frozen_line_keeps_the_face_it_reaches_from_outside():
+    """Keep a frozen line on the face it enters once its unit is back under it.
+
+    Returns
+    -------
+    None
+        The line meets V-101 on its north face, square.
+    """
+    from dataclasses import replace
+
+    from pandid.portgeom import resolve_port
+
+    fs, v, s = _receiver_feed()
+    assert s.route is not None
+    start, escape = s.route.waypoints[:2]
+    north = replace(frame_of(v), port_faces={"in_1": "N"})
+    x, y = resolve_port(v, north, "inlet").point
+    s.via([start, escape, (escape[0], 150.0), (x, 150.0), (x, y)])
+    v.pin(x=180, y=200)
+    fs.route()
+    v.pin(x=300, y=200)
+    fs.route()
+
+    assert resolve_port(v, frame_of(v), "inlet").face == "N"
+    assert [i.message for i in fs.validate() if i.code == "route-diagonal"] == []
