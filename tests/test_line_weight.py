@@ -58,6 +58,8 @@ def _viewport(use: ET.Element, symbol: ET.Element) -> Matrix:
     _, _, view_width, view_height = (float(value) for value in view_box.split())
     width = float(use.get("width", view_width))
     height = float(use.get("height", view_height))
+    if symbol.get("preserveAspectRatio") == "none":
+        return (width / view_width, 0.0, 0.0, height / view_height, 0.0, 0.0)
     scale = min(width / view_width, height / view_height)
     return (scale, 0.0, 0.0, scale, 0.0, 0.0)
 
