@@ -66,8 +66,7 @@ def captures() -> "dict[str, tuple[Flowsheet, dict]]":
     """
     out = {}
     for stem in sorted(p.stem for p in EXAMPLES.glob("[0-9]*.py")):
-        with contextlib.redirect_stdout(io.StringIO()):
-            out |= _sheets(stem)
+        out |= _sheets(stem)
     return out
 
 
@@ -79,7 +78,8 @@ def sheets() -> list[str]:
     list[str]
         Sheet names used for gallery asset names.
     """
-    return list(captures())
+    with contextlib.redirect_stdout(io.StringIO()):
+        return list(captures())
 
 
 def _sheets(stem: str) -> "dict[str, tuple[Flowsheet, dict]]":
