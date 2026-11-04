@@ -25,27 +25,6 @@ SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 
 # ---------------------------------------------------------------------------
-# Reading the drawing
-# ---------------------------------------------------------------------------
-
-
-def _frames(fs: Flowsheet) -> dict[str, Frame]:
-    """Return every unit's frame by tag.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out flowsheet.
-
-    Returns
-    -------
-    dict[str, Frame]
-        Frame of each unit, keyed by its name.
-    """
-    return {unit.name: frame_of(unit) for unit in fs.units}
-
-
-# ---------------------------------------------------------------------------
 # The mock flowsheets the sweeps run over
 # ---------------------------------------------------------------------------
 
@@ -267,7 +246,7 @@ def test_flow_runs_east_and_a_return_line_runs_west() -> None:
     """The loop is read in flow order and the gas comes back west to the mixer."""
     fs = _recycle()
     fs.layout()
-    at = _frames(fs)
+    at = {unit.name: frame_of(unit) for unit in fs.units}
     train = ["F", "M-1", "R-1", "V-1", "K-1"]
     assert sorted(train, key=lambda name: at[name].x) == train, {n: at[n].x for n in train}
     assert at["V-1"].x < at["Product"].x
@@ -294,7 +273,7 @@ def _pump_line(*, mirrored: bool) -> dict[str, Frame]:
     fs.connect(feed.outlet, pump.suction)
     fs.connect(pump.discharge, prod.inlet)
     fs.layout()
-    return _frames(fs)
+    return {unit.name: frame_of(unit) for unit in fs.units}
 
 
 def test_a_mirrored_pump_draws_its_peers_on_the_mirrored_side() -> None:

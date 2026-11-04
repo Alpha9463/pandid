@@ -684,24 +684,6 @@ def _drawn_nozzles(sym: Symbol) -> list[_Nozzle]:
     return found
 
 
-def _port_placements(sym: Symbol) -> list[tuple[str, str, Point]]:
-    """List each port placement.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol definition.
-
-    Returns
-    -------
-    list[tuple[str, str, Point]]
-        Port name, face, and position.
-    """
-    return [
-        (name, face, xy) for name, faces in sym.port_faces.items() for face, xy in faces.items()
-    ]
-
-
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_drawn_nozzles_and_ports_agree(entry):
     """Verify each drawn nozzle has a port and no port sits between two nozzles."""
@@ -709,7 +691,9 @@ def test_drawn_nozzles_and_ports_agree(entry):
     if (kind, variant) in _NOT_NOZZLES:
         pytest.skip("draws a gauge stub, not a process nozzle")
     nozzles = _drawn_nozzles(sym)
-    placements = _port_placements(sym)
+    placements = [
+        (name, face, xy) for name, faces in sym.port_faces.items() for face, xy in faces.items()
+    ]
     points = [xy for _n, _f, xy in placements]
     for nozzle in nozzles:
         near = min(math.dist(nozzle.point, p) for p in points) if points else math.inf
@@ -935,26 +919,6 @@ def odd_box_sheets():
     return sheets
 
 
-def _resolved_in_symbol_space(unit, matrix: Matrix, name: str) -> Point:
-    """Map a resolved port back to symbol coordinates.
-
-    Parameters
-    ----------
-    unit : units.Unit
-        Placed unit.
-    matrix : Matrix
-        Symbol-to-sheet transform.
-    name : str
-        Port name.
-
-    Returns
-    -------
-    Point
-        Symbol-space port position.
-    """
-    return _apply(_invert(matrix), *port_point(unit, unit.frame, name))
-
-
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_ports_stay_on_the_drawing_at_any_box_shape(entry, odd_box_sheets):
     """Verify process ports stay on ink and signal ports on the outline in odd boxes."""
@@ -971,7 +935,7 @@ def test_ports_stay_on_the_drawing_at_any_box_shape(entry, odd_box_sheets):
         unit, matrix = sheet[(kind, variant)]
         for name in unit.ports:
             where = f"{kind}/{variant} port {name!r} in a {w:g}x{h:g} box"
-            point = _resolved_in_symbol_space(unit, matrix, name)
+            point = _apply(_invert(matrix), *port_point(unit, unit.frame, name))
             if (kind, name) in _SIGNAL_PORTS:
                 d = _nearest_distance(point, outline)
                 assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
@@ -1176,7 +1140,8 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
             (round(unit.frame.cx, 6), round(unit.frame.cy, 6))
         ]
         for name in unit.ports:
-            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
+            point = _apply(_invert(matrix), *port_point(unit, unit.frame, name))
+            d = _nearest_distance(point, segments)
             assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
                 f"{kind}/{variant} turned end for end: port {name!r} in a {w:g}x{h:g} box "
                 f"is {d:.1f}u from the nearest drawn stroke once the artwork's own "
@@ -2327,24 +2292,6 @@ def _ink_extents(svg: str) -> list[tuple[str, float, float]]:
 _FEATURE_AREA = 0.5
 
 
-def _body_fill(sym: Symbol) -> float:
-    """Measure the largest filled element area ratio.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol definition.
-
-    Returns
-    -------
-    float
-        Largest area ratio.
-    """
-    return max(
-        [(w * h) / (sym.width * sym.height) for _, w, h in _ink_extents(sym.svg)], default=0.0
-    )
-
-
 def test_no_valve_body_is_drawn_filled():
     """Verify valve bodies are not filled by default."""
     for variant in default_registry.variants("valve"):
@@ -2378,7 +2325,11 @@ def test_a_normally_closed_valve_is_the_one_valve_drawn_filled():
         sym = default_registry.for_unit(valve)
         if variant in NC_DARKENS:
             assert mark == "fill"
-            assert _body_fill(sym) >= _FEATURE_AREA, (
+            fill = max(
+                [(w * h) / (sym.width * sym.height) for _, w, h in _ink_extents(sym.svg)],
+                default=0.0,
+            )
+            assert fill >= _FEATURE_AREA, (
                 f"valve/{variant} is declared normally closed but nothing it draws "
                 f"covers enough of its box to read as a darkened body"
             )
@@ -2396,28 +2347,11 @@ _VALVE_RUN_HEIGHT = 7.5
 _VALVE_RUN_TOL = 0.25
 
 
-def _straight_through(sym: Symbol) -> bool:
-    """Identify a west-to-east valve.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Valve symbol.
-
-    Returns
-    -------
-    bool
-        Whether the process run is straight.
-    """
-    return list(sym.port_faces.get("inlet", ())) == ["W"] and list(
-        sym.port_faces.get("outlet", ())
-    ) == ["E"]
-
-
 _STRAIGHT_VALVES = sorted(
     variant
     for variant in default_registry.variants("valve")
-    if _straight_through(default_registry.get("valve", variant))
+    for faces in [default_registry.get("valve", variant).port_faces]
+    if list(faces.get("inlet", ())) == ["W"] and list(faces.get("outlet", ())) == ["E"]
 )
 
 
@@ -2425,26 +2359,6 @@ _OFF_THE_RUN = {
     "three_way": "The branch extends the box below the top-aligned process run.",
     "knife": "The gate housing extends below the process run.",
 }
-
-
-def _run_heights(sym: Symbol) -> dict[tuple[str, str], float]:
-    """Read process-port heights above a valve base.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Valve symbol.
-
-    Returns
-    -------
-    dict[tuple[str, str], float]
-        Heights by port and face.
-    """
-    return {
-        (name, face): sym.height - y
-        for name in ("inlet", "outlet")
-        for face, (_, y) in sym.port_faces[name].items()
-    }
 
 
 def _ink_below_the_run(sym: Symbol) -> float:
@@ -2468,13 +2382,15 @@ def _ink_below_the_run(sym: Symbol) -> float:
 def test_a_straight_through_valve_carries_the_run_at_one_height(variant):
     """Verify straight-through valves preserve run height."""
     sym = default_registry.get("valve", variant)
-    for (name, face), above in _run_heights(sym).items():
-        assert above == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL), (
-            f"valve/{variant} puts {name!r} ({face}) {above:.2f}u above the bottom of its "
-            f"{sym.width}x{sym.height} box, not the {_VALVE_RUN_HEIGHT} every other "
-            f"straight-through valve carries the run at (tolerance {_VALVE_RUN_TOL}) -- "
-            f"so swapping a valve for this one moves the line it sits in"
-        )
+    for name in ("inlet", "outlet"):
+        for face, (_, y) in sym.port_faces[name].items():
+            above = sym.height - y
+            assert above == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL), (
+                f"valve/{variant} puts {name!r} ({face}) {above:.2f}u above the bottom of its "
+                f"{sym.width}x{sym.height} box, not the {_VALVE_RUN_HEIGHT} every other "
+                f"straight-through valve carries the run at (tolerance {_VALVE_RUN_TOL}) -- "
+                f"so swapping a valve for this one moves the line it sits in"
+            )
 
 
 @pytest.mark.parametrize("variant", _STRAIGHT_VALVES)
@@ -2492,9 +2408,11 @@ def test_exactly_the_valves_named_above_leave_the_run():
     strayed = {
         variant
         for variant in _STRAIGHT_VALVES
+        for sym in [default_registry.get("valve", variant)]
         if any(
-            abs(above - _VALVE_RUN_HEIGHT) > _VALVE_RUN_TOL
-            for above in _run_heights(default_registry.get("valve", variant)).values()
+            abs(sym.height - y - _VALVE_RUN_HEIGHT) > _VALVE_RUN_TOL
+            for name in ("inlet", "outlet")
+            for _, y in sym.port_faces[name].values()
         )
     }
     assert strayed == set(_OFF_THE_RUN)

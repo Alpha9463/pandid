@@ -1631,7 +1631,8 @@ def _drawio_cells(fs, kwargs) -> dict:
     dict[str, ET.Element]
         Exported cells keyed by identifier.
     """
-    return _drawio_cells_from_document(fs.to_drawio(**_drawio_options(kwargs)))
+    root = _drawio_root(fs.to_drawio(**_drawio_options(kwargs)))
+    return {cell.get("id"): cell for cell in root.iter("mxCell")}
 
 
 def _drawio_options(kwargs: dict) -> dict:
@@ -1666,22 +1667,6 @@ def _drawio_root(document: str) -> ET.Element:
     root = ET.fromstring(document).find("diagram/mxGraphModel/root")
     assert root is not None, "the Draw.io document has no graph root"
     return root
-
-
-def _drawio_cells_from_document(document: str) -> dict:
-    """Index cells from an already-rendered Draw.io document.
-
-    Parameters
-    ----------
-    document : str
-        Draw.io XML document.
-
-    Returns
-    -------
-    dict[str, ET.Element]
-        Exported cells keyed by identifier.
-    """
-    return {cell.get("id"): cell for cell in _drawio_root(document).iter("mxCell")}
 
 
 def _drawio_furniture(fs, kwargs):
@@ -2781,7 +2766,8 @@ def _gallery_cells(rendered_gallery: dict[str, _GalleryArtifacts], stem: str) ->
     dict[str, ET.Element]
         Fresh XML cells from the named Draw.io artifact.
     """
-    return _drawio_cells_from_document(rendered_gallery[stem].drawio)
+    root = _drawio_root(rendered_gallery[stem].drawio)
+    return {cell.get("id"): cell for cell in root.iter("mxCell")}
 
 
 @pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
@@ -3452,34 +3438,26 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _composed_units():
-    """Build one unit for each supported symbol composition.
-
-    Returns
-    -------
-    list[Unit]
-        Units with representative overlays and body variants.
-    """
-    return [
-        units.Reactor("R-101"),
-        units.Reactor("R-102", agitator="turbine"),
-        units.Reactor("R-103", variant="jacketed", agitator="propeller"),
-        units.Reactor("R-201", internals="packing", agitator=None),
-        units.Reactor("R-202", internals="fluidised_bed", agitator="anchor"),
-        units.Column("T-101", internals="tray"),
-        units.Column("T-102", internals="bubble_cap_tray", trays=6),
-        units.Column("T-103", internals="packing", trays=2),
-        units.Vessel("D-301", supports="leg"),
-        units.Vessel("D-302", supports="skirt"),
-        units.Vessel("D-303", supports="bracket"),
-        units.Vessel("D-304", supports="ring"),
-        units.Separator("V-201", characteristic="gravity"),
-        units.Separator("V-202", characteristic="electrostatic"),
-        units.Separator("V-203", characteristic="electromagnetic"),
-    ]
+_COMPOSED = [
+    units.Reactor("R-101"),
+    units.Reactor("R-102", agitator="turbine"),
+    units.Reactor("R-103", variant="jacketed", agitator="propeller"),
+    units.Reactor("R-201", internals="packing", agitator=None),
+    units.Reactor("R-202", internals="fluidised_bed", agitator="anchor"),
+    units.Column("T-101", internals="tray"),
+    units.Column("T-102", internals="bubble_cap_tray", trays=6),
+    units.Column("T-103", internals="packing", trays=2),
+    units.Vessel("D-301", supports="leg"),
+    units.Vessel("D-302", supports="skirt"),
+    units.Vessel("D-303", supports="bracket"),
+    units.Vessel("D-304", supports="ring"),
+    units.Separator("V-201", characteristic="gravity"),
+    units.Separator("V-202", characteristic="electrostatic"),
+    units.Separator("V-203", characteristic="electromagnetic"),
+]
 
 
-COMPOSED_IDS = [f"{u.kind}/{u.name}" for u in _composed_units()]
+COMPOSED_IDS = [f"{u.kind}/{u.name}" for u in _COMPOSED]
 
 
 @pytest.fixture(scope="module")
@@ -3492,7 +3470,7 @@ def composed_sheet() -> Flowsheet:
         Grid of composed units.
     """
     fs = Flowsheet("compositions")
-    for i, unit in enumerate(_composed_units()):
+    for i, unit in enumerate(_COMPOSED):
         fs.add(unit).pin(x=(i % 5) * 400.0, y=(i // 5) * 400.0)
     fs.layout()
     return fs
