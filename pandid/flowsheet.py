@@ -2106,12 +2106,6 @@ class Flowsheet:
         kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
-        Where the last layout stacked two units in a column with another
-        unit pinned to a row between theirs, the sheet is laid out and
-        routed again with those two unstacked, kept only if no tap leaves
-        its line and no finding, clash, crossing or fallback route grows;
-        where kept, the next route() starts from the stacked drawing and
-        tries again.
 
         Where a mixer's or splitter's face grows to hold its nozzles, or
         laterals are laid on lanes, the sheet is also drawn as route() would
@@ -2121,6 +2115,40 @@ class Flowsheet:
         crossing, bend, fallback, finding, clash or tap off its line grows
         by them; otherwise, and wherever lanes changed no route and no face
         grew, the sheet is drawn without them.
+
+        Last, where the drawing stacks two units in a column with another
+        unit pinned to a row between theirs, the sheet is laid out and
+        routed again with those two unstacked, kept only if no tap leaves
+        its line and no finding, clash, crossing or fallback route grows.
+        Where kept, the next route() starts from the stacked drawing.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.routing import DefaultRouter
+
+        # Start a repeated call from the stacked drawing held last time.
+        held, self._stacked = self._stacked, None
+        if held is not None and not (self._layout_stale
+                                     or any(u.frame is None for u in self.units)):
+            self._put_state(held)
+        self._route_lanes(router)
+        if (self._stack_spans and not self._laying_out
+                and (router is None or type(router) is DefaultRouter)):
+            self._unstack(router)
+
+    def _route_lanes(self, router=None) -> None:
+        """Route the sheet, with lanes and grown faces where they draw no
+        worse.
 
         Parameters
         ----------
@@ -2179,6 +2207,53 @@ class Flowsheet:
         finally:
             self._routing = False
 
+    def _unstack(self, router=None) -> None:
+        """Lay out and route the sheet again with two units unstacked where
+        another unit in their column is pinned to a row between theirs.
+
+        The new drawing is kept only if no tap leaves its line and no
+        finding, clash, crossing or fallback route grows; a kept drawing
+        holds the one it replaced for the next route().
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+        """
+        from pandid.layout.conflicts import analyze_conflicts
+        from pandid.layout.control import _flaws, _taps_off
+
+        def count() -> Counter[str]:
+            """Count findings and clashes, crossings and fallback routes.
+
+            Returns
+            -------
+            Counter[str]
+                What :func:`_flaws` counts, plus ``crossing`` and
+                ``fallback`` conflicts.
+            """
+            flaws = _flaws(self)
+            flaws.update(c.kind for c in analyze_conflicts(self)
+                         if c.kind in ("crossing", "fallback"))
+            return flaws
+
+        before, off, stacked = count(), _taps_off(self), self._state()
+        self._split_stacks = self._routing = True
+        try:
+            self.layout(self._engine)
+            self._route_once(router)
+            kept = _taps_off(self) <= off and not any(
+                n > before[k] for k, n in count().items())
+        except Exception:
+            kept = False
+        finally:
+            self._split_stacks = self._routing = False
+        if kept:
+            self._stacked = stacked
+        else:
+            self._put_state(stacked)
+        self._stack_spans = self._route_stale = False
+
     def _state(self) -> tuple:
         """Return a copy of the geometry and the state laid out with it.
 
@@ -2188,7 +2263,7 @@ class Flowsheet:
             State for :meth:`_put_state`.
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
-                        self._mounted_layout, self._widened, self._stack_spans, self._stacked))
+                        self._mounted_layout, self._widened, self._stack_spans))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2199,7 +2274,7 @@ class Flowsheet:
             What :meth:`_state` returned.
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
-         self._mounted_layout, self._widened, self._stack_spans, self._stacked) = _copied(state)
+         self._mounted_layout, self._widened, self._stack_spans) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2229,7 +2304,6 @@ class Flowsheet:
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
-        from pandid.layout.conflicts import analyze_conflicts
         from pandid.validate import geometry_issues
 
         def place() -> None:
@@ -2296,8 +2370,7 @@ class Flowsheet:
                 if chained:
                     attempt(may_hang=False, keep_clear=True)
 
-        def keep_if_better(redo: Callable[[], None], before: Counter[str],
-                           count: Callable[["Flowsheet"], Counter[str]] = _flaws) -> bool:
+        def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
             """Redo the sheet, and undo that if a finding or clash grew or a
             tap left its line.
 
@@ -2307,27 +2380,19 @@ class Flowsheet:
                 Lays out or routes the sheet again.
             before : Counter[str]
                 Findings and clashes of the sheet as it stands.
-            count : Callable[[Flowsheet], Counter[str]], optional
-                Counts the findings and clashes compared with ``before``.
-
-            Returns
-            -------
-            bool
-                Whether the redone sheet is kept.
             """
             prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
             free = self._free_faces
             try:
                 redo()
                 kept = _taps_off(self) <= off and not any(
-                    n > before[k] for k, n in count(self).items())
+                    n > before[k] for k, n in _flaws(self).items())
             except Exception:
                 kept = False
             if not kept:
                 self._free_faces = free
                 self._put_geometry(prior, keep_manual=False)
                 self._unhung = unhung
-            return kept
 
         def priced() -> None:
             """Settle the sheet with arrowheads and lanes beside units priced
@@ -2347,61 +2412,21 @@ class Flowsheet:
             if tries and any(i.code in touch for i in geometry_issues(self)):
                 keep_if_better(priced, _flaws(self))
 
-        def relaid(clear: bool, split: bool) -> None:
-            """Lay out again and settle.
-
-            Parameters
-            ----------
-            clear : bool
-                Keep every signal exit a lane clear.
-            split : bool
-                Leave two units unstacked where another unit in their
-                column is pinned to a row between theirs.
-            """
-            self._exit_clear, self._split_stacks = clear, split
+        def relaid() -> None:
+            """Lay out with every signal exit a lane clear, and settle."""
+            self._exit_clear = True
             try:
                 self.layout(self._engine)
-                self._exit_clear = False
-                settle_best()
             finally:
-                self._exit_clear = self._split_stacks = False
-
-        def strict(fs: "Flowsheet") -> Counter[str]:
-            """Count findings and clashes, crossings and fallback routes.
-
-            Parameters
-            ----------
-            fs : Flowsheet
-                Routed sheet.
-
-            Returns
-            -------
-            Counter[str]
-                What :func:`_flaws` counts, plus ``crossing`` and
-                ``fallback`` conflicts.
-            """
-            flaws = _flaws(fs)
-            flaws.update(c.kind for c in analyze_conflicts(fs) if c.kind in ("crossing", "fallback"))
-            return flaws
+                self._exit_clear = False
+            settle_best()
 
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
-        # Route the stacked drawing held where unstacking was kept, and
-        # try unstacking again.
-        held, self._stacked = self._stacked, None
-        if tries and held is not None:
-            self._put_state(held)
-            self._free_faces = False
         settle_best()
-        clear = False
         if tries and self._exit_tight:
-            clear = keep_if_better(lambda: relaid(clear=True, split=False), _flaws(self))
+            keep_if_better(relaid, _flaws(self))
             self._exit_tight = False
-        if tries and self._stack_spans:
-            stacked = self._state()
-            if keep_if_better(lambda: relaid(clear=clear, split=True), strict(self), strict):
-                self._stacked = stacked
-            self._exit_tight = self._stack_spans = False
         self._route_stale = False
 
     def _geometry(self) -> tuple:

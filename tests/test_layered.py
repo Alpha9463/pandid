@@ -387,6 +387,55 @@ def test_a_second_route_redraws_a_sheet_that_tried_unstacking(unstacked: bool) -
     assert _fingerprint(fs) == fingerprint
 
 
+def test_saved_geometry_put_back_twice_is_unchanged_by_edits_between() -> None:
+    """Put back saved frames and routes as saved, after editing the ones put back."""
+    fs, line = _line()
+    fs.route()
+    saved = fs._geometry()
+    unit = fs.units[0]
+    assert unit.frame is not None and line.route is not None
+    x, waypoints = unit.frame.x, list(line.route.waypoints)
+    fs._put_geometry(saved, keep_manual=False)
+    assert unit.frame is not None and line.route is not None
+    unit.frame.x += 50
+    line.route.waypoints.append((0.0, 0.0))
+    fs._put_geometry(saved, keep_manual=False)
+
+    assert unit.frame is not None and line.route is not None
+    assert unit.frame.x == x and line.route.waypoints == waypoints
+
+
+def test_unstacking_is_tried_on_the_drawing_lanes_won() -> None:
+    """Keep the lanes drawing of a bank whose column a row pin would unstack."""
+    fs = Flowsheet("Recovery")
+    a = fs.add(U.Column("T-101")).pin(col=0, row=0)
+    b = fs.add(U.Tank("V-101").nozzle("in_1", "N")).pin(col=0, row=2)
+    c = fs.add(U.HeatExchanger("E-101")).pin(col=0, row=1)
+    feed = fs.add(Feed("Feed")).pin(col=-1, row=1)
+    top = fs.add(Product("Distillate"))
+    bottom = fs.add(Product("Bottoms")).pin(row=3)
+    splitter = fs.add(U.Splitter("SP-101", n_outlets=6))
+    mixer = fs.add(U.Mixer("MX-101", n_inlets=6))
+    for source, dest in [
+        (a.ports["bottoms"], b.ports["in_1"]),
+        (a.ports["overhead"], c.ports["tube_in"]),
+        (feed.ports["outlet"], a.ports["feed_1"]),
+        (c.ports["tube_out"], splitter.ports["inlet"]),
+        (mixer.ports["outlet"], top.ports["inlet"]),
+        (b.ports["out_1"], bottom.ports["inlet"]),
+    ]:
+        fs.connect(source, dest)
+    for i, (outlet, inlet) in enumerate(zip(splitter.outlets, mixer.inlets)):
+        bank = fs.add(D.ShellAndTubeExchanger(f"E-{i}"))
+        fs.connect(outlet, bank.ports["tube_in"])
+        fs.connect(bank.ports["tube_out"], inlet)
+
+    for _ in range(2):
+        fs.route()
+        assert measure_final(fs).crossings <= 1
+        assert not [i for i in fs.validate() if i.code == "lines-crowded"]
+
+
 def test_row_only_pins_hold_beside_a_column_split_by_a_row_pin() -> None:
     """Keep two units pinned by row alone in order beside a column whose stack splits."""
     fs = Flowsheet("Mixed pins")
