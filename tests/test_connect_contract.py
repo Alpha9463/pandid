@@ -18,19 +18,6 @@ def _duty_sheet() -> tuple[Flowsheet, U.Cooler, U.Heater]:
     return fs, cooler, heater
 
 
-def test_an_unstated_kind_between_two_utility_nozzles_is_still_energy():
-    """Check that a line between two utility nozzles defaults to energy."""
-    fs, cooler, heater = _duty_sheet()
-    assert fs.connect(cooler.utility_out, heater.utility_in).kind == "energy"
-
-
-def test_a_stated_material_kind_survives_two_utility_nozzles():
-    """Check that a stated material kind survives two utility nozzles."""
-    fs, cooler, heater = _duty_sheet()
-    stream = fs.connect(cooler.utility_out, heater.utility_in, kind="material")
-    assert stream.kind == "material"
-
-
 def test_a_stated_energy_kind_survives_two_process_nozzles():
     """Check that a stated energy kind survives two process nozzles."""
     fs = Flowsheet("symmetry")

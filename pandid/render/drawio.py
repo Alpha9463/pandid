@@ -20,13 +20,14 @@ from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import fmt, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
-                               _fitted, _LABEL_CODES, _RENDER_CODES,
+                               _LABEL_CODES, _RENDER_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
                                label_findings,
-                               draws_arrowheads, flange_marks, impulse_tap,
+                               draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
+                               quadrant_labels,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
@@ -52,9 +53,6 @@ _NO_STROKE = "none"
 
 _LINE_INK = "#000000"
 
-# draw.io ``jumpStyle`` for each crossing style; ``"plain"`` has none.
-_JUMP_STYLES = {"arc": "arc", "gap": "gap"}
-
 # Style for edges that are not streams: they never hop.
 _NO_HOP = "noJump=1;"
 
@@ -72,7 +70,7 @@ def _hops(polylines: dict, direction: str,
     polylines : dict
         ``{key: points}`` for every stream, in write order.
     direction : str
-        ``"vertical"`` or ``"horizontal"``; other values hop nothing.
+        ``"vertical"`` or ``"horizontal"``.
     style : str, default="arc"
         ``crossing_style``; ``"plain"`` hops nothing.
 
@@ -86,7 +84,7 @@ def _hops(polylines: dict, direction: str,
         ``(hopper, crossed, x, y)`` for each sheet hop drawn flat.
     """
     keys = list(polylines)
-    if style not in _JUMP_STYLES or direction not in ("vertical", "horizontal"):
+    if style == "plain":
         return keys, set(), set()
     # The edges each edge must be written after.
     after: dict = {key: set() for key in keys}
@@ -172,23 +170,6 @@ def _placed_rect(frame, x: float, y: float, w: float, h: float
     return xs[0], ys[0], xs[1] - xs[0], ys[1] - ys[0]
 
 
-def _turn_keys(frame) -> list[str]:
-    """Return the ``direction`` key turning a child with its parent.
-
-    Parameters
-    ----------
-    frame : Frame
-        Parent unit's frame.
-
-    Returns
-    -------
-    list[str]
-        The key, or an empty list when the parent is not turned.
-    """
-    rot, _mirror_x, _mirror_y = _xform(frame)
-    return [] if rot not in _DIRECTION else [f"direction={_DIRECTION[rot]}"]
-
-
 class _Fit(NamedTuple):
     """Map drawing coordinates onto the page.
 
@@ -204,17 +185,6 @@ class _Fit(NamedTuple):
     scale: float
     dx: float
     dy: float
-
-    @classmethod
-    def identity(cls) -> "_Fit":
-        """Return the identity fit.
-
-        Returns
-        -------
-        _Fit
-            A fit that leaves points unchanged.
-        """
-        return cls(1.0, 0.0, 0.0)
 
     def at(self, x: float, y: float) -> "tuple[float, float]":
         """Return a drawing point on the page.
@@ -296,7 +266,7 @@ class _Approximation(NamedTuple):
     shape : str or None
         Built-in shape name; ``None`` is the rectangle.
     lost : str
-        What the stand-in does not draw; empty when nothing is lost.
+        Symbol parts missing from the stand-in, or empty.
     flip_h : bool
         Mirror the built-in.
     fill : str
@@ -369,7 +339,7 @@ _APPROXIMATIONS = {
     ("splitter", "default"): _Approximation("triangle", "", flip_h=True),
     # An invisible cell that every edge meets at its centre.
     ("tee", "default"): _Approximation(None, "", stroke=_NO_STROKE),
-    # Drawn by DrawioRenderer._flag_shape.
+    # Drawn by DrawioRenderer._shape.
     ("feed", "default"): _Approximation(None, ""),
     ("product", "default"): _Approximation(None, ""),
     ("conveyor", "default"): _Approximation(
@@ -378,32 +348,15 @@ _APPROXIMATIONS = {
     ("reactor", "tubular"): _Approximation(
         None, "the tube pass inside the shell"),
     # Composed bodies: the mark is a child cell.
-    ("separator", "gravity"): _Approximation(
-        None, "the V bottom the collected phase draws off through"),
-    ("separator", "electrostatic"): _Approximation(
-        None, "the V bottom the collected phase draws off through"),
-    ("separator", "electromagnetic"): _Approximation(
-        None, "the V bottom the collected phase draws off through"),
-    ("crusher", "default"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "cone"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "hammer"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "impact"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "jaw"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("crusher", "roller"): _Approximation(
-        None, "the trapezoid outline and the two jaws drawn down it"),
-    ("mill", "default"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
-    ("mill", "hammer"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
-    ("mill", "impact"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
-    ("mill", "roller"): _Approximation(
-        None, "the trapezoid outline and its chamfered top corners"),
+    **{("separator", v): _Approximation(
+        None, "the V bottom the collected phase draws off through")
+       for v in ("gravity", "electrostatic", "electromagnetic")},
+    **{("crusher", v): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it")
+       for v in ("default", "cone", "hammer", "impact", "jaw", "roller")},
+    **{("mill", v): _Approximation(
+        None, "the trapezoid outline and its chamfered top corners")
+       for v in ("default", "hammer", "impact", "roller")},
     ("mill", "vibration"): _Approximation(
         None, "the trapezoid outline, its chamfered top corners and the drum"),
     ("crushing_machine", "default"): _Approximation(
@@ -592,12 +545,9 @@ class _Tags(NamedTuple):
         of the tag halo's near edge, or ``None`` with no halo.
     plates : list
         Opaque boxes of tags and ``NC``/fail letters.
-    codes : list
-        Quadrant label items.
     """
     at: dict
     plates: list
-    codes: list
 
 
 def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
@@ -617,7 +567,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     Returns
     -------
     _Tags
-        Tag placements, plates and quadrant codes.
+        Tag placements and plates.
     """
     from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
                                    flange_boxes, quadrant_labels)
@@ -657,8 +607,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
         if letters:
             items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
                                                 ink, symbols))
-    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None],
-                 codes)
+    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None])
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
@@ -787,6 +736,8 @@ class DrawioRenderer:
         self.registry = registry or default_registry
         # Findings put on fs.warnings at the end of render().
         self._findings: list = []
+        # Whether a side label is laid out by draw.io off the sheet's plates.
+        self._loose_label = False
 
     # --------------------------------------------------- document
 
@@ -838,6 +789,7 @@ class DrawioRenderer:
         reject_unknown_options("DrawioRenderer.render()", opts)
         arrows = draws_arrowheads(diagram)
         self._findings = []
+        self._loose_label = False
         check_render_arguments(
             fs, show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, connections=connections,
@@ -866,7 +818,11 @@ class DrawioRenderer:
                                 crossing_style))
         body.extend(self._taps(fs, fit))
         body.extend(balloons)
-        for n, code in enumerate(tags.codes):
+        # shortcut: draw.io keeps main's codes on a sheet with a stacked or wrapped
+        # side label, whose box draw.io lays out; box those labels if that is common.
+        codes = (quadrant_labels(fs, jump_direction) if self._loose_label
+                 else drawn_codes(fs, joints, jump_direction, tags.plates))
+        for n, code in enumerate(codes):
             body.extend(_quadrant_cell(f"q{n}", code, fit))
 
         return self._document(fs, sheet, frame, body)
@@ -924,7 +880,11 @@ class DrawioRenderer:
         """
         # The page size is always stated; page view is on only for a
         # fixed page.
-        page_w, page_h = self._page_box(sheet, frame)
+        if sheet is not None:
+            page_w, page_h = sheet.width, sheet.height
+        else:
+            _ox, _oy, ow, oh = F.sheet_rect(*frame)
+            page_w, page_h = ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN
         paper = (f'page="{0 if sheet is None else 1}" pageScale="1" '
                  f'pageWidth="{fmt(page_w, 2)}" pageHeight="{fmt(page_h, 2)}"')
         # A page id stable across exports.
@@ -1047,7 +1007,16 @@ class DrawioRenderer:
         weight = (f"strokeWidth="
                   f"{fit.length(_svg._class_weight(sym).width):g}")
         if u.kind in ("feed", "product"):
-            return self._flag_shape(u, fit)
+            # draw.io's offPageConnector, turned north to point east and
+            # south to point west.
+            (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
+            size = (depth / (x1 - x0)) if x1 - x0 else 0.375
+            return ["shape=offPageConnector", f"size={fmt(min(1.0, size), 6)}",
+                    f"direction={'north' if east else 'south'}",
+                    "anchorPointDirection=0", "legacyAnchorPoints=1",
+                    "rounded=0", "whiteSpace=wrap",
+                    f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
+                    f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
         stencil = sym.drawio_shape or sym.drawio_body_shape
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
@@ -1067,35 +1036,6 @@ class DrawioRenderer:
         return keys + [*approx.keys, f"strokeColor={approx.stroke}",
                        f"fillColor={approx.fill}",
                        f"strokeWidth={fit.length(approx.weight):g}"]
-
-    @staticmethod
-    def _flag_shape(u, fit: "_Fit") -> list[str]:
-        """Return the style keys for an off-page flag.
-
-        The flag is draw.io's ``offPageConnector``, turned north to
-        point east and south to point west.
-
-        Parameters
-        ----------
-        u : Unit
-            Feed or Product.
-        fit : _Fit
-            Drawing fit.
-
-        Returns
-        -------
-        list[str]
-            Style keys.
-        """
-        (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
-        width = x1 - x0
-        size = (depth / width) if width else 0.375
-        return ["shape=offPageConnector", f"size={fmt(min(1.0, size), 6)}",
-                f"direction={'north' if east else 'south'}",
-                "anchorPointDirection=0", "legacyAnchorPoints=1",
-                "rounded=0", "whiteSpace=wrap",
-                f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
-                f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
 
     def _label(self, u, fit: "_Fit", tags: "_Tags",
                wraps: bool) -> "tuple[str, list[str], tuple]":
@@ -1163,6 +1103,8 @@ class DrawioRenderer:
             # A one-line tag sits on its halo; any other label keeps draw.io's spot.
             gx, gy = _SIDE_LABEL_GAP[side]
             offset = (fit.length(near[0]) - gx, fit.length(near[1]) - gy)
+        elif lines and side in _SIDE_LABEL_GAP:
+            self._loose_label = True
         # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
@@ -1225,12 +1167,19 @@ class DrawioRenderer:
                  '          </mxGeometry>']
                 if (round(dx, 2) or round(dy, 2)) else [geometry + " />"])
         cid = self._id(index)
+        # A stand-in's second outline, as a child cell.
+        inscribed = [] if approx is None or approx.inscribed is None else _rect(
+            f"{cid}-in", 0, 0, x1 - x0, y1 - y0,
+            ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
+                      f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
+                      f"strokeWidth={fit.length(approx.weight):g}",
+                      "connectable=0", "movable=0"]) + ";", parent=cid)
         return [
             f'        <mxCell id="{cid}" value={_attr(text)} '
             f'style={_attr(style)} vertex="1" parent="1">',
             *body,
             '        </mxCell>',
-            *self._inscribed(cid, approx, x1 - x0, y1 - y0, fit),
+            *inscribed,
             *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
             *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name),
         ]
@@ -1293,7 +1242,8 @@ class DrawioRenderer:
         """
         if approx is None or not approx.pieces:
             return []
-        turn = _turn_keys(u.frame)
+        rot = _xform(u.frame)[0]
+        turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
         for i, piece in enumerate(approx.pieces):
             px, py, pw, ph = _placed_rect(u.frame, piece.x, piece.y, piece.w, piece.h)
@@ -1334,6 +1284,8 @@ class DrawioRenderer:
         """
         if not sym.overlays:
             return []
+        rot = _xform(frame)[0]
+        turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
         for i, overlay in enumerate(sym.overlays):
             part = self.registry.part(overlay.group, overlay.name)
@@ -1354,43 +1306,12 @@ class DrawioRenderer:
                 keys.append("flipH=1")
             ox, oy, ow, oh = _placed_rect(frame, overlay.x, overlay.y, overlay.w, overlay.h)
             style = ";".join([
-                "html=1", "rounded=0", *keys, *_turn_keys(frame),
+                "html=1", "rounded=0", *keys, *turn,
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(_PART_STROKE):g}",
                 "connectable=0", "movable=0"]) + ";"
             out += _rect(f"{cid}-p{i}", ox * w, oy * h, ow * w, oh * h, style, parent=cid)
         return out
-
-    @staticmethod
-    def _inscribed(cid: str, approx: "_Approximation | None",
-                   w: float, h: float, fit: "_Fit") -> list[str]:
-        """Return a stand-in's second outline as a child cell.
-
-        Parameters
-        ----------
-        cid : str
-            Parent cell id.
-        approx : _Approximation or None
-            Stand-in.
-        w : float
-            Parent cell width.
-        h : float
-            Parent cell height.
-        fit : _Fit
-            Drawing fit.
-
-        Returns
-        -------
-        list[str]
-            Cell XML lines; empty without an inscribed shape.
-        """
-        if approx is None or approx.inscribed is None:
-            return []
-        style = ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
-                          f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
-                          f"strokeWidth={fit.length(approx.weight):g}",
-                          "connectable=0", "movable=0"]) + ";"
-        return _rect(f"{cid}-in", 0, 0, w, h, style, parent=cid)
 
     # ---------------------------------------------------- streams
 
@@ -1497,7 +1418,8 @@ class DrawioRenderer:
             Cell XML lines: edges in hop order, then number enclosures.
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
-        placed = stream_numbers(fs, list(tags.plates), joints, direction)
+        # The numbers' boxes join the tag plates, which the codes keep off.
+        placed = stream_numbers(fs, tags.plates, joints, direction)
         numbers = {number.name: number for number in placed}
         shape = enclosure_shape(fs)
         self._findings += label_findings(fs, shape, placed, direction)
@@ -1538,7 +1460,8 @@ class DrawioRenderer:
                 # draw.io's jumpSize for a hop of HOP_R on this line, at least 1.
                 weight = fit.length(_stream_rung(signal).width)
                 size = max(1, round(2.0 * (fit.length(HOP_R) - weight) + 2.0))
-                keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}", f"jumpSize={size}"]
+                # draw.io's jumpStyle takes the crossing style's name.
+                keys += [f"jumpStyle={crossing_style}", f"jumpSize={size}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
                 keys += ["endArrow=block", "endFill=1",
@@ -1593,10 +1516,8 @@ class DrawioRenderer:
                 *geometry,
                 '        </mxCell>',
             ]
-            if s.kind == "pneumatic":
-                cells[n] += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
-            cells[n] += _flanges(f"s{n}", s, points, resolve_connections(s, joints),
-                                 s.color or _LINE_INK, fit)
+            cells[n] += _line_marks(f"s{n}", s, points, resolve_connections(s, joints),
+                                    s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
             if boxed:
@@ -1669,27 +1590,6 @@ class DrawioRenderer:
 
     # -------------------------------------------------- furniture
 
-    @staticmethod
-    def _page_box(sheet, frame) -> "tuple[float, float]":
-        """Return the page size the file states.
-
-        Parameters
-        ----------
-        sheet : _Sheet or None
-            Fixed page, or ``None`` to size the page from ``frame``.
-        frame : tuple[float, float, float, float]
-            Furniture frame.
-
-        Returns
-        -------
-        tuple[float, float]
-            ``(width, height)``.
-        """
-        if sheet is not None:
-            return (sheet.width, sheet.height)
-        _ox, _oy, ow, oh = F.sheet_rect(*frame)
-        return (ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN)
-
     def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False,
                    border: str = "none"):
         """Return the furniture cells, the frame and the drawing fit.
@@ -1719,12 +1619,11 @@ class DrawioRenderer:
             If the page is too small for the furniture.
         """
         plan = diagram_plan(fs, sheet, border, show_stream_table)
-        fit = _Fit.identity() if plan.free is None else _Fit(
-            *_fitted(plan.bounds, plan.free))
+        fit = _Fit(1.0, 0.0, 0.0) if plan.fit is None else _Fit(*plan.fit)
         # Fallbacks for the strip's name, date and scale.
         name = fs.name
         date = datetime.now().strftime("%Y-%m-%d")
-        scale = "" if plan.free is None else _scale_text(fit.scale)
+        scale = "" if plan.fit is None else _scale_text(fit.scale)
         out: list[str] = []
         for n, (obj, x, y, w, h) in enumerate(plan.placed):
             out += self._furniture_cell(f"f{n}", plan.block if obj is TITLE else obj,
@@ -1830,9 +1729,7 @@ class DrawioRenderer:
                                       + ("fontStyle=1;" if c == 0 and len(r) > 1 else "")
                                       for c in range(len(col_w))] for r in grid])
         # Free-form lines.
-        size = getattr(obj, "font_size", 11.0)
-        _s, _row_h, title_h, _col_w = F._ann_layout(obj) if rows or title else (
-            size, 0.0, 0.0, [])
+        size, _row_h, title_h, _col_w = F._ann_layout(obj)
         return _text_box(cid, title, [str(r) for r in rows], x, y, w, h, size,
                          title_h)
 
@@ -1867,12 +1764,15 @@ class DrawioRenderer:
                     "rounded=0;html=1;movable=1;"
                     f"strokeColor={_LINE_INK};fillColor={_NO_FILL};"
                     f"strokeWidth={F._STRIP_RULE:g};")
-        for n, part in enumerate(strip.rules):
-            out += _strip_rule(f"{cid}-v{n}", part)
+        for n, (_kind, x1, y1, x2, y2, weight) in enumerate(strip.rules):
+            out += _segment(f"{cid}-v{n}", x1, y1, x2, y2, _LINE_INK, weight)
         out += _rev_table(f"{cid}-rev", strip.rev)
         for n, part in enumerate(strip.parts):
-            out += (_strip_rule(f"{cid}-p{n}", part) if part[0] == "rule"
-                    else _strip_label(f"{cid}-p{n}", part))
+            if part[0] == "rule":
+                _kind, x1, y1, x2, y2, weight = part
+                out += _segment(f"{cid}-p{n}", x1, y1, x2, y2, _LINE_INK, weight)
+            else:
+                out += _strip_label(f"{cid}-p{n}", part)
         return out
 
 
@@ -2015,67 +1915,11 @@ _HATCH_ANGLE = round(math.degrees(math.atan2(-2 * _svg.HATCH_ARM[1], 2 * _svg.HA
 _HATCH_LEN = round(2 * math.hypot(*_svg.HATCH_ARM), 2)
 
 
-def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
-    """Return the double cross-hatch marking a pneumatic line.
+def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
+    """Return the pneumatic cross-hatches and the flanged-joint marks on one line.
 
-    Each stroke is a ``line`` child vertex of the edge, placed by arc
-    length.
-
-    Parameters
-    ----------
-    edge_id : str
-        Id of the stream's edge.
-    points : list[tuple[float, float]]
-        Stream polyline.
-    ink : str
-        Line colour.
-    fit : _Fit
-        Drawing fit.
-
-    Returns
-    -------
-    list[str]
-        XML lines for the hatch cells.
-    """
-    from pandid.render.svg import pneumatic_marks
-
-    total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
-                for (ax, ay), (bx, by) in zip(points, points[1:]))
-    if total <= 0:
-        return []
-
-    length = fit.length(_HATCH_LEN)
-    half = length / 2
-    out: list[str] = []
-    for n, mark in enumerate(pneumatic_marks(points)):
-        # -1 to +1 from source to target by arc length.
-        rel = max(-1.0, min(1.0, 2.0 * mark.along / total - 1.0))
-        horiz = mark.horizontal
-        angle = _HATCH_ANGLE if horiz else _HATCH_ANGLE + 90.0
-        style = (f"shape=line;rotation={angle:g};strokeColor={ink};"
-                 f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};fillColor={_NO_FILL};html=1;"
-                 "resizable=0;movable=1;")
-        for k, off in enumerate(_svg.HATCH_ALONG):
-            step = fit.length(off)
-            dx, dy = (step, 0.0) if horiz else (0.0, step)
-            out += [
-                f'        <mxCell id="{edge_id}h{n}{k}" value="" style={_attr(style)} '
-                f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
-                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
-                'relative="1" as="geometry">',
-                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
-                'as="offset" />',
-                '          </mxGeometry>',
-                '        </mxCell>',
-            ]
-    return out
-
-
-def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
-    """Return the flanged-joint marks on one line.
-
-    Each mark is two bars, each a ``line`` child vertex of the edge.
+    Each hatch is two strokes and each flange two bars, every one a
+    ``line`` child vertex of the edge placed by arc length.
 
     Parameters
     ----------
@@ -2085,8 +1929,8 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
         Stream.
     points : list[tuple[float, float]]
         Stream polyline.
-    ends : str or None
-        Joint for the stream's ends.
+    ends : tuple[str, str]
+        Resolved ``(source, dest)`` joint settings.
     ink : str
         Line colour.
     fit : _Fit
@@ -2095,37 +1939,52 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
     Returns
     -------
     list[str]
-        XML lines for the flange cells.
+        XML lines for the hatch cells, then the flange cells.
     """
+    from pandid.render.svg import pneumatic_marks
+
     total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
                 for (ax, ay), (bx, by) in zip(points, points[1:]))
     if total <= 0:
         return []
-
-    length = fit.length(_svg.FLANGE_TICK)
-    half = length / 2
+    gap = fit.length(_svg.FLANGE_GAP / 2)
+    # Per family: id letter, stroke length, and each mark's arc length,
+    # rotation and stroke offsets. A further quarter turn makes a flange
+    # bar cross the run.
+    families = (
+        ("h", _HATCH_LEN, [
+            (m.along, _HATCH_ANGLE if m.horizontal else _HATCH_ANGLE + 90.0,
+             [(fit.length(off), 0.0) if m.horizontal else (0.0, fit.length(off))
+              for off in _svg.HATCH_ALONG])
+            for m in (pneumatic_marks(points) if s.kind == "pneumatic" else [])]),
+        ("f", _svg.FLANGE_TICK, [
+            (m.along, m.angle + 90.0,
+             [(math.cos(math.radians(m.angle)) * step, math.sin(math.radians(m.angle)) * step)
+              for step in (-gap, gap)])
+            for m in flange_marks(s, points, ends)]),
+    )
     out: list[str] = []
-    for n, mark in enumerate(flange_marks(s, points, ends)):
-        rel = max(-1.0, min(1.0, 2.0 * mark.along / total - 1.0))
-        # A further quarter turn makes the bar cross the run.
-        style = (f"shape=line;rotation={mark.angle + 90.0:g};strokeColor={ink};"
-                 f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};fillColor={_NO_FILL};"
-                 "html=1;resizable=0;movable=1;")
-        rad = math.radians(mark.angle)
-        for k, sign in enumerate((-1, 1)):
-            step = fit.length(_svg.FLANGE_GAP / 2) * sign
-            dx, dy = math.cos(rad) * step, math.sin(rad) * step
-            out += [
-                f'        <mxCell id="{edge_id}f{n}{k}" value="" style={_attr(style)} '
-                f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
-                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
-                'relative="1" as="geometry">',
-                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
-                'as="offset" />',
-                '          </mxGeometry>',
-                '        </mxCell>',
-            ]
+    for letter, size, marks in families:
+        length = fit.length(size)
+        half = length / 2
+        for n, (along, angle, offsets) in enumerate(marks):
+            # -1 to +1 from source to target by arc length.
+            rel = max(-1.0, min(1.0, 2.0 * along / total - 1.0))
+            style = (f"shape=line;rotation={angle:g};strokeColor={ink};"
+                     f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};"
+                     f"fillColor={_NO_FILL};html=1;resizable=0;movable=1;")
+            for k, (dx, dy) in enumerate(offsets):
+                out += [
+                    f'        <mxCell id="{edge_id}{letter}{n}{k}" value="" '
+                    f'style={_attr(style)} vertex="1" connectable="0" parent="{edge_id}">',
+                    f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+                    f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
+                    'relative="1" as="geometry">',
+                    f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
+                    'as="offset" />',
+                    '          </mxGeometry>',
+                    '        </mxCell>',
+                ]
     return out
 
 
@@ -2337,27 +2196,6 @@ def _fill(colour: str) -> str:
     return colour
 
 
-def _stream_cell(cell) -> str:
-    """Return the style for one stream-table cell.
-
-    Parameters
-    ----------
-    cell : StreamCell
-        Laid-out cell.
-
-    Returns
-    -------
-    str
-        Style fragment.
-    """
-    if cell.anchor == "start":
-        align = f"align=left;spacingLeft={fmt(F._STREAM_PAD - _TEXT_INSET, 2)};"
-    else:
-        align = "align=center;"
-    return (f"fillColor={_fill(cell.fill)};" + align
-            + ("fontStyle=1;" if cell.bold else ""))
-
-
 def _stream_table(cid: str, table, x, y) -> list[str]:
     """Return the stream property table as a draw.io table.
 
@@ -2384,8 +2222,11 @@ def _stream_table(cid: str, table, x, y) -> list[str]:
                   font=table.size, row_h=table.row_h,
                   keys=f"strokeWidth={F._CELL_RULE:g};",
                   row_widths=widths,
-                  cell_keys=[[_stream_cell(c) for c in row]
-                             for row in table.rows])
+                  cell_keys=[[f"fillColor={_fill(c.fill)};"
+                              + (f"align=left;spacingLeft={fmt(F._STREAM_PAD - _TEXT_INSET, 2)};"
+                                 if c.anchor == "start" else "align=center;")
+                              + ("fontStyle=1;" if c.bold else "")
+                              for c in row] for row in table.rows])
 
 
 def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
@@ -2536,25 +2377,6 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
              f"fontColor={_LINE_INK};")
     return _rect(cid, cx - _LABEL_HALF, cy - _LABEL_HALF, 2 * _LABEL_HALF, 2 * _LABEL_HALF,
                  style, _html_text(text))
-
-
-def _strip_rule(cid: str, part) -> list[str]:
-    """Return a title-strip rule as an edge.
-
-    Parameters
-    ----------
-    cid : str
-        Cell id.
-    part : tuple
-        ``(kind, x1, y1, x2, y2, weight)``.
-
-    Returns
-    -------
-    list[str]
-        XML lines.
-    """
-    _kind, x1, y1, x2, y2, weight = part
-    return _segment(cid, x1, y1, x2, y2, _LINE_INK, weight)
 
 
 def _strip_label(cid: str, part) -> list[str]:

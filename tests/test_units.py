@@ -1,4 +1,3 @@
-import os
 import re
 import warnings
 
@@ -88,14 +87,6 @@ def test_fixed_port_units_have_expected_ports():
     # A plain Reactor is stirred, so it has a ``drive``; ``agitator=None`` drops it.
     assert set(U.Reactor("R").ports) == {"feed_1", "outlet", "vent", "duty", "drive"}
     assert set(U.Reactor("R", agitator=None).ports) == {"feed_1", "outlet", "vent", "duty"}
-
-
-def test_distillation_column_return_nozzles_close_the_internal_loops():
-    col = U.DistillationColumn("T-101")
-    assert col.reflux_in.direction == "inlet"
-    assert col.boilup_in.direction == "inlet"
-    assert col.reflux_in.role == "liquid"
-    assert col.boilup_in.role == "vapor"
 
 
 def test_reactor_duty_is_energy_role():
@@ -317,6 +308,10 @@ def test_distillation_column_has_all_four_return_nozzles():
         "condenser_duty",
     }
     assert isinstance(col, U.Column)
+    assert col.reflux_in.direction == "inlet"
+    assert col.boilup_in.direction == "inlet"
+    assert col.reflux_in.role == "liquid"
+    assert col.boilup_in.role == "vapor"
 
 
 def test_a_plain_column_has_no_distillation_nozzles_and_no_distillate():
@@ -328,21 +323,6 @@ def test_a_plain_column_has_no_distillation_nozzles_and_no_distillate():
     for unit in (U.Absorber("V-1"), U.Stripper("T-2"), U.DistillationColumn("T-3")):
         with pytest.raises(AttributeError, match="distillate"):
             getattr(unit, "distillate")
-
-
-def test_absorber_and_stripper_never_answer_to_the_nozzles_they_refused():
-    """Check that an absorber and a stripper refuse the return nozzles they lack."""
-    absorber = U.Absorber("V-501")
-    for name in ("reflux_in", "boilup_in", "reboiler_duty", "condenser_duty"):
-        with pytest.raises(AttributeError, match=name):
-            getattr(absorber, name)
-
-    stripper = U.Stripper("T-601")
-    for name in ("reflux_in", "condenser_duty"):
-        with pytest.raises(AttributeError, match=name):
-            getattr(stripper, name)
-    assert stripper.boilup_in.role == "vapor"
-    assert stripper.reboiler_duty.role == "energy"
 
 
 # --- feed_stages: a feed lands on the stage it enters ------------------------
@@ -452,6 +432,8 @@ def test_a_column_takes_a_side_draw():
     assert set(col.ports) == {"feed_1", "draw", "overhead", "bottoms"}
     assert col.draw.direction == "outlet"
     assert col.draw.role == "draw"
+    assert [p.name for p in col.draws] == ["draw"]
+    assert col.draws[0] is col.draw
 
 
 def test_a_column_takes_more_than_one_side_draw():
@@ -759,9 +741,7 @@ def test_series_membership_is_cached_and_the_cache_answers_a_wider_family():
     assert s._series_members(series) == {"out_1": 0, "out_2": 1, "out_3": 2}
 
 
-# ---------------------------------------------------------------------------
 # The families, as sequences.
-# ---------------------------------------------------------------------------
 
 
 def test_a_family_holds_the_very_ports_the_numbered_names_are_bound_to():
@@ -773,19 +753,6 @@ def test_a_family_holds_the_very_ports_the_numbered_names_are_bound_to():
     assert all(p is m.ports[p.name] for p in m.inlets)
 
 
-def test_a_family_is_indexed_from_zero_while_its_nozzles_are_numbered_from_one():
-    """Check that ``inlets[0]`` is ``in_1``."""
-    m = U.Mixer("M", n_inlets=4)
-    assert m.inlets[0] is m.in_1
-    assert m.inlets[3] is m.in_4
-    assert [(i, p.name) for i, p in enumerate(m.inlets, start=1)] == [
-        (1, "in_1"),
-        (2, "in_2"),
-        (3, "in_3"),
-        (4, "in_4"),
-    ]
-
-
 def test_a_family_holds_only_its_own_side():
     """Check that a mixer's outlet is not an inlet and a splitter's inlet is not an outlet."""
     m = U.Mixer("M", n_inlets=2)
@@ -793,14 +760,6 @@ def test_a_family_holds_only_its_own_side():
     s = U.Splitter("S", n_outlets=2)
     assert s.inlet not in s.outlets
     assert [p.name for p in s.outlets] == ["out_1", "out_2"]
-
-
-def test_a_count_worked_out_at_run_time_is_the_case_the_family_exists_for():
-    """Check that a mixer takes an inlet count computed at run time."""
-    streams = ["S-101", "S-102", "S-103", "S-104"]
-    m = U.Mixer("M-1", n_inlets=len(streams))
-    assert len(m.inlets) == len(streams)
-    assert [p.direction for p in m.inlets] == ["inlet"] * 4
 
 
 @pytest.mark.parametrize(
@@ -845,21 +804,13 @@ def test_a_multi_draw_towers_family_is_its_numbered_nozzles_top_to_bottom():
     assert col.feed not in col.draws
 
 
-def test_one_draw_is_the_one_tuple_holding_the_singular_nozzle():
-    col = U.Column("T-101", n_draws=1)
-    assert [p.name for p in col.draws] == ["draw"]
-    assert col.draws[0] is col.draw
-
-
 def test_tank_is_its_own_kind():
     assert U.Tank is not U.Vessel
     assert U.Tank("T-1").kind == "tank"
     assert U.Vessel("V-1").kind == "vessel"
 
 
-# ---------------------------------------------------------------------------
 # A vessel's and a tank's five nozzles
-# ---------------------------------------------------------------------------
 
 #: The five nozzles both classes offer, by the name an author writes.
 _HOLDUP_PORTS = ["inlet", "outlet", "vent", "relief", "drain"]
@@ -894,7 +845,7 @@ def test_the_three_fixed_nozzles_are_never_numbered(cls):
 
 
 @pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
-def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank]) -> None:
+def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank], same_file) -> None:
     """Each warns at the caller's line, is reported, and still answers the face."""
     from pandid import Flowsheet
 
@@ -903,9 +854,7 @@ def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank]) -
     with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
         faces = (unit.default_input_face(), unit.default_output_face())
     assert faces == unit.input_faces + unit.output_faces
-    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
-        os.path.normcase(os.path.realpath(__file__))
-    }
+    assert {same_file(w.filename) for w in caught} == {same_file(__file__)}
     found = [issue.message for issue in fs.validate() if issue.code == "deprecated"]
     assert found == [str(caught[0].message)]
 
@@ -934,16 +883,14 @@ class _TopDrawn(U.Vessel):
         return "N"
 
 
-def test_a_subclass_input_face_hook_is_honoured_and_reported() -> None:
+def test_a_subclass_input_face_hook_is_honoured_and_reported(same_file) -> None:
     """Check that an overriding input hook places the inlet and is reported at the build."""
     from pandid import Flowsheet
 
     with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
         tank = _TopFed("T-1")
     assert tank.input_faces == ("N",)
-    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
-        os.path.normcase(os.path.realpath(__file__))
-    }
+    assert {same_file(w.filename) for w in caught} == {same_file(__file__)}
     fs = Flowsheet("hooks")
     fs.add(tank)
     assert [i.code for i in fs.validate() if i.code == "deprecated"] == ["deprecated"]

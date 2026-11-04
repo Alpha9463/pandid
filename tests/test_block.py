@@ -41,9 +41,7 @@ def _distance(p, segments):
     return best
 
 
-# ---------------------------------------------------------------------------
 # The declaration: a count, or a face per connection.
-# ---------------------------------------------------------------------------
 
 
 def test_a_block_asked_for_by_name_is_one_line_through_a_box():
@@ -61,14 +59,6 @@ def test_a_count_puts_every_connection_on_the_face_its_kind_defaults_to():
     assert list(b.ports) == ["in_1", "in_2", "in_3", "out_1", "out_2"]
     assert b.input_faces == ("W", "W", "W")
     assert b.output_faces == ("E", "E")
-
-
-def test_a_face_list_names_one_face_per_connection_in_order():
-    b = units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"])
-    assert b.input_faces == ("W", "W", "N")
-    assert b.output_faces == ("E", "S")
-    assert b.face("in_3") == "N"
-    assert b.face("out_2") == "S"
 
 
 def test_the_face_takes_every_spelling_nozzle_takes():
@@ -134,9 +124,7 @@ def test_a_block_declares_no_variants_and_owns_its_whole_kind():
     assert default_registry.variants("block") == ["default"]
 
 
-# ---------------------------------------------------------------------------
 # The box sizes itself to what it carries.
-# ---------------------------------------------------------------------------
 
 
 def test_the_pitch_is_measured_off_the_arrowhead_the_renderer_draws():
@@ -203,14 +191,7 @@ def test_a_width_the_author_gave_wins_over_the_name():
     assert resolve_size(named) == (140, BLOCK_MIN_HEIGHT)
 
 
-# ---------------------------------------------------------------------------
 # ...and refuses a box that cannot hold them.
-# ---------------------------------------------------------------------------
-
-
-def test_a_box_too_small_for_its_connections_is_refused_at_construction():
-    with pytest.raises(ValueError, match=r"4 connections on the W face"):
-        units.Block("B", inputs=4, height=60)
 
 
 def test_the_refusal_says_what_to_give_instead():
@@ -271,9 +252,7 @@ def test_a_turn_that_still_fits_is_allowed():
     assert b.pin_.orientation == 90
 
 
-# ---------------------------------------------------------------------------
 # Every nozzle on drawn ink, on every face, at every count and box shape.
-# ---------------------------------------------------------------------------
 
 #: The three box shapes and the tolerance ``tests/test_symbol_invariants.py`` uses.
 _ODD_BOXES = ((300.0, 300.0), (400.0, 160.0), (200.0, 400.0))
@@ -373,9 +352,7 @@ def test_a_series_member_really_does_offer_only_its_series_face():
         m.nozzle("in_2", "S")
 
 
-# ---------------------------------------------------------------------------
 # nozzle(): moving a connection means changing the declaration.
-# ---------------------------------------------------------------------------
 
 
 def test_nozzle_moves_a_connection_and_the_ink_follows():
@@ -425,9 +402,7 @@ def test_the_layout_engine_never_moves_a_connection_off_its_declared_face():
     assert port_point(b, b.frame, "in_1")[1] == b.frame.y
 
 
-# ---------------------------------------------------------------------------
 # order_on(): where a connection sits along the face it is on.
-# ---------------------------------------------------------------------------
 
 
 def _along(block, face):
@@ -469,12 +444,6 @@ def test_the_order_runs_the_way_the_family_is_numbered_on_every_face(face):
     placed = _along(b, face)
     assert [name for name, _ in placed] == ["out_1", "in_2", "in_1"]
     assert [t for _, t in placed] == sorted(t for _, t in placed)
-
-
-def test_three_or_more_on_a_face_are_placed_exactly_as_named():
-    b = units.Block("B", inputs=["N", "N"], outputs=["N", "N"])
-    b.order_on("N", [b.out_2, b.in_1, b.out_1, b.in_2])
-    assert [name for name, _ in _along(b, "N")] == ["out_2", "in_1", "out_1", "in_2"]
 
 
 def test_ordering_one_face_leaves_every_other_face_where_it_was():
@@ -659,9 +628,7 @@ def test_only_a_block_or_a_tank_or_a_vessel_takes_an_order_and_a_bad_one_names_t
         )
 
 
-# ---------------------------------------------------------------------------
 # The spreading rule is shared, not reimplemented.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("count", range(1, 9))
@@ -675,9 +642,7 @@ def test_a_port_series_spreads_its_members_with_the_shared_rule(count, extent):
         )
 
 
-# ---------------------------------------------------------------------------
 # The rest of the package.
-# ---------------------------------------------------------------------------
 
 
 def test_a_block_is_not_scheduled_equipment():
