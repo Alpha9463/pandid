@@ -22,6 +22,10 @@ _TOL = 1.0  # tolerance in px
 #: Distance in px a drawn coordinate may sit from its pin.
 _PIN_TOL = 0.05
 
+#: ``mirrored=`` spelling of each ``(mirrored, mirror_y)`` pair.
+_MIRRORED = {(False, False): "False", (True, False): "True",
+             (False, True): '"y"', (True, True): '"xy"'}
+
 #: Distance in px within which a line lies on a box edge: one main-flow
 #: line width.
 _EDGE_TOL = 2.0
@@ -791,6 +795,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     list[Issue]
         Errors, then warnings.
     """
+    from pandid.inline import _INLINE_KINDS
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces,
                                  port_point, resolve_port, unit_box)
@@ -845,11 +850,21 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
                 missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
                               f"drawn at {u.frame.orientation:g}")
+            reversed_in_line = ""
             if pin is not None and u._mirror_stated and (
                     (u.frame.mirrored, u.frame.mirror_y) != (pin.mirrored, pin.mirror_y)):
-                missed.append(f"{u.name} was pinned with mirrored="
-                              f"{(pin.mirrored, pin.mirror_y)} and is drawn with "
-                              f"{(u.frame.mirrored, u.frame.mirror_y)}")
+                stated = _MIRRORED[pin.mirrored, pin.mirror_y]
+                drawn_mirror = _MIRRORED[u.frame.mirrored, u.frame.mirror_y]
+                missed.append(f"{u.name} was pinned with mirrored={stated} and is "
+                              f"drawn with mirrored={drawn_mirror}")
+                if (u.kind in _INLINE_KINDS
+                        and u.frame.orientation % 360 == pin.orientation % 360):
+                    reversed_in_line = (
+                        f"A device in a line is drawn with its inlet upstream, so "
+                        f"{u.name} is drawn end for end. Pin it with "
+                        f"mirrored={drawn_mirror} to draw it so, or with "
+                        f"orientation={(pin.orientation + 180) % 360:g} to keep "
+                        f"mirrored={stated}")
             # Compare pinned col/row with the frame's, skipping an axis
             # with an absolute pin.
             for axis, absolute in (("col", "x"), ("row", "y")) if pin is not None else ():
@@ -868,6 +883,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     "offset=..., angle=...), or "
                     "detach it to have it laid out like any other unit"
                     if getattr(u, "host", None) is not None else
+                    reversed_in_line or
                     "A pinned axis is honoured exactly, so something moved "
                     "this unit after the solver read the pin")
             for said in missed:
