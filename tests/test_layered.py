@@ -229,7 +229,7 @@ def _line() -> tuple[Flowsheet, Stream]:
 def test_a_stated_mirror_holds_on_a_line() -> None:
     """Keep the mirror its author stated on a control valve set on a line."""
     fs, line = _line()
-    valve = fs.add(D.ControlValve("CV-1").pin(orientation=0, mirrored=True), on=line)
+    valve = fs.add(D.ControlValve("CV-1").pin(mirrored=True), on=line)
     fs.route()
 
     assert valve.frame is not None and valve.frame.mirrored is True

@@ -122,6 +122,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A parallel bank draws without crossings (#458).** A `Mixer` or `Splitter`
   face grows to keep its nozzles 20 apart, and the laterals from one face to a
   column of units turn on lanes ordered so they do not cross.
+- **A device with a stated turn and mirror sits on its pipe, inlet upstream
+  (#642).** Where `pin(orientation=..., mirrored=...)` would run it against
+  its line, it is drawn end for end, and `validate()` reports the pin that
+  draws it so.
 - **`validate()` reports a variant no symbol draws (#645).**
   `Valve("V-1", variant="gat")` is a `variant-unknown` error naming the
   registered variants, and the render refuses it before any layout.
