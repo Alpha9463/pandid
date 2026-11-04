@@ -125,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   beside less than half its length of line gets a leader. draw.io writes an
   equipment tag inside the halo the sheet clears for it, not up to 8 units
   nearer its symbol.
+- **A line no longer draws a hidden jog where its ends differ by a rounding
+  step (#611).** Coordinates within 1e-6 of the previous point's are drawn on
+  its track, so a valve set a rounding step off its pipe adds no bends.
 - **Hanging a controller off its actuator no longer takes a tap off its line
   (#636).** Where hanging leaves a balloon's tap off its line, `route()` places
   the sheet as if no controller could hang.
