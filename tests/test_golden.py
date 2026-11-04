@@ -1,7 +1,6 @@
-"""Test representative SVG fixtures and rendered nozzle placement."""
+"""Test representative sheets against the gallery and rendered nozzle placement."""
 
 import difflib
-import os
 import re
 from pathlib import Path
 
@@ -12,8 +11,7 @@ from pandid.document import equipment_list
 from pandid.render.debug import _BOX, _PORT
 from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
-GOLDEN_DIR = Path(__file__).parent / "golden"
-UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
+GOLDEN_DIR = Path(__file__).parents[1] / "docs" / "gallery"
 
 #: Representative manual, PFD, P&ID, BFD, and automatic-layout fixtures.
 GOLDEN_SCENARIOS = (
@@ -31,24 +29,17 @@ GOLDEN_FINDINGS = {
 
 
 def _check_golden(name: str, svg: str) -> None:
-    """Compare an SVG document with its approved fixture.
+    """Compare an SVG document with its gallery sheet.
 
     Parameters
     ----------
     name : str
-        Golden fixture name.
+        Gallery sheet name.
     svg : str
         Rendered SVG document text.
     """
-    path = GOLDEN_DIR / f"{name}.svg"
     normalized = _normalize(svg)
-    if UPDATE:
-        GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
-        path.write_text(normalized, encoding="utf-8")
-        return
-    if not path.exists():
-        pytest.fail(f"no golden at {path}; regenerate with PANDID_UPDATE_GOLDEN=1", pytrace=False)
-    golden = _normalize(path.read_text(encoding="utf-8"))
+    golden = _normalize((GOLDEN_DIR / f"{name}.svg").read_text(encoding="utf-8"))
     assert golden == normalized, "".join(
         difflib.unified_diff(golden.splitlines(True), normalized.splitlines(True), n=2)
     )
