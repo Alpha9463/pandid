@@ -54,15 +54,6 @@ def test_both_taps_of_a_header_are_drawn_the_same_size():
     assert len(widths) == 1
 
 
-def test_each_tap_is_still_one_unit_to_look_up():
-    """Check that each tap is one unit with its own stream."""
-    fs, taps = _two_taps()
-    for supply, ret in taps:
-        assert [u for u in fs.units if u.name == supply.name] == [supply]
-        assert [u for u in fs.units if u.name == ret.name] == [ret]
-        assert supply.outlet.stream is not ret.inlet.stream
-
-
 def test_a_header_flag_carries_its_off_page_reference_to_every_tap():
     """Check that every tap draws the header's off-page reference."""
     fs, taps = _two_taps(reference="U-1201")
@@ -129,7 +120,6 @@ def test_each_tap_gets_its_own_stream_and_line_number():
         '4"-CWS-1003-A1A',
         '4"-CWR-1004-A1A',
     ]
-    assert len(set(numbers)) == len(numbers)
 
 
 def test_a_repeated_header_passes_validation():

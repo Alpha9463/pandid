@@ -246,6 +246,7 @@ def test_a_closed_blind_renders_as_its_own_definition():
     svg = _line(units.Fitting("SB-1", variant="blind", normal_position="closed"))
     assert 'href="#sym_fitting_blind_closed"' in svg
     assert 'href="#sym_fitting_blind"' not in svg
+    assert ">NC</text>" not in svg
 
 
 def test_the_two_blinds_are_separate_definitions_on_one_sheet():
@@ -255,12 +256,6 @@ def test_the_two_blinds_are_separate_definitions_on_one_sheet():
     )
     assert svg.count('<symbol id="sym_fitting_blind_closed"') == 1
     assert svg.count('<symbol id="sym_fitting_blind"') == 1
-
-
-def test_a_closed_blind_is_not_lettered_nc():
-    """Check that a closed blind is not lettered NC."""
-    svg = _line(units.Fitting("SB-1", variant="blind", normal_position="closed"))
-    assert ">NC</text>" not in svg
 
 
 @pytest.mark.parametrize("variant", ["default", "strainer", "venturi", "spool"])
