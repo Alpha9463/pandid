@@ -3,8 +3,9 @@
 Before you start:
 1. Pass diagram="p&id" to render() for a P&ID ("bfd" for a block flow
    diagram). Without it the sheet is a PFD, which warns until every line
-   crossing the sheet edge states its flow: stream.properties =
-   {"Flow (kg/h)": ...}; render(show_stream_table=True) tabulates them.
+   crossing the sheet edge states a property, such as its flow:
+   stream.properties = {"Flow (kg/h)": ...};
+   render(show_stream_table=True) tabulates them.
 2. Check in this order: render, then fs.validate(), then look. render()
    raises ValueError listing every error finding; before a render,
    fs.validate() misses findings that need the drawing and uses PFD
