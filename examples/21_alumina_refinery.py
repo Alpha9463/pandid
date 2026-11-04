@@ -398,14 +398,9 @@ def clarification():
                            description="Blow-off Dilution Tank"))
     floc_tee = fs.add(Tee(branch="inlet"))
     flocculant = fs.add(Feed("Flocculant", reference="PCD-904"))
-    # A thickener, drawn as one. Through 0.1.3 these two were
-    # ``Separator(characteristic="gravity")`` -- ISO item 8.3 X8031, a
-    # separating vessel carrying the group-29 settling arrow -- because
-    # that was the nearest thing in the library. It is a tall
-    # hopper-bottomed drum, which is the shape of a dust collector; a
-    # thickener is wide and shallow with a raked floor, and the rake is
-    # the machine. ``rake=`` is what draws it, defaulting to ISO item
-    # 28.4 C2021's cross-beam.
+    # A thickener, drawn as one: wide and shallow with a raked floor.
+    # ``rake=`` draws the rake, defaulting to ISO item 28.4 C2021's
+    # cross-beam.
     #
     # 150 x 120 and not the default 100 x 80: the two settling machines
     # are the largest items in a Bayer plant and they are drawn like it,
@@ -578,23 +573,15 @@ def precipitation():
     # The fuel is burned in a chamber of its own and the hot gas
     # fluidises the bed, so the fuel and the combustion air land on
     # ``FH-901`` and the duct goes to the calciner's own ``air`` nozzle,
-    # under the distributor grid. Through 0.1.3 there was a tee here
-    # instead: the calciner was a ``FluidizedBedDryer``, whose gas
-    # connection is on the casing wall rather than in a windbox, so the
-    # hot duct had to be teed into the hydrate feed line.
+    # under the distributor grid.
     combustion = fs.add(Furnace("FH-901", width=100, height=120,
                                 description="Calciner Combustion Chamber"))
     air = fs.add(Feed("Combustion Air"))
     fuel = fs.add(Feed("Fuel Gas", reference="PCD-905"))
-    # A calciner, drawn as one. Through 0.1.3 this was a fluidised-bed
-    # *drier*, which has a feed and a product and nothing else, so the
-    # calcined alumina and the spent gas left together on one nozzle and
-    # ``CY-903`` was where the sheet had to part them.
-    #
-    # ``CA-901.product`` is the bed's own draw and ``CA-901.offgas`` the
-    # freeboard's, which is what the machine really has, so the cyclone
-    # below is now on the gas line where it belongs -- catching the two
-    # tonnes an hour of alumina the gas carries out with it.
+    # A calciner, drawn as one. ``CA-901.product`` is the bed's own draw
+    # and ``CA-901.offgas`` the freeboard's, so the cyclone below is on
+    # the gas line -- catching the two tonnes an hour of alumina the gas
+    # carries out with it.
     #
     # ``CA-901.fuel`` is left unpiped on purpose: this calciner has no
     # burner of its own, and the nozzle is there for the fired kilns that
@@ -623,12 +610,8 @@ def precipitation():
     spent_tank = fs.add(Tank("M-902", inputs=3, width=70, height=90,
                               description="Spent Liquor Tank"))
     caustic = fs.add(Feed("Caustic Soda Make-up", reference="PCD-906"))
-    # An effect of a falling-film train, drawn as one. Through 0.1.3 this
-    # was a ``KettleReboiler``: a shell with a heated bundle in it and a
-    # weir draw at the end, which was the nearest drawing the library
-    # had, and which says the machine returns boil-up to a tower. It does
-    # not -- its vapour is 329 t/h of water leaving the circuit, and
-    # ``EV-901.vapor`` is the nozzle that says so.
+    # An effect of a falling-film train, drawn as one. Its vapour is
+    # 329 t/h of water leaving the circuit, on ``EV-901.vapor``.
     #
     # 100 x 200, the artwork's own 1:2: a falling-film body is tall
     # because the tubes are, which is the point of the machine.
@@ -671,7 +654,7 @@ def precipitation():
     hydrate_run_y = pinned_y(hydrate_belt, "discharge")
     calciner.pin(port="feed", x=2520, y=hydrate_run_y)
     # On the calciner's own off-gas elevation rather than on the hydrate
-    # run: the cyclone is now on the gas line, and a machine pinned to
+    # run: the cyclone is on the gas line, and a machine pinned to
     # the line it is not on is a machine the router has to reach round.
     product_cyclone.pin(port="feed", x=2790, y=1720)
     # Under the cyclone's own apex and on the calciner's product

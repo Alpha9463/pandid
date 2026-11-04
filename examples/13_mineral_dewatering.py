@@ -168,12 +168,6 @@ def main():
     # The dryer's feed breeching is bought and tagged with the dryer, so
     # it is a tee rather than an item of its own.
     breeching = fs.add(Tee(branch="inlet"))
-    # **Two nozzles where the plant has four.** ``units.Dryer`` declares
-    # only ``feed`` and ``product``, so the solids chute and the gas
-    # duct at each end share one connection. It costs the drawing S-416,
-    # which carries the whole product in the gas. A ``Dryer`` with gas
-    # nozzles of its own is the fix, and this sheet wants redrawing
-    # around them.
     dryer = fs.add(Dryer("DR-401",
                          description="Concentrate Rotary Dryer"))
 
