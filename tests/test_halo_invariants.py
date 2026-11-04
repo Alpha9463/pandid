@@ -305,17 +305,59 @@ def _codes_between_a_flange_and_a_line() -> "tuple[Flowsheet, dict]":
     return fs, {"diagram": "p&id", "connections": "flanged"}
 
 
-def test_a_letter_code_kept_off_a_flange_mark_lands_on_no_line():
-    """Check that a letter code with no spot clear of a flange mark lands on no line."""
-    fs, kwargs = _codes_between_a_flange_and_a_line()
-    fs.to_svg(**kwargs)
+def _codes_beside_a_fixed_tag() -> "tuple[Flowsheet, dict]":
+    """Build a flanged sheet whose codes could leave a flange only for a tag set in place."""
+    fs, kwargs = CORPUS["codes_beside_a_flange"]()
+    fs.add(U.Valve("HV-2", label_pos="bottom")).pin(x=70, y=98)
+    return fs, kwargs
+
+
+def _codes_beside_another_balloon() -> "tuple[Flowsheet, dict]":
+    """Build a flanged sheet whose moved codes could crowd a later balloon's onto a line."""
+    fs, kwargs = CORPUS["codes_beside_a_flange"]()
+    feed, valve, prod = fs.units[:3]
+    feed.pin(port="outlet", x=400, y=500)
+    valve.pin(port="inlet", x=480, y=440)
+    prod.pin(port="inlet", x=680, y=440)
+    fs.add_instrument("TI", 2).annotate(high="TAH", low="TAL").pin(x=300, y=417)
+    other, out = fs.add(U.Feed("F2")), fs.add(U.Product("P2"))
+    other.pin(port="outlet", x=100, y=429)
+    out.pin(port="inlet", x=600, y=330)
+    fs.connect(other.outlet, out.inlet).via([(290, 429), (290, 330)])
+    return fs, kwargs
+
+
+#: Flanged sheets where a letter code by a flange mark has nowhere better to go.
+CROWDED_CODES = {
+    "a_flange_and_a_line": _codes_between_a_flange_and_a_line,
+    "a_fixed_tag": _codes_beside_a_fixed_tag,
+    "another_balloon": _codes_beside_another_balloon,
+}
+
+
+@pytest.mark.parametrize("build", list(CROWDED_CODES.values()), ids=list(CROWDED_CODES))
+def test_a_letter_code_by_a_flange_mark_lands_on_no_line_or_label(build):
+    """Check that a letter code by a flange mark lands on no line and no other label."""
+    fs, kwargs = build()
+    svg = fs.to_svg(**kwargs)
+    codes = _code_boxes(fs, kwargs)
+    labels = [
+        h
+        for h in _halos(svg)
+        if not any(all(abs(a - b) < 0.2 for a, b in zip(h, code)) for code in codes)
+    ]
     struck = [
         f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
-        for box in _code_boxes(fs, kwargs)
+        for box in codes
         for line in _ink(fs, "vertical")
         if overlaps(box, line.box)
+    ] + [
+        f"({box[0]:.0f}, {box[1]:.0f}) on a label"
+        for box in codes
+        for h in labels
+        if overlaps(box, h)
     ]
-    assert not struck, "a letter code lies on " + "; ".join(sorted(set(struck)))
+    assert not struck, "a letter code lies " + "; ".join(sorted(set(struck)))
 
 
 def test_the_corpus_has_letter_codes_to_check(drawn):

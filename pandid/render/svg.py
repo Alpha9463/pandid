@@ -369,8 +369,10 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
     fs : Flowsheet
         Laid-out and routed sheet.
     joints : str or None
-        :func:`sheet_connections` result; a code on one of its flange marks
-        moves to a spot clear of everything, if there is one.
+        :func:`sheet_connections` result. Codes are placed clear of the
+        sheet's symbols, lines and earlier codes; then a pair on one of its
+        flange marks moves to a spot clear of those, every other code, the
+        flange marks and the tags set on a side, if there is one.
     direction : str
         ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
 
@@ -386,10 +388,10 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
     if not annotated:
         return []
     ink = _ink(fs, direction)
-    symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    flanges = [_obstacle(b) for b in flange_boxes(fs, joints)]
+    units = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
 
-    out: list = []
+    symbols = list(units)
+    pairs: list = []
     for u in annotated:
         box = unit_box(u, u.frame)
         for names, prefers in _QUADRANT_PAIRS:
@@ -397,16 +399,30 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
             if not any(codes.values()):
                 continue
             _damage, placed = _quadrant_side(box, codes, prefers, ink, symbols)
-            plates = [b for b in map(_unit_label_box, placed) if b is not None]
-            if any(boxes_overlap(b, f) for b in plates for f in flanges):
-                # Leave a flange mark only for a spot clear of everything.
-                damage, clear = _quadrant_side(box, codes, prefers, ink, symbols + flanges)
-                if damage == (0, 0, 0):
-                    placed = clear
-            out.extend(placed)
+            pairs.append([box, codes, prefers, placed])
             # Placed codes become obstacles for later pairs.
             symbols += [b for b in map(_unit_label_box, placed) if b is not None]
-    return out
+
+    # Then move a pair off a flange mark, only to a spot clear of everything else.
+    flanges = [_obstacle(b) for b in flange_boxes(fs, joints)]
+    # A tag on a side its author set does not move out of a code's way.
+    fixed = [(*SvgRenderer._label_place(u.frame.label_pos, u.frame.x, u.frame.y,
+                                        u.frame.w, u.frame.h), u.frame.label_pos, u.tag)
+             for u in fs.units
+             if u.frame is not None and u.tag and getattr(u, "label_pos", None)
+             and u.kind not in ("feed", "product", "instrument")]
+    held = units + flanges + [_obstacle(b) for b in map(_unit_label_box, fixed) if b is not None]
+    for pair in pairs:
+        box, codes, prefers, placed = pair
+        if not any(boxes_overlap(b, f) for b in map(_unit_label_box, placed)
+                   if b is not None for f in flanges):
+            continue
+        others = [b for other in pairs if other is not pair
+                  for b in map(_unit_label_box, other[3]) if b is not None]
+        damage, moved = _quadrant_side(box, codes, prefers, ink, held + others)
+        if damage == (0, 0, 0):
+            pair[3] = moved
+    return [item for pair in pairs for item in pair[3]]
 
 
 def _quadrant_side(box, codes, prefers: int, ink, symbols):
@@ -4032,7 +4048,8 @@ class SvgRenderer:
                        f'dominant-baseline="middle">{escaped(bot)}</text>')
         return out
 
-    def _label_place(self, lpos: str, x: float, y: float, u_width: float,
+    @staticmethod
+    def _label_place(lpos: str, x: float, y: float, u_width: float,
                      u_height: float) -> "tuple[float, float, str, str]":
         """Return a label's anchor and text alignment for one side.
 
