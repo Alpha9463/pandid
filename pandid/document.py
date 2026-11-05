@@ -724,16 +724,19 @@ def _line(fs: "Flowsheet", flags: "list[Unit]") -> _Line:
     Returns
     -------
     tuple
-        Line number, service and size, each ``None`` when unstated,
-        and all ``None`` unless exactly one stream ends at the flags. A
-        stream number the sheet assigned is not a line number.
+        Line number, service and size stated on any segment of the
+        line, each ``None`` when unstated, and all ``None`` unless
+        exactly one stream ends at the flags. A stream number the sheet
+        assigned is not a line number.
     """
-    runs = [s for s in fs.streams if s.source.owner in flags or s.dest.owner in flags]
-    if len(runs) != 1:
+    at = [s for s in fs.streams if s.source.owner in flags or s.dest.owner in flags]
+    if len(at) != 1:
         return (None, None, None)
-    (s,) = runs
-    return (s.name if s.has_line_number or not s.auto_named else None,
-            _drawn_text(s.service) or None, _drawn_text(s.size) or None)
+    run = fs._named_runs().get(at[0].name, at)
+    service, size = (next((getattr(s, f) for s in run if getattr(s, f) is not None), None)
+                     for f in ("service", "size"))
+    return (at[0].name if any(s.has_line_number or not s.auto_named for s in run) else None,
+            _drawn_text(service) or None, _drawn_text(size) or None)
 
 
 def _connectors(fs: "Flowsheet") -> "dict[tuple[str, str, str], tuple[list[Unit], _Line]]":

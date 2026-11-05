@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from _render_cases import SCENARIOS
-from pandid import Document, Feed, Flowsheet, Product, Stream, Tank, TitleBlock, Unit, Vessel
+from pandid import Document, Feed, Flowsheet, Product, Stream, Tank, TitleBlock, Unit, Valve, Vessel
 
 
 def _sheet(name: str, number: str, *units: Unit) -> Flowsheet:
@@ -95,6 +95,28 @@ def test_matched_connectors_that_disagree_on_the_line_are_an_error():
     assert "size '6' on PFD-001 and '4' on PFD-002" in issue.message
     assert "service" not in issue.message
     assert "connect() the same line number (name= or sequence=) and size (size=)" in issue.message
+
+
+@pytest.mark.parametrize("size", ["4", "6"])
+def test_a_connector_compares_the_line_through_a_valve_by_its_whole_run(size: str):
+    """Check that fields stated before a valve reach the flag's line."""
+    out, into = Product("Crude", reference="PFD-002"), Feed("Crude", reference="PFD-001")
+    a = _sheet("Crude Unit", "PFD-001", Feed("Crude Oil"), Valve("HV-1"), out)
+    b = _sheet("Residue Unit", "PFD-002", into, Product("Residue"))
+    first = a.streams[0]
+    first.size, first.service, first.sequence = "6", "P", "1001"
+    _line(into, size, "P", "1001")
+
+    issues = Document([a, b]).validate()
+
+    assert [s.name for s in a.streams] == ["6-P-1001", "6-P-1001"]
+    if size == "6":
+        assert issues == []
+    else:
+        (issue,) = issues
+        assert issue.code == "connector-line-mismatch"
+        assert "line number '6-P-1001' on PFD-001 and '4-P-1001' on PFD-002" in issue.message
+        assert "size '6' on PFD-001 and '4' on PFD-002" in issue.message
 
 
 def test_one_tag_on_two_kinds_of_equipment_is_an_error():
