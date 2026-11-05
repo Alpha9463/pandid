@@ -4178,7 +4178,7 @@ class SvgRenderer:
     # --- streams ------------------------------------------------------
 
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True,
-                      plates=None, joints=None, crossing_style="arc"):
+                      plates=None, joints=None, crossing_style="gap"):
         """Return the ``streams`` group: runs, joint marks and numbers.
 
         Parameters
@@ -4195,7 +4195,7 @@ class SvgRenderer:
             Receives every opaque box the label passes reserve.
         joints : str, optional
             Sheet joint default, or ``None``.
-        crossing_style : str, default="arc"
+        crossing_style : str, default="gap"
             ``"gap"``, ``"arc"`` or ``"plain"``.
 
         Returns
