@@ -9,7 +9,7 @@ from pandid.layout.attach import stream_path
 from pandid.layout.control import _flaws, _shared, _taps_off
 from pandid.layout import layered
 from pandid.layout.layered import COL_GAP, LANE_PITCH
-from pandid.layout.quality import measure_final
+from _quality import measure_final
 from pandid.render import symbols
 from pandid.route_geometry import stream_polyline
 from pandid.routing import lanes
