@@ -259,7 +259,7 @@ def test_the_junction_is_the_only_symbol_drawn_as_bare_pipe():
 
 
 def test_the_station_validates_clean(cv303):
-    assert cv303.validate() == []
+    assert cv303.validate(show_stream_table=True) == []
 
 
 def test_the_bypass_and_the_drains_are_drawn(cv303):
