@@ -44,6 +44,8 @@ These are removed in 0.4.0.
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 - Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
+- `route()` no longer turns a line into a nozzle from the side when it could
+  run straight in with one bend fewer.
 
 ## [0.2.0] - 2026-11-05
 

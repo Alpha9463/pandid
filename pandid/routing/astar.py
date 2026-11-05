@@ -24,6 +24,11 @@ NOZZLE_PENALTY = BEND_PENALTY
 TOUCH_PENALTY = BEND_PENALTY
 
 
+#: Discount on the bend a side arrival turns into the goal stub, so the
+#: side arrival wins an exact tie.
+SIDE_ARRIVAL_TIE = 1e-6
+
+
 #: Crossing queries before a search caches the sorted tracks locally.
 _INLINE_CROSSING_QUERY_THRESHOLD = 500
 
@@ -427,11 +432,11 @@ def find_path(
             elif cur_dir and crossing_index is not None:
                 cost += CROSSING_PENALTY * crossing_index.crosses(current, _AXIS[cur_dir])
 
-            if neighbor == goal and goal_dir and crossing_index is not None:
-                if ndir is not None and ndir == OPPOSITE[goal_dir]:
-                    cost += CROSSING_PENALTY * crossing_index.crosses(goal, _AXIS[ndir])
-                elif crossing_index.crosses(goal, _AXIS[OPPOSITE[goal_dir]]):
-                    cost += bend_cost
+            if neighbor == goal and goal_dir:
+                if ndir != OPPOSITE[goal_dir]:
+                    cost += bend_cost - SIDE_ARRIVAL_TIE
+                elif crossing_index is not None:
+                    cost += CROSSING_PENALTY * crossing_index.crosses(goal, _AXIS[goal_dir])
 
             h = heuristic(neighbor, goal, bend_cost)
 

@@ -553,7 +553,7 @@ def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
 
 
 def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
-    """Price the bend a side arrival makes with the goal stub."""
+    """Cross a line at the goal rather than turn into the stub to dodge it."""
     graph = _graph(
         [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],  # Arrive in line with the stub.
         [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],  # Arrive from the side.
@@ -566,12 +566,34 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
     assert (0.0, 0.0) in routed, f"bought a bend to dodge a 10px crossing: {routed}"
     assert (20.0, -20.0) not in routed, f"bought a bend to dodge a 10px crossing: {routed}"
 
-    # Confirm the graph is unbiased: either route may win without the index.
-    tied = find_path(graph, (0.0, -20.0), (20.0, 0.0), None, "W")
-    assert tied in (
-        [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],
-        [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],
+
+@pytest.mark.parametrize("index", [None, CrossingIndex()], ids=["no-index", "empty-index"])
+def test_a_side_arrival_pays_the_bend_it_draws_into_the_goal_stub(
+    index: CrossingIndex | None,
+) -> None:
+    """Prefer the arrival in line with the goal stub, one bend fewer."""
+    inline = [(0.0, 0.0), (40.0, 0.0), (40.0, 20.0)]
+    side = [(0.0, 0.0), (0.0, 20.0), (40.0, 20.0)]
+    dearer = {((0.0, 0.0), (40.0, 0.0)): 5.0}  # Make the inline arrival 5 px dearer.
+    routed = find_path(
+        _graph(inline, side), (0.0, 0.0), (40.0, 20.0), None, "N", dearer, crossing_index=index
     )
+    assert routed == inline, f"turned into the stub from the side: {routed}"
+
+
+@pytest.mark.parametrize("side_first", [False, True], ids=["inline-first", "side-first"])
+def test_a_side_arrival_wins_a_tie_with_an_inline_arrival(side_first: bool) -> None:
+    """Keep the side arrival when both draw two bends over the same length."""
+    inline = [(0.0, 0.0), (0.0, 10.0), (40.0, 10.0), (40.0, 20.0)]
+    side = [(0.0, 0.0), (0.0, 20.0), (40.0, 20.0)]
+    inline_cost = _final_g(_graph(inline), (0.0, 0.0), (40.0, 20.0), None, "N")
+    side_cost = _final_g(_graph(side), (0.0, 0.0), (40.0, 20.0), None, "N")
+    assert side_cost < inline_cost
+    assert side_cost == pytest.approx(inline_cost)
+
+    graph = _graph(side, inline) if side_first else _graph(inline, side)
+    routed = find_path(graph, (0.0, 0.0), (40.0, 20.0), None, "N")
+    assert routed == side, f"broke the tie towards the inline arrival: {routed}"
 
 
 def test_a_recycle_search_returns_the_cheapest_path():
