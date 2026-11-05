@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
+  off-page connectors without a partner or on lines that disagree, a tag on two
+  kinds of equipment, a drawing number on two sheets, and references to
+  drawings outside the set.
+
 ## [0.2.0] - 2026-11-05
 
 Every sheet without pins draws differently from 0.1.5.
