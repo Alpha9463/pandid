@@ -15,7 +15,7 @@ from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
 from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking,
-                                   fail_marking, wears_arrowhead)
+                                   default_registry, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
 from pandid.route_geometry import stream_polyline
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -1862,7 +1862,6 @@ def flanged_joint(port, want: str) -> bool:
         Whether this end gets a flange mark.
     """
     from pandid.flowsheet import INLINE_KINDS
-    from pandid.render.symbols import default_registry
 
     kind = port.owner.kind
     if kind in {"feed", "product", "instrument"}:
@@ -3398,22 +3397,7 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
 
 
 class SvgRenderer:
-    """Renderer of a laid-out Flowsheet to SVG.
-
-    Parameters
-    ----------
-    registry : SymbolRegistry, optional
-        Symbols to draw with; ``default_registry`` when omitted.
-
-    Attributes
-    ----------
-    registry : SymbolRegistry
-        Symbols drawn with.
-    """
-
-    def __init__(self, registry=None):  # numpydoc ignore=GL08
-        from pandid.render.symbols import default_registry
-        self.registry = registry or default_registry
+    """Renderer of a laid-out Flowsheet to SVG."""
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
                crossing_style: str = "gap",
@@ -3634,7 +3618,7 @@ class SvgRenderer:
         tuple[int, bool, bool]
             ``(rotation, mirror_x, mirror_y)``.
         """
-        sym = self.registry.for_unit(u)
+        sym = default_registry.for_unit(u)
         f = u.frame
         rot = int(getattr(f, "orientation", 0) or 0)
         mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
@@ -3661,7 +3645,7 @@ class SvgRenderer:
             Definition id.
         """
         variant = getattr(u, 'variant', 'default')
-        sym = self.registry.for_unit(u)
+        sym = default_registry.for_unit(u)
         body = (u.kind if variant == "default" else f"{u.kind}_{variant}") + sym.id_suffix
         if not (math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9)
                 and _fold(sym, u) == (1.0, 1.0)):
@@ -3708,7 +3692,7 @@ class SvgRenderer:
         for u in fs.units:
             if u.kind in ("feed", "product"):
                 continue
-            sym = self.registry.for_unit(u)
+            sym = default_registry.for_unit(u)
             xform = self._baked_xform(u)
             fold, pen = _fold(sym, u), _pen_scale(sym, u)
             key = ((u.kind, getattr(u, 'variant', 'default'), sym.id_suffix, fold, pen)
@@ -3821,7 +3805,7 @@ class SvgRenderer:
                     tag_box = _unit_label_box(item)
                     label_items.append(item)
                 # NC marking (ISO 15519-1 11.4.5).
-                if closed_marking(u, self.registry) == "NC":
+                if closed_marking(u, default_registry) == "NC":
                     label_items.append(
                         self._nc_label_item(u, f, x, y, u_width, u_height, tag_box))
                 # Fail position (ISA-5.1 Table 5.4.4).
@@ -4031,7 +4015,7 @@ class SvgRenderer:
         box = _unit_label_box(item)
         if box is None or not (ink or symbols):
             return item
-        if getattr(u, "label_pos", None) or self.registry.for_unit(u).label_pos:
+        if getattr(u, "label_pos", None) or default_registry.for_unit(u).label_pos:
             return item
         # Test only ink near the unit.
         pad = max(u_width, u_height) + (box[2] - box[0])
@@ -4242,7 +4226,7 @@ class SvgRenderer:
             d_str = " ".join(d_parts)
 
             marker = (f' marker-end="url(#{marker_id})"'
-                      if arrows and wears_arrowhead(s, self.registry) else "")
+                      if arrows and wears_arrowhead(s, default_registry) else "")
             width = _stream_rung(is_signal).width
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
