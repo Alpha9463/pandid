@@ -495,10 +495,7 @@ class Unit:
         old = self.__dict__.get(name)
         super().__setattr__(name, value)
         if name == "variant" and old is not None:
-            if self._composition:
-                _recompose(self, old)
-            if self._VARIANT_BUILDS:
-                _VARIANT_REASSIGNED.warn(self, where=self.name)
+            _recompose(self, old)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
 
@@ -1539,6 +1536,9 @@ def _recompose(unit: "Unit", old: str) -> None:
     """Redraw a unit's parts on its new variant, or restore ``old``.
 
     Overlays added after the parts are kept, after the redrawn parts.
+    On a unit whose ports or faces are built from its variant, the
+    reassignment is reported as deprecated. Whatever raises, the unit
+    keeps ``old`` and its overlays.
 
     Parameters
     ----------
@@ -1552,8 +1552,12 @@ def _recompose(unit: "Unit", old: str) -> None:
     ValueError
         If the overlays no longer begin with the parts the unit was
         built with, or the new variant cannot carry the parts, the
-        added overlays, the manholes or the sockets; the unit keeps
-        ``old`` and its overlays.
+        added overlays, the manholes or the sockets.
+
+    Warns
+    -----
+    DeprecationWarning
+        If the unit's ports or faces are built from its variant.
     """
     from pandid.render.symbols import default_registry
 
@@ -1563,27 +1567,32 @@ def _recompose(unit: "Unit", old: str) -> None:
     built, current = _placed(stated, old), tuple(overlays or ())
     walls = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
     try:
-        if current[:len(built)] != built:
-            raise ValueError(
-                f"{unit.name}: its overlays no longer begin with the parts it was built "
-                f"with, so a new variant cannot redraw them. Build "
-                f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
-                f"instead"
-            )
-        _compose_onto(unit, *unit._composition)
-        unit._check_parts()
-        added = current[len(built):]
-        if added:
-            drawn = _placed(stated, unit.variant) + added
-            unit.overlays = drawn
-            default_registry.composed(unit.kind, unit.variant, drawn)
-        for keyword, placed in zip(("manholes", "sockets"), walls):
-            _on_walls(unit, keyword, placed)
-        if any(walls):
-            default_registry.for_unit(unit)
-    except ValueError:
+        if unit._composition:
+            if current[:len(built)] != built:
+                raise ValueError(
+                    f"{unit.name}: its overlays no longer begin with the parts it was "
+                    f"built with, so a new variant cannot redraw them. Build "
+                    f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
+                    f"instead"
+                )
+            _compose_onto(unit, *unit._composition)
+            unit._check_parts()
+            added = current[len(built):]
+            if added:
+                drawn = _placed(stated, unit.variant) + added
+                unit.overlays = drawn
+                default_registry.composed(unit.kind, unit.variant, drawn)
+            for keyword, placed in zip(("manholes", "sockets"), walls):
+                _on_walls(unit, keyword, placed)
+            if any(walls):
+                default_registry.for_unit(unit)
+        if unit._VARIANT_BUILDS:
+            _VARIANT_REASSIGNED.warn(unit, where=unit.name, stacklevel=4)
+    except BaseException:
         unit.__dict__["variant"] = old
-        if overlays is not None:
+        if overlays is None:
+            unit.__dict__.pop("overlays", None)
+        else:
             unit.__dict__["overlays"] = overlays
         raise
 

@@ -51,3 +51,19 @@ def test_reassigning_a_variant_the_ports_do_not_come_from_is_not(build, variant)
         warnings.simplefilter("error", DeprecationWarning)
         unit.variant = variant
     assert unit.variant == variant
+
+
+def test_a_reassignment_the_warning_refuses_leaves_the_unit_as_it_was():
+    """Check that a deprecation raised as an error undoes the whole reassignment."""
+    reactor = U.Reactor("R-1", agitator="propeller")
+    fs = Flowsheet("x")
+    fs.add(reactor)
+    fs.to_svg()
+    before = (reactor.variant, reactor.__dict__["overlays"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        with pytest.raises(DeprecationWarning, match="variant"):
+            reactor.variant = "jacketed"
+    assert (reactor.variant, reactor.__dict__["overlays"]) == before
+    assert (fs._layout_stale, fs._route_stale) == (False, False)
+    assert [i for i in fs.validate() if i.code == "deprecated"] == []
