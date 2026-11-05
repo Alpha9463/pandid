@@ -16,7 +16,7 @@ from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.stages import slot
-from pandid.portgeom import COMPASS, port_faces, resolve_port, unit_box
+from pandid.portgeom import COMPASS, pinned_x, pinned_y, port_faces, resolve_port, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
 
 if TYPE_CHECKING:
@@ -309,16 +309,16 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     xs = _columns(layers, segs, fs._lanes)
     plain = _columns(layers, segs, False)
     fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
-    if not any(u.pin_ is not None and (u.pin_.x is not None or u.pin_.y is not None)
+    if not any(u._pin is not None and (u._pin.x is not None or u._pin.y is not None)
                for u in units):
         _fold(layers, segs, xs)
-    pinned_y = any(u.pin_ is not None and u.pin_.y is not None for u in units)
+    pinned_y = any(u._pin is not None and u._pin.y is not None for u in units)
     lift = 0.0 if pinned_y else MARGIN - min(
         n.y - n.pad.north for layer in layers.values() for n in layer if n.members)
     # Shift free units to put the first x-pinned unit on its pin.
-    slide = next((u.pin_.x - xs[node] - node.dx[u] + _shift(u)
+    slide = next((pinned_x(u) - xs[node] - node.dx[u] + _shift(u)
                   for layer in layers.values() for node in layer for u in node.members
-                  if u.pin_ is not None and u.pin_.x is not None), 0.0)
+                  if u._pin is not None and u._pin.x is not None), 0.0)
     for layer in layers.values():
         for node in layer:
             for unit in node.members:
@@ -381,7 +381,7 @@ def _clear_pins(units: list[Unit]) -> None:
         bool
             True if the axis is free.
         """
-        return u.pin_ is None or getattr(u.pin_, axis) is None
+        return u._pin is None or getattr(u._pin, axis) is None
 
     def box(u: Unit) -> tuple[float, float, float, float]:
         """Return a unit's drawn box at its slot.
@@ -458,8 +458,8 @@ def _stacks(units: list[Unit], links: list[Link], split: bool
             u = lead[u]
         return u
 
-    col = {u: None if u.pin_ is None else u.pin_.col for u in units}
-    row = {u: None if u.pin_ is None else u.pin_.row for u in units}
+    col = {u: None if u._pin is None else u._pin.col for u in units}
+    row = {u: None if u._pin is None else u._pin.row for u in units}
     # Each column-and-row pin.
     grid = {u: (c, r) for u in units if (c := col[u]) is not None and (r := row[u]) is not None}
     # Each unit's depth down its stack.
@@ -644,8 +644,8 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
         n = next(n for n in nodes if n not in placed and all(p in placed for p in pred[n]))
         order.append(n)
         placed.add(n)
-    fixed = {n: next(u.pin_.col for u in n.members if u.pin_ is not None and u.pin_.col is not None)
-             for n in nodes if any(u.pin_ is not None and u.pin_.col is not None for u in n.members)}
+    fixed = {n: next(u._pin.col for u in n.members if u._pin is not None and u._pin.col is not None)
+             for n in nodes if any(u._pin is not None and u._pin.col is not None for u in n.members)}
     for n in order:
         n.layer = fixed.get(n, max((p.layer + 1 for p in pred[n]), default=0))
     # Put a source just before its nearest consumer.
@@ -791,9 +791,9 @@ def _row_pins(layers: dict[int, list[_Node]]) -> None:
         Stacks and dummies in each layer, in order.
     """
     for layer in layers.values():
-        rows = {n: min(u.pin_.row for u in n.members if u.pin_ is not None and u.pin_.row is not None)
+        rows = {n: min(u._pin.row for u in n.members if u._pin is not None and u._pin.row is not None)
                 for n in layer
-                if any(u.pin_ is not None and u.pin_.row is not None for u in n.members)}
+                if any(u._pin is not None and u._pin.row is not None for u in n.members)}
         places = [i for i, n in enumerate(layer) if n in rows]
         for i, n in zip(places, sorted(rows, key=rows.__getitem__)):
             layer[i] = n
@@ -818,10 +818,10 @@ def _row_order(layers: dict[int, list[_Node]]) -> dict[_Node, float]:
         Top of each stack holding a unit pinned by row alone, or an
         empty dict if no unit moves.
     """
-    rowed = sorted(((u.pin_.row, n, u) for layer in layers.values() for n in layer
+    rowed = sorted(((u._pin.row, n, u) for layer in layers.values() for n in layer
                     for u in n.members
-                    if u.kind != "instrument" and u.pin_ is not None and u.pin_.row is not None
-                    and u.pin_.col is None and u.pin_.y is None), key=lambda e: e[0])
+                    if u.kind != "instrument" and u._pin is not None and u._pin.row is not None
+                    and u._pin.col is None and u._pin.y is None), key=lambda e: e[0])
     y = {n: n.y for layer in layers.values() for n in layer}
     floor = ceiling = -math.inf
     moved = False
@@ -951,8 +951,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
     for layer in layers.values():
         for n in layer:
             for u in n.members:
-                if u.pin_ is not None and u.pin_.y is not None:
-                    pinned[n] = u.pin_.y - n.dy[u]
+                if u._pin is not None and u._pin.y is not None:
+                    pinned[n] = pinned_y(u) - n.dy[u]
     # Each stack pulls harder toward a neighbour nearer a pin.
     hops = dict.fromkeys(pinned, 0)
     walk = list(pinned)

@@ -520,7 +520,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     for assembly in fs._station_assemblies:
         station = assembly.station
         corner = (station.control, station.inlet.owner, station.outlet.owner)
-        if not all(u.pin_ is not None and u.pin_.x is not None and u.pin_.y is not None
+        if not all(u._pin is not None and u._pin.x is not None and u._pin.y is not None
                    for u in corner):
             continue
         short = {axis: max((-v for m in station.members if m.pin_ is not None
@@ -981,7 +981,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
                                   f"drawn at {drawn:g}, {abs(drawn - want):g} away")
             # Check that a stated turn or mirror is drawn as stated.
-            pin = u.pin_
+            pin = u._pin
             if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
                 missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
                               f"drawn at {u.frame.orientation:g}")
@@ -1032,7 +1032,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # Grid pins in order: a lower col is drawn further west, and a
         # lower row higher up its column.
         graded = [(u, pin) for u in placed
-                  if u.kind != "instrument" and (pin := u.pin_) is not None]
+                  if u.kind != "instrument" and (pin := u._pin) is not None]
         for a, pa in graded:
             for b, pb in graded:
                 fa, fb = a.frame, b.frame
@@ -1274,7 +1274,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 continue
             su, du = s.source.owner, s.dest.owner
             # Only where an elevation was pinned by hand.
-            if not any(getattr(u.pin_, "y", None) is not None for u in (su, du)):
+            if not any(getattr(u._pin, "y", None) is not None for u in (su, du)):
                 continue
             src = resolve_port(su, su.frame, s.source.name)
             dst = resolve_port(du, du.frame, s.dest.name)
