@@ -480,8 +480,8 @@
     <use href="#sym_hex" x="520" y="495" width="60.0" height="60.0" />
     <use href="#sym_column_ca20047b0" x="690" y="420" width="100.0" height="200.0" />
     <use href="#sym_hex" x="710" y="230" width="60.0" height="60.0" transform="translate(0, 520) scale(1, -1)" />
-    <use href="#sym_vessel_horizontal_130x42_cf99ece5a" x="920" y="315" width="130" height="42" />
-    <use href="#sym_tee" x="1020.5" y="409" width="12.0" height="12.0" transform="rotate(90, 1026.5, 415) translate(0, 830) scale(1, -1)" />
+    <use href="#sym_vessel_horizontal_130x42_cf99ece5a" x="911.58" y="315" width="130" height="42" />
+    <use href="#sym_tee" x="1002.2" y="409" width="12.0" height="12.0" transform="rotate(90, 1008.2, 415) translate(0, 830) scale(1, -1)" />
     <use href="#sym_hex_kettle_s120x44" x="830" y="645" width="120" height="44" />
     <polygon points="1070.0,402.0 1155.704,402.0 1170.704,415.0 1155.704,428.0 1070.0,428.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1112.852" y="411.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Light Product</text>
@@ -489,8 +489,8 @@
     <use href="#sym_pump" x="1010" y="700" width="70.0" height="67.0" />
     <use href="#sym_column_c94688fb2" x="1260" y="420" width="100.0" height="200.0" />
     <use href="#sym_hex" x="1280" y="230" width="60.0" height="60.0" transform="translate(0, 520) scale(1, -1)" />
-    <use href="#sym_vessel_horizontal_130x42_cf99ece5a" x="1490" y="315" width="130" height="42" />
-    <use href="#sym_tee" x="1590.5" y="409" width="12.0" height="12.0" transform="rotate(90, 1596.5, 415) translate(0, 830) scale(1, -1)" />
+    <use href="#sym_vessel_horizontal_130x42_cf99ece5a" x="1481.58" y="315" width="130" height="42" />
+    <use href="#sym_tee" x="1572.2" y="409" width="12.0" height="12.0" transform="rotate(90, 1578.2, 415) translate(0, 830) scale(1, -1)" />
     <use href="#sym_hex_kettle_s120x44" x="1400" y="645" width="120" height="44" />
     <polygon points="1640.0,402.0 1723.028,402.0 1738.028,415.0 1723.028,428.0 1640.0,428.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1681.514" y="411.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Med Product</text>
@@ -509,18 +509,18 @@
     <path d="M 580.0,525.0 L 690.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 740.0,420.0 L 740.0,290.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 740.0,230.0 L 740.0,205.0 L 940.0,205.0 L 940.0,315.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1026.5,357.0 L 1026.5,409.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1026.5,421.0 L 1026.5,455.0 L 790.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1032.5,415.0 L 1070.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1008.1967,357.0 L 1008.1967,409.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1008.1967,421.0 L 1008.1967,455.0 L 790.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1014.1967,415.0 L 1070.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 740.0,620.0 L 740.0,714.0 L 890.0,714.0 L 890.0,685.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 913.9344262295082,645.0 L 913.9344262295082,595.0 L 790.0,595.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 941.4754098360656,685.0 L 941.4754098360656,730.0 L 1010.0,730.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1080.0,710.0 L 1235.0,710.0 L 1235.0,525.0 L 1260.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1310.0,420.0 L 1310.0,290.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1310.0,230.0 L 1310.0,205.0 L 1510.0,205.0 L 1510.0,315.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1596.5,357.0 L 1596.5,409.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1596.5,421.0 L 1596.5,455.0 L 1360.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1602.5,415.0 L 1640.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1578.1967000000002,357.0 L 1578.1967000000002,409.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1578.1967000000002,421.0 L 1578.1967000000002,455.0 L 1360.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1584.1967000000002,415.0 L 1640.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1310.0,620.0 L 1310.0,714.0 L 1460.0,714.0 L 1460.0,685.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1483.9344262295083,645.0 L 1483.9344262295083,595.0 L 1360.0,595.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1511.4754098360656,685.0 L 1511.4754098360656,730.0 L 1580.0,730.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -543,12 +543,12 @@
     <rect x="830.9" y="198.5" width="18.2" height="13.0" fill="white" />
     <polygon points="840.0,186.6 858.4,205.0 840.0,223.4 821.6,205.0" fill="white" stroke="black" stroke-width="1" />
     <text x="840.0" y="205.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S5</text>
-    <rect x="1017.4" y="376.5" width="18.2" height="13.0" fill="white" />
-    <polygon points="1026.5,364.6 1044.9,383.0 1026.5,401.4 1008.1,383.0" fill="white" stroke="black" stroke-width="1" />
-    <text x="1026.5" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
-    <rect x="1042.1" y="408.5" width="18.2" height="13.0" fill="white" />
-    <polygon points="1051.2,396.6 1069.6,415.0 1051.2,433.4 1032.9,415.0" fill="white" stroke="black" stroke-width="1" />
-    <text x="1051.2" y="415.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <rect x="999.1" y="376.5" width="18.2" height="13.0" fill="white" />
+    <polygon points="1008.2,364.6 1026.6,383.0 1008.2,401.4 989.8,383.0" fill="white" stroke="black" stroke-width="1" />
+    <text x="1008.2" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
+    <rect x="1033.0" y="408.5" width="18.2" height="13.0" fill="white" />
+    <polygon points="1042.1,396.6 1060.5,415.0 1042.1,433.4 1023.7,415.0" fill="white" stroke="black" stroke-width="1" />
+    <text x="1042.1" y="415.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
     <rect x="805.9" y="707.5" width="18.2" height="13.0" fill="white" />
     <polygon points="815.0,695.6 833.4,714.0 815.0,732.4 796.6,714.0" fill="white" stroke="black" stroke-width="1" />
     <text x="815.0" y="714.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
@@ -567,12 +567,12 @@
     <rect x="1398.1" y="198.5" width="23.8" height="13.0" fill="white" />
     <polygon points="1410.0,186.6 1428.4,205.0 1410.0,223.4 1391.6,205.0" fill="white" stroke="black" stroke-width="1" />
     <text x="1410.0" y="205.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S13</text>
-    <rect x="1584.6" y="376.5" width="23.8" height="13.0" fill="white" />
-    <polygon points="1596.5,364.6 1614.9,383.0 1596.5,401.4 1578.1,383.0" fill="white" stroke="black" stroke-width="1" />
-    <text x="1596.5" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S14</text>
-    <rect x="1609.4" y="408.5" width="23.8" height="13.0" fill="white" />
-    <polygon points="1621.2,396.6 1639.6,415.0 1621.2,433.4 1602.9,415.0" fill="white" stroke="black" stroke-width="1" />
-    <text x="1621.2" y="415.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S15</text>
+    <rect x="1566.3" y="376.5" width="23.8" height="13.0" fill="white" />
+    <polygon points="1578.2,364.6 1596.6,383.0 1578.2,401.4 1559.8,383.0" fill="white" stroke="black" stroke-width="1" />
+    <text x="1578.2" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S14</text>
+    <rect x="1600.2" y="408.5" width="23.8" height="13.0" fill="white" />
+    <polygon points="1612.1,396.6 1630.5,415.0 1612.1,433.4 1593.7,415.0" fill="white" stroke="black" stroke-width="1" />
+    <text x="1612.1" y="415.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S15</text>
     <rect x="1373.1" y="707.5" width="23.8" height="13.0" fill="white" />
     <polygon points="1385.0,695.6 1403.4,714.0 1385.0,732.4 1366.6,714.0" fill="white" stroke="black" stroke-width="1" />
     <text x="1385.0" y="714.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S16</text>
@@ -603,8 +603,8 @@
     <text x="716.0" y="410" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">T-100</text>
     <rect x="780.0" y="252.5" width="40.0" height="15.0" fill="white" />
     <text x="780.0" y="260.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-101</text>
-    <rect x="1060.0" y="328.5" width="40.0" height="15.0" fill="white" />
-    <text x="1060.0" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-101</text>
+    <rect x="1051.6" y="328.5" width="40.0" height="15.0" fill="white" />
+    <text x="1051.5846999999999" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-101</text>
     <rect x="960.0" y="659.5" width="40.0" height="15.0" fill="white" />
     <text x="960.0" y="667.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-102</text>
     <rect x="1015.3" y="678.0" width="59.4" height="15.0" fill="white" />
@@ -613,8 +613,8 @@
     <text x="1286.0" y="410" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">T-200</text>
     <rect x="1350.0" y="252.5" width="40.0" height="15.0" fill="white" />
     <text x="1350.0" y="260.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-201</text>
-    <rect x="1630.0" y="328.5" width="40.0" height="15.0" fill="white" />
-    <text x="1630.0" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-201</text>
+    <rect x="1621.6" y="328.5" width="40.0" height="15.0" fill="white" />
+    <text x="1621.5847" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-201</text>
     <rect x="1530.0" y="659.5" width="40.0" height="15.0" fill="white" />
     <text x="1530.0" y="667.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-202</text>
     <rect x="1585.3" y="678.0" width="59.4" height="15.0" fill="white" />
