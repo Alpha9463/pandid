@@ -180,8 +180,10 @@ Validation reports `gravity-turned` when one is rotated away from it.
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
-`software` or `capillary`. When omitted, two energy/utility ports make an energy
-stream; other process ports make a material stream.
+`software` or `capillary`. When omitted, a signal line to a valve's actuator is
+pneumatic and any other signal line is electric, as `add_control_loop()` draws
+them; two energy/utility ports make an energy stream; other process ports make a
+material stream.
 
 `connect()` also accepts `name`, `draw_as_recycle`, `ends` and line-number fields
 `size`, `schedule`, `service`, `sequence`, `spec` and `insulation`. The first

@@ -75,9 +75,10 @@ Traps:
   it. Use the named class (Cyclone, ControlValve, GearPump), else the base
   class with variant=: Valve("HV-101", variant="gate").
   python -m pandid symbols --kind valve lists a kind's drawings.
-- A signal line needs kind= (electric, pneumatic, data, capillary or
-  software): fs.connect(ft.sig_out, fic.sig_in, kind="electric"). A process
-  line infers material, or energy between two energy or utility ports.
+- connect() infers a line's kind. A signal line is pneumatic to a valve's
+  actuator, else electric; a process line is material, or energy between
+  two energy or utility ports. Pass kind= for another, such as data,
+  capillary or software: fs.connect(ft.sig_out, fic.sig_in, kind="data").
 - face= is a side of a unit, "N", "S", "E" or "W"; at= is a fraction
   along a line, 0..1 for an instrument and strictly between for a valve
   put in the line: fs.add_instrument("TI", 103, sensing=cooler, face="E"),
@@ -86,7 +87,7 @@ Traps:
 - Attach an instrument with one of sensing= (what it measures), acting_on=
   (what it drives) or near= (beside it, no line). sensing= and acting_on=
   draw a tap line but add no Stream; join instruments with
-  fs.connect(..., kind=...). fs.add_control_loop("F", 101, measuring=line,
+  fs.connect(ft, fic). fs.add_control_loop("F", 101, measuring=line,
   acting_on=valve) adds the transmitter, the controller and both signal
   lines.
 - A line keeps its number through a valve or fitting (Feed -> valve -> pump
