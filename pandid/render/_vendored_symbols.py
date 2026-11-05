@@ -311,7 +311,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         gravity_fixed=True,
         port_faces={'outlet': {'S': (31.0, 100.0), 'E': (62.0, 82.5), 'W': (0.0, 82.5)}},
-        port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=50.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.32, at=50.0, singular='feed'),),
     ), 'default')
 
     registry.register('reactor', Symbol(
@@ -320,7 +320,7 @@ def register_vendored(registry):
         ports={'outlet': (26.0, 95.4), 'jacket_in': (52.0, 72.7), 'jacket_out': (52.0, 22.7), 'vent': (46.0, 10.0)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=47.7, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.34, at=47.7, singular='feed'),),
     ), 'jacketed')
 
     registry.register('separator', Symbol(

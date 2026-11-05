@@ -162,17 +162,19 @@ KIND_MAP = {
                             "reboiler_duty": ("E", 70.325)}),
     # Stirred tank (ISO item 1.27): the drum's body and box; ``Reactor`` composes the
     # agitator. The vent sits on the east wall below the head, since the crown carries
-    # the shaft. The outlet also offers E and W at y = 165.
+    # the shaft. The outlet also offers E and W at y = 165. The feeds are 32 apart
+    # before SCALE, 16 drawn, so three fill 0.32 of the body.
     ("reactor", "default"): ("vessels", "Pressurized Vessel",
-                             {"feed": ("SERIES", "W", 100.0, 28.0, 0.32),
+                             {"feed": ("SERIES", "W", 100.0, 32.0, 0.32),
                               "outlet": [("S", 50.0), ("E", 165.0), ("W", 165.0)],
                               "duty": ("E", 100.0),
                               "vent": ("AT", 100.0, 20.0)}),
     # Jacketed stirred tank: ``vessel/jacketed``'s stencil. The jacket, y 12.69..82.69,
     # takes its supply low and its return high, each 10 off its end on the east face;
-    # the vent takes the shell wall above it.
+    # the vent takes the shell wall above it. Three feeds 16 apart fit in 0.34 of the
+    # 95.4 body, on the jacket.
     ("reactor", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
-                              {"feed": ("SERIES", "W", 47.7, 14, 0.32),
+                              {"feed": ("SERIES", "W", 47.7, 16, 0.34),
                                "outlet": ("S", 26.0),
                                "jacket_in": ("E", 72.7), "jacket_out": ("E", 22.7),
                                "vent": ("AT", 46.0, 10.0)}),

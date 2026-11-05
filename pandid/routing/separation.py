@@ -4,18 +4,26 @@ Overlapping runs of different streams on tracks within :data:`SPACING`
 are assigned tracks; end runs and manual routes keep their track.
 """
 
+from functools import cache
+from itertools import chain, count
 from typing import Any, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
+    from pandid.units import Unit
 
 #: Grid step between the tracks runs are moved onto.
 SPACING = 6.0
 
+#: Grid steps from the base track that a run moved clear of unit
+#: bodies may take.
+REACH = 4
+
 
 def _compute_offsets(
     streams: "Sequence[Stream]",
+    units: "Sequence[Unit]",
 ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
     """Return the offsets for horizontal and vertical segments.
 
@@ -23,6 +31,8 @@ def _compute_offsets(
     ----------
     streams : Sequence[Stream]
         Routed streams.
+    units : Sequence[Unit]
+        Units whose bodies a moved run keeps out of.
 
     Returns
     -------
@@ -37,7 +47,8 @@ def _compute_offsets(
     h_offsets: dict[tuple[int, int], float] = {}
     v_offsets: dict[tuple[int, int], float] = {}
 
-    from pandid.portgeom import unit_box
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import drawn_box, unit_box
 
     for s in streams:
         if not s.route or not s.route.waypoints:
@@ -89,6 +100,8 @@ def _compute_offsets(
                 open_run = {
                     "stream": id(s),
                     "axis": axis,
+                    "ends": ends,
+                    "pts": pts,
                     "boxes": boxes,
                     "seg_idxs": [i],
                     "track": track,
@@ -122,6 +135,98 @@ def _compute_offsets(
                 return True
         return False
 
+    def endpoints(axis, track, a, b):
+        """Return the ends of a segment on a track.
+
+        Parameters
+        ----------
+        axis : str
+            ``"h"`` or ``"v"``.
+        track : float
+            Its y if horizontal, x if vertical.
+        a, b : float
+            Its ends along the axis.
+
+        Returns
+        -------
+        tuple[tuple[float, float], tuple[float, float]]
+            Its two end points.
+        """
+        return ((a, track), (b, track)) if axis == "h" else ((track, a), (track, b))
+
+    @cache
+    def bodies():
+        """Return each placed unit's drawn box.
+
+        Returns
+        -------
+        list[tuple[int, tuple[float, float, float, float]]]
+            ``(id(unit), box)`` for each unit with a frame.
+        """
+        return [(id(u), drawn_box(u, u.frame)) for u in units if u.frame is not None]
+
+    def blocked(run, track):
+        """Return whether a run on a track, or a leg it stretches, enters a unit.
+
+        A leg is the segment either side of the run. A leg from a nozzle
+        may cross its own unit while it leaves the nozzle the way it was
+        drawn.
+
+        Parameters
+        ----------
+        run : dict
+            Run to test.
+        track : float
+            Candidate track coordinate.
+
+        Returns
+        -------
+        bool
+            Whether the run enters an end unit, or the run or a leg
+            enters a unit body.
+        """
+        if enters(run, track):
+            return True
+        a, b = endpoints(run["axis"], track, run["min_val"], run["max_val"])
+        if any(segment_crosses_box(a, b, box) for _, box in bodies()):
+            return True
+        pts, first, last = run["pts"], run["seg_idxs"][0], run["seg_idxs"][-1]
+        n_segs = len(pts) - 1
+        k, across = (0, "v") if run["axis"] == "h" else (1, "h")
+        for seg, near, far, end in ((first - 1, first, first - 1, 0),
+                                    (last + 1, last + 1, last + 2, 1)):
+            if not 0 <= seg < n_segs or abs(pts[near][k] - pts[far][k]) >= 0.1:
+                continue
+            at, start = pts[near][k], pts[far][1 - k]
+            a, b = endpoints(across, at, start, track)
+            as_drawn = seg in (0, n_segs - 1) and (track - start) * (run["track"] - start) > 0
+            skip = id(run["ends"][end]) if as_drawn else None
+            if any(segment_crosses_box(a, b, box) for uid, box in bodies() if uid != skip):
+                return True
+        return False
+
+    def slots(base, occupied, steps):
+        """Yield the free slots on the grid around a track, nearest first.
+
+        Parameters
+        ----------
+        base : float
+            Track the grid is centred on.
+        occupied : list[float]
+            Tracks already taken.
+        steps : Iterable[int]
+            Grid steps out from ``base`` to try.
+
+        Yields
+        ------
+        float
+            Slot at least :data:`SPACING` from every taken track.
+        """
+        for k in steps:
+            for cand in ((base,) if k == 0 else (base + k * SPACING, base - k * SPACING)):
+                if all(abs(cand - o) >= SPACING - 1e-9 for o in occupied):
+                    yield cand
+
     def resolve_track(runs, offsets_dict):
         """Assign target tracks to one cluster of nearby runs.
 
@@ -130,7 +235,11 @@ def _compute_offsets(
         free run joins its stream's nearest fixed track clear of its end
         units, and any other run takes the nearest free slot on a
         :data:`SPACING` grid around the fixed runs' mean track, or all
-        runs' if none is fixed.
+        runs' if none is fixed. Where the run on that track, or a
+        segment either side of it stretched to meet it, would enter a
+        unit body, the run takes the first of the same tracks, out to
+        :data:`REACH` grid steps, on which neither would, and keeps the
+        first track if there is none.
 
         Parameters
         ----------
@@ -179,20 +288,16 @@ def _compute_offsets(
             for run in comp:
                 if run["is_fixed"]:
                     continue
-                own = [t for t in nozzles.get(run["stream"], []) if not enters(run, t)]
-                if own:
-                    track = run["track"]
-                    run["target"] = min(own, key=lambda t: (abs(t - track), t))
-                    continue
-                k = 0
-                while "target" not in run:
-                    for cand in ((base,) if k == 0 else (base + k * SPACING, base - k * SPACING)):
-                        if (all(abs(cand - o) >= SPACING - 1e-9 for o in occupied)
-                                and not enters(run, cand)):
-                            run["target"] = cand
-                            occupied.append(cand)
-                            break
-                    k += 1
+                track = run["track"]
+                own = sorted(nozzles.get(run["stream"], []), key=lambda t: (abs(t - track), t))
+                target = next(t for t in chain(own, slots(base, occupied, count()))
+                              if not enters(run, t))
+                if blocked(run, target):
+                    clear = (t for t in chain(own, slots(base, occupied, range(REACH + 1)))
+                             if not blocked(run, t))
+                    target = next(clear, target)
+                run["target"] = target
+                occupied.append(target)
 
             for run in comp:
                 offset = run["target"] - run["track"]
@@ -246,7 +351,7 @@ def separate_streams(fs: "Flowsheet") -> None:
     fs : Flowsheet
         Sheet with routed streams.
     """
-    new_waypoints = preview_separated_waypoints(fs.streams)
+    new_waypoints = preview_separated_waypoints(fs.streams, fs.units)
     for s in fs.streams:
         if id(s) in new_waypoints and not s.route.manual:  # type: ignore[union-attr]
             s.route.waypoints = new_waypoints[id(s)]  # type: ignore[union-attr]
@@ -254,6 +359,7 @@ def separate_streams(fs: "Flowsheet") -> None:
 
 def preview_separated_waypoints(
     streams: "Sequence[Stream]",
+    units: "Sequence[Unit]",
 ) -> dict[int, list[tuple[float, float]]]:
     """Return each stream's separated waypoints.
 
@@ -261,13 +367,15 @@ def preview_separated_waypoints(
     ----------
     streams : Sequence[Stream]
         Routed streams.
+    units : Sequence[Unit]
+        Units whose bodies a moved run keeps out of.
 
     Returns
     -------
     dict[int, list[tuple[float, float]]]
         Separated waypoints by ``id(stream)``, for each routed stream.
     """
-    h_offsets, v_offsets = _compute_offsets(streams)
+    h_offsets, v_offsets = _compute_offsets(streams, units)
     result: dict[int, list[tuple[float, float]]] = {}
     for s in streams:
         if not s.route or not s.route.waypoints:
