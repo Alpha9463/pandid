@@ -561,3 +561,20 @@ def test_a_vent_control_valve_keeps_its_loop_clear() -> None:
     quality = measure_final(fs)
     assert not quality.hard_conflicts
     assert not any(issue.code in ("route-crosses-unit", "unit-overlap") for issue in fs.validate())
+
+
+def test_a_valve_keeps_clear_of_a_balloon_pinned_on_both_axes() -> None:
+    """Check that a valve steps along its pipe off a balloon pinned where it would sit."""
+    from pandid import Vessel
+
+    fs = Flowsheet("Pinned balloon")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=200)
+    drum = fs.add(Vessel("V-101")).pin(x=700, y=150)
+    valve = fs.add(Valve("HV-1"), on=fs.connect(feed.outlet, drum.inlet))
+    lt = fs.add_instrument("LT", 101, sensing=drum, face="N")
+    fs.layout()
+    assert valve.frame is not None
+    lt.pin(x=valve.frame.cx - 22, y=valve.frame.cy - 22)
+
+    fs.route()
+    assert not any(issue.code == "unit-overlap" for issue in fs.validate())

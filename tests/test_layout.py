@@ -1072,6 +1072,54 @@ def test_a_chain_of_balloons_is_reserved_paper_before_anything_is_placed() -> No
     assert _unit_overlaps(fs) == [], "a balloon was drawn over something"
 
 
+def _drum_pump_drum() -> tuple[Flowsheet, U.Vessel, U.Instrument]:
+    """Return a drum, pump and drum in line, with an LT and LIC hung east of the first."""
+    fs = Flowsheet("pinned chain")
+    drum = fs.add(U.Vessel("V-101"))
+    pump = fs.add(U.Pump("P-101"))
+    fs.connect(drum.outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Vessel("V-102")).inlet)
+    lt = fs.add_instrument("LT", 101, sensing=drum, face="E")
+    fs.add_instrument("LIC", 101, near=lt, face="E")
+    return fs, drum, lt
+
+
+def _equipment_boxes(fs: Flowsheet) -> dict[str, Box]:
+    """Return the drawn box of every unit that is not a balloon, by name."""
+    boxes = _drawn_boxes(fs)
+    return {u.name: boxes[u.name] for u in fs.units if u.kind != "instrument"}
+
+
+@pytest.mark.parametrize(("x", "y"), [(440.0, 180.0), (640.0, 180.0), (250.0, 100.0)])
+def test_equipment_keeps_clear_of_a_balloon_pinned_on_both_axes(x: float, y: float) -> None:
+    """Check that a fully pinned chain frees its host's room and nothing lands on it."""
+    fs, drum, lt = _drum_pump_drum()
+    fs.layout()
+    before = _equipment_boxes(fs)
+    lt.pin(x=x, y=y)
+    fs.route()
+    after = _equipment_boxes(fs)
+
+    assert drum not in balloon_pads(fs), "the drum still reserves room for a pinned chain"
+    assert after["P-101"][0] - after["V-101"][2] < before["P-101"][0] - before["V-101"][2]
+    assert _unit_overlaps(fs) == []
+
+
+@pytest.mark.parametrize(("x", "y"), [(440.0, None), (None, 400.0)])
+def test_a_balloon_pinned_on_one_axis_keeps_its_hosts_room(
+    x: float | None, y: float | None
+) -> None:
+    """Check that a pin on one axis leaves the host's room and the equipment as they were."""
+    fs, drum, lt = _drum_pump_drum()
+    fs.layout()
+    pad, boxes = balloon_pads(fs)[drum], _equipment_boxes(fs)
+    lt.pin(x=x, y=y)
+    fs.layout()
+
+    assert balloon_pads(fs)[drum] == pad
+    assert _equipment_boxes(fs) == boxes
+
+
 def _lanes(fs: Flowsheet) -> tuple[dict[int, float], dict[int, float]]:
     """Return where each grid column and row the balloons are measured against starts."""
     cols, rows = control_grid(fs)

@@ -72,6 +72,11 @@ def test_unit_overlap_moves_an_attached_balloon_with_at_and_offset():
 def test_unit_overlap_moves_a_pinned_balloon_by_its_pin():
     """Check that the overlap message tells a pinned balloon to move by its pin."""
     fs, fv, ft = _tapped_line()
+    # A line too short for the valve to step clear of the balloon.
+    feed, _, prod = fs.units[:3]
+    feed.pin(port="outlet", x=100, y=100)
+    prod.pin(port="inlet", x=200, y=100)
+    fs.route()
     assert fv.frame is not None
     ft.pin(x=fv.frame.x, y=fv.frame.y)
     fs.route()

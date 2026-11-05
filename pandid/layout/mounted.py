@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Callable, Iterator, Union
 from pandid.geometry import Frame
 from pandid.inline import _INLINE_KINDS
 from pandid.layout.conflicts import boxes_overlap
+from pandid.layout.halo import balloon_pads, pinned_balloons
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.portgeom import port_point, resolve_size, unit_box
 from pandid.routing.metrics import path_length
@@ -1097,7 +1098,8 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     """Place equipment and loose stations, then set pipe furniture.
 
     Each furnished pipe reserves its furniture's room in the equipment
-    solve (:class:`pandid.layout.layered.Link`). With
+    solve (:class:`pandid.layout.layered.Link`). Furniture keeps clear
+    of each balloon pinned on both axes and its chain. With
     ``fs._exit_clear`` set, each signal exit keeps
     :data:`~pandid.routing.visibility.MARGIN` from other units;
     ``fs._exit_tight`` records whether any comes closer.
@@ -1134,7 +1136,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
         return
     routes, lines = _routed_pipes(fs, runs, retained)
     obstacles = list(retained)
-    zones: list[Box] = []
+    zones: list[Box] = pinned_balloons(fs, balloon_pads(fs))
     exit_gap = MARGIN if fs._exit_clear else 0.0
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
         _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap)
