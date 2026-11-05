@@ -111,10 +111,10 @@ from pandid.geometry import Pin, Frame, Route
 from pandid.loops import Loop, ControlLoop
 from pandid.stations import ValveStation
 from pandid.validate import Issue
-from pandid.document import TitleBlock, Revision, Annotation, TableBox
+from pandid.document import TitleBlock, Revision, Annotation, TableBox, Document
 
 __all__ = ["Flowsheet", "Component", "units", "devices", "SpecError", "__version__",
            "Port", "Stream", "Pin", "Frame", "Route",
            "Loop", "ControlLoop", "ValveStation", "Issue",
-           "TitleBlock", "Revision", "Annotation", "TableBox",
+           "TitleBlock", "Revision", "Annotation", "TableBox", "Document",
            *units.__all__, *devices.__all__]

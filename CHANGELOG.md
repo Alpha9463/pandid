@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
+  off-page connectors without a partner or on lines that disagree, a tag on two
+  kinds of equipment, a drawing number on two sheets, and references to
+  drawings outside the set.
 - `Vessel` and `Evaporator` draw manholes and sockets on their walls:
   `Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)])`. Each socket
   is a port, `socket_1`, `socket_2`, and so on.
