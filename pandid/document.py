@@ -406,11 +406,12 @@ class StreamLabelOptions:
 
 # Kinds an equipment table schedules by default.
 _MAJOR_EQUIPMENT = frozenset({
-    "blower", "boiler", "column", "compressor", "conveyor", "cooler",
-    "cooling_tower", "crusher", "dryer", "ejector", "elevator", "evaporator",
-    "feeder", "filter", "flare", "flotation_cell", "furnace", "heater", "hex",
-    "kiln", "kneader", "mill", "pump", "reactor", "screening_device", "separator",
-    "stack", "tank", "thickener", "turbine", "vessel",
+    "blower", "boiler", "centrifuge", "column", "compressor", "conveyor",
+    "cooler", "cooling_tower", "crusher", "crushing_machine", "crystallizer",
+    "dryer", "ejector", "elevator", "evaporator", "feeder", "filter", "flare",
+    "flotation_cell", "furnace", "heater", "hex", "kiln", "kneader", "mill",
+    "pump", "reactor", "screening_device", "separator", "stack", "tank",
+    "thickener", "turbine", "vessel",
 })
 
 # Equipment-table description of a kind whose name is not its title.

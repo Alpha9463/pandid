@@ -102,6 +102,8 @@ The names depend on the class and variant. Common patterns are:
   `actuator`.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
+- A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`
+  names the stirrer in its draft tube, or `None` for none.
 - A `FlotationCell` uses `feed`, `concentrate`, `tailings` and `air`;
   `agitator=` names the rotor on its shaft, or `None` for none.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
