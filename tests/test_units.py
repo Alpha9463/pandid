@@ -96,6 +96,88 @@ def test_reactor_duty_is_energy_role():
     assert r.outlet.direction == "outlet"
 
 
+def test_a_jacketed_reactor_has_a_jacket_inlet_and_outlet():
+    """Check that the jacketed body's utility pair replaces its single duty port."""
+    r = D.JacketedReactor("R-1")
+    assert list(r.ports) == ["outlet", "vent", "jacket_in", "jacket_out", "drive", "feed_1"]
+    assert (r.jacket_in.direction, r.jacket_in.role) == ("inlet", "utility")
+    assert (r.jacket_out.direction, r.jacket_out.role) == ("outlet", "utility")
+    # The base class with the variant builds the same nozzles.
+    assert list(U.Reactor("R-2", variant="jacketed").ports) == list(r.ports)
+
+
+def test_the_jacket_nozzles_sit_on_the_jacket_wall():
+    """Check that both nozzles are on the east jacket's outer face, in low and out high."""
+    from pandid.render.symbols import default_registry
+
+    body = default_registry.get("reactor", "jacketed")
+    # The jacket is two boxes either side of the shell; the second is east.
+    rects = re.findall(
+        r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"', body.svg
+    )
+    x, top, w, h = map(float, rects[1])
+    (in_x, in_y), (out_x, out_y) = body.ports["jacket_in"], body.ports["jacket_out"]
+    assert in_x == out_x == x + w == body.width
+    assert top < out_y < in_y < top + h
+    assert body.port_faces["jacket_in"] == {"E": (in_x, in_y)}
+    assert body.port_faces["jacket_out"] == {"E": (out_x, out_y)}
+
+
+def test_the_jacket_supply_and_return_connect_to_their_nozzles():
+    """Check that a supply and a return pipe end on the drawn jacket nozzles."""
+    from pandid import Flowsheet
+    from pandid.portgeom import port_point
+
+    fs = Flowsheet("jacket")
+    r = fs.add(D.JacketedReactor("R-1", width=152, height=360))
+    cws = fs.add(U.Feed("CWS"))
+    cwr = fs.add(U.Product("CWR"))
+    supply = fs.connect(cws.outlet, r.jacket_in)
+    back = fs.connect(r.jacket_out, cwr.inlet)
+    fs.to_svg()
+    assert supply.kind == back.kind == "material"
+    assert r.frame is not None and supply.route is not None and back.route is not None
+    assert supply.route.waypoints[-1] == pytest.approx(port_point(r, r.frame, "jacket_in"))
+    assert back.route.waypoints[0] == pytest.approx(port_point(r, r.frame, "jacket_out"))
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_duty_on_a_jacketed_reactor_is_deprecated_for_jacket_in(same_file):
+    """Check that ``duty`` on a jacketed body warns at the caller's line and is ``jacket_in``."""
+    from pandid import Flowsheet
+
+    fs = Flowsheet("jacket")
+    r = fs.add(U.Reactor("R-1", variant="jacketed"))
+    cws = fs.add(U.Feed("CWS"))
+    with pytest.warns(DeprecationWarning, match="use JacketedReactor, with jacket_in") as caught:
+        duty = r.duty
+    assert len(caught) == 1
+    assert same_file(caught[0].filename) == same_file(__file__)
+    assert duty is r.port("jacket_in")
+    fs.connect(cws.outlet, duty)
+    found = [i.message for i in fs.validate() if i.code == "deprecated"]
+    assert found == [str(caught[0].message)]
+    assert found[0].startswith("R-1: ")
+    # Every other body keeps its duty port without a warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        assert U.Reactor("R-2").duty.name == "duty"
+        assert U.Reactor("R-3", variant="tubular").duty.name == "duty"
+        # The named class never had a duty port.
+        assert getattr(D.JacketedReactor("R-4"), "duty", None) is None
+
+
+def test_duty_on_a_jacketed_reactor_is_placed_where_jacket_in_is():
+    """Check that the layout helpers place ``duty`` on ``jacket_in``'s nozzle."""
+    from pandid.portgeom import is_anchored, port_faces, port_offset
+
+    r = U.Reactor("R-1", variant="jacketed", width=152, height=360)
+    with pytest.warns(DeprecationWarning):
+        assert port_offset(r, "duty") == port_offset(r, "jacket_in")
+        assert port_faces(r, "duty") == port_faces(r, "jacket_in") == ["E"]
+        assert is_anchored(r, "duty")
+
+
 def test_a_column_takes_more_than_one_feed():
     """Check that a column takes a numbered family of feeds."""
     col = U.Column("T-302", n_feeds=2)

@@ -103,6 +103,7 @@ __all__ = [
     "SteamTrap",
     "FlowElement",
     "StirredTankReactor",
+    "JacketedReactor",
     "GasHolder",
 ]
 
@@ -1374,6 +1375,30 @@ class StirredTankReactor(Reactor):
     outlet: Port
     vent: Port
     duty: Port
+
+
+class JacketedReactor(Reactor):
+    """Jacketed reactor: a stirred tank inside a heating or cooling jacket.
+
+    ``jacket_in`` is low on the jacket and ``jacket_out`` high on it.
+    ``n_feeds`` adds feed ports as on :class:`pandid.units.Reactor`.
+
+    Parameters are those of :class:`~pandid.units.Reactor`.
+    """
+
+    VARIANTS = ("default", "jacketed")
+    VARIANT_ALIASES = {"default": "jacketed"}
+    PORTS = [
+        ("outlet", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("jacket_in", "inlet", "utility"),
+        ("jacket_out", "outlet", "utility"),
+    ]
+
+    outlet: Port
+    vent: Port
+    jacket_in: Port
+    jacket_out: Port
 
 
 class GasHolder(Tank):

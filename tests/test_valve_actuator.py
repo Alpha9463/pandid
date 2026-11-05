@@ -27,16 +27,25 @@ def test_a_control_valve_draws_an_actuator():
 def test_the_actuator_stands_above_the_body_rather_than_inside_it():
     """Check that the control valve's actuator stands above the body and the run."""
     sym = default_registry.get("valve", "control")
-    assert (sym.width, sym.height) == (24.5, 19.8)
+    assert (sym.width, sym.height) == (24.5, 19.75)
     # The run passes through the body under the dome, below the middle of the box.
-    assert sym.ports["inlet"][1] == sym.ports["outlet"][1] == 12.4
+    assert sym.ports["inlet"][1] == sym.ports["outlet"][1] == 12.4425
     assert sym.ports["inlet"][1] > sym.height / 2
 
 
 def test_the_signal_still_lands_on_the_crown():
-    """Check that the actuator nozzle is at the top of the symbol."""
+    """Check that the actuator nozzle is on the body's axis at the top."""
     sym = default_registry.get("valve", "control")
-    assert sym.ports["actuator"] == (12.2, 0.0)
+    assert sym.ports["actuator"] == (sym.width / 2, 0.0)
+
+
+def test_a_balloon_over_a_valve_drops_its_signal_straight_onto_the_actuator(settled_gallery):
+    """Draw FIC-604's and FIC-605's signals into their actuators with no jog."""
+    fs = settled_gallery["13_tank_farm"][0]
+    for line in ("S18", "S21"):
+        stream = next(s for s in fs.streams if s.name == line)
+        assert stream.route is not None
+        assert len({x for x, _ in stream.route.waypoints}) == 1, stream.route.waypoints
 
 
 def test_the_old_drawing_keeps_its_place_under_its_own_name():

@@ -17,7 +17,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.gate_valve',
         trim=True,
     ), 'default')
@@ -25,7 +25,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_gate"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.gate_valve',
         trim=True,
     ), 'gate')
@@ -33,7 +33,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_globe"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 Z" fill="#111" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.globe_valve',
         trim=True,
     ), 'globe')
@@ -41,7 +41,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_ball"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.ball_valve',
         trim=True,
     ), 'ball')
@@ -49,15 +49,15 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_butterfly"><g transform="scale(0.25)"><ellipse cx="49.0" cy="30.0" rx="5.0" ry="5.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 60.0 L 0.0 0.0 L 45.0 27.5 M 53.0 32.5 L 98.0 60.0 L 98.0 0.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.butterfly_valve_1',
         trim=True,
     ), 'butterfly')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_check"><g transform="scale(0.25)"><path d="M 3.0 62.0 L 3.0 2.0 L 98.5 62.0 L 98.5 2.0" fill="none" stroke="#111" stroke-width="8.0"/><ellipse cx="3.0" cy="3.0" rx="3.0" ry="3.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 89.5 50.0 L 98.5 62.0 L 84.0 59.5 L 89.5 56.5 Z" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=24.6, height=15.5,
-        ports={'inlet': (0.7, 7.8), 'outlet': (24.6, 7.8), 'actuator': (12.3, 0.0)},
+        width=24.625, height=15.5,
+        ports={'inlet': (0.7388, 7.75), 'outlet': (24.625, 7.75), 'actuator': (12.3125, 0.0)},
         drawio_shape='mxgraph.pid.valves.check_valve_1',
         trim=True,
     ), 'check')
@@ -65,7 +65,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_saunders"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.diaphragm',
         trim=True,
     ), 'saunders')
@@ -73,47 +73,47 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_needle"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z M 49.0 5.0 L 49.0 55.0" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.needle',
         trim=True,
     ), 'needle')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_three_way"><g transform="scale(0.25)"><path d="M 19.0 79.0 L 49.0 30.0 L 98.0 0.0 L 98.0 60.0 L 0.0 0.0 L 0.0 60.0 L 49.0 30.0 L 79.0 79.0 Z" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=24.5, height=19.8,
-        ports={'inlet': (0.0, 7.6), 'outlet': (24.5, 7.6), 'actuator': (12.2, 0.0), 'branch': (12.2, 19.8)},
+        width=24.5, height=19.75,
+        ports={'inlet': (0.0, 7.6037), 'outlet': (24.5, 7.6037), 'actuator': (12.25, 0.0), 'branch': (12.25, 19.75)},
         drawio_shape='mxgraph.pid.valves.three-way_valve',
         trim=True,
     ), 'three_way')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_relief"><g transform="scale(0.375)"><path d="M 0.0 20.0 A 20.0 20.0 0.0 0 1 20.0 0.0 A 20.0 20.0 0.0 0 1 40.0 20.0 Z M 20.0 20.0 L 20.0 59.0" fill="white" stroke="#111" stroke-width="5.333"/><rect x="20.0" y="20.0" width="20.0" height="8.0" fill="none" stroke="#111" stroke-width="5.333"/></g></g>',
-        width=15.0, height=22.1,
-        ports={'inlet': (7.5, 22.1), 'outlet': (7.5, 0.0), 'actuator': (15.0, 9.0)},
+        width=15.0, height=22.125,
+        ports={'inlet': (7.5, 22.125), 'outlet': (7.5, 0.0), 'actuator': (15.0, 9.0)},
         drawio_shape='mxgraph.pid.valves.relief_prv',
         trim=True,
     ), 'relief')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_angle"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 30.0 30.0 L 79.0 0.0 L 79.0 60.0 L 30.0 30.0 L 60.0 79.0 Z" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=19.8, height=19.8,
-        ports={'inlet': (7.5, 19.8), 'outlet': (19.8, 7.5), 'actuator': (7.5, 0.0)},
+        width=19.75, height=19.75,
+        ports={'inlet': (7.505, 19.75), 'outlet': (19.75, 7.505), 'actuator': (7.5, 0.0)},
         drawio_shape='mxgraph.pid.valves.angle',
         trim=True,
     ), 'angle')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_psv"><g transform="scale(0.35714285714285715)"><path d="M 0.0 94.5 L 21.0 60.0 L 55.5 39.0 L 55.5 81.0 L 21.0 60.0 L 42.0 94.5 Z M 21.0 61.0 L 21.0 0.0 M 6.0 39.0 L 36.0 19.0 M 6.0 32.0 L 36.0 12.0 M 6.0 25.0 L 36.0 5.0" fill="white" stroke="#111" stroke-width="5.6"/></g></g>',
-        width=19.8, height=33.8,
-        ports={'inlet': (7.5, 33.8), 'outlet': (19.8, 21.6), 'actuator': (7.5, 0.0)},
+        width=19.8214, height=33.75,
+        ports={'inlet': (7.5321, 33.75), 'outlet': (19.8214, 21.6), 'actuator': (7.5, 0.0)},
         drawio_shape='mxgraph.pid.valves.safety_psv_1',
         trim=True,
     ), 'psv')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_bleed"><g transform="scale(0.25)"><path d="M 0.0 75.0 L 25.0 75.0 L 0.0 35.0 L 25.0 35.0 Z M 12.5 0.0 L 12.5 35.0" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=6.2, height=18.8,
-        ports={'inlet': (3.1, 0.0), 'outlet': (3.1, 18.8), 'actuator': (6.0, 0.0)},
+        width=6.25, height=18.75,
+        ports={'inlet': (3.125, 0.0), 'outlet': (3.125, 18.75), 'actuator': (6.0, 0.0)},
         drawio_shape='mxgraph.pid.valves.bleeder_valve_1',
         trim=True,
     ), 'bleed')
@@ -121,7 +121,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_plug"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z M 16.5 10.0 L 81.5 10.0 M 16.5 50.0 L 81.5 50.0" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.plug',
         trim=True,
     ), 'plug')
@@ -129,55 +129,55 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_pinch"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 31.5 10.0 L 49.0 20.7 L 66.5 10.0 M 31.5 50.0 L 49.0 39.3 L 66.5 50.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.pinch_valve',
         trim=True,
     ), 'pinch')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_motor"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">M</text><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">M</text></g></g>',
-        width=24.5, height=22.2,
-        ports={'inlet': (0.0, 14.9), 'outlet': (24.5, 14.9), 'actuator': (12.2, 0.0)},
+        width=24.5, height=22.25,
+        ports={'inlet': (0.0, 14.9075), 'outlet': (24.5, 14.9075), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.motor_operated_valve',
         trim=True,
     ), 'motor')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_solenoid"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">S</text><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">S</text></g></g>',
-        width=24.5, height=22.2,
-        ports={'inlet': (0.0, 14.9), 'outlet': (24.5, 14.9), 'actuator': (12.2, 0.0)},
+        width=24.5, height=22.25,
+        ports={'inlet': (0.0, 14.9075), 'outlet': (24.5, 14.9075), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.solenoid_valve_closed',
         trim=True,
     ), 'solenoid')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_hydraulic"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">H</text><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">H</text></g></g>',
-        width=24.5, height=22.2,
-        ports={'inlet': (0.0, 14.9), 'outlet': (24.5, 14.9), 'actuator': (12.2, 0.0)},
+        width=24.5, height=22.25,
+        ports={'inlet': (0.0, 14.9075), 'outlet': (24.5, 14.9075), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.hydraulic_valve',
         trim=True,
     ), 'hydraulic')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_control"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=24.5, height=19.8,
-        ports={'inlet': (0.0, 12.4), 'outlet': (24.5, 12.4), 'actuator': (12.2, 0.0)},
+        width=24.5, height=19.75,
+        ports={'inlet': (0.0, 12.4425), 'outlet': (24.5, 12.4425), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.pneumatic_operated',
         trim=True,
     ), 'control')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_manual"><g transform="scale(0.25)"><path d="M 0.0 65.0 L 0.0 5.0 L 98.0 65.0 L 98.0 5.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 35.0 L 49.0 0.0 L 79.0 0.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=24.5, height=16.2,
-        ports={'inlet': (0.0, 8.8), 'outlet': (24.5, 8.8), 'actuator': (12.2, 0.0)},
+        width=24.5, height=16.25,
+        ports={'inlet': (0.0, 8.775), 'outlet': (24.5, 8.775), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.manual_operated_valve',
         trim=True,
     ), 'manual')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_knife"><g transform="scale(0.25)"><rect x="35.0" y="15.0" width="30.0" height="70.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 45.0 L 35.0 45.0 M 65.0 45.0 L 100.0 45.0 M 30.0 0.0 L 70.0 0.0 M 50.0 0.0 L 50.0 60.0 M 60.0 50.0 L 50.0 80.0 L 40.0 50.0 L 50.0 60.0 Z" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=25.0, height=21.2,
-        ports={'inlet': (0.0, 11.3), 'outlet': (25.0, 11.3), 'actuator': (12.5, 0.0)},
+        width=25.0, height=21.25,
+        ports={'inlet': (0.0, 11.2625), 'outlet': (25.0, 11.2625), 'actuator': (12.5, 0.0)},
         drawio_shape='mxgraph.pid.valves.knife_valve',
         trim=True,
     ), 'knife')
@@ -185,7 +185,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_butterfly_pneumatic"><g transform="scale(0.4083333333333333, 0.375)"><rect x="0.0" y="40.0" width="60.0" height="40.0" fill="white" stroke="#111" stroke-width="5.111"/><path d="M 30.0 20.0 L 30.0 52.0 M 10.0 20.0 A 20.0 20.0 0.0 0 1 30.0 0.0 A 20.0 20.0 0.0 0 1 50.0 20.0 Z M 5.0 75.0 L 55.0 45.0" fill="white" stroke="#111" stroke-width="5.111"/><ellipse cx="30.0" cy="60.0" rx="4.0" ry="4.0" fill="white" stroke="#111" stroke-width="5.111"/></g></g>',
         width=24.5, height=30.0,
-        ports={'inlet': (0.0, 22.5), 'outlet': (24.5, 22.5), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 22.5), 'outlet': (24.5, 22.5), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.pneumatic_operated_butterfly_valve',
         trim=True,
     ), 'butterfly_pneumatic')
@@ -193,7 +193,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_regulator"><g transform="scale(0.25)"><path d="M 0.0 94.0 L 0.0 35.0 L 98.0 94.0 L 98.0 35.0 Z M 49.0 35.0 L 49.0 64.0 M 29.0 35.0 A 20.0 20.0 0.0 0 1 49.0 15.0 A 20.0 20.0 0.0 0 1 69.0 35.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 0.0 L 97.5 0.0 L 49.0 64.5" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=23.5,
-        ports={'inlet': (0.0, 16.1), 'outlet': (24.5, 16.1), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 16.0975), 'outlet': (24.5, 16.0975), 'actuator': (12.25, 0.0)},
         drawio_shape='mxgraph.pid.valves.back_pressure_regulator_1',
         trim=True,
     ), 'regulator')
@@ -214,8 +214,8 @@ def register_vendored(registry):
 
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_screw"><path d="M 12.0 53.97 L 0.0 66.97 L 60.0 66.97 L 48.0 53.97" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 24.97 A 30.0 30.0 0.0 0 1 30.175 0.0018 A 30.0 30.0 0.0 0 1 59.75 24.97 L 70.0 24.97 L 70.0 34.97 L 59.75 34.97 A 30.0 30.0 0.0 0 1 30.175 59.9382 A 30.0 30.0 0.0 0 1 0.6 34.97" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 7.7 40.77 A 13.0 13.0 0.0 0 0 30.0 29.97 A 13.0 13.0 0.0 0 1 52.4 18.97" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=70.0, height=67.0,
-        ports={'suction': (0.7, 30.1), 'discharge': (70.0, 30.1)},
+        width=70.0, height=66.97,
+        ports={'suction': (0.7, 30.1365), 'discharge': (70.0, 30.1365)},
         drawio_shape='mxgraph.pid.pumps.screw_pump',
     ), 'screw')
 
@@ -250,14 +250,14 @@ def register_vendored(registry):
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 4.5 7.5 0.0 0 1 0.0 22.5 A 4.5 7.5 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 91.5 15.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=33.0,
-        ports={'shell_in': (45.8, 30.0), 'shell_out': (64.0, 0.0), 'tube_in': (0.0, 22.5), 'tube_out': (91.5, 15.0), 'bottoms': (85.0, 30.0)},
+        ports={'shell_in': (45.75, 30.0), 'shell_out': (64.0, 0.0), 'tube_in': (0.0, 22.5), 'tube_out': (91.5, 15.0), 'bottoms': (85.0, 30.0)},
         drawio_shape='mxgraph.pid.heat_exchangers.reboiler',
     ), 'kettle')
 
     registry.register('heater', Symbol(
         svg='<g id="sym_heater"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 4.5 70.0 L 0.0 80.0 L 10.0 75.5 L 5.0 75.0 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
-        ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'utility_in': (40.0, 70.1)},
+        ports={'inlet': (9.92, 40.0), 'outlet': (70.08, 40.0), 'utility_in': (40.0, 70.08)},
         drawio_shape='mxgraph.pid.heat_exchangers.heater',
         directional=True,
     ), 'default')
@@ -265,7 +265,7 @@ def register_vendored(registry):
     registry.register('cooler', Symbol(
         svg='<g id="sym_cooler"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
-        ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'utility_out': (40.0, 9.9)},
+        ports={'inlet': (9.92, 40.0), 'outlet': (70.08, 40.0), 'utility_out': (40.0, 9.92)},
         drawio_shape='mxgraph.pid.heat_exchangers.condenser',
         directional=True,
     ), 'default')
@@ -316,11 +316,11 @@ def register_vendored(registry):
 
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=52.0, height=95.4,
-        ports={'outlet': (26.0, 95.4), 'duty': (52.0, 47.7), 'vent': (46.0, 10.0)},
+        width=52.0, height=95.38,
+        ports={'outlet': (26.0, 95.38), 'jacket_in': (52.0, 72.7), 'jacket_out': (52.0, 22.7), 'vent': (46.0, 10.0)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.34, at=47.7, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.34, at=47.69, singular='feed'),),
     ), 'jacketed')
 
     registry.register('separator', Symbol(
@@ -334,8 +334,8 @@ def register_vendored(registry):
 
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_knockout"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=51.0, height=95.4,
-        ports={'vapor': (25.0, 0.0), 'liquid': (25.0, 95.4)},
+        width=51.0, height=95.38,
+        ports={'vapor': (25.0, 0.0), 'liquid': (25.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.knock-out_drum',
         gravity_fixed=True,
         port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.52, at=55.0, singular='feed'),),
@@ -343,8 +343,8 @@ def register_vendored(registry):
 
     registry.register('tank', Symbol(
         svg='<g id="sym_tank"><rect x="0.0" y="25.46" width="100.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=100.0, height=95.5,
-        ports={'inlet': (0.0, 85.0), 'outlet': (50.0, 95.5), 'vent': (35.0, 7.9), 'relief': (65.0, 7.9), 'drain': (20.0, 95.5)},
+        width=100.0, height=95.46,
+        ports={'inlet': (0.0, 85.0), 'outlet': (50.0, 95.46), 'vent': (35.0, 7.9), 'relief': (65.0, 7.9), 'drain': (20.0, 95.46)},
         drawio_shape='mxgraph.pid.vessels.tank_(dished_roof)',
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 85.0), 'E': (100.0, 85.0), 'N': (50.0, 6.4)}},
@@ -364,7 +364,7 @@ def register_vendored(registry):
     registry.register('reducer', Symbol(
         svg='<g id="sym_reducer"><g transform="scale(0.625)"><path d="M 0.0 0.0 L 20.0 5.0 L 20.0 15.0 L 0.0 20.0 Z" fill="white" stroke="#111" stroke-width="3.2"/></g></g>',
         width=12.5, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (12.5, 6.2)},
+        ports={'inlet': (0.0, 6.25), 'outlet': (12.5, 6.25)},
         drawio_shape='mxgraph.pid.piping.concentric_reducer',
         trim=True,
     ), 'default')
@@ -372,15 +372,15 @@ def register_vendored(registry):
     registry.register('reducer', Symbol(
         svg='<g id="sym_reducer_concentric"><g transform="scale(0.625)"><path d="M 0.0 0.0 L 20.0 5.0 L 20.0 15.0 L 0.0 20.0 Z" fill="white" stroke="#111" stroke-width="3.2"/></g></g>',
         width=12.5, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (12.5, 6.2)},
+        ports={'inlet': (0.0, 6.25), 'outlet': (12.5, 6.25)},
         drawio_shape='mxgraph.pid.piping.concentric_reducer',
         trim=True,
     ), 'concentric')
 
     registry.register('reducer', Symbol(
         svg='<g id="sym_reducer_eccentric"><g transform="scale(0.8333333333333334)"><path d="M 0.0 0.0 L 20.0 0.0 L 20.0 10.0 L 0.0 15.0 Z" fill="white" stroke="#111" stroke-width="2.4"/></g></g>',
-        width=16.7, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (16.7, 3.8)},
+        width=16.6667, height=12.5,
+        ports={'inlet': (0.0, 6.25), 'outlet': (16.6667, 3.75)},
         drawio_shape='mxgraph.pid.piping.eccentric_reducer',
         trim=True,
     ), 'eccentric')
@@ -388,7 +388,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 0.0 50.0 M 20.0 0.0 L 20.0 50.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=5.0, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (5.0, 6.2)},
+        ports={'inlet': (0.0, 6.25), 'outlet': (5.0, 6.25)},
         drawio_shape='mxgraph.pid.fittings.flanged_connection',
         trim=True,
     ), 'default')
@@ -396,7 +396,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_flange"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 0.0 50.0 M 20.0 0.0 L 20.0 50.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=5.0, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (5.0, 6.2)},
+        ports={'inlet': (0.0, 6.25), 'outlet': (5.0, 6.25)},
         drawio_shape='mxgraph.pid.fittings.flanged_connection',
         trim=True,
     ), 'flange')
@@ -428,7 +428,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_sight_glass"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="100.0" height="50.0" fill="white" stroke="#111" stroke-width="8.0"/><ellipse cx="50.0" cy="25.0" rx="25.0" ry="25.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=25.0, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (25.0, 6.2)},
+        ports={'inlet': (0.0, 6.25), 'outlet': (25.0, 6.25)},
         drawio_shape='mxgraph.pid.fittings.viewing_glass',
         trim=True,
     ), 'sight_glass')
@@ -436,7 +436,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_sight_glass_lit"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="100.0" height="50.0" fill="white" stroke="#111" stroke-width="8.0"/><ellipse cx="50.0" cy="25.0" rx="25.0" ry="25.0" fill="none" stroke="#111" stroke-width="8.0"/><ellipse cx="50.0" cy="75.0" rx="25.0" ry="25.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 32.0 57.0 L 68.0 93.0 M 32.0 93.0 L 68.0 57.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=25.0, height=25.0,
-        ports={'inlet': (0.0, 6.2), 'outlet': (25.0, 6.2)},
+        ports={'inlet': (0.0, 6.25), 'outlet': (25.0, 6.25)},
         drawio_shape='mxgraph.pid.fittings.viewing_glass_(lighting)',
         trim=True,
     ), 'sight_glass_lit')
@@ -508,7 +508,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_hose"><g transform="scale(0.25)"><path d="M 0.0 15.0 A 15.0 15.0 0.0 0 1 15.0 0.0 A 15.0 15.0 0.0 0 1 30.0 15.0 A 15.0 15.0 0.0 0 0 45.0 30.0 A 15.0 15.0 0.0 0 0 60.0 15.0 A 15.0 15.0 0.0 0 1 75.0 0.0 A 15.0 15.0 0.0 0 1 90.0 15.0 A 15.0 15.0 0.0 0 0 105.0 30.0 A 15.0 15.0 0.0 0 0 120.0 15.0 A 15.0 15.0 0.0 0 1 135.0 0.0 A 15.0 15.0 0.0 0 1 150.0 15.0 A 15.0 15.0 0.0 0 0 165.0 30.0 A 15.0 15.0 0.0 0 0 180.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=45.0, height=7.5,
-        ports={'inlet': (0.0, 3.8), 'outlet': (45.0, 3.8)},
+        ports={'inlet': (0.0, 3.75), 'outlet': (45.0, 3.75)},
         drawio_shape='mxgraph.pid.fittings.hose',
         trim=True,
     ), 'hose')
@@ -523,8 +523,8 @@ def register_vendored(registry):
 
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_rotameter"><g transform="scale(0.25)"><path d="M 51.5 9.0 L 75.0 30.0 L 51.5 51.0" fill="white" stroke="#111" stroke-width="8.0"/><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=18.8, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (18.8, 7.5)},
+        width=18.75, height=15.0,
+        ports={'inlet': (0.0, 7.5), 'outlet': (18.75, 7.5)},
         drawio_shape='mxgraph.pid.valves.rotameter',
         trim=True,
     ), 'rotameter')
@@ -549,7 +549,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_flow_nozzle"><g transform="scale(0.5)"><path d="M 0.0 0.0 A 50.0 10.0 0.0 0 0 19.0403 5.2028 A 50.0 10.0 0.0 0 0 50.0 7.0 L 50.0 18.0 A 50.0 10.0 0.0 0 0 19.0403 19.7972 A 50.0 10.0 0.0 0 0 0.0 25.0 Z" fill="white" stroke="#111" stroke-width="4.0"/></g></g>',
         width=25.0, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (25.0, 6.2)},
+        ports={'inlet': (0.0, 6.25), 'outlet': (25.0, 6.25)},
         drawio_shape='mxgraph.pid.flow_sensors.flow_nozzle',
         trim=True,
     ), 'flow_nozzle')
@@ -637,7 +637,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_strainer_y"><g transform="scale(0.5)"><path d="M 0.0 10.0 L 50.0 10.0 M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0 M 25.0 10.0 L 45.0 30.0 M 40.0 34.0 L 50.0 25.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=25.0, height=17.0,
-        ports={'inlet': (0.0, 4.9), 'outlet': (25.0, 4.9)},
+        ports={'inlet': (0.0, 4.93), 'outlet': (25.0, 4.93)},
         drawio_shape='mxgraph.pid.piping.y-type_strainer',
         trim=True,
     ), 'strainer_y')
@@ -645,7 +645,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_strainer_basket"><g transform="scale(0.5)"><path d="M 40.0 0.0 L 40.0 30.0 A 15.0 15.0 0.0 0 1 25.0 45.0 A 15.0 15.0 0.0 0 1 10.0 30.0 L 10.0 0.0 Z M 50.0 15.0 L 50.0 35.0 M 0.0 15.0 L 0.0 35.0 M 0.0 25.0 L 10.0 25.0 M 40.0 25.0 L 50.0 25.0" fill="white" stroke="#111" stroke-width="4.0"/></g></g>',
         width=25.0, height=22.5,
-        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+        ports={'inlet': (0.0, 12.4875), 'outlet': (25.0, 12.4875)},
         drawio_shape='mxgraph.pid.piping.basket_strainer',
         trim=True,
     ), 'strainer_basket')
@@ -677,7 +677,7 @@ def register_vendored(registry):
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_spool"><g transform="scale(0.5)"><path d="M 0.0 10.0 L 50.0 10.0 M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=25.0, height=15.0,
-        ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
+        ports={'inlet': (0.0, 5.025), 'outlet': (25.0, 5.025)},
         drawio_shape='mxgraph.pid.piping.removable_spool',
         trim=True,
     ), 'spool')
@@ -708,8 +708,8 @@ def register_vendored(registry):
 
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_u_tube"><path d="M 15.0 24.0 L 15.0 30.0 L 0.0 30.0 L 0.0 0.0 L 15.0 0.0 L 15.0 6.0 L 85.0 6.0 A 6.75 9.0 0.0 0 1 91.75 15.0 A 6.75 9.0 0.0 0 1 85.0 24.0 L 15.0 24.0 Z M 15.0 6.0 L 15.0 24.0 M 0.0 15.0 L 15.0 15.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=91.8, height=30.0,
-        ports={'tube_in': (0.0, 7.5), 'tube_out': (0.0, 22.5), 'shell_in': (45.9, 6.0), 'shell_out': (45.9, 24.0)},
+        width=91.75, height=30.0,
+        ports={'tube_in': (0.0, 7.5), 'tube_out': (0.0, 22.5), 'shell_in': (45.875, 6.0), 'shell_out': (45.875, 24.0)},
         drawio_shape='mxgraph.pid.heat_exchangers.u-tube_heat_exchanger',
     ), 'u_tube')
 
@@ -723,7 +723,7 @@ def register_vendored(registry):
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_condenser"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
-        ports={'tube_in': (9.9, 40.0), 'tube_out': (70.1, 40.0), 'shell_in': (40.0, 9.9), 'shell_out': (40.0, 70.1)},
+        ports={'tube_in': (9.92, 40.0), 'tube_out': (70.08, 40.0), 'shell_in': (40.0, 9.92), 'shell_out': (40.0, 70.08)},
         drawio_shape='mxgraph.pid.heat_exchangers.condenser',
         directional=True,
     ), 'condenser')
@@ -758,7 +758,7 @@ def register_vendored(registry):
 
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_hairpin"><path d="M 5.0 6.0 L 15.0 6.0 L 15.0 0.0 L 20.0 0.0 L 20.0 6.0 L 70.0 6.0 L 70.0 0.0 L 75.0 0.0 L 75.0 6.0 L 85.0 6.0 A 6.75 9.0 0.0 0 1 91.75 15.0 A 6.75 9.0 0.0 0 1 85.0 24.0 L 75.0 24.0 L 75.0 30.0 L 70.0 30.0 L 70.0 24.0 L 20.0 24.0 L 20.0 30.0 L 15.0 30.0 L 15.0 24.0 L 5.0 24.0 L 0.0 23.0 L 0.0 20.0 L 5.0 19.0 L 83.0 19.0 A 3.5 4.0 0.0 0 0 86.5 15.0 A 3.5 4.0 0.0 0 0 83.0 11.0 L 5.0 11.0 L 0.0 10.0 L 0.0 7.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 5.0 3.0 L 5.0 14.0 M 5.0 16.0 L 5.0 27.0 M 15.0 6.0 L 20.0 6.0 M 70.0 6.0 L 75.0 6.0 M 75.0 24.0 L 70.0 24.0 M 20.0 24.0 L 15.0 24.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 2.0 8.0 L 2.0 9.5 M 3.0 7.0 L 3.0 9.0 M 2.0 21.0 L 2.0 22.5 M 3.0 20.0 L 3.0 22.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=91.8, height=30.0,
+        width=91.75, height=30.0,
         ports={'tube_in': (0.0, 8.5), 'tube_out': (0.0, 21.5), 'shell_in': (72.5, 0.0), 'shell_out': (17.5, 30.0)},
         drawio_shape='mxgraph.pid.heat_exchangers.hairpin_exchanger',
     ), 'hairpin')
@@ -772,8 +772,8 @@ def register_vendored(registry):
 
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_vacuum"><path d="M 0.0 22.97 L 14.5 22.97 L 14.5 14.97 L 26.6 14.97 A 25.0 25.0 0.0 0 1 72.4 14.97 L 84.5 14.97 L 84.5 22.97 L 99.0 22.97 L 99.0 26.97 L 84.5 26.97 L 84.5 34.97 L 72.4 34.97 A 25.0 25.0 0.0 0 1 26.6 34.97 L 14.5 34.97 L 14.5 26.97 L 0.0 26.97 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 14.5 22.97 L 14.5 26.97 M 84.5 22.97 L 84.5 26.97 M 26.6 34.97 A 25.0 25.0 0.0 0 1 26.6 14.97 M 72.4 14.97 A 25.0 25.0 0.0 0 1 72.4 34.97" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=99.0, height=49.9,
-        ports={'suction': (0.0, 25.0), 'discharge': (99.0, 25.0)},
+        width=99.0, height=49.94,
+        ports={'suction': (0.0, 24.97), 'discharge': (99.0, 24.97)},
         drawio_shape='mxgraph.pid.pumps.vacuum_pump',
     ), 'vacuum')
 
@@ -786,15 +786,15 @@ def register_vendored(registry):
 
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_submersible"><path d="M 96.77 40.0 A 20.0 20.0 0.0 0 1 96.77 70.0 L 6.77 70.0 A 20.0 20.0 0.0 0 1 6.77 40.0 Z M 76.77 31.5 L 96.77 31.5 M 86.77 31.5 L 86.77 40.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="16.77" y="70.0" width="70.0" height="4.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="31.77" y="5.0" width="40.0" height="35.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="44.77" y="0.0" width="14.0" height="5.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=103.5, height=74.0,
-        ports={'suction': (51.8, 74.0), 'discharge': (96.8, 31.5)},
+        width=103.54, height=74.0,
+        ports={'suction': (51.77, 74.0), 'discharge': (96.77, 31.5)},
         drawio_shape='mxgraph.pid.pumps.submersible_pump',
     ), 'submersible')
 
     registry.register('compressor', Symbol(
         svg='<g id="sym_compressor_rotary"><path d="M 7.5 82.0 L 0.0 91.0 L 42.0 91.0 L 34.4 82.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 41.0 10.0 L 41.0 75.0 A 20.0 10.0 0.0 0 1 21.0 85.0 A 20.0 10.0 0.0 0 1 1.0 75.0 L 1.0 10.0 A 20.0 10.0 0.0 0 1 21.0 0.0 A 20.0 10.0 0.0 0 1 41.0 10.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="21.0" cy="23.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="21.0" cy="60.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=42.0, height=91.0,
-        ports={'suction': (0.8, 45.5), 'discharge': (21.0, 0.0)},
+        ports={'suction': (0.84, 45.5), 'discharge': (21.0, 0.0)},
         drawio_shape='mxgraph.pid.compressors.rotary_compressor',
     ), 'rotary')
 
@@ -807,8 +807,8 @@ def register_vendored(registry):
 
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_dished"><path d="M 50.0 7.69 L 50.0 87.69 A 20.0 7.6923 0.0 0 1 30.0 95.3823 A 20.0 7.6923 0.0 0 1 10.0 87.69 L 10.0 7.69 A 20.0 7.6923 0.0 0 1 30.0 -0.0023 A 20.0 7.6923 0.0 0 1 50.0 7.69 Z M 10.0 7.69 L 50.0 7.69 M 10.0 87.69 L 50.0 87.69 M 50.0 62.69 L 60.0 72.69 L 50.0 72.69 Z M 10.0 62.69 L 0.0 72.69 L 10.0 72.69 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=60.0, height=95.4,
-        ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0), 'vent': (30.0, 0.0), 'relief': (18.0, 1.5), 'drain': (30.0, 95.4)},
+        width=60.0, height=95.38,
+        ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0), 'vent': (30.0, 0.0), 'relief': (18.0, 1.5), 'drain': (30.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_brackets)',
         gravity_fixed=True,
         bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
@@ -816,8 +816,8 @@ def register_vendored(registry):
 
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_dome"><path d="M 87.69 14.93 A 7.6923 20.0 179.97 0 1 95.3923 34.9272 A 7.6923 20.0 179.97 0 1 87.71 54.93 L 7.71 54.97 A 7.6923 20.0 179.97 0 1 0.0077 34.9728 A 7.6923 20.0 179.97 0 1 7.69 14.97 L 52.69 14.94 L 52.68 4.94 A 10.0 5.0 179.97 0 1 62.6779 -0.065 A 10.0 5.0 179.97 0 1 72.68 4.93 L 72.69 14.93 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=95.4, height=55.0,
-        ports={'inlet': (0.0, 27.0), 'outlet': (95.4, 27.0), 'vent': (62.7, 0.0), 'relief': (30.0, 15.0), 'drain': (47.7, 55.0)},
+        width=95.38, height=55.0,
+        ports={'inlet': (0.0, 27.0), 'outlet': (95.38, 27.0), 'vent': (62.7, 0.0), 'relief': (30.0, 15.0), 'drain': (47.69, 55.0)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dome)',
         gravity_fixed=True,
         bands={'W': (27.0, 27.0), 'E': (27.0, 27.0)},
@@ -825,8 +825,8 @@ def register_vendored(registry):
 
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=52.0, height=95.4,
-        ports={'inlet': (0.0, 47.7), 'outlet': (52.0, 47.7), 'vent': (26.0, 0.0), 'relief': (14.0, 1.5), 'drain': (26.0, 95.4)},
+        width=52.0, height=95.38,
+        ports={'inlet': (0.0, 47.69), 'outlet': (52.0, 47.69), 'vent': (26.0, 0.0), 'relief': (14.0, 1.5), 'drain': (26.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         gravity_fixed=True,
         bands={'W': (22.7, 72.7), 'E': (22.7, 72.7)},
@@ -834,8 +834,8 @@ def register_vendored(registry):
 
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_insulated"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69 M 0.0 12.69 L 0.0 82.69 M 52.0 12.69 L 52.0 82.69 M 6.0 12.69 L 0.0 18.69 M 6.0 17.69 L 0.0 23.69 M 6.0 22.69 L 0.0 28.69 M 6.0 27.69 L 0.0 33.69 M 6.0 32.69 L 0.0 38.69 M 6.0 37.69 L 0.0 43.69 M 6.0 42.69 L 0.0 48.69 M 6.0 47.69 L 0.0 53.69 M 6.0 52.69 L 0.0 58.69 M 6.0 57.69 L 0.0 63.69 M 6.0 62.69 L 0.0 68.69 M 6.0 67.69 L 0.0 73.69 M 6.0 72.69 L 0.0 78.69 M 6.0 77.69 L 1.0 82.69 M 52.0 12.69 L 46.0 18.69 M 52.0 17.69 L 46.0 23.69 M 52.0 22.69 L 46.0 28.69 M 52.0 27.69 L 46.0 33.69 M 52.0 32.69 L 46.0 38.69 M 52.0 37.69 L 46.0 43.69 M 52.0 42.69 L 46.0 48.69 M 52.0 47.69 L 46.0 53.69 M 52.0 52.69 L 46.0 58.69 M 52.0 57.69 L 46.0 63.69 M 52.0 62.69 L 46.0 68.69 M 52.0 67.69 L 46.0 73.69 M 52.0 72.69 L 46.0 78.69 M 52.0 77.69 L 47.0 82.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=52.0, height=95.4,
-        ports={'inlet': (0.0, 47.7), 'outlet': (52.0, 47.7), 'vent': (26.0, 0.0), 'relief': (14.0, 1.5), 'drain': (26.0, 95.4)},
+        width=52.0, height=95.38,
+        ports={'inlet': (0.0, 47.69), 'outlet': (52.0, 47.69), 'vent': (26.0, 0.0), 'relief': (14.0, 1.5), 'drain': (26.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_thermal_insulation)',
         gravity_fixed=True,
         bands={'W': (22.7, 72.7), 'E': (22.7, 72.7)},
@@ -843,8 +843,8 @@ def register_vendored(registry):
 
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_electrical_heating"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="white" stroke="#111" stroke-width="2.0"/><rect x="44.0" y="37.69" width="6.0" height="20.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 47.0 27.69 L 47.0 37.69 M 47.0 57.69 L 47.0 67.69 M 44.0 42.69 L 50.0 42.69 M 44.0 47.69 L 50.0 47.69 M 44.0 52.69 L 50.0 52.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=50.0, height=95.4,
-        ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 77.7), 'vent': (20.0, 0.0), 'relief': (8.0, 1.5), 'drain': (20.0, 95.4)},
+        width=50.0, height=95.38,
+        ports={'inlet': (0.0, 47.69), 'outlet': (40.0, 77.7), 'vent': (20.0, 0.0), 'relief': (8.0, 1.5), 'drain': (20.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_electrical_heating)',
         gravity_fixed=True,
         bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
@@ -901,8 +901,8 @@ def register_vendored(registry):
 
     registry.register('tank', Symbol(
         svg='<g id="sym_tank_dished_roof_conical_bottom"><path d="M 0.0 95.46 L 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 L 100.0 95.46 L 50.0 125.46 Z M 0.0 25.46 L 100.0 25.46 M 0.0 95.46 L 100.0 95.46" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=100.0, height=125.5,
-        ports={'inlet': (50.0, 6.4), 'outlet': (50.0, 125.5), 'vent': (35.0, 7.9), 'relief': (65.0, 7.9), 'drain': (35.0, 116.5)},
+        width=100.0, height=125.46,
+        ports={'inlet': (50.0, 6.4), 'outlet': (50.0, 125.46), 'vent': (35.0, 7.9), 'relief': (65.0, 7.9), 'drain': (35.0, 116.5)},
         drawio_shape='mxgraph.pid.vessels.tank_(dished_roof,_conical_bottom)',
         gravity_fixed=True,
         port_faces={'inlet': {'N': (50.0, 6.4), 'W': (0.0, 85.0), 'E': (100.0, 85.0)}},
@@ -928,21 +928,21 @@ def register_vendored(registry):
 
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.7692 15.0 0.0 0 0 91.5392 15.0 A 5.7692 15.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.7692 15.0 0.0 0 0 0.0008 15.0 A 5.7692 15.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=91.5, height=30.0,
+        width=91.54, height=30.0,
         ports={'inlet': (0.0, 15.0), 'outlet': (68.0, 30.0), 'vent': (55.0, 0.0), 'relief': (30.0, 0.0), 'drain': (25.0, 30.0)},
         drawio_shape='mxgraph.pid.vessels.drum_or_condenser',
         gravity_fixed=True,
-        port_faces={'inlet': {'W': (0.0, 15.0), 'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
+        port_faces={'inlet': {'W': (0.0, 15.0), 'N': (20.0, 0.0), 'E': (91.54, 15.0)}},
         bands={'N': (15.8, 75.8), 'S': (15.8, 75.8), 'W': (15.0, 15.0), 'E': (15.0, 15.0)},
     ), 'horizontal')
 
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.7692 15.0 0.0 0 0 91.5392 15.0 A 5.7692 15.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.7692 15.0 0.0 0 0 0.0008 15.0 A 5.7692 15.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=91.5, height=30.0,
+        width=91.54, height=30.0,
         ports={'feed': (0.0, 15.0), 'vapor': (30.0, 0.0), 'liquid': (68.0, 30.0)},
         drawio_shape='mxgraph.pid.vessels.drum_or_condenser',
         gravity_fixed=True,
-        port_faces={'feed': {'W': (0.0, 15.0), 'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
+        port_faces={'feed': {'W': (0.0, 15.0), 'N': (20.0, 0.0), 'E': (91.54, 15.0)}},
     ), 'horizontal')
 
     registry.register('separator', Symbol(
@@ -1084,7 +1084,7 @@ def register_vendored(registry):
     registry.register('furnace', Symbol(
         svg='<g id="sym_furnace"><path d="M 25.0 0.0 L 55.0 0.0 L 55.0 34.5 L 70.0 44.5 L 70.0 99.0 L 60.0 99.0 L 60.0 89.5 L 20.0 89.5 L 20.0 99.0 L 10.0 99.0 L 10.0 44.5 L 25.0 34.5 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 25.0 34.5 L 55.0 34.5 M 10.0 44.5 L 70.0 44.5 M 10.0 89.5 L 70.0 89.5 M 0.0 54.5 L 55.0 54.5 L 25.0 79.5 L 80.0 79.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=99.0,
-        ports={'inlet': (0.0, 54.5), 'outlet': (80.0, 79.5), 'fuel': (40.0, 89.6)},
+        ports={'inlet': (0.0, 54.5), 'outlet': (80.0, 79.5), 'fuel': (40.0, 89.595)},
         drawio_shape='mxgraph.pid.vessels.furnace',
     ), 'default')
 
@@ -1098,7 +1098,7 @@ def register_vendored(registry):
     registry.register('cooling_tower', Symbol(
         svg='<g id="sym_cooling_tower"><path d="M 24.0 70.0 L 19.0 60.0 L 24.0 60.0 L 0.0 10.0 L 34.0 10.0 L 34.0 0.0 L 64.0 0.0 L 64.0 10.0 L 98.0 10.0 L 74.0 60.0 L 79.0 60.0 L 74.0 70.0 Z M 34.0 10.0 L 64.0 10.0 M 24.0 60.0 L 74.0 60.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=98.0, height=70.0,
-        ports={'water_in': (4.8, 20.0), 'water_out': (49.0, 70.0), 'air_in': (86.2, 35.0), 'air_out': (49.0, 0.0), 'makeup': (28.0, 70.0), 'blowdown': (70.0, 70.0)},
+        ports={'water_in': (4.8, 20.0), 'water_out': (49.0, 70.0), 'air_in': (86.24, 35.0), 'air_out': (49.0, 0.0), 'makeup': (28.0, 70.0), 'blowdown': (70.0, 70.0)},
         drawio_shape='mxgraph.pid.vessels.induced-draft_cooling_tower',
         gravity_fixed=True,
     ), 'default')
@@ -1106,7 +1106,7 @@ def register_vendored(registry):
     registry.register('cooling_tower', Symbol(
         svg='<g id="sym_cooling_tower_induced_draft"><path d="M 24.0 70.0 L 19.0 60.0 L 24.0 60.0 L 0.0 10.0 L 34.0 10.0 L 34.0 0.0 L 64.0 0.0 L 64.0 10.0 L 98.0 10.0 L 74.0 60.0 L 79.0 60.0 L 74.0 70.0 Z M 34.0 10.0 L 64.0 10.0 M 24.0 60.0 L 74.0 60.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=98.0, height=70.0,
-        ports={'water_in': (4.8, 20.0), 'water_out': (49.0, 70.0), 'air_in': (86.2, 35.0), 'air_out': (49.0, 0.0), 'makeup': (28.0, 70.0), 'blowdown': (70.0, 70.0)},
+        ports={'water_in': (4.8, 20.0), 'water_out': (49.0, 70.0), 'air_in': (86.24, 35.0), 'air_out': (49.0, 0.0), 'makeup': (28.0, 70.0), 'blowdown': (70.0, 70.0)},
         drawio_shape='mxgraph.pid.vessels.induced-draft_cooling_tower',
         gravity_fixed=True,
     ), 'induced_draft')

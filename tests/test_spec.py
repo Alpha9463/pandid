@@ -177,6 +177,43 @@ def test_exchanger_side_nozzles_round_trip():
     assert Flowsheet.from_dict(written).to_dict() == written
 
 
+def test_a_jacketed_reactors_jacket_nozzles_round_trip():
+    """Check that the jacket supply and return round-trip through a spec."""
+    spec = {
+        "name": "T",
+        "units": [
+            {"kind": "Feed", "name": "CWS"},
+            {"kind": "JacketedReactor", "name": "R-1"},
+            {"kind": "Product", "name": "CWR"},
+        ],
+        "streams": [
+            {"from": ["CWS", "outlet"], "to": ["R-1", "jacket_in"]},
+            {"from": ["R-1", "jacket_out"], "to": ["CWR", "inlet"]},
+        ],
+    }
+    written = Flowsheet.from_dict(spec).to_dict()
+    assert [(s["from"], s["to"]) for s in written["streams"]] == [
+        (s["from"], s["to"]) for s in spec["streams"]
+    ]
+    assert Flowsheet.from_dict(written).to_dict() == written
+
+
+def test_a_spec_naming_a_jacketed_reactors_duty_warns_and_writes_jacket_in():
+    """Check that a spec's ``duty`` on a jacketed reactor is read as ``jacket_in``."""
+    spec = {
+        "name": "T",
+        "units": [
+            {"kind": "Feed", "name": "CWS"},
+            {"kind": "Reactor", "name": "R-1", "variant": "jacketed"},
+        ],
+        "streams": [{"from": ["CWS", "outlet"], "to": ["R-1", "duty"]}],
+    }
+    with pytest.warns(DeprecationWarning, match="use JacketedReactor"):
+        fs = Flowsheet.from_dict(spec)
+    assert [i.code for i in fs.validate()].count("deprecated") == 1
+    assert fs.to_dict()["streams"][0]["to"] == ["R-1", "jacket_in"]
+
+
 def test_a_filters_wash_and_cake_round_trip():
     """Check that a filter press's wash and cake nozzles round-trip with their streams."""
     fs = Flowsheet("dewatering")
@@ -568,8 +605,9 @@ def test_port_faces():
             ],
         }
     )
-    # ``inlet`` is stored under its canonical name ``in_1``.
-    assert fs.units[0]._port_faces == {"in_1": "N"}
+    # ``inlet`` is moved under its canonical name ``in_1``.
+    assert fs.units[0].face("in_1") == "N"
+    assert fs.to_dict()["units"][0]["port_faces"] == {"in_1": "N"}
 
 
 def test_a_tanks_face_list_round_trips_through_a_spec():
