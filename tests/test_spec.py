@@ -702,6 +702,19 @@ def test_stream_fields():
     assert stream.properties == {"Temperature": "25 C", "Flow": 1200}
 
 
+def test_a_subsidiary_line_round_trips():
+    """Check subsidiary is read, written only where set, and read back."""
+    spec = _spec()
+    spec["streams"][1]["subsidiary"] = True
+    fs = Flowsheet.from_dict(spec)
+    assert [s.subsidiary for s in fs.streams] == [False, True]
+    written = fs.to_dict()["streams"]
+    assert "subsidiary" not in written[0]
+    assert written[1]["subsidiary"] is True
+    again = Flowsheet.from_dict(fs.to_dict())
+    assert [s.subsidiary for s in again.streams] == [False, True]
+
+
 def test_signal_lines_take_a_kind():
     fs = Flowsheet.from_dict(
         {

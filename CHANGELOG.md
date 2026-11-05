@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `fs.connect(vessel.drain, sump.inlet, subsidiary=True)` marks a drain, vent or
+  other minor process line as a subsidiary flow line, drawn at the weight of
+  equipment outlines. A spec keeps it, and a signal line refuses it.
+
 ## [0.2.0] - 2026-11-05
 
 Every sheet without pins draws differently from 0.1.5.

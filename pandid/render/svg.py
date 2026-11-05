@@ -103,9 +103,12 @@ def _stream_rung(stream) -> LineWeight:
     Returns
     -------
     LineWeight
-        Detail rung for a signal line, else main flow.
+        Detail rung for a signal line, equipment rung for a subsidiary
+        line, else main flow.
     """
-    return LineWeight.DETAIL if stream.kind in _SIGNAL_KINDS else LineWeight.MAIN_FLOW
+    if stream.kind in _SIGNAL_KINDS:
+        return LineWeight.DETAIL
+    return LineWeight.EQUIPMENT if stream.subsidiary else LineWeight.MAIN_FLOW
 
 
 def _ink_pad(rung: LineWeight) -> float:

@@ -139,6 +139,9 @@ class Stream:
         Connection type, one of :data:`STREAM_KINDS`.
     draw_as_recycle : bool
         Prefer this stream as the return line of a cycle.
+    subsidiary : bool
+        Draw as a subsidiary flow line, on the equipment weight
+        (ISO 10628-1 5.3.1 b)); refused on a signal line.
     route : Route or None
         Resolved or manually supplied route.
     color, dasharray : str or None
@@ -163,6 +166,7 @@ class Stream:
     dest: Port
     kind: str = "material"
     draw_as_recycle: bool = False
+    subsidiary: bool = False
     route: Route | None = None
     color: str | None = None
     dasharray: str | None = None
@@ -189,7 +193,7 @@ class Stream:
     _CHECKED = {"color": check_color, "dasharray": check_dasharray}
 
     def __setattr__(self, name: str, value) -> None:
-        """Set an attribute, validating ``color`` and ``dasharray``.
+        """Set an attribute, validating colour, dashes and subsidiary.
 
         Parameters
         ----------
@@ -203,8 +207,15 @@ class Stream:
         TypeError
             If ``color`` or ``dasharray`` is not text or ``None``.
         ValueError
-            If ``color`` or ``dasharray`` has the wrong shape.
+            If ``color`` or ``dasharray`` has the wrong shape, or
+            ``subsidiary`` is set on a signal line.
         """
+        if name == "subsidiary" and value and self.kind in SIGNAL_KINDS:
+            ends = " to ".join(f"{p.owner.name}.{p.name}" for p in (self.source, self.dest))
+            raise ValueError(
+                f"{_names(self)}subsidiary=True is for a process line, and "
+                f"{ends} is a signal line (kind={self.kind!r}); leave subsidiary out"
+            )
         check = self._CHECKED.get(name)
         if check is not None and value is not None:
             if not isinstance(value, str):

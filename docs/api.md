@@ -183,16 +183,21 @@ units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
 `software` or `capillary`. When omitted, two energy/utility ports make an energy
 stream; other process ports make a material stream.
 
-`connect()` also accepts `name`, `draw_as_recycle`, `ends` and line-number fields
-`size`, `schedule`, `service`, `sequence`, `spec` and `insulation`. The first
-stream is `S1` by default. Inline fittings carry the same number through;
-`unit.new_line_number = True` starts a new one. Assigning line-number fields
-produces names such as `6"-P-1001-A1A` instead of `S1`.
+`connect()` also accepts `name`, `draw_as_recycle`, `subsidiary`, `ends` and
+line-number fields `size`, `schedule`, `service`, `sequence`, `spec` and
+`insulation`. The first stream is `S1` by default. Inline fittings carry the
+same number through; `unit.new_line_number = True` starts a new one. Assigning
+line-number fields produces names such as `6"-P-1001-A1A` instead of `S1`.
 
 A returned `Stream` exposes `source`, `dest`, `kind`, `name`, `route`,
 `properties`, `color`, `dasharray` and `ends`. `properties` supplies text or
 numbers for the stream table; no balances are calculated. `draw_as_recycle`
 hints which edge a cycle should break. `via()` overrides its automatic route.
+
+`subsidiary=True` marks a drain, vent or other minor process line as a
+subsidiary flow line, drawn at the weight of equipment outlines (ISO 10628-1
+5.3.1 b)): `fs.connect(vessel.drain, sump.inlet, subsidiary=True)`. A signal
+line refuses it.
 
 ### Line numbers
 

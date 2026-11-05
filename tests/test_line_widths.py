@@ -248,3 +248,87 @@ def test_a_leader_head_is_a_size_and_does_not_follow_a_rung() -> None:
     from pandid.render.svg import _LEADER_HEAD
 
     assert ARROWHEAD / _LEADER_HEAD == pytest.approx(2.0)
+
+
+def _main_and_subsidiary() -> Flowsheet:
+    """Build a sheet with two main lines and a subsidiary drain line."""
+    fs = Flowsheet("subsidiary")
+    feed = fs.add(units.Feed("F"))
+    vessel = fs.add(units.Vessel("V-1"))
+    product = fs.add(units.Product("P"))
+    sump = fs.add(units.Product("DR"))
+    fs.connect(feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, product.inlet)
+    fs.connect(vessel.drain, sump.inlet, subsidiary=True)
+    return fs
+
+
+def _wide_main_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Put the main-flow rung at 0.4 M so it differs from the equipment rung."""
+    from pandid.render import weights
+
+    monkeypatch.setitem(weights._MODULES, weights.LineWeight.MAIN_FLOW, 0.4)
+
+
+def test_a_subsidiary_line_is_on_the_equipment_rung() -> None:
+    """Check each stream's rung: main flow, subsidiary and signal."""
+    from pandid.render.svg import _stream_rung
+    from pandid.render.weights import LineWeight
+
+    fs = _main_and_subsidiary()
+    signal = _two_unit_sheet().streams[-1]
+    assert [_stream_rung(s) for s in fs.streams] == [
+        LineWeight.MAIN_FLOW,
+        LineWeight.MAIN_FLOW,
+        LineWeight.EQUIPMENT,
+    ]
+    assert _stream_rung(signal) is LineWeight.DETAIL
+
+
+def test_a_subsidiary_line_is_drawn_at_the_width_of_its_rung(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check the SVG draws a subsidiary line at the equipment width."""
+    from pandid.render.weights import LineWeight
+
+    _wide_main_flow(monkeypatch)
+    svg = _main_and_subsidiary().to_svg()
+    pens = [
+        float(w) for w in re.findall(r'<path [^>]*stroke-width="([\d.]+)"', _streams_group(svg))
+    ]
+    main, equipment = LineWeight.MAIN_FLOW.width, LineWeight.EQUIPMENT.width
+    assert main == 2 * equipment
+    assert pens == [main, main, equipment]
+
+
+def test_the_export_draws_a_subsidiary_line_at_the_width_of_its_rung(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check draw.io exports a subsidiary line at the equipment width."""
+    from test_drawio import _drawio_cells, _style
+
+    _wide_main_flow(monkeypatch)
+    cells = _drawio_cells(_main_and_subsidiary(), {})
+    widths = [float(_style(cells[f"s{n}"])["strokeWidth"]) for n in range(3)]
+    assert widths[0] == widths[1] == pytest.approx(2 * widths[2])
+
+
+def test_a_valve_put_on_a_subsidiary_line_keeps_both_parts_subsidiary() -> None:
+    """Check a line split by on= stays subsidiary on each segment."""
+    fs = _main_and_subsidiary()
+    fs.add(units.Valve("HV-1"), on=fs.streams[-1])
+    assert [s.subsidiary for s in fs.streams] == [False, False, True, True]
+
+
+def test_subsidiary_is_refused_on_a_signal_line_and_the_sheet_is_unchanged() -> None:
+    """Check subsidiary=True on a signal line raises and leaves the sheet as it was."""
+    fs = Flowsheet("refused")
+    lt = fs.add(units.Instrument("LT-1"))
+    lc = fs.add(units.Instrument("LIC-1"))
+    before = fs.to_dict()
+    with pytest.raises(ValueError, match="leave subsidiary out") as caught:
+        fs.connect(lt.sig_out, lc.sig_in, kind="electric", subsidiary=True)
+    assert "LT-1.sig_out" in str(caught.value)
+    assert fs.to_dict() == before
+    assert fs.streams == []
+    assert lt.sig_out.stream is None and lc.sig_in.stream is None

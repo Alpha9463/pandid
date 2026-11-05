@@ -189,6 +189,7 @@ def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
     selected = segments[index]
     old_dest = selected.dest
     successor = Stream(name="", source=outlet, dest=old_dest, kind="material",
+                       subsidiary=selected.subsidiary,
                        color=selected.color, dasharray=selected.dasharray)
     successor._inline_at = selected._inline_at
     successor._logical_root = line

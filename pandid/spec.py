@@ -649,7 +649,8 @@ _BALLOON_KEYS = ({"balloon_of"} | _INSTRUMENT_KEYS) - {"type", "number", *_ANCHO
 _QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
-    "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
+    "from", "to", "kind", "name", "draw_as_recycle", "subsidiary", "properties",
+    "tabulate", "via",
     "color", "dasharray", "ends", "inline_at", "logical_to",
     *LINE_NUMBER_FIELDS,
 }
@@ -1493,7 +1494,7 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
     src = _read_endpoint(fs, data["from"], f"{where}.from")
     dst = _read_endpoint(fs, data["to"], f"{where}.to")
     kwargs = _read_fields(data, where, ((("kind", "name"), _text),
-                                        (("draw_as_recycle",), _flag)))
+                                        (("draw_as_recycle", "subsidiary"), _flag)))
     if "ends" in data:
         ends = data["ends"]
         if isinstance(ends, (list, tuple)) and len(ends) == 2:
@@ -2288,6 +2289,8 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["name"] = stream.name
     if stream.draw_as_recycle:
         entry["draw_as_recycle"] = True
+    if stream.subsidiary:
+        entry["subsidiary"] = True
     for key in LINE_NUMBER_FIELDS:
         value = getattr(stream, key)
         if value is not None and not (key == "sequence" and value == stream._auto_sequence):

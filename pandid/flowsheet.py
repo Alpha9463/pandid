@@ -1764,6 +1764,7 @@ class Flowsheet:
     def connect(self, src: "Port | Unit", dst: "Port | Unit", *,
                 kind: str | None = None,
                 name: str | None = None, draw_as_recycle: bool = False,
+                subsidiary: bool = False,
                 size: str | float | None = None, schedule: str | float | None = None,
                 service: str | float | None = None,
                 sequence: str | float | None = None, spec: str | float | None = None,
@@ -1788,6 +1789,10 @@ class Flowsheet:
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False
             Prefer this stream as a cycle's return line.
+        subsidiary : bool, default=False
+            Draw a process line as a subsidiary flow line, on the
+            equipment weight (ISO 10628-1 5.3.1 b)), such as a drain,
+            vent or utility branch; refused on a signal line.
         size, schedule, service : str or float, optional
             Nominal bore, wall schedule and service.
         sequence, spec, insulation : str or float, optional
@@ -1806,8 +1811,9 @@ class Flowsheet:
         TypeError
             If an end is neither a port nor a unit.
         ValueError
-            If the kind, ports, ``ends`` or numbering is invalid, or a
-            port is taken and its unit has no other like it.
+            If the kind, ports, ``ends`` or numbering is invalid, a
+            port is taken and its unit has no other like it, or
+            ``subsidiary`` is set on a signal line.
         """
         from pandid.ports import Port
         from pandid.units import Unit
@@ -1833,6 +1839,7 @@ class Flowsheet:
                 dest=dst,
                 kind=kind,
                 draw_as_recycle=draw_as_recycle,
+                subsidiary=subsidiary,
                 auto_named=not name,
                 size=size,
                 schedule=schedule,
