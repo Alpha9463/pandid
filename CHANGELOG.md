@@ -53,6 +53,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A `Tee` whose branch serves a unit drawn above the run turns its branch north,
+  so a header of tees no longer draws each branch as a box crossing back through
+  the run. `tee.pin(mirrored=False)` keeps the branch south.
 - A valve or fitting on a line from a `Splitter`, or into a `Mixer`, sits next
   to the unit at the line's other end, so a bank of pumps draws its isolation
   valves beside the pumps without crossings. One given `at=` keeps its place.
