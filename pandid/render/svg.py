@@ -15,7 +15,7 @@ from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
 from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking,
-                                   fail_marking, wears_arrowhead)
+                                   default_registry, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
 from pandid.route_geometry import stream_polyline
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -1862,7 +1862,6 @@ def flanged_joint(port, want: str) -> bool:
         Whether this end gets a flange mark.
     """
     from pandid.flowsheet import INLINE_KINDS
-    from pandid.render.symbols import default_registry
 
     kind = port.owner.kind
     if kind in {"feed", "product", "instrument"}:
@@ -3162,7 +3161,8 @@ class TableSheetPlan(NamedTuple):
     findings: list
 
 
-def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
+def table_sheet_plan(fs, sheet: "_Sheet | None",
+                     diagram: "str | None" = None) -> TableSheetPlan:
     """Lay out the stream table's own sheet.
 
     Wrap the table to the page, dock the title strip and frame both.
@@ -3173,6 +3173,8 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
         Sheet.
     sheet : _Sheet or None
         Fixed page, or ``None`` to fit the sheet to the table.
+    diagram : str or None, optional
+        Diagram type the table belongs to; ``None`` is a PFD.
 
     Returns
     -------
@@ -3190,13 +3192,13 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
     # Wrap to the frame width less the dock clearance.
     room = None if sheet is None else (
         sheet.width - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER)
-    table = F.stream_table_sheet(fs, room)
+    table = F.stream_table_sheet(fs, room, diagram)
     if table is None:
         raise ValueError(
             "show_stream_table='sheet' draws a sheet whose body is the stream "
             "table, and this flowsheet has nothing to tabulate: no stream "
-            "states a property and none crosses the sheet edge. Put properties "
-            "on the streams (stream.properties = {...}), or drop the table sheet")
+            "states a property. Put properties on the streams "
+            "(stream.properties = {...}), or drop the table sheet")
     block = table_sheet_block(fs.title_block, F._options(fs))
     ts_w, ts_h = F.measure_title_strip(block)
     items = [(TITLE, "bottom-right", ts_w, ts_h)]
@@ -3263,7 +3265,8 @@ class DiagramPlan(NamedTuple):
 
 
 def diagram_plan(fs, sheet: "_Sheet | None", border: str,
-                 show_stream_table: bool) -> DiagramPlan:
+                 show_stream_table: bool,
+                 diagram: "str | None" = None) -> DiagramPlan:
     """Lay out the diagram's sheet and dock its furniture.
 
     Furniture is the annotation boxes, a title strip for a title block
@@ -3279,6 +3282,8 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
         ``"none"`` or ``"zone"``.
     show_stream_table : bool
         Whether to dock the stream table.
+    diagram : str or None, optional
+        Diagram type; ``None`` is a PFD.
 
     Returns
     -------
@@ -3303,7 +3308,7 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
              for a in fs.annotations]
     if fs.title_block is not None or border == "zone":
         items.append((TITLE, "bottom-right", *F.measure_title_strip(block)))
-    table = F.stream_table_layout(fs) if show_stream_table else None
+    table = F.stream_table_layout(fs, diagram) if show_stream_table else None
     if table is not None:
         items.append((table, "bottom-left", table.w, table.h))
     # The frame sits where a border would.
@@ -3391,29 +3396,14 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
     was = fs.warnings
     contents = list(was)
     try:
-        table_sheet_plan(fs, page)
+        table_sheet_plan(fs, page, kind)
     finally:
         was[:] = contents
         fs.warnings = was
 
 
 class SvgRenderer:
-    """Renderer of a laid-out Flowsheet to SVG.
-
-    Parameters
-    ----------
-    registry : SymbolRegistry, optional
-        Symbols to draw with; ``default_registry`` when omitted.
-
-    Attributes
-    ----------
-    registry : SymbolRegistry
-        Symbols drawn with.
-    """
-
-    def __init__(self, registry=None):  # numpydoc ignore=GL08
-        from pandid.render.symbols import default_registry
-        self.registry = registry or default_registry
+    """Renderer of a laid-out Flowsheet to SVG."""
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
                crossing_style: str = "gap",
@@ -3470,10 +3460,10 @@ class SvgRenderer:
         joints = sheet_connections(diagram, connections)
         sheet = _page(page_size)
         if table_sheet:
-            return self._table_sheet(fs, sheet, border)
+            return self._table_sheet(fs, sheet, border, diagram)
 
         # 1. The sheet: furniture docked round the drawing.
-        plan = diagram_plan(fs, sheet, border, bool(show_stream_table))
+        plan = diagram_plan(fs, sheet, border, bool(show_stream_table), diagram)
         fit_issues: list[Issue] = []
         # Findings from the label passes.
         self._findings: list[Issue] = []
@@ -3573,7 +3563,7 @@ class SvgRenderer:
         OUT = F.OUTER_MARGIN
         return furniture, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT)
 
-    def _table_sheet(self, fs, sheet, border) -> str:
+    def _table_sheet(self, fs, sheet, border, diagram) -> str:
         """Return the stream table drawn as a sheet of its own.
 
         Parameters
@@ -3584,6 +3574,8 @@ class SvgRenderer:
             Fixed page, or ``None`` to size to the table.
         border : str
             ``"none"`` or ``"zone"``.
+        diagram : str
+            Diagram type the table belongs to.
 
         Returns
         -------
@@ -3593,7 +3585,7 @@ class SvgRenderer:
         from pandid.document import _drawn_text
 
         fit_issues: list[Issue] = []
-        plan = table_sheet_plan(fs, sheet)
+        plan = table_sheet_plan(fs, sheet, diagram)
         furniture: list[str] = []
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
             furniture.extend(F.draw_stream_table(
@@ -3634,7 +3626,7 @@ class SvgRenderer:
         tuple[int, bool, bool]
             ``(rotation, mirror_x, mirror_y)``.
         """
-        sym = self.registry.for_unit(u)
+        sym = default_registry.for_unit(u)
         f = u.frame
         rot = int(getattr(f, "orientation", 0) or 0)
         mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
@@ -3661,7 +3653,7 @@ class SvgRenderer:
             Definition id.
         """
         variant = getattr(u, 'variant', 'default')
-        sym = self.registry.for_unit(u)
+        sym = default_registry.for_unit(u)
         body = (u.kind if variant == "default" else f"{u.kind}_{variant}") + sym.id_suffix
         if not (math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9)
                 and _fold(sym, u) == (1.0, 1.0)):
@@ -3708,7 +3700,7 @@ class SvgRenderer:
         for u in fs.units:
             if u.kind in ("feed", "product"):
                 continue
-            sym = self.registry.for_unit(u)
+            sym = default_registry.for_unit(u)
             xform = self._baked_xform(u)
             fold, pen = _fold(sym, u), _pen_scale(sym, u)
             key = ((u.kind, getattr(u, 'variant', 'default'), sym.id_suffix, fold, pen)
@@ -3821,7 +3813,7 @@ class SvgRenderer:
                     tag_box = _unit_label_box(item)
                     label_items.append(item)
                 # NC marking (ISO 15519-1 11.4.5).
-                if closed_marking(u, self.registry) == "NC":
+                if closed_marking(u, default_registry) == "NC":
                     label_items.append(
                         self._nc_label_item(u, f, x, y, u_width, u_height, tag_box))
                 # Fail position (ISA-5.1 Table 5.4.4).
@@ -4031,7 +4023,7 @@ class SvgRenderer:
         box = _unit_label_box(item)
         if box is None or not (ink or symbols):
             return item
-        if getattr(u, "label_pos", None) or self.registry.for_unit(u).label_pos:
+        if getattr(u, "label_pos", None) or default_registry.for_unit(u).label_pos:
             return item
         # Test only ink near the unit.
         pad = max(u_width, u_height) + (box[2] - box[0])
@@ -4242,7 +4234,7 @@ class SvgRenderer:
             d_str = " ".join(d_parts)
 
             marker = (f' marker-end="url(#{marker_id})"'
-                      if arrows and wears_arrowhead(s, self.registry) else "")
+                      if arrows and wears_arrowhead(s, default_registry) else "")
             width = _stream_rung(is_signal).width
             lines.append(
                 f'    <path d="{d_str}" fill="none" '

@@ -191,10 +191,11 @@ def _draw(args: argparse.Namespace) -> int:
         f"{_plural(len(fs.streams), 'stream')})"
     )
     if fs.warnings:
-        # Point to the validate command for the same diagram type.
+        # Point to the validate command for the same drawing.
         sheet = f" --diagram '{args.diagram}'" if args.diagram != "pfd" else ""
+        table = " --stream-table" if args.stream_table else ""
         _note(f"{_plural(len(fs.warnings), 'warning')}; "
-              f"see: pandid validate{sheet} {args.spec}")
+              f"see: pandid validate{sheet} {args.spec}{table}")
     return EXIT_OK
 
 
@@ -225,7 +226,7 @@ def _validate(args: argparse.Namespace) -> int:
     fs = _load(args.spec)
     # The geometric checks measure the routed frames.
     fs.route()
-    issues = fs.validate(diagram=args.diagram)
+    issues = fs.validate(diagram=args.diagram, show_stream_table=args.stream_table)
     for issue in issues:
         print(f"{issue.severity}: {issue.code}: {issue.message}")
     errors = sum(1 for issue in issues if issue.severity == "error")
@@ -321,6 +322,23 @@ def _diagram_option(command: argparse.ArgumentParser, help: str) -> None:
                          help=help)
 
 
+def _stream_table_option(command: argparse.ArgumentParser, help: str) -> None:
+    """Add the shared ``--stream-table`` option to a command.
+
+    ``--stream-table`` alone is the table under the drawing;
+    ``--stream-table sheet`` is the table as its own sheet.
+
+    Parameters
+    ----------
+    command : argparse.ArgumentParser
+        Subcommand parser.
+    help : str
+        Help text for the option.
+    """
+    command.add_argument("--stream-table", nargs="?", const=True, default=False,
+                         choices=(TABLE_SHEET,), metavar=TABLE_SHEET, help=help)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every subcommand.
 
@@ -367,13 +385,10 @@ def _build_parser() -> argparse.ArgumentParser:
              "'flanged-at-nozzles' marks the nozzles only. A P&ID only "
              "(default: none)",
     )
-    # ``--stream-table`` alone draws the table under the drawing;
-    # ``--stream-table sheet`` draws the table as its own sheet.
-    draw.add_argument(
-        "--stream-table", nargs="?", const=True, default=False,
-        choices=(TABLE_SHEET,), metavar=TABLE_SHEET,
-        help="draw the stream property table under the drawing, or pass "
-             f"'{TABLE_SHEET}' to draw the table as a sheet of its own",
+    _stream_table_option(
+        draw,
+        "draw the stream property table under the drawing, or pass "
+        f"'{TABLE_SHEET}' to draw the table as a sheet of its own",
     )
     draw.add_argument(
         "--jump-direction", choices=("vertical", "horizontal"), default="vertical",
@@ -406,6 +421,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "which drawing the findings are about; a P&ID draws no arrowheads, so "
         "nozzles pitched inside the heads they would carry on a PFD are not a "
         "defect on one, and a 'bfd' owes no stream table (default: pfd)",
+    )
+    _stream_table_option(
+        validate,
+        "the findings are about a drawing with its stream property table, as "
+        "draw --stream-table draws it; without one, a PFD whose lines state "
+        "properties shows none of them",
     )
     validate.set_defaults(run=_validate)
 

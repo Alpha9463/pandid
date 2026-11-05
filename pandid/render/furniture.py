@@ -678,21 +678,28 @@ def _run_values(run) -> dict:
     return values
 
 
-def _table_runs(fs) -> list:
+def _table_runs(fs, diagram: "str | None" = None) -> list:
     """Return the named runs that get a column, in sheet order.
 
     Parameters
     ----------
     fs : Flowsheet
         Flowsheet.
+    diagram : str or None, optional
+        Diagram type; ``None`` is a PFD.
 
     Returns
     -------
     list[list[Stream]]
-        Runs with a property or crossing the edge (ISO 10628-1 4.3.2 d).
+        Runs with a property, and on a PFD runs crossing the edge
+        (ISO 10628-1 4.3.2 d)).
     """
+    from pandid.render.svg import tabulates_boundary_flows
+
+    boundary = tabulates_boundary_flows(diagram)
     return [run for run in fs._named_runs().values()
-            if any(s.properties for s in run) or any(s.at_boundary for s in run)]
+            if any(s.properties for s in run)
+            or (boundary and any(s.at_boundary for s in run))]
 
 
 class _Measured(NamedTuple):
@@ -787,13 +794,15 @@ def _stream_table(m: "_Measured", streams: list, cells: list,
                        m.row_h * len(rows))
 
 
-def stream_table_layout(fs) -> "StreamTable | None":
+def stream_table_layout(fs, diagram: "str | None" = None) -> "StreamTable | None":
     """Return the stream table docked on a diagram, or ``None``.
 
     Parameters
     ----------
     fs : Flowsheet
         Flowsheet.
+    diagram : str or None, optional
+        Diagram type; ``None`` is a PFD.
 
     Returns
     -------
@@ -809,14 +818,15 @@ def stream_table_layout(fs) -> "StreamTable | None":
     ValueError
         If more than one segment of a run is marked ``tabulate``.
     """
-    m = _measure(fs)
+    m = _measure(fs, diagram=diagram)
     if m is None:
         return None
     return _stream_table(m, m.streams, m.cells,
                          _section_span(m, len(m.streams)))
 
 
-def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
+def _measure(fs, *, own_sheet: bool = False,
+             diagram: "str | None" = None) -> "_Measured | None":
     """Return the table's measurements, or ``None`` if it is empty.
 
     Parameters
@@ -825,6 +835,8 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
         Flowsheet.
     own_sheet : bool, default=False
         Use the table-sheet default type size.
+    diagram : str or None, optional
+        Diagram type; ``None`` is a PFD.
 
     Returns
     -------
@@ -840,7 +852,7 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
     ValueError
         If more than one segment of a run is marked ``tabulate``.
     """
-    runs = _table_runs(fs)
+    runs = _table_runs(fs, diagram)
     if not runs:
         return None
     streams = [run[0] for run in runs]
@@ -1006,7 +1018,8 @@ def _partition(m: "_Measured", n: int, room: "float | None") -> list:
     return _blocks_of(n, n)
 
 
-def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
+def stream_table_sheet(fs, room: "float | None",
+                       diagram: "str | None" = None) -> "TableSheet | None":
     """Return the stream table as stacked blocks, or ``None``.
 
     Parameters
@@ -1015,6 +1028,8 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
         Flowsheet.
     room : float or None
         Page width for the table, or ``None`` for one block.
+    diagram : str or None, optional
+        Diagram type; ``None`` is a PFD.
 
     Returns
     -------
@@ -1030,7 +1045,7 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     ValueError
         If more than one segment of a run is marked ``tabulate``.
     """
-    m = _measure(fs, own_sheet=True)
+    m = _measure(fs, own_sheet=True, diagram=diagram)
     if m is None:
         return None
     n = len(m.streams)

@@ -966,7 +966,7 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
         fs, kwargs = copy_settled_case(settled_gallery, stem)
         cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
-        plates = _tag_pass(fs, default_registry, None, "vertical").plates
+        plates = _tag_pass(fs, None, "vertical").plates
         # The sheet's own joints: a flange mark is ink the number search dodges.
         joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
         wanted = {number.name: number for number in stream_numbers(fs, plates, joints, "vertical")}
