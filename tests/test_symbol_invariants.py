@@ -15,6 +15,7 @@ from pandid.portgeom import outward_dir, port_offset, port_point, resolve_size
 from pandid.render.symbols import (
     CENTRED,
     FROM_START,
+    MIN_NOZZLE_PITCH,
     PortSeries,
     Symbol,
     _face_local,
@@ -1033,6 +1034,20 @@ def test_series_members_lie_on_drawn_geometry(entry):
                 x, y = series.placement(index, count, sym.width, sym.height)
                 d = _nearest_distance((x, y), segments)
                 assert d <= GEOM_TOL, f"{kind}/{variant} {series.prefix}{index + 1} of {count}"
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_every_port_series_sets_two_members_an_arrowhead_pitch_apart(entry):
+    """Verify every series pitch, and two members' gap, is MIN_NOZZLE_PITCH."""
+    (kind, variant), sym = entry
+    for series in sym.port_series:
+        assert series.pitch >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}"
+        band = sym.bands.get(series.face)
+        (x0, y0), (x1, y1) = (
+            series.placement(i, 2, sym.width, sym.height, band=band) for i in (0, 1)
+        )
+        gap = abs(y1 - y0) if series.face in ("W", "E") else abs(x1 - x0)
+        assert gap >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}: {gap}"
 
 
 def test_a_lone_member_lands_where_the_fixed_nozzle_did():

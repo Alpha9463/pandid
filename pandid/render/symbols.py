@@ -3325,7 +3325,7 @@ class SymbolRegistry:
                 f'A 5 5 0 0 0 15 30 L 105 30" {_DETAIL}/></g>',
             width=120.0, height=40.0,
             ports={"outlet": (120.0, 20.0), "duty": (60.0, 0.0)},
-            port_series=(PortSeries(prefix="feed_", face="W", pitch=10.0,
+            port_series=(PortSeries(prefix="feed_", face="W", pitch=MIN_NOZZLE_PITCH,
                                     extent=0.5, at=20.0, singular="feed"),),
         ), "tubular")
 
