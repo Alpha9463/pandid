@@ -1301,6 +1301,15 @@ def test_a_value_present_and_blank_is_a_report():
     assert _found(fs, "boundary-flow-missing") == []
 
 
+@pytest.mark.parametrize(("diagram", "reported"), [("pfd", 1), ("p&id", 0), ("bfd", 0)])
+def test_only_a_pfd_owes_a_flow_on_every_boundary_line(diagram, reported):
+    """Check that boundary-flow-missing is reported on a PFD alone."""
+    fs = _partly_tabulated()
+    assert len(_found(fs, "boundary-flow-missing", diagram=diagram)) == reported
+    fs.to_svg(diagram=diagram, show_stream_table=True)
+    assert len([w for w in fs.warnings if w.code == "boundary-flow-missing"]) == reported
+
+
 # --- stream-table-missing --------------------------------------------------
 
 

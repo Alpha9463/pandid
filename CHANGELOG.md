@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On a PFD, `validate()` warns when an energy line does not name its carrier.
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
 
+### Fixed
+
+- The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
+  drawn with `diagram="p&id"` or `diagram="bfd"`.
+
 ## [0.2.0] - 2026-11-05
 
 Every sheet without pins draws differently from 0.1.5.
