@@ -408,6 +408,8 @@ STAYS_ON_BASE = {
     ("evaporator", "default"):
         "the general row: two tubesheets around a boxed element, no element chosen",
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",
+    ("crystallizer", "default"): "Crystallizer's own drawing (the draft-tube baffle body)",
+    ("flotation_cell", "default"): "FlotationCell's own drawing (the mechanical cell)",
     ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
     ("fitting", "rotary_mixer"): "body style: a rotating mixing element in the run",
     ("fitting", "mixing_path"): "body style: three mixing elements in series in the run",
