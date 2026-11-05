@@ -104,8 +104,9 @@ def _choose_family_faces(fs: "Flowsheet", unit: "_FaceFamilies", frame,
         if target is None or name in held:
             continue
         faces = family_faces(unit, frame) or unit._faces
-        menu = [drawn_side(face, rot, mx, my) for face in unit._offered(name)
-                if unit._fits({**faces, name: face}, frame)]
+        home, *others = unit._offered(name)
+        menu = [drawn_side(face, rot, mx, my) for face in (
+            home, *(face for face in others if unit._fits({**faces, name: face}, frame)))]
         if len(menu) < 2:
             continue
         before = _lines(unit, frame, family, held)
