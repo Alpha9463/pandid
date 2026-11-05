@@ -190,6 +190,25 @@ def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
     fs.streams.insert(place + 1, successor)
 
 
+def _pipework(fs: Flowsheet, station: ValveStation) -> list[Stream]:
+    """Return the streams that join two members of a valve station.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet owning the station.
+    station : ValveStation
+        Station on a line.
+
+    Returns
+    -------
+    list[Stream]
+        Its run, bypass and drain streams, in sheet order.
+    """
+    return [s for s in fs.streams
+            if s.source.owner in station.members and s.dest.owner in station.members]
+
+
 def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
                   at: float | None) -> _UnitT:
     """Add an unconnected two-port device to a sheet, in a line.
@@ -270,6 +289,7 @@ def insert_station(fs: Flowsheet, line: Stream, station: ValveStation, *,
     old_dest = segments[index].dest
     with fs._unchanged_if_it_raises((fs, *fs.streams, old_dest, station.inlet, station.outlet)):
         _splice(fs, line, segments, index, station.inlet, station.outlet, at)
+        line._logical_pipework += _pipework(fs, station)
         fs._station_assemblies[record] = replace(
             fs._station_assemblies[record], run=line, at=None if at is None else float(at),
         )
@@ -297,6 +317,7 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
     if root._logical_to is not None or root._logical_root is not None:
         raise ValueError("logical run roots cannot overlap")
     segments = [root]
+    pipework: list[Stream] = []
     visited = {id(root)}
     while segments[-1].dest is not endpoint:
         incoming = segments[-1]
@@ -305,6 +326,8 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
                         if assembly.run is root and assembly.station.inlet is incoming.dest), None)
         if station is None and unit.kind not in _INLINE_KINDS:
             raise ValueError("logical run does not reach its destination through inline devices")
+        if station is not None:
+            pipework += _pipework(fs, station)
         outlet = station.outlet if station is not None else unit.ports.get("outlet")
         following = outlet.stream if outlet is not None else None
         if (following is None or following.source is not outlet
@@ -320,5 +343,6 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
         raise ValueError("logical run positions must be distinct and in flow order")
     root._logical_to = endpoint
     root._logical_segments = segments
+    root._logical_pipework = pipework
     for segment in segments[1:]:
         segment._logical_root = root

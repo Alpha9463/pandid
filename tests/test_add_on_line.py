@@ -390,6 +390,33 @@ def test_a_refused_valve_station_leaves_the_sheet_unchanged(on_line: bool) -> No
     assert [s.name for s in fs.streams] == streams
 
 
+@pytest.mark.parametrize("order", ["style-then-on", "on-then-style", "on-then-reload-then-style"])
+def test_a_style_set_on_a_split_line_reaches_its_whole_run(order: str) -> None:
+    """Draw every segment and station pipe of a line in the style set on it."""
+    fs = Flowsheet("Styled")
+    line = fs.connect(fs.add(Feed("F")).outlet, fs.add(Product("P")).inlet)
+    other = fs.connect(fs.add(Feed("G")).outlet, fs.add(Product("Q")).inlet)
+    if order == "style-then-on":
+        line.color, line.dasharray = "blue", "4,2"
+    fs.add(Valve("HV-1"), on=line)
+    fs.add_valve_station("CV-1", on=line)
+    station = fs.add_valve_station("CV-2", on=other)
+    plain = [
+        i
+        for i, s in enumerate(fs.streams)
+        if other is s or other is s._logical_root or s.source.owner in station.members
+    ]
+    if order == "on-then-reload-then-style":
+        fs = Flowsheet.from_dict(fs.to_dict())
+        line = fs.streams[0]
+    if order != "style-then-on":
+        line.color, line.dasharray = "blue", "4,2"
+
+    drawn = [(s.color, s.dasharray) for s in fs.streams]
+    assert {style for i, style in enumerate(drawn) if i not in plain} == {("blue", "4,2")}
+    assert {style for i, style in enumerate(drawn) if i in plain} == {(None, None)}
+
+
 def _recycle_loop(marked: bool) -> tuple[Flowsheet, Stream]:
     """Build a mixer, reactor and splitter loop and return its return line."""
     fs = Flowsheet("Recycle")
