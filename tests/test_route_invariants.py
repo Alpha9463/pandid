@@ -8,7 +8,7 @@ from pandid import Flowsheet, units
 from pandid.geometry import Route
 from pandid.layout.attach import MAX_PLACEMENT_PASSES, place_attached, stream_path
 from pandid.portgeom import port_anchor, port_point
-from pandid.render.svg import tap_lines, tap_route
+from pandid.render.svg import tap_routes
 from pandid.routing import DefaultRouter
 
 from _render_cases import copy_settled_case
@@ -94,8 +94,7 @@ def test_nothing_is_drawn_diagonally(routed, name):
             if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
                 sloping.append(f"{s.name} runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
     # Check the impulse lines emitted by the renderer.
-    for inst, tap, centre in tap_lines(fs):
-        route = tap_route(inst, tap, centre)
+    for inst, route in tap_routes(fs):
         for (x1, y1), (x2, y2) in zip(route, route[1:]):
             if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
                 sloping.append(

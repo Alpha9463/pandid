@@ -69,7 +69,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     from pandid.layout.faces import select_faces
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import square_taps
 
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
@@ -82,7 +82,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     clear = _nozzle_keepouts(fs, skip=set(pending))
     # Drawn lines it must clear too, each with the units it joins.
     lines: list[tuple[tuple[object, ...], list[tuple[float, float]]]] = [
-        ((u.host,), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+        ((u.host,), points) for u, points in square_taps(fs)]
     lines += [((s.source.owner, s.dest.owner), stream_path(s))
               for s in fs.streams if s.route is not None]
     segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
@@ -234,18 +234,19 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     Returns
     -------
     Counter[str]
-        Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, line segments through units other than
-        balloons on that line and the end of a line leaving its own
-        nozzle straight out of the face, tap lines through units or tag
-        halos, and runs two lines or tap lines share.
+        Each validate() finding by code but ``tap-crosses-unit``, plus
+        units on tag halos, lines through tag halos, line segments
+        through units other than balloons on that line and the end of a
+        line leaving its own nozzle straight out of the face, tap lines'
+        square turns (:func:`~pandid.render.svg.square_taps`) through
+        units or tag halos, and runs two lines or square turns share.
     """
     from collections import Counter
 
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
     from pandid.portgeom import COMPASS, resolve_port, unit_box
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import square_taps
 
     def outward(port, nozzle: tuple[float, float], other: tuple[float, float]) -> bool:
         """Return whether a segment leaves a nozzle straight out of its face.
@@ -285,7 +286,7 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         """
         return any(segment_crosses_box(a, b, box) for a, b in zip(points, points[1:]))
 
-    flaws = Counter(i.code for i in fs.validate())
+    flaws = Counter(i.code for i in fs.validate() if i.code != "tap-crosses-unit")
     halos = _halos(fs)
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     flaws["unit-on-tag"] = sum(boxes_overlap(box, h, -_BODY_TOL)
@@ -301,7 +302,7 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         for u, box in boxes if getattr(u, "host", None) is not s
         and not (k == 0 and u is s.source.owner and outward(s.source, a, b))
         and not (k == len(points) - 2 and u is s.dest.owner and outward(s.dest, b, a)))
-    taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
+    taps = square_taps(fs)
     for inst, route in taps:
         flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
                                          if u is not inst and u is not inst.host)

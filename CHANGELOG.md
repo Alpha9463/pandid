@@ -94,6 +94,9 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- A balloon's tap line is drawn round equipment and tags in its way instead of
+  through them, and `validate()` reports `tap-crosses-unit` where there is no
+  way round.
 - Reassigning `variant` on a unit built with supports, an agitator, internals,
   manholes or sockets redraws them on the new body and keeps any overlays added
   since, or refuses a body that cannot carry them and keeps the old one.

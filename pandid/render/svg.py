@@ -266,8 +266,279 @@ def tap_lines(fs):
     return out
 
 
-def tap_route(inst, tap, centre):
-    """Return the orthogonal path of one tap line.
+def square_taps(fs):
+    """Return the square turn of every tap line.
+
+    Layout and routing weigh tap lines by these; :func:`tap_routes`
+    gives the paths drawn.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[Instrument, list[tuple[float, float]]]]
+        Instrument and :func:`_square_tap` path, in :func:`tap_lines`
+        order.
+    """
+    return [(inst, _square_tap(inst, tap, centre)[0]) for inst, tap, centre in tap_lines(fs)]
+
+
+def tap_routes(fs):
+    """Return the drawn path of every tap line.
+
+    Each line is its square turn (:func:`_square_tap`) unless that
+    crosses a unit body or another unit's tag. Such a line is then
+    routed round them (:func:`pandid.routing.route_tap`), in
+    :func:`tap_lines` order, priced against the streams and every
+    other tap line as drawn so far. The first route that crosses fewer
+    bodies and tags, and whose ink beyond its square turn's
+    (:func:`_new_ink`) meets no other line (:func:`_touches`) and comes
+    within :data:`~pandid.routing.visibility.EDGE_TOL` of no other mark
+    drawn (:func:`_drawn_marks`), is kept.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[Instrument, list[tuple[float, float]]]]
+        Instrument and points from the tap to the balloon centre, in
+        :func:`tap_lines` order.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.routing import route_tap
+    from pandid.routing.visibility import _tag_halo
+
+    obstacles = []
+    for u in fs.units:
+        if u.frame is not None:
+            halo = _tag_halo(u, u.frame)
+            obstacles.append((u, unit_box(u, u.frame)))
+            if halo is not None:
+                obstacles.append((u, (halo.x_min, halo.y_min, halo.x_max, halo.y_max)))
+
+    def clashes(inst, route) -> int:
+        """Count the bodies and tags but its host's a tap line crosses.
+
+        Parameters
+        ----------
+        inst : Instrument
+            Attached balloon.
+        route : list[tuple[float, float]]
+            Tap line points.
+
+        Returns
+        -------
+        int
+            Unit bodies and tag halos crossed.
+        """
+        return sum(any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+                   for u, box in obstacles if u is not inst and u is not inst.host)
+
+    pipes = [stream_polyline(s) for s in fs.streams if s.route is not None
+             and s.source.owner.frame is not None and s.dest.owner.frame is not None]
+    taps = tap_lines(fs)
+    squares = [_square_tap(inst, tap, centre) for inst, tap, centre in taps]
+    crossed = [clashes(inst, path) for (inst, _, _), (path, _) in zip(taps, squares)]
+    drawn = [path for path, _ in squares]
+    marks: list = []
+
+    def clear(inst, ink, lines) -> bool:
+        """Return whether a route's new ink meets nothing drawn.
+
+        Parameters
+        ----------
+        inst : Instrument
+            Attached balloon.
+        ink : list[tuple[float, float]]
+            The route's ink beyond its square turn.
+        lines : list[list[tuple[float, float]]]
+            Streams and other tap lines.
+
+        Returns
+        -------
+        bool
+            True if ``ink`` meets no line and comes near no other mark.
+        """
+        from pandid.routing.visibility import EDGE_TOL
+
+        if _touches(ink, lines):
+            return False
+        if not marks:
+            marks.extend(_drawn_marks(fs))
+        # The last run ends inside the balloon.
+        return not any(boxes_overlap(_span(a, b), box, EDGE_TOL)
+                       for i, (a, b) in enumerate(zip(ink, ink[1:]))
+                       for owner, box in marks if owner is not inst or i < len(ink) - 2)
+
+    for k, ((inst, tap, centre), (path, faces)) in enumerate(zip(taps, squares)):
+        if not crossed[k] or not faces:
+            continue
+        lines = pipes + drawn[:k] + drawn[k + 1:]
+        drawn[k] = next((routed for routed in route_tap(inst, tap, faces, centre, lines)
+                         if clashes(inst, routed) < crossed[k]
+                         and clear(inst, _new_ink(routed, path), lines)), path)
+    return [(inst, path) for (inst, _, _), path in zip(taps, drawn)]
+
+
+def _span(p, q) -> "tuple[float, float, float, float]":
+    """Return the box a segment spans.
+
+    Parameters
+    ----------
+    p, q : tuple[float, float]
+        Segment ends.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x0, y0, x1, y1)``.
+    """
+    return min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1])
+
+
+def _drawn_marks(fs) -> list:
+    """Return the box of every mark the renderers draw but a line.
+
+    Every unit's box and hop, and the label plates, flange marks and
+    pneumatic hatches placed for each jump direction and sheet joint
+    default, and the arrowhead room at each end of each run.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    list[tuple[Unit | None, tuple[float, float, float, float]]]
+        The unit a box is the body of, else ``None``, and the box.
+    """
+    from pandid.render.drawio import _tag_pass
+
+    marks: list = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    runs = [stream_polyline(s) for s in fs.streams if s.route is not None
+            and s.source.owner.frame is not None and s.dest.owner.frame is not None]
+    for direction in JUMP_DIRECTIONS:
+        marks += [(None, line.box) for line in _ink(fs, direction) if line.kind == "hop"]
+        for joints in (None, *CONNECTIONS):
+            plates = list(_tag_pass(fs, joints, direction).plates)
+            stream_numbers(fs, plates, joints, direction)
+            plates += [b for b in map(_unit_label_box, drawn_codes(fs, joints, direction, plates))
+                       if b is not None]
+            marks += [(None, b) for b in plates + flange_boxes(fs, joints)]
+    pad = _ink_pad(LineWeight.DETAIL)
+    marks += [(None, (min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad))
+              for s in fs.streams if s.kind == "pneumatic" and s.route is not None
+              for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+    for points in runs:
+        for (ex, ey), (nx, ny) in ((points[0], points[1]), (points[-1], points[-2])):
+            ux, uy = (nx > ex) - (nx < ex), (ny > ey) - (ny < ey)
+            x0, y0, x1, y1 = _span((ex, ey), (ex + ux * ARROWHEAD, ey + uy * ARROWHEAD))
+            half = ARROWHEAD / 2
+            marks.append((None, (x0 - half * abs(uy), y0 - half * abs(ux),
+                                 x1 + half * abs(uy), y1 + half * abs(ux))))
+    return marks
+
+
+def _new_ink(route, square):
+    """Return the part of a tap line its square turn does not draw.
+
+    Both leave the tap; the run they share from it is left out. A route
+    leaving the other way starts :data:`~pandid.routing.visibility.EDGE_TOL`
+    from the tap, the one point it must meet its host at.
+
+    Parameters
+    ----------
+    route : list[tuple[float, float]]
+        Rerouted tap line.
+    square : list[tuple[float, float]]
+        Its square turn.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Points from where the route leaves the square turn to the balloon
+        centre.
+    """
+    from pandid.routing.visibility import EDGE_TOL
+
+    (tx, ty), (rx, ry), (sx, sy) = route[0], route[1], square[1]
+    ux, uy = (rx > tx) - (rx < tx), (ry > ty) - (ry < ty)
+    run = abs(rx - tx) + abs(ry - ty)
+    shared = (ux, uy) == ((sx > tx) - (sx < tx), (sy > ty) - (sy < ty))
+    d = min(run, abs(sx - tx) + abs(sy - ty)) if shared else EDGE_TOL
+    start = (tx + ux * d, ty + uy * d)
+    return route[1:] if start == route[1] else [start, *route[1:]]
+
+
+def _touches(route, lines) -> bool:
+    """Return whether a line meets any other line but by crossing it.
+
+    Two segments meet when they come within
+    :data:`~pandid.routing.visibility.EDGE_TOL` of each other, the
+    distance a line lies on a box edge. A level and an upright segment
+    that cross cross rather than meet when every corner of either is at
+    least :data:`HOP_R`, the room a crossing mark takes, from the other,
+    and every end of another line at least :data:`ARROWHEAD`, the room
+    a crossing keeps from a nozzle. A shared run, a corner or end on
+    another line, and a near touch all meet.
+
+    Parameters
+    ----------
+    route : list[tuple[float, float]]
+        Line points.
+    lines : list[list[tuple[float, float]]]
+        Other drawn lines.
+
+    Returns
+    -------
+    bool
+        Whether any segment of ``route`` meets one of ``lines``.
+    """
+    from pandid.routing.visibility import EDGE_TOL
+
+    def box(p, q):
+        """Return the box a segment spans.
+
+        Parameters
+        ----------
+        p, q : tuple[float, float]
+            Segment ends.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``(x0, y0, x1, y1)``.
+        """
+        return min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1])
+
+    for a, b in zip(route, route[1:]):
+        ab = box(a, b)
+        for line in lines:
+            last = len(line) - 2
+            for j, (c, d) in enumerate(zip(line, line[1:])):
+                cd = box(c, d)
+                if not boxes_overlap(ab, cd, EDGE_TOL):
+                    continue
+                across = ((a[1] == b[1] and a[0] != b[0] and c[0] == d[0] and c[1] != d[1])
+                          or (a[0] == b[0] and a[1] != b[1] and c[1] == d[1] and c[0] != d[0]))
+                room = ((a, cd, HOP_R), (b, cd, HOP_R),
+                        (c, ab, ARROWHEAD if j == 0 else HOP_R),
+                        (d, ab, ARROWHEAD if j == last else HOP_R))
+                if not across or any(boxes_overlap(box(p, p), other, gap)
+                                     for p, other, gap in room):
+                    return True
+    return False
+
+
+def _square_tap(inst, tap, centre):
+    """Return the square path of one tap line and its ways out.
 
     A balloon on a pipe, or ahead of a unit's face, is reached in one
     straight run when aligned with the tap. Otherwise the line leaves
@@ -285,34 +556,49 @@ def tap_route(inst, tap, centre):
 
     Returns
     -------
-    list[tuple[float, float]]
-        Points from the tap to the balloon centre.
+    tuple[list[tuple[float, float]], list[str]]
+        Points from the tap to the balloon centre, and the compass
+        directions a line may leave the tap in, first the path's own:
+        a unit's face outward, a pipe either side; none for a tap on a
+        slanted run.
     """
     from pandid.layout.attach import _anchor
+    from pandid.portgeom import COMPASS
     from pandid.streams import Stream
 
     (tx, ty), (cx, cy) = tap, centre
     anchor = _anchor(inst)
     if anchor is None:
-        return [tap, centre]
+        return [tap, centre], []
     # A unit's reference runs along its face; turned, it is the outward normal.
     rx, ry = anchor[1]
     nx, ny = ry, -rx
     across = abs(nx) > abs(ny)
+    ahead = (cx - tx) * nx + (cy - ty) * ny
     # A pipe has no outside, so its balloon is always ahead.
-    if isinstance(inst.host, Stream) or (cx - tx) * nx + (cy - ty) * ny > 0:
+    if isinstance(inst.host, Stream) or ahead > 0:
         if abs(cx - tx) < 0.01 or abs(cy - ty) < 0.01:
-            return [tap, centre]
-        return [tap, (cx, ty) if across else (tx, cy), centre]
-    sx, sy = tx + nx * M, ty + ny * M
-    x0, y0, x1, y1 = unit_box(inst.host, inst.host.frame)
-    if across:
-        y = cy if not y0 < cy < y1 else (y0 - M if cy - y0 < y1 - cy else y1 + M)
-        bends = [(sx, sy), (sx, y), (cx, y)]
+            square = [tap, centre]
+        else:
+            square = [tap, (cx, ty) if across else (tx, cy), centre]
+        # Leave a pipe on its balloon's side.
+        if ahead < 0:
+            nx, ny = -nx, -ny
     else:
-        x = cx if not x0 < cx < x1 else (x0 - M if cx - x0 < x1 - cx else x1 + M)
-        bends = [(sx, sy), (x, sy), (x, cy)]
-    return [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
+        sx, sy = tx + nx * M, ty + ny * M
+        x0, y0, x1, y1 = unit_box(inst.host, inst.host.frame)
+        if across:
+            y = cy if not y0 < cy < y1 else (y0 - M if cy - y0 < y1 - cy else y1 + M)
+            bends = [(sx, sy), (sx, y), (cx, y)]
+        else:
+            x = cx if not x0 < cx < x1 else (x0 - M if cx - x0 < x1 - cx else x1 + M)
+            bends = [(sx, sy), (x, sy), (x, cy)]
+        square = [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
+    faces: dict[tuple[float, float], str] = {v: k for k, v in COMPASS.items()}
+    face = faces.get((nx, ny))
+    if face is None:
+        return square, []
+    return square, [face, faces[-nx, -ny]] if isinstance(inst.host, Stream) else [face]
 
 
 def impulse_tap(inst) -> bool:
@@ -636,8 +922,7 @@ def _ink(fs, direction: str) -> "list[_Ink]":
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe", s.name or "")
-    for u, tap, centre in tap_lines(fs):
-        route = tap_route(u, tap, centre)
+    for _, route in square_taps(fs):
         for a, b in zip(route, route[1:]):
             add(a, b, _ink_pad(LineWeight.DETAIL), "tap")
     # A hop belongs to the run that draws it.
@@ -2871,7 +3156,7 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
 
 
 def drawing_bounds(fs) -> "tuple[float, float, float, float]":
-    """Return the bounding box of every unit box and route waypoint.
+    """Return the bounding box of every unit box, route and tap line.
 
     Parameters
     ----------
@@ -2905,6 +3190,10 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
             for px, py in s.route.waypoints:
                 x0, y0 = min(x0, px), min(y0, py)
                 x1, y1 = max(x1, px), max(y1, py)
+    for _, route in tap_routes(fs):
+        for px, py in route:
+            x0, y0 = min(x0, px), min(y0, py)
+            x1, y1 = max(x1, px), max(y1, py)
     return (x0, y0, x1, y1)
 
 
@@ -3829,7 +4118,7 @@ class SvgRenderer:
         """Return the lines from tap points to their balloons.
 
         Draw impulse lines solid and signal lines dashed, along
-        :func:`tap_route`.
+        :func:`tap_routes`.
 
         Parameters
         ----------
@@ -3842,10 +4131,9 @@ class SvgRenderer:
             SVG lines, empty when there are no taps.
         """
         out = []
-        for u, tap, centre in tap_lines(fs):
+        for u, route in tap_routes(fs):
             dash = "" if impulse_tap(u) else f' stroke-dasharray="{_TAP_DASH}"'
             pen = f'stroke="black" stroke-width="{LineWeight.DETAIL.width:g}"{dash} />'
-            route = tap_route(u, tap, centre)
             if len(route) == 2:
                 (tx, ty), (cx, cy) = route
                 out.append(f'    <line x1="{fmt(tx, 2)}" y1="{fmt(ty, 2)}" '

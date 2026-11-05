@@ -29,7 +29,7 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
                                quadrant_labels,
                                resolve_connections, sheet_connections,
-                               stream_numbers, stream_polyline, tap_lines, tap_route)
+                               stream_numbers, stream_polyline, tap_routes)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, default_registry, fail_marking,
                                    wears_arrowhead)
@@ -1546,7 +1546,8 @@ class DrawioRenderer:
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
         out: list[str] = []
-        for n, (inst, tap, centre) in enumerate(tap_lines(fs)):
+        for n, (inst, route) in enumerate(tap_routes(fs)):
+            tap, centre = route[0], route[-1]
             target = index.get(id(inst))
             if target is None:  # not on the sheet
                 continue
@@ -1568,7 +1569,7 @@ class DrawioRenderer:
             terminals = f' source="{self._id(source)}"' if source is not None else ""
             body = [f'            <mxPoint x="{fmt(fit.at(*tap)[0], 2)}" '
                     f'y="{fmt(fit.at(*tap)[1], 2)}" as="sourcePoint" />'] if source is None else []
-            bends = [fit.at(*p) for p in tap_route(inst, tap, centre)[1:-1]]
+            bends = [fit.at(*p) for p in route[1:-1]]
             if bends:
                 body += ['            <Array as="points">',
                          *(f'              <mxPoint x="{fmt(x, 2)}" y="{fmt(y, 2)}" />'

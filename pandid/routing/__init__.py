@@ -3,7 +3,7 @@
 import math
 import warnings
 from collections import defaultdict
-from typing import Protocol, TYPE_CHECKING
+from typing import Iterator, Protocol, TYPE_CHECKING
 
 from pandid.deprecation import Deprecation
 from pandid.geometry import Route
@@ -311,7 +311,7 @@ class DefaultRouter:
             If an end has no frame or anchor; the stream is skipped.
         """
         from pandid.portgeom import COMPASS, resolve_port
-        from pandid.render.svg import tap_lines, tap_route
+        from pandid.render.svg import square_taps
         from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
         from pandid.routing.astar import CROSSING_PENALTY, TOUCH_PENALTY, CrossingIndex, find_path
@@ -337,7 +337,7 @@ class DefaultRouter:
         edge_penalties = defaultdict(float)
         for run in hugging:
             edge_penalties[run] += TOUCH_PENALTY
-        taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+        taps = [(u.host, points) for u, points in square_taps(fs)]
         routed: list["Stream"] = []
         # Ends of each found route's stand-offs.
         escapes: dict[int, tuple[tuple[float, float], tuple[float, float]]] = {}
@@ -534,3 +534,82 @@ class DefaultRouter:
         # Keep the routes layout sets pipe furniture on.
         if fs._lanes and not fs._laying_out and relane(fs, escapes, graph):
             fs._relaned = True
+
+
+def route_tap(inst, tap: tuple[float, float], faces: list[str],
+              centre: tuple[float, float],
+              lines: list[list[tuple[float, float]]]) -> Iterator[list[tuple[float, float]]]:
+    """Yield a tap line's paths round unit bodies and tags, best first.
+
+    Each path leaves the tap square along one of ``faces``, in order,
+    to a stand-off :data:`~pandid.routing.visibility.MIN_ESCAPE` out or
+    else half that, and reaches the balloon centre on the visibility
+    graph at the fewest bends. It crosses its own host's tag only where
+    it leaves the host through it. It is priced as a stream routed after
+    ``lines``: by the lines it crosses and the runs it shares.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Placed attached balloon.
+    tap : tuple[float, float]
+        Tap point.
+    faces : list[str]
+        Compass directions the line may leave the tap in, in order.
+    centre : tuple[float, float]
+        Balloon centre.
+    lines : list[list[tuple[float, float]]]
+        Streams and other tap lines already drawn.
+
+    Yields
+    ------
+    list[tuple[float, float]]
+        Points from ``tap`` to ``centre``, one path per way out that
+        reaches it.
+    """
+    from bisect import bisect_left, bisect_right
+
+    from pandid.portgeom import COMPASS, unit_box
+    from pandid.routing.astar import CrossingIndex, find_path
+    from pandid.routing.visibility import MIN_ESCAPE, Rect, VisibilityGraph, _tag_halo
+    from pandid.units import Unit
+
+    host, fs = inst.host, inst.flowsheet
+    if fs is None or inst.frame is None:
+        return
+    x0, y0, x1, y1 = unit_box(inst, inst.frame)
+    omit = [Rect(x0, x1, y0, y1)]
+    owner = host if isinstance(host, Unit) else inst
+    stubs = [(face, (tap[0] + escape * COMPASS[face][0], tap[1] + escape * COMPASS[face][1]))
+             for face in faces for escape in (MIN_ESCAPE, MIN_ESCAPE / 2)]
+    # A line that leaves its host through the host's tag may cross it.
+    halo = _tag_halo(owner, owner.frame) if owner.frame is not None else None
+    if halo is not None and any(halo.intersects_segment(*tap, *stub) for _, stub in stubs):
+        omit.append(halo)
+    graph = VisibilityGraph(fs, lanes=(*(stub for _, stub in stubs), centre), omit=omit)
+    if not graph.edges.get(centre):
+        return
+    index = CrossingIndex()
+    used: dict[tuple[tuple[float, float], tuple[float, float]], float] = defaultdict(float)
+    for line in lines:
+        _record_route(index, line, True)
+        # Charge each graph edge on the line's square runs.
+        for (ax, ay), (bx, by) in zip(line, line[1:]):
+            if (ax == bx) == (ay == by):
+                continue
+            lanes, fixed = (graph.xs, ay) if ay == by else (graph.ys, ax)
+            lo, hi = sorted((ax, bx) if ay == by else (ay, by))
+            run = [(c, fixed) if ay == by else (fixed, c)
+                   for c in lanes[bisect_left(lanes, lo):bisect_right(lanes, hi)]]
+            for p, q in zip(run, run[1:]):
+                if q in graph.edges.get(p, ()):
+                    used[(p, q)] += 2000.0
+                    used[(q, p)] += 2000.0
+    for face, stub in stubs:
+        start = graph.reachable_projection(tap, stub, face, owner)
+        path = find_path(graph, start, centre, face, None, used, False, index) if start else []
+        if path:
+            points = [tap, *path]
+            yield [points[0], *(b for a, b, c in zip(points, points[1:], points[2:])
+                                if not (a[0] == b[0] == c[0] or a[1] == b[1] == c[1])),
+                   points[-1]]
