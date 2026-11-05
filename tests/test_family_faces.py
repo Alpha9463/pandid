@@ -379,3 +379,16 @@ def test_a_line_meeting_a_roof_nozzle_is_not_counted_through_its_tank():
     _flag(fs, tank, "in_1", 340, 150, False)
     fs.route()
     assert _flaws(fs)["line-through-unit"] == 0
+
+
+def test_a_line_leaving_a_roof_nozzle_across_the_roof_is_counted_through_its_tank():
+    """Count a line's end that runs inside its own unit off the nozzle's face."""
+    from pandid.layout.control import _flaws
+
+    fs = Flowsheet("roof")
+    tank = fs.add(units.Tank("TK-1")).pin(x=300, y=300)
+    product = fs.add(units.Product("P-1")).pin(x=600, y=307.9)
+    # The vent's line runs east across the inside of the roof.
+    fs.connect(tank.vent, product.inlet).via([(550, 307.9)])
+    fs.route()
+    assert _flaws(fs)["line-through-unit"] == 1
