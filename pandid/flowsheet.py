@@ -2132,12 +2132,14 @@ class Flowsheet:
         self.renumber_streams()
         runs = list(self._named_runs().values())
         keys = dict.fromkeys(k for run in runs for s in run for k in s.properties)
-        clash = [k for k in keys if k in _LINE_LIST_COLUMNS]
-        if clash:
+        clash = next((k for k in keys if k in _LINE_LIST_COLUMNS), None)
+        if clash is not None:
+            carrier = next(s for run in runs for s in run if clash in s.properties)
             raise ValueError(
-                f"the stream property {clash[0]!r} has the name of a line_list() "
-                f"column, so a row cannot hold both. Rename it in the stream's "
-                f"properties, e.g. stream.properties = {{{clash[0].title()!r}: ...}}"
+                f"{carrier.name}: the stream property {clash!r} has the name of a "
+                f"line_list() column, so a row cannot hold both. Rename it on that "
+                f"stream, keeping its value: stream.properties[{clash.title()!r}] = "
+                f"stream.properties.pop({clash!r})"
             )
         rows = []
         for run in runs:
@@ -2179,7 +2181,8 @@ class Flowsheet:
         """Return the instrument index: one row per instrument balloon.
 
         Every row has the keys ``tag``, ``loop`` (the measured
-        variable and loop number, such as ``"F-101"``),
+        variable and loop number as ``Loop.name`` spells them, such as
+        ``"F-101"``),
         ``measured_variable`` (the first letter), ``function_letters``,
         ``location`` (``"field"``, ``"central"`` or ``"subsidiary"``),
         ``on`` (the line or unit the balloon is attached to) and
@@ -2200,7 +2203,7 @@ class Flowsheet:
 
         self.renumber_streams()
         return [{"tag": u.tag,
-                 "loop": f"{u.type[:1]}-{u.number}" if u.number else "",
+                 "loop": f"{u.type[:1].upper()}-{u.number}" if u.number else "",
                  "measured_variable": u.type[:1],
                  "function_letters": u.type,
                  "location": u.display,

@@ -2,10 +2,11 @@
 
 import csv
 import io
+import re
 
 import pytest
 
-from pandid import Feed, Flowsheet, GearPump, Product, Valve, Vessel
+from pandid import ControlValve, Feed, Flowsheet, GearPump, Product, Valve, Vessel
 from pandid.deprecation import CODE
 from pandid.document import equipment_list, equipment_table
 from pandid.render.furniture import stream_table_layout
@@ -145,15 +146,20 @@ def test_a_stream_number_shared_across_a_pump_runs_through_it():
     assert _ends(row) == ["V-401", "out_1", "Product", "inlet"]
 
 
-def test_a_property_named_like_a_column_is_refused():
-    """Check that a property named like a line-list column raises, not overwrites."""
+def test_a_property_named_like_a_column_is_refused_with_advice_that_keeps_it():
+    """Check that following the clash advice literally keeps every property."""
     fs = Flowsheet("Clash")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
     line = fs.connect(feed.outlet, product.inlet, size='2"')
-    line.properties = {"size": "DN50"}
-    with pytest.raises(ValueError, match="properties"):
+    line.properties = {"Temperature": "25 C", "size": "DN50", "Flow (kg/h)": 1200}
+    with pytest.raises(ValueError, match=re.escape(line.name)) as refused:
         fs.line_list()
+    advice = str(refused.value).rsplit(": ", 1)[1]
+    exec(advice, {"stream": line})
+    assert line.properties == {"Temperature": "25 C", "Flow (kg/h)": 1200, "Size": "DN50"}
+    (row,) = fs.line_list()
+    assert (row["size"], row["Size"], row["Temperature"]) == ('2"', "DN50", "25 C")
 
 
 def test_the_equipment_list_has_one_row_per_scheduled_unit():
@@ -203,6 +209,27 @@ def test_the_instrument_index_has_one_row_per_balloon():
             "relation": "sensing",
         },
     ]
+
+
+def test_an_instruments_loop_is_its_loops_name():
+    """Check that each balloon's ``loop`` is the name of the loop it was built from."""
+    fs = Flowsheet("Loops")
+    feed = fs.add(Feed("Feed"))
+    valve = fs.add(ControlValve("FV-101"))
+    product = fs.add(Product("Product"))
+    line = fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, product.inlet)
+    flow = fs.add_control_loop("F", 101, measuring=line, acting_on=valve).loop
+    pressure = fs.add_loop("P")
+    fs.add_instrument("PDT", pressure, sensing=line)
+    fs.add_instrument("pi", pressure, near=valve)
+    rows = {row["tag"]: row["loop"] for row in fs.instrument_index()}
+    assert rows == {
+        "FT-101": flow.name,
+        "FIC-101": flow.name,
+        f"PDT-{pressure.number}": pressure.name,
+        f"pi-{pressure.number}": pressure.name,
+    }
 
 
 @pytest.mark.parametrize("schedule", ["line_list", "equipment_list", "instrument_index"])
