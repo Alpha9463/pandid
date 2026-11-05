@@ -477,3 +477,47 @@ def test_a_rejected_wall_outlet_leaves_the_inlet_moves_main_draws():
     quality = measure_final(fs)
     assert _face(tank, "in_2") == "N"
     assert (quality.crossings, quality.bends) == (1, 7)
+
+
+def _tank_to_mixer(case: str) -> Flowsheet:
+    """Build a tank whose outlets reach a mixer by a pump and a vessel."""
+    if case == "A":
+        tk, v, p, m, n, out = (900, 100), (600, 550), (600, 100), (300, 300), 5, (900, 300)
+    else:
+        tk, v, p, m, n, out = (600, 100), (1100, 650), (600, 550), (900, 300), 3, (300, 650)
+    fs = Flowsheet("tank to mixer")
+    tank = fs.add(units.Tank("TK-1", inputs=2, outputs=2)).pin(x=tk[0], y=tk[1])
+    vessel = fs.add(units.Vessel("V-1")).pin(x=v[0], y=v[1])
+    pump = fs.add(units.Pump("P-1")).pin(x=p[0], y=p[1])
+    mixer = fs.add(units.Mixer("M-1", n_inlets=n)).pin(x=m[0], y=m[1])
+    product = fs.add(units.Product("Product")).pin(x=out[0], y=out[1])
+    for k, y in enumerate((100, 340)):
+        feed = fs.add(units.Feed(f"Feed-{k}")).pin(x=70, y=y)
+        fs.connect(feed.outlet, tank.inlets[k])
+    fs.connect(tank.outlets[0], pump.suction)
+    fs.connect(pump.discharge, mixer.in_1)
+    fs.connect(tank.outlets[1], vessel.inlet)
+    fs.connect(vessel.outlet, mixer.in_2)
+    last = fs.connect(mixer.outlet, product.inlet)
+    for k in range(n - 2):
+        additive = fs.add(units.Feed(f"Additive-{k}")).pin(x=70, y=700 + 150 * k)
+        fs.connect(additive.outlet, mixer.inlets[k + 2])
+    if case == "B":
+        fs.add_instrument("FI", 101, sensing=last, at=0.5, offset=90)
+    return fs
+
+
+@pytest.mark.parametrize(
+    ("case", "crossings", "bends"), [("A", 18, 28), ("B", 6, 22)], ids=["mixer-grown", "balloon"]
+)
+def test_the_family_face_trial_never_draws_worse_than_main(case, crossings, bends):
+    """Judge the family faces from main's starting state, and keep the winner as scored."""
+    from pandid.layout.control import _taps_off
+
+    fs = _tank_to_mixer(case)
+    fs.route()
+    quality = measure_final(fs)
+    assert quality.crossings <= crossings
+    assert quality.bends <= bends
+    assert fs.route_converged
+    assert _taps_off(fs) == set()

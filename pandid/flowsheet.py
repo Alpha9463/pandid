@@ -2297,9 +2297,10 @@ class Flowsheet:
         its declared face, the sheet is also laid out and drawn with every
         such connection on its declared face. The moves are kept only if no
         crossing, bend, fallback, finding, clash or tap off its line grows
-        by them and one of them falls. Where a move is onto a symbol's
-        family faces, the sheet is first drawn so with the stencil's own
-        faces alone, and the family faces are kept only if they beat that.
+        by them and one of them falls. Where a symbol offers family faces,
+        the sheet is then laid out again from where that started with them
+        too, and drawn so only if a move takes one; that drawing is kept
+        only if it beats the first.
 
         Last, where the drawing stacks two units in a column with another
         unit pinned to a row between theirs, the sheet is laid out and
@@ -2494,27 +2495,67 @@ class Flowsheet:
                 self._put_state(kept)
                 self._plain_state, self._plain_stale = plain_state
 
-        if not (self._family_faces and self._added_faces):
-            self._family_faces = self._added_faces = self._layout_stale = True
+        def snapshot() -> tuple:
+            """Return the drawing and the caches a trial starts from.
+
+            Returns
+            -------
+            tuple
+                State for :func:`restore`.
+            """
+            return (self._state(), self._plain_state, self._plain_stale,
+                    self._layout_stale, self._route_stale)
+
+        def restore(snap: tuple) -> None:
+            """Put back what :func:`snapshot` returned.
+
+            Parameters
+            ----------
+            snap : tuple
+                What :func:`snapshot` returned.
+            """
+            state, self._plain_state, self._plain_stale, layout_stale, route_stale = snap
+            self._put_state(state)
+            self._layout_stale, self._route_stale = layout_stale, route_stale
+
+        def offered() -> bool:
+            """Return whether a connected port is offered a family face.
+
+            Returns
+            -------
+            bool
+                True if some unit's symbol offers one.
+            """
+            return any(
+                isinstance(u, _FaceFamilies)
+                and any(len(u._offered(name)) > len(u._offered(name, added=False))
+                        for name in u._faces
+                        if u.ports[name].stream is not None and name not in u._stated)
+                for u in self.units)
+
+        start = snapshot()
+        # Main's drawing: moves on the stencil's own faces, as main judges
+        # them.
+        laid_so = self._family_faces and not self._added_faces
+        self._family_faces, self._added_faces = True, False
+        self._layout_stale = self._layout_stale or not laid_so
         self._route_lanes(router)
         if self._laying_out or not (router is None or type(router) is DefaultRouter):
             return
-        if not moved(True):
-            # With no move onto a family face, layout moved what it moves
-            # on the stencil's faces alone.
-            against_plain()
-            return
-        # Draw the sheet on the stencil's faces alone, judged as that is,
-        # and keep the family faces only where they beat it.
-        kept, judged = self._state(), _score(self)
-        plain_state = self._plain_state, self._plain_stale
-        self._added_faces, self._layout_stale = False, True
-        self._route_lanes(router)
         against_plain()
-        if beats(judged, _score(self)):
-            self._family_faces = self._added_faces = True
-            self._put_state(kept)
-            self._plain_state, self._plain_stale = plain_state
+        if not offered():
+            return
+        mains, judged = snapshot(), _score(self)
+        # The family faces, laid out from where main's drawing started and
+        # kept only where they beat it.
+        restore(start)
+        self._family_faces = self._added_faces = self._layout_stale = True
+        self.layout(self._engine)
+        if moved(True):
+            self._route_lanes(router)
+            if beats(_score(self), judged):
+                return
+        restore(mains)
 
     def _route_lanes(self, router=None) -> None:
         """Route the sheet, with lanes and grown faces where they draw no
@@ -2641,7 +2682,10 @@ class Flowsheet:
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
                         self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out))
+                        self._rows_out,
+                        tuple((u, u._stock_face) for u in self.units
+                              if hasattr(u, "_stock_face")),
+                        self._family_faces, self._added_faces, self._lanes, self._relaned))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2653,7 +2697,10 @@ class Flowsheet:
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out) = _copied(state)
+         self._rows_out, stock, self._family_faces, self._added_faces, self._lanes,
+         self._relaned) = _copied(state)
+        for u, flag in stock:
+            u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
