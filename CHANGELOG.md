@@ -56,6 +56,8 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- The equipment list and `fs.equipment_list()` include centrifuges and
+  crushing machines.
 - A balloon takes any number of signal lines. Lines on one side of it leave
   from separate points on its outline instead of stacking on one point.
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
