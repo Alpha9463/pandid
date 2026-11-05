@@ -44,6 +44,8 @@ These are removed in 0.4.0.
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 - Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
+- `validate()` reports a `route-crosses-unit` warning for a slanted `via()` leg
+  drawn through a unit, including the unit the line connects to.
 
 ## [0.2.0] - 2026-11-05
 
