@@ -119,6 +119,9 @@ def _lines(unit: "Unit", frame, names: list[str], held: set[str]
            ) -> dict[str, tuple[tuple[float, float], int | None]]:
     """Return each port's anchor and fewest bends to a fixed peer.
 
+    A line that bends leaves its port a full escape before its first
+    bend.
+
     Parameters
     ----------
     unit : Unit
@@ -136,15 +139,19 @@ def _lines(unit: "Unit", frame, names: list[str], held: set[str]
         Port name to anchor and bends, None for a held port or one
         whose peer has a choice of faces.
     """
-    from pandid.portgeom import resolve_port
+    from pandid.portgeom import COMPASS, resolve_port
     from pandid.routing.metrics import min_bends
 
     out: dict[str, tuple[tuple[float, float], int | None]] = {}
     for name in names:
         _, anchor, face = resolve_port(unit, frame, name)
         peer = None if name in held else _fixed_peer(unit.ports[name])
-        out[name] = (anchor, None if peer is None
-                     else min_bends(anchor, face, peer.anchor, peer.face))
+        bends = None if peer is None else min_bends(anchor, face, peer.anchor, peer.face)
+        if peer is not None and bends:
+            dx, dy = COMPASS[face]
+            tip = (anchor[0] + MIN_ESCAPE * dx, anchor[1] + MIN_ESCAPE * dy)
+            bends = min_bends(tip, face, peer.anchor, peer.face)
+        out[name] = (anchor, bends)
     return out
 
 

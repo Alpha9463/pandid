@@ -39,17 +39,17 @@ def _block(
 
 
 # A 120 x 80 block at (300, 300): W (300, 340), E (420, 340), N (360, 300),
-# S (360, 380).
+# S (360, 380); in_1 and out_1 on one side face sit at 325 and 355.
 @pytest.mark.parametrize(
     ("port", "x", "y", "mirrored", "face"),
     [
         ("in_1", 340, 150, False, "N"),
         ("in_1", 340, 520, False, "S"),
         ("in_1", 100, 340, False, "W"),
-        ("in_1", 650, 340, True, "E"),
+        ("in_1", 650, 325, True, "E"),
         ("out_1", 650, 120, False, "N"),
         ("out_1", 650, 560, False, "S"),
-        ("out_1", 80, 340, True, "W"),
+        ("out_1", 80, 355, True, "W"),
         ("out_1", 650, 340, False, "E"),
     ],
     ids=[
@@ -66,7 +66,7 @@ def _block(
 def test_a_counted_block_connection_takes_the_face_toward_its_peer(port, x, y, mirrored, face):
     """Draw an unstated block connection on the face toward its peer."""
     fs, b = _block(port, x, y, mirrored)
-    fs.layout()
+    fs.route()
     assert _face(b, port) == face
 
 
@@ -76,7 +76,7 @@ def test_two_inlets_on_the_west_split_when_one_comes_from_above():
     b = fs.add(units.Block("Reaction", inputs=2)).pin(x=300, y=300)
     _flag(fs, b, "in_1", 100, 340, False)
     _flag(fs, b, "in_2", 340, 150, False)
-    fs.layout()
+    fs.route()
     assert (_face(b, "in_1"), _face(b, "in_2")) == ("W", "N")
 
 
@@ -89,9 +89,10 @@ def test_a_second_tank_inlet_takes_the_face_toward_its_peer(x, y, mirrored, face
     """Choose among the faces a tank's artwork offers an inlet."""
     fs = Flowsheet("tank")
     tank = fs.add(units.Tank("TK-1", inputs=2)).pin(x=300, y=300)
-    _flag(fs, tank, "in_1", 100, 365, False)
+    # in_1 sits at y = 385 alone on the west face and at 365 beside in_2.
+    _flag(fs, tank, "in_1", 100, 300 if face == "W" else 385, False)
     _flag(fs, tank, "in_2", x, y, mirrored)
-    fs.layout()
+    fs.route()
     assert _face(tank, "in_2") == face
 
 
@@ -170,6 +171,14 @@ def test_a_full_face_takes_no_more_connections():
     assert b.frame is not None
     xs = sorted(resolve_port(b, b.frame, p).point[0] for p in ("out_1", "out_2", "out_3", "out_4"))
     assert min(b - a for a, b in zip(xs, xs[1:])) >= BLOCK_PITCH - 1e-6
+
+
+def test_a_face_whose_line_would_turn_before_it_clears_the_box_is_not_taken():
+    """Keep an outlet off the top when its line would run along the roof."""
+    # The peer is 5 above the roof, so the top's line would turn at once.
+    fs, b = _block("out_1", 600, 295)
+    fs.layout()
+    assert _face(b, "out_1") == "E"
 
 
 def test_two_inlets_never_share_a_face_in_the_order_that_crosses_them():
