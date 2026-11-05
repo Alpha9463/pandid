@@ -5,6 +5,7 @@ import heapq
 import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Optional, Tuple
+from pandid.portgeom import COMPASS
 from pandid.routing.visibility import VisibilityGraph
 
 BEND_PENALTY = 500.0
@@ -250,8 +251,12 @@ def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
 
 
 def heuristic(a: Tuple[float, float], b: Tuple[float, float],
-              bend_cost: float = BEND_PENALTY) -> float:
-    """Return the Manhattan distance plus one bend if not aligned.
+              bend_cost: float = BEND_PENALTY, goal_dir: Optional[str] = None) -> float:
+    """Return the Manhattan distance plus the fewest bends still to draw.
+
+    Without ``goal_dir``, count one bend if not aligned. With it, count
+    the turn into the goal stub too: none on the stub's line outward of
+    ``b``, one beside that line, two inward of ``b``.
 
     Parameters
     ----------
@@ -259,6 +264,8 @@ def heuristic(a: Tuple[float, float], b: Tuple[float, float],
         Points to measure between.
     bend_cost : float, default=BEND_PENALTY
         Cost of one bend.
+    goal_dir : str or None, optional
+        Outward direction at the port whose escape node is ``b``.
 
     Returns
     -------
@@ -269,8 +276,15 @@ def heuristic(a: Tuple[float, float], b: Tuple[float, float],
     dy = abs(a[1] - b[1])
     h = dx + dy
 
-    if dx > 0 and dy > 0:
-        h += bend_cost
+    if goal_dir is None:
+        return h + bend_cost if dx > 0 and dy > 0 else h
+    ux, uy = COMPASS[goal_dir]
+    ahead = (a[0] - b[0]) * ux + (a[1] - b[1]) * uy
+    beside = dx if ux == 0 else dy
+    if ahead < 0:
+        h += 2 * bend_cost - SIDE_ARRIVAL_TIE
+    elif beside > 0:
+        h += bend_cost if ahead > 0 else bend_cost - SIDE_ARRIVAL_TIE
     return h
 
 
@@ -438,7 +452,7 @@ def find_path(
                 elif crossing_index is not None:
                     cost += CROSSING_PENALTY * crossing_index.crosses(goal, _AXIS[goal_dir])
 
-            h = heuristic(neighbor, goal, bend_cost)
+            h = heuristic(neighbor, goal, bend_cost, goal_dir)
 
             counter += 1
             heapq.heappush(queue, (cost + h, cost, counter, neighbor, ndir, path + [neighbor]))

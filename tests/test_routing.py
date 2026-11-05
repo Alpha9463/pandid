@@ -1,6 +1,7 @@
 """Check obstacle geometry, path search, crossing pricing, and the default router."""
 
 import heapq
+import itertools
 import re
 import warnings
 from collections.abc import Callable
@@ -594,6 +595,25 @@ def test_a_side_arrival_wins_a_tie_with_an_inline_arrival(side_first: bool) -> N
     graph = _graph(side, inline) if side_first else _graph(inline, side)
     routed = find_path(graph, (0.0, 0.0), (40.0, 20.0), None, "N")
     assert routed == side, f"broke the tie towards the inline arrival: {routed}"
+
+
+def test_the_estimate_keeps_every_search_on_a_grid_cheapest(monkeypatch: pytest.MonkeyPatch):
+    """Find the cost a blind search finds, for every end and direction."""
+    ticks = [0.0, 10.0, 20.0, 30.0]
+    graph = _graph(
+        *[[(x, y) for x in ticks] for y in ticks],
+        *[[(x, y) for y in ticks] for x in ticks],
+    )
+    points = [(x, y) for x in ticks for y in ticks]
+    dirs = [None, "N", "S", "E", "W"]
+    for start, goal, start_dir, goal_dir in itertools.product(points, points, dirs, dirs[1:]):
+        if start == goal or not find_path(graph, start, goal, start_dir, goal_dir):
+            continue
+        guided = _final_g(graph, start, goal, start_dir, goal_dir)
+        with monkeypatch.context() as patch:
+            patch.setattr(astar, "heuristic", lambda *_: 0.0)
+            blind = _final_g(graph, start, goal, start_dir, goal_dir)
+        assert guided == pytest.approx(blind, abs=1e-9), (start, goal, start_dir, goal_dir)
 
 
 def test_a_recycle_search_returns_the_cheapest_path():
