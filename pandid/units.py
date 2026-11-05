@@ -2453,10 +2453,12 @@ class Tee(Unit):
     """Pipe tee: the junction where a line branches.
 
     The run passes straight through ``inlet`` and ``outlet``; the branch
-    leaves the south face at a right angle. ``pin(mirrored="y")`` turns
-    the branch north, ``orientation=90`` runs N to S with the branch W
-    and ``orientation=270`` runs S to N with the branch E. A tee has no
-    tag. Tees may share a name, and
+    leaves the south face at a right angle, or the north face where the
+    unit it serves is drawn above the run.
+    ``pin(mirrored=False)`` keeps the branch south,
+    ``pin(mirrored="y")`` turns it north, ``orientation=90`` runs N to S
+    with the branch W and ``orientation=270`` runs S to N with the branch
+    E. A tee has no tag. Tees may share a name, and
     :meth:`~pandid.flowsheet.Flowsheet.add` renames them ``TEE (2)``,
     ``TEE (3)``. The run keeps its line number through the tee unless
     ``new_line_number`` is set; the branch starts its own.
