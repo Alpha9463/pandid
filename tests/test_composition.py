@@ -1170,6 +1170,7 @@ _COMPOSING = [
         units.Evaporator,
         units.Thickener,
         units.Crystallizer,
+        units.FlotationCell,
         units.Column,
         units.Reactor,
     )

@@ -41,6 +41,7 @@ __all__ = [
     "Reactor",
     "Separator",
     "Thickener",
+    "FlotationCell",
     "Crystallizer",
     "Absorber",
     "Stripper",
@@ -4253,6 +4254,68 @@ class Crystallizer(Unit):
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
                              lambda name, _body: draft_tube_overlays(name)))
+
+
+class FlotationCell(Unit):
+    """Mechanical flotation cell.
+
+    ``feed`` enters the west wall, ``concentrate`` leaves the froth
+    launder on the east, ``tailings`` leaves the floor and ``air``
+    enters the standpipe beside the shaft. ``validate`` reports a
+    turned cell as ``gravity-turned``.
+
+    Parameters
+    ----------
+    name : str
+        Tag.
+    variant : str, default="default"
+        Body drawing.
+    agitator : str or None, default="turbine"
+        Rotor on the shaft, one of :class:`Reactor`'s ``agitator``
+        names, or ``None``. Fixed at construction.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
+
+    Attributes
+    ----------
+    agitator : str or None
+        Rotor drawn on the shaft.
+
+    Raises
+    ------
+    ValueError
+        If ``agitator`` is unknown or the variant cannot carry it.
+    """
+
+    feed: Port
+    concentrate: Port
+    tailings: Port
+    air: Port
+
+    kind = "flotation_cell"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("concentrate", "outlet", "process"),
+        ("tailings", "outlet", "process"),
+        ("air", "inlet", "utility"),
+    ]
+    COMPOSITION = {"agitator": "turbine"}
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator"})
+
+    def __init__(  # numpydoc ignore=GL08
+        self,
+        name: str,
+        variant: str = "default",
+        agitator: str | None = "turbine",
+        **options: Unpack[_UnitOptions],
+    ):
+        super().__init__(name, variant=variant, **options)
+        from pandid.render.iso_parts import flotation_overlays
+
+        self.agitator = agitator
+        _compose_onto(self, ("agitator", agitator,
+                             lambda name, _body: flotation_overlays(name)))
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:

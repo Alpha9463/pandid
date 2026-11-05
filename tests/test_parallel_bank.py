@@ -7,8 +7,9 @@ from pandid.devices import ControlValve
 from pandid.streams import Stream
 from pandid.layout.attach import stream_path
 from pandid.layout.control import _flaws, _shared, _taps_off
-from pandid.layout import layered
+from pandid.layout import layered, mounted
 from pandid.layout.layered import COL_GAP, LANE_PITCH
+from pandid.layout.mounted import ALONG
 from _quality import measure_final
 from pandid.render import symbols
 from pandid.route_geometry import stream_polyline
@@ -221,3 +222,74 @@ def test_a_restored_drawing_shares_no_frame_with_the_one_it_was_saved_from():
     fs._put_state(state)
     saved = {id(frame) for _, frame, _ in state[0][0]}
     assert not saved & {id(u.frame) for u in fs.units}
+
+
+def _valved(n: int, at: float | None = None) -> tuple[Flowsheet, list[U.Valve], list[U.Pump]]:
+    """Return n pumps between SP and MX, each with a valve on its suction."""
+    fs = Flowsheet(f"Valved bank of {n}")
+    sp = fs.add(U.Splitter("SP", n_outlets=n))
+    mx = fs.add(U.Mixer("MX", n_inlets=n))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    valves, pumps = [], []
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        if at is None:
+            valve = fs.add(U.Valve(f"HV-{i}"))
+            fs.connect(outlet, valve.inlet)
+            fs.connect(valve.outlet, pump.suction)
+        else:
+            valve = fs.add(U.Valve(f"HV-{i}"), on=fs.connect(outlet, pump.suction), at=at)
+        fs.connect(pump.discharge, inlet)
+        valves.append(valve)
+        pumps.append(pump)
+    return fs, valves, pumps
+
+
+@pytest.mark.parametrize("n", [3, 6, 8])
+def test_each_suction_valve_sits_on_the_level_run_into_its_pump(n):
+    fs, valves, _ = _valved(n)
+    fs.route()
+    for valve in valves:
+        line = valve.outlet.stream
+        assert line is not None
+        points = stream_polyline(line)
+        assert len(points) == 2, valve.name
+        (x0, y0), (x1, y1) = points
+        assert y0 == y1 and x1 - x0 <= ALONG + 1, valve.name
+    assert measure_final(fs).crossings == 0
+    flaws = _flaws(fs)
+    assert flaws["unit-on-tag"] == flaws["line-through-tag"] == 0
+
+
+def _makeup() -> Flowsheet:
+    """Return a makeup line through a valve into a mixer."""
+    fs = Flowsheet("Makeup")
+    mx = fs.add(U.Mixer("MX"))
+    valve = fs.add(U.Valve("HV-1"))
+    fs.connect(fs.add(U.Feed("Makeup")).outlet, valve.inlet)
+    fs.connect(valve.outlet, mx.inlets[0])
+    fs.connect(fs.add(U.Feed("Return")).outlet, mx.inlets[1])
+    fs.connect(mx.outlet, fs.add(U.Pump("P-1")).suction)
+    return fs
+
+
+@pytest.mark.parametrize("build", [lambda: _valved(4, at=0.3)[0], _makeup])
+def test_a_valve_placed_or_off_a_flag_keeps_its_place(monkeypatch, build):
+    fs = build()
+    fs.route()
+    monkeypatch.setattr(mounted, "_fanned", lambda run, legs: None)
+    plain = build()
+    plain.route()
+    assert _drawing(fs) == _drawing(plain)
+
+
+def test_routing_a_valved_bank_again_draws_the_same_sheet():
+    fs = _valved(6)[0]
+    fs.route()
+    first = _drawing(fs)
+    fs.route()
+    assert _drawing(fs) == first
+    fs.layout()
+    fs.route()
+    assert _drawing(fs) == first
