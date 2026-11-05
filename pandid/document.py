@@ -5,6 +5,7 @@ bordered grid (:class:`TableBox`). A :class:`Document` checks a set of
 sheets against each other.
 """
 
+from contextlib import ExitStack
 from dataclasses import dataclass, field, fields, replace
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -731,13 +732,32 @@ class Document:
     def validate(self) -> "list[Issue]":
         """Return the findings across sheets, errors first, then warnings.
 
-        Number each sheet's streams first, as a render does. A sheet's
-        own findings come from its ``validate()``.
+        Number each sheet's streams first, as a render does, and keep
+        those numbers; a call that raises leaves every sheet unchanged.
+        A sheet's own findings come from its ``validate()``.
 
         Returns
         -------
         list[Issue]
             Findings, each naming the sheets it involves.
+
+        Raises
+        ------
+        ValueError
+            If a sheet's naming scheme cannot name a stream.
+        """
+        with ExitStack() as unchanged:
+            for fs in self.sheets:
+                unchanged.enter_context(fs._unchanged_if_it_raises())
+            return self._findings()
+
+    def _findings(self) -> "list[Issue]":
+        """Number each sheet's streams and return the findings across sheets.
+
+        Returns
+        -------
+        list[Issue]
+            Findings, errors first, then warnings.
 
         Raises
         ------

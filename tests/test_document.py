@@ -143,6 +143,21 @@ def test_the_alumina_refinery_set_has_no_cross_sheet_error():
     assert {(i.severity, i.code) for i in issues} == {("warning", "reference-not-in-set")}
 
 
+def test_a_refused_validate_leaves_every_sheet_as_it_was():
+    """Check that a sheet whose lines cannot be numbered leaves the earlier sheets unchanged."""
+    a = _sheet("Crude Unit", "PFD-001", Feed("In"), Product("Out"))
+    b = _sheet("Residue Unit", "PFD-002", Feed("In"), Product("Out"))
+    (line_a,), (line_b,) = a.streams, b.streams
+    for fs, line in ((a, line_a), (b, line_b)):
+        line.size, line.service = "6", "P"
+        fs.renumber_streams()
+    line_a.sequence = "4711"
+    b.line_numbering_scheme = "{spec}"
+    with pytest.raises(ValueError, match="line_numbering_scheme"):
+        Document([a, b]).validate()
+    assert (line_a.name, line_b.name) == ("6-P-1001", "6-P-1001")
+
+
 def test_a_document_holds_only_flowsheets():
     """Check that a sheet that is not a Flowsheet is refused."""
     sheets: list[Any] = ["PFD-001"]
