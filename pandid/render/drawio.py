@@ -787,14 +787,15 @@ class DrawioRenderer:
         table_sheet = wants_table_sheet(show_stream_table)
         if table_sheet and border is None:
             border = "zone"
-        border, _diagram = _resolve_sheet(border, diagram)
+        border, kind = _resolve_sheet(border, diagram)
         sheet = _page(page_size)
         if table_sheet:
-            return self._table_sheet(fs, sheet, border)
+            return self._table_sheet(fs, sheet, border, kind)
 
         body: list[str] = []
         # Cell order is z-order: border and furniture first.
-        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table), border)
+        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table), border,
+                                                kind)
         body.extend(self._border(frame, border))
         body.extend(furniture)
         # Then equipment, runs, taps and balloons.
@@ -817,7 +818,7 @@ class DrawioRenderer:
 
         return self._document(fs, sheet, frame, body)
 
-    def _table_sheet(self, fs, sheet, border) -> str:
+    def _table_sheet(self, fs, sheet, border, diagram) -> str:
         """Return the stream table's own sheet as a draw.io document.
 
         Parameters
@@ -828,6 +829,8 @@ class DrawioRenderer:
             Fixed page, or ``None``.
         border : str
             ``"none"`` or ``"zone"``.
+        diagram : str
+            Diagram type the table belongs to.
 
         Returns
         -------
@@ -836,7 +839,7 @@ class DrawioRenderer:
         """
         from pandid.render.svg import table_sheet_plan
 
-        plan = table_sheet_plan(fs, sheet)
+        plan = table_sheet_plan(fs, sheet, diagram)
         self._findings.extend(plan.findings)
         body = list(self._border(plan.frame, border))
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
@@ -1583,7 +1586,7 @@ class DrawioRenderer:
     # -------------------------------------------------- furniture
 
     def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False,
-                   border: str = "none"):
+                   border: str = "none", diagram: "str | None" = None):
         """Return the furniture cells, the frame and the drawing fit.
 
         With a fixed ``sheet`` the drawing is fitted into the space the
@@ -1599,6 +1602,8 @@ class DrawioRenderer:
             Whether to dock the stream table.
         border : str, default="none"
             ``"none"`` or ``"zone"``.
+        diagram : str or None, optional
+            Diagram type; ``None`` is a PFD.
 
         Returns
         -------
@@ -1610,7 +1615,7 @@ class DrawioRenderer:
         ValueError
             If the page is too small for the furniture.
         """
-        plan = diagram_plan(fs, sheet, border, show_stream_table)
+        plan = diagram_plan(fs, sheet, border, show_stream_table, diagram)
         fit = _Fit(1.0, 0.0, 0.0) if plan.fit is None else _Fit(*plan.fit)
         # Fallbacks for the strip's name, date and scale.
         name = fs.name
