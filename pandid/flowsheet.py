@@ -2280,6 +2280,8 @@ class Flowsheet:
         kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
+        Then each balloon hung from a balloon is placed again an arrowhead
+        clear of the line its chain taps, kept on the same terms.
 
         Where a mixer's or splitter's face grows to hold its nozzles, or
         laterals are laid on lanes, the sheet is also drawn as route() would
@@ -2550,24 +2552,6 @@ class Flowsheet:
             elif self._unhung is None:
                 self._unhung = prior
 
-        def keep_off(may_hang: bool) -> None:
-            """Keep each balloon hung from a balloon off its tapped line.
-
-            Each step is an :func:`attempt` on the drawing the last one
-            left: a touch clear, then an arrowhead clear, then, where the
-            sheet has not settled, an arrowhead clear placed from the sheet
-            with its automatic routes cleared.
-
-            Parameters
-            ----------
-            may_hang : bool
-                Hang each controller it can off its actuator.
-            """
-            attempt(may_hang, TOUCHING)
-            attempt(may_hang, ARROWHEAD)
-            if not self.route_converged:
-                attempt(may_hang, ARROWHEAD, unrouted=True)
-
         def settle() -> None:
             """Route the laid-out sheet and place its balloons."""
             # Start from the sheet as routed without hanging, not from a
@@ -2583,13 +2567,13 @@ class Flowsheet:
             if hang:
                 attempt(may_hang=True, keep_clear=0.0)
             if chained:
-                keep_off(may_hang=self._unhung is not None)
+                attempt(may_hang=self._unhung is not None, keep_clear=TOUCHING)
             # Where hanging left a tap off its line, place as if nothing
             # could hang.
             if hang and not _taps_off(self) <= off:
                 self._unhang()
                 if chained:
-                    keep_off(may_hang=False)
+                    attempt(may_hang=False, keep_clear=TOUCHING)
 
         def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
             """Redo the sheet, and undo that if a finding or clash grew or a
@@ -2664,6 +2648,14 @@ class Flowsheet:
                 # Keep only a drawing with fewer overlaps.
                 flaws["unit-overlap"] -= 1
                 keep_if_better(repinned, flaws)
+        # Keep each balloon hung from a balloon an arrowhead off its tapped
+        # line, from the drawing above and then, where that has not
+        # settled, from its unrouted lines.
+        if tries and any(_chained(u) for u in self.units):
+            may_hang = self._unhung is not None
+            attempt(may_hang, ARROWHEAD)
+            if not self.route_converged:
+                attempt(may_hang, ARROWHEAD, unrouted=True)
         self._route_stale = False
 
     def _geometry(self) -> tuple:

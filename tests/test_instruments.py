@@ -2566,6 +2566,42 @@ def test_a_refused_retry_keeps_the_hung_balloons_it_started_from() -> None:
     assert _flaws(fs)["tap-through-unit"] == 0
 
 
+def _chains_by_a_vessel(
+    product: tuple[float, float], chains: list[tuple[float, float, float, str, float, float]]
+) -> Flowsheet:
+    """Return a routed line past a vessel, with a TT-TIC chain per (TT at, offset, angle, TIC face, offset, angle)."""
+    fs = Flowsheet("chains")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=product[0], y=product[1])
+    fs.add(U.Vessel("V")).pin(x=300, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    for n, (at, offset, angle, face, hung, hung_angle) in enumerate(chains, 1):
+        tt = fs.add_instrument("TT", n, sensing=line, at=at, offset=offset, angle=angle)
+        tic = fs.add_instrument("TIC", n, near=tt, face=face, offset=hung, angle=hung_angle)
+        fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+    return fs
+
+
+def test_keeping_hung_balloons_further_off_leaves_the_priced_fallback_to_run() -> None:
+    """Settle with every tap on its line, as the priced fallback does before any wider gap."""
+    from pandid.layout.control import _taps_off
+
+    fs = _chains_by_a_vessel(
+        (500, 200), [(0.5, 60, 90, "W", 35, 135), (0.3, 35, 135, "E", 25, 180)]
+    )
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+
+
+def test_keeping_hung_balloons_further_off_leaves_the_priced_remedy_judged_as_before() -> None:
+    """Keep the line off the vessel's wall, as the priced remedy does before any wider gap."""
+    fs = _chains_by_a_vessel((400, 100), [(0.7, 60, 135, "N", 70, 0), (0.7, 35, 0, "S", 45, 90)])
+
+    assert "route-along-unit" not in [i.code for i in fs.validate()]
+
+
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
 
