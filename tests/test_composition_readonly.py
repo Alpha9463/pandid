@@ -1,5 +1,7 @@
 """Check that a composition keyword is fixed once the unit is built."""
 
+import warnings
+
 import pytest
 
 from pandid import Flowsheet
@@ -79,19 +81,23 @@ def test_a_variant_the_parts_cannot_go_on_is_refused_as_the_constructor_refuses_
     before = (unit.variant, unit.__dict__.get("overlays"))
     with pytest.raises(ValueError) as built_error:
         built()
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValueError) as error, warnings.catch_warnings():
+        # A refused reassignment is not deprecated: nothing was reassigned.
+        warnings.simplefilter("error", DeprecationWarning)
         unit.variant = variant
     assert str(error.value) == str(built_error.value)
     assert (unit.variant, unit.__dict__.get("overlays")) == before
     sheet = Flowsheet("x")
     sheet.add(unit)
     sheet.to_svg()
+    assert [i for i in sheet.validate() if i.code == "deprecated"] == []
 
 
 def test_a_variant_the_parts_can_go_on_draws_them_as_the_constructor_would():
     """Check that a carried variant places the parts on the new body."""
     reactor = U.Reactor("R-1", agitator="propeller")
-    reactor.variant = "jacketed"
+    with pytest.warns(DeprecationWarning, match="variant"):
+        reactor.variant = "jacketed"
     built = U.Reactor("R-1", variant="jacketed", agitator="propeller")
     assert reactor.__dict__["overlays"] == built.__dict__["overlays"]
 
@@ -102,7 +108,8 @@ def test_a_reassigned_variant_keeps_the_overlays_the_author_added(variant):
     added = Overlay(27, "packing", 0, 0.3, 1, 0.3)
     reactor = U.Reactor("R-1", agitator="propeller")
     reactor.overlays = (*reactor.__dict__["overlays"], added)
-    reactor.variant = variant
+    with pytest.warns(DeprecationWarning, match="variant"):
+        reactor.variant = variant
     built = U.Reactor("R-1", variant=variant, agitator="propeller")
     assert reactor.__dict__["overlays"] == (*built.__dict__["overlays"], added)
     assert added in default_registry.for_unit(reactor).overlays
@@ -113,6 +120,10 @@ def test_a_variant_is_refused_once_the_built_parts_are_edited():
     reactor = U.Reactor("R-1", agitator="propeller")
     edited = reactor.__dict__["overlays"][:1]
     reactor.overlays = edited
-    with pytest.raises(ValueError, match=r"Reactor\('R-1', \.\.\., variant='jacketed'\)"):
+    with (
+        pytest.raises(ValueError, match=r"Reactor\('R-1', \.\.\., variant='jacketed'\)"),
+        warnings.catch_warnings(),
+    ):
+        warnings.simplefilter("error", DeprecationWarning)
         reactor.variant = "jacketed"
     assert (reactor.variant, reactor.__dict__["overlays"]) == ("default", edited)

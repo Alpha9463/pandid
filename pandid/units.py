@@ -163,6 +163,15 @@ _PLACEMENT_HINTS = Deprecation(
 )
 
 
+#: Deprecation of reassigning a variant that builds the unit's ports.
+_VARIANT_REASSIGNED = Deprecation(
+    what="reassigning variant on a built unit",
+    instead="a new unit built with variant=",
+    removed_in="0.4.0",
+    note="its ports and faces are built from the variant it was given",
+)
+
+
 #: Deprecation of a vessel's default_input_face() and default_output_face().
 _DEFAULT_FACES = Deprecation(
     what="default_input_face() or default_output_face()",
@@ -229,7 +238,8 @@ class Unit:
     name : str
         Tag.
     variant : str
-        Registry variant name.
+        Registry variant name. Reassigning it is deprecated on a unit
+        whose ports or faces are built from it.
     ports : dict[str, Port]
         Ports by name.
     flowsheet : Flowsheet or None
@@ -272,6 +282,9 @@ class Unit:
 
     # Composition parts, redrawn when the variant is reassigned.
     _composition: "tuple[_Part, ...]" = ()
+
+    # Whether __init__ builds ports or faces from the variant.
+    _VARIANT_BUILDS = False
 
     COMPOSITION: dict[str, Any] = {}
 
@@ -457,6 +470,12 @@ class Unit:
             unit's parts, manholes or sockets.
         AttributeError
             If an attribute fixed at construction is reassigned.
+
+        Warns
+        -----
+        DeprecationWarning
+            If ``variant`` is reassigned on a unit whose ports or faces
+            are built from it.
         """
         if name in ("width", "height") and value is not None:
             where = self.__dict__.get("name", "?")
@@ -477,7 +496,7 @@ class Unit:
             )
         old = self.__dict__.get(name)
         super().__setattr__(name, value)
-        if name == "variant" and old is not None and self._composition:
+        if name == "variant" and old is not None:
             _recompose(self, old)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
@@ -1281,6 +1300,7 @@ class Valve(_NormallyPositioned):
     ]
     #: Ports by variant, defaulting to :data:`_DEFAULT_PORTS`.
     _VARIANT_PORTS = {"three_way": [*_DEFAULT_PORTS, ("branch", "outlet", "process")]}
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -1518,6 +1538,9 @@ def _recompose(unit: "Unit", old: str) -> None:
     """Redraw a unit's parts on its new variant, or restore ``old``.
 
     Overlays added after the parts are kept, after the redrawn parts.
+    On a unit whose ports or faces are built from its variant, the
+    reassignment is reported as deprecated. Whatever raises, the unit
+    keeps ``old`` and its overlays.
 
     Parameters
     ----------
@@ -1531,8 +1554,12 @@ def _recompose(unit: "Unit", old: str) -> None:
     ValueError
         If the overlays no longer begin with the parts the unit was
         built with, or the new variant cannot carry the parts, the
-        added overlays, the manholes or the sockets; the unit keeps
-        ``old`` and its overlays.
+        added overlays, the manholes or the sockets.
+
+    Warns
+    -----
+    DeprecationWarning
+        If the unit's ports or faces are built from its variant.
     """
     from pandid.render.symbols import default_registry
 
@@ -1542,27 +1569,32 @@ def _recompose(unit: "Unit", old: str) -> None:
     built, current = _placed(stated, old), tuple(overlays or ())
     walls = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
     try:
-        if current[:len(built)] != built:
-            raise ValueError(
-                f"{unit.name}: its overlays no longer begin with the parts it was built "
-                f"with, so a new variant cannot redraw them. Build "
-                f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
-                f"instead"
-            )
-        _compose_onto(unit, *unit._composition)
-        unit._check_parts()
-        added = current[len(built):]
-        if added:
-            drawn = _placed(stated, unit.variant) + added
-            unit.overlays = drawn
-            default_registry.composed(unit.kind, unit.variant, drawn)
-        for keyword, placed in zip(("manholes", "sockets"), walls):
-            _on_walls(unit, keyword, placed)
-        if any(walls):
-            default_registry.for_unit(unit)
-    except ValueError:
+        if unit._composition:
+            if current[:len(built)] != built:
+                raise ValueError(
+                    f"{unit.name}: its overlays no longer begin with the parts it was "
+                    f"built with, so a new variant cannot redraw them. Build "
+                    f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
+                    f"instead"
+                )
+            _compose_onto(unit, *unit._composition)
+            unit._check_parts()
+            added = current[len(built):]
+            if added:
+                drawn = _placed(stated, unit.variant) + added
+                unit.overlays = drawn
+                default_registry.composed(unit.kind, unit.variant, drawn)
+            for keyword, placed in zip(("manholes", "sockets"), walls):
+                _on_walls(unit, keyword, placed)
+            if any(walls):
+                default_registry.for_unit(unit)
+        if unit._VARIANT_BUILDS:
+            _VARIANT_REASSIGNED.warn(unit, where=unit.name, stacklevel=4)
+    except BaseException:
         unit.__dict__["variant"] = old
-        if overlays is not None:
+        if overlays is None:
+            unit.__dict__.pop("overlays", None)
+        else:
             unit.__dict__["overlays"] = overlays
         raise
 
@@ -1965,6 +1997,8 @@ class _MultiPortVessel(_FaceFamilies):
     inlets, outlets : tuple[Port, ...]
         Port families in declaration order.
     """
+
+    _VARIANT_BUILDS = True
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
@@ -2838,6 +2872,8 @@ class _VariantPorted(Unit):
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
     """
+
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -4419,6 +4455,7 @@ class Reactor(Unit):
             ("duty", "inlet", "energy"),
         ],
     }
+    _VARIANT_BUILDS = True
 
     # Bodies that get an agitator by default.
     _STIRRED = ("default", "jacketed")
@@ -4622,6 +4659,7 @@ class Separator(Unit):
         "permanent_magnet": _OVER_AND_UNDER,
         "electromagnetic": _OVER_AND_UNDER,
     }
+    _VARIANT_BUILDS = True
     # Variant -> {port: artwork anchor}, where the artwork renames one.
     _VARIANT_ANCHORS = {
         "cyclone": {"overflow": "vapor", "underflow": "liquid"},
