@@ -227,6 +227,28 @@ def test_an_attached_balloon_keeps_off_another_units_tag():
     assert not on_a_tag(fs)
 
 
+def test_a_balloon_kept_off_a_tag_does_not_cross_a_line_to_get_there():
+    """Check that clearing a mixer's tag does not move TT-1 so its tap crosses the run above."""
+    from pandid.render.svg import tap_lines, tap_route
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import crossing_count
+
+    fs = Flowsheet("tap crossing")
+    feed, product = fs.add(U.Feed("F-1")).pin(x=100, y=400), fs.add(U.Product("P-1"))
+    lower = fs.connect(feed.outlet, product.pin(x=600, y=400).inlet)
+    upper = fs.add(U.Feed("F-2")).pin(x=100, y=330)
+    mixer = fs.add(U.Fitting("M-101", variant="static_mixer", label_pos="bottom"))
+    mixer.pin(port="inlet", x=325, y=330)
+    fs.connect(upper.outlet, mixer.inlet)
+    fs.connect(mixer.outlet, fs.add(U.Product("P-2")).pin(x=600, y=330).inlet)
+    fs.add_instrument("TT", 1, sensing=lower, at=0.4, offset=50, angle=45)
+    fs.route()
+    lines = [stream_polyline(s) for s in fs.streams]
+    taps = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
+    assert taps
+    assert crossing_count(lines + taps) == 0
+
+
 def test_angle_follows_a_reroute_rather_than_the_screen():
     """Check that the angle is measured from the flow on a vertical leg, not the screen."""
     fs = Flowsheet("v")

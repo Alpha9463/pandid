@@ -299,16 +299,18 @@ def _drawn(fs: "Flowsheet") -> "Counter[str]":
     Returns
     -------
     Counter[str]
-        :func:`_flaws`, plus ``"crossing"`` and ``"bend"`` over every
-        drawn line.
+        :func:`_flaws`, plus ``"crossing"`` over every drawn line and
+        tap line, and ``"bend"`` over every drawn line.
     """
+    from pandid.render.svg import tap_lines, tap_route
     from pandid.route_geometry import stream_polyline
     from pandid.routing.metrics import crossing_count, real_bends
 
     paths = [stream_polyline(s) for s in fs.streams if s.route is not None
              and s.source.owner.frame is not None and s.dest.owner.frame is not None]
+    taps = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
     flaws = _flaws(fs)
-    flaws["crossing"] = crossing_count(paths)
+    flaws["crossing"] = crossing_count(paths + taps)
     flaws["bend"] = sum(real_bends(path) for path in paths)
     return flaws
 
