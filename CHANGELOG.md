@@ -47,6 +47,8 @@ These are removed in 0.4.0.
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 - Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
+- `on=` puts a valve, fitting or valve station on a recycle line, including one
+  connected with `draw_as_recycle=True`, before or after the sheet is rendered.
 
 ## [0.2.0] - 2026-11-05
 
