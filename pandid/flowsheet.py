@@ -629,6 +629,15 @@ class Flowsheet:
         self._order_rows = False
         self._rows_out = False
         self._stacked: tuple | None = None
+        # Whether layout turns each free tee's branch toward the unit it
+        # serves, and whether the last layout drew one facing away.
+        self._face_tees = False
+        self._tees_away = False
+        # Whether layout sets the furniture on each lateral off a splitter
+        # or into a mixer next to the unit at its other end, and whether
+        # the last layout drew any such lateral.
+        self._fan_out = False
+        self._fannable = False
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -1577,7 +1586,8 @@ class Flowsheet:
         sequence, spec, insulation : str or float, optional
             Bypass and drain line sequence, piping class and insulation.
         on : Stream or None, optional
-            Material line from :meth:`connect` to put the station in.
+            Material line from :meth:`connect` to put the station in;
+            the station's pipework takes its colour and dash pattern.
         at : float or None, optional
             Position on that line, as for :meth:`add`.
 
@@ -2246,6 +2256,8 @@ class Flowsheet:
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
+        self._tees_away = False
+        self._fannable = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2273,7 +2285,13 @@ class Flowsheet:
         placed as if no controller could hang. Where the result draws a
         line along a unit or across an arrowhead, the sheet is routed again
         pricing both, with each unfaced balloon on equipment on a free face,
-        kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
+        kept only if no tap leaves its line and no finding or clash grows.
+        Where a line from a splitter or into a mixer carries valves or
+        fittings set with no ``at=``, the sheet is laid out and routed
+        again with each such line turned beside the splitter or mixer and
+        its valves and fittings next to the unit at its other end, kept
+        only if no crossing, bend, fallback, finding, clash or tap off its
+        line grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
         Where the drawing then holds a separated route that crosses lines
@@ -2303,7 +2321,10 @@ class Flowsheet:
         Then, where a unit pinned by row alone is drawn no lower than one
         pinned to a lower row, the sheet is laid out and routed again with
         each such unit below those pinned to lower rows, kept on the same
-        terms. Where either is kept, the next route() starts from the
+        terms. Then, where a tee's branch leaves the run on the side away
+        from the unit it serves, the sheet is laid out and routed again
+        with each such branch turned toward it, kept on the same terms.
+        Where any of these is kept, the next route() starts from the
         drawing before them.
 
         Last, with the default router, each balloon hung from a balloon is
@@ -2334,13 +2355,15 @@ class Flowsheet:
                                      or any(u.frame is None for u in self.units)):
             self._put_state(held)
         self._route_faces(router)
-        if ((self._stack_spans or self._rows_out) and not self._laying_out
+        if ((self._stack_spans or self._rows_out or self._tees_away) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
             first = self._state()
-            split = self._stack_spans and self._relayout(router, True, False)
-            if (self._rows_out and self._relayout(router, split, True)) or split:
+            split = self._stack_spans and self._relayout(router, True, False, False)
+            order = self._rows_out and self._relayout(router, split, True, False)
+            tees = self._tees_away and self._relayout(router, split, order, True)
+            if split or order or tees:
                 self._stacked = first
-            self._stack_spans = self._rows_out = self._route_stale = False
+            self._stack_spans = self._rows_out = self._tees_away = self._route_stale = False
         if not self._laying_out and (router is None or type(router) is DefaultRouter):
             unkept = self._state()
             if self._keep_further_off(router or DefaultRouter()):
@@ -2518,8 +2541,9 @@ class Flowsheet:
         finally:
             self._routing = False
 
-    def _relayout(self, router, split: bool, order: bool) -> bool:
-        """Lay out and route the sheet again with stacks split or rows ordered.
+    def _relayout(self, router, split: bool, order: bool, tees: bool) -> bool:
+        """Lay out and route the sheet again with stacks split, rows ordered
+        or tees turned.
 
         The new drawing is kept only if no tap leaves its line and no
         finding, clash, crossing or fallback route grows; otherwise the
@@ -2534,6 +2558,8 @@ class Flowsheet:
             is pinned to a row between theirs.
         order : bool
             Move units pinned by row alone into row order.
+        tees : bool
+            Turn each free tee's branch toward the unit it serves.
 
         Returns
         -------
@@ -2558,7 +2584,8 @@ class Flowsheet:
             return flaws
 
         before, off, drawn = count(), _taps_off(self), self._state()
-        self._split_stacks, self._order_rows, self._routing = split, order, True
+        self._split_stacks, self._order_rows, self._face_tees = split, order, tees
+        self._routing = True
         try:
             self.layout(self._engine)
             self._route_once(router)
@@ -2567,7 +2594,7 @@ class Flowsheet:
         except Exception:
             kept = False
         finally:
-            self._split_stacks = self._order_rows = self._routing = False
+            self._split_stacks = self._order_rows = self._face_tees = self._routing = False
         if not kept:
             self._put_state(drawn)
         return kept
@@ -2582,7 +2609,7 @@ class Flowsheet:
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
                         self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out))
+                        self._rows_out, self._tees_away, self._fannable))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2594,7 +2621,7 @@ class Flowsheet:
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out) = _copied(state)
+         self._rows_out, self._tees_away, self._fannable) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2747,6 +2774,25 @@ class Flowsheet:
             finally:
                 self._recheck = False
 
+        def fanned() -> None:
+            """Lay out with the furniture on each lateral off a splitter or
+            into a mixer next to the unit at its other end, and settle;
+            put the sheet back if a crossing, bend, fallback, finding or
+            clash grows, or a tap leaves its line."""
+            before, off, drawn = _score(self)[0], _taps_off(self), self._state()
+            self._fan_out = True
+            try:
+                self.layout(self._engine)
+                settle_best()
+                kept = _taps_off(self) <= off and not any(
+                    n > before[k] for k, n in _score(self)[0].items())
+            except Exception:
+                kept = False
+            finally:
+                self._fan_out = False
+            if not kept:
+                self._put_state(drawn)
+
         def relaid() -> None:
             """Lay out with every signal exit a lane clear, and settle."""
             self._exit_clear = True
@@ -2769,6 +2815,8 @@ class Flowsheet:
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
+        if tries and self._fannable:
+            fanned()
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False

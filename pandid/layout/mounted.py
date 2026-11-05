@@ -982,12 +982,80 @@ def _centres(wanted: list[float], lengths: list[float], size: float,
     return centres
 
 
+def _off_header(run: MountedRun) -> bool:
+    """Return whether a pipe joins a header to a unit, its elements free.
+
+    That is a pipe from a splitter to a unit, or to a mixer from a unit,
+    where the unit is no splitter, mixer or boundary flag, with no
+    element set ``on=``.
+
+    Parameters
+    ----------
+    run : MountedRun
+        Furnished pipe.
+
+    Returns
+    -------
+    bool
+        True for such a pipe.
+    """
+    source, dest = run.source.owner.kind, run.dest.owner.kind
+    unit = dest if source == "splitter" else source if dest == "mixer" else None
+    return unit not in (None, "splitter", "mixer", "feed", "product") and not any(run.places)
+
+
+def _fanned(run: MountedRun, legs: list[Leg]) -> tuple[list[Leg], list[float]] | None:
+    """Return a header lateral's legs turned at its header, and centres.
+
+    A header lateral is a pipe :func:`_off_header` takes that runs as
+    one level leg, or whose level end legs, at two heights, run the same
+    way; the second kind turns :data:`END` from the header. Its elements
+    pack against the end away from the header, :data:`ALONG` apart and
+    from its nozzle.
+
+    Parameters
+    ----------
+    run : MountedRun
+        Furnished pipe.
+    legs : list[Leg]
+        Its legs in flow order.
+
+    Returns
+    -------
+    tuple[list[Leg], list[float]] or None
+        The turned legs and each element's centre distance along them,
+        or None if the pipe is no header lateral.
+    """
+    if not (_off_header(run) and _level(legs[0]) and _level(legs[-1])):
+        return None
+    head = run.source.owner.kind == "splitter"
+    (a, after), (before, b) = legs[0], legs[-1]
+    sign = 1.0 if after[0] > a[0] else -1.0
+    x = a[0] + sign * END if head else b[0] - sign * END
+    if len(legs) == 1:
+        turned = legs
+    elif (abs(a[1] - b[1]) < 1e-6 or (b[0] - before[0]) * sign <= 0
+            or not 0 < (x - a[0]) * sign < (b[0] - a[0]) * sign):
+        return None
+    else:
+        turned = [(a, (x, a[1])), ((x, a[1]), (x, b[1])), ((x, b[1]), b)]
+    lengths = [_level_length(element) for element in run.elements]
+    if head:
+        total = sum(map(path_length, turned))
+        return turned, [total - sum(n + ALONG for n in lengths[k:]) + n / 2
+                        for k, n in enumerate(lengths)]
+    return turned, [sum(n + ALONG for n in lengths[:k + 1]) - n / 2
+                    for k, n in enumerate(lengths)]
+
+
 def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
-             zones: list[Box], pipes: list[list[Point]], exit_gap: float = 0.0) -> bool:
+             zones: list[Box], pipes: list[list[Point]], exit_gap: float = 0.0,
+             fan: bool = False) -> bool:
     """Set a pipe's elements on its routed polyline.
 
     With no route, one straight leg from the source nozzle along the
-    larger offset to the destination stands in.
+    larger offset to the destination stands in. With ``fan`` set, a
+    header lateral is set as :func:`_fanned` turns and packs it.
 
     Parameters
     ----------
@@ -1003,6 +1071,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         Routed lines between placed equipment, every pipe included.
     exit_gap : float, default=0.0
         Clearance each element's signal exits keep from other units.
+    fan : bool, default=False
+        Set a header lateral as :func:`_fanned` turns and packs it.
 
     Returns
     -------
@@ -1016,6 +1086,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         a = port_point(source, source.frame, run.source.name)
         b = port_point(dest, dest.frame, run.dest.name)
         legs = [(a, (b[0], a[1])) if abs(b[0] - a[0]) >= abs(b[1] - a[1]) else (a, (a[0], b[1]))]
+    fanned = _fanned(run, legs) if fan else None
+    if fanned is not None:
+        legs = fanned[0]
     count = len(run.elements)
     want = _wanted(run, sum(path_length(leg) for leg in legs),
                    lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)),
@@ -1026,7 +1099,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         (x, y), level = _point_at(legs, distance)
         if not level:
             tap_zones.append((x - 1.0, y - TAP, x + 1.0, y + TAP))
-    want = want[:count]
+    want = want[:count] if fanned is None else fanned[1]
     starts = [0.0, *accumulate(map(path_length, legs))]
     # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
@@ -1104,7 +1177,9 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     pinned on both axes and its chain. With
     ``fs._exit_clear`` set, each signal exit keeps
     :data:`~pandid.routing.visibility.MARGIN` from other units;
-    ``fs._exit_tight`` records whether any comes closer.
+    ``fs._exit_tight`` records whether any comes closer. With
+    ``fs._fan_out`` set, each header lateral is set as :func:`_fanned`
+    turns and packs it; ``fs._fannable`` records whether any pipe is one.
 
     Parameters
     ----------
@@ -1126,7 +1201,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
           if id(s) not in inside and s.source.owner in shown and s.dest.owner in shown
           and s.source.owner is not s.dest.owner),
         *(Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
-               _chain_width(run), _column_room(run))
+               _chain_width(run), _column_room(run), fs._fan_out and _off_header(run))
           for run in runs)])
     for unit in members:
         placed = slot(unit)
@@ -1137,11 +1212,13 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     if not runs:
         return
     routes, lines = _routed_pipes(fs, runs, retained)
+    fs._fannable = any(_fanned(run, list(zip(points, points[1:]))) is not None
+                       for run, points in zip(runs, routes) if len(points) > 1)
     obstacles = list(retained)
     zones: list[Box] = pinned_balloons(fs, balloon_pads(fs)) if fs._pin_balloons else []
     exit_gap = MARGIN if fs._exit_clear else 0.0
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
-        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap)
+        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap, fs._fan_out)
     # Note a signal exit drawn within MARGIN of another unit.
     fs._exit_tight = any(boxes_overlap(box, unit_box(other, other.frame), MARGIN)
                          for unit in members if unit.frame is not None
