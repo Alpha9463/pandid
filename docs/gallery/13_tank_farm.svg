@@ -267,7 +267,7 @@
     <path d="M 681.6667,662.5 L 705.0,662.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 775.0,642.5 L 795.0,642.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 807.5,642.5 L 875.0,642.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 898.885,642.5 L 1220.0,642.5" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 898.8862,642.5 L 1220.0,642.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 770.0,355.0 L 770.0,550.0 L 785.0,550.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 809.5,550.0 L 845.0,550.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 855.0,550.0 L 870.0,550.0" fill="none" stroke="black" stroke-width="2" />
@@ -277,7 +277,7 @@
     <path d="M 1072.0,550.0 L 1080.0,550.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1105.0,550.0 L 1140.0,550.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1164.5,550.0 L 1180.0,550.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1203.885,550.0 L 1226.0,550.0 L 1226.0,636.5" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1203.8862,550.0 L 1226.0,550.0 L 1226.0,636.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1066.0,556.0 L 1066.0,620.0 L 876.0,620.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 876.0,597.875 L 876.0,556.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1160.0,346.5 L 1160.0,390.0 L 1250.0,390.0" fill="none" stroke="black" stroke-width="2" />
@@ -428,13 +428,13 @@
     <rect x="542.0" y="633.0" width="46.0" height="15.0" fill="white" />
     <text x="565.0" y="645.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">EJ-601</text>
     <rect x="593.8" y="630.5" width="47.3" height="15.0" fill="white" />
-    <text x="617.5" y="642.51" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">ST-601</text>
+    <text x="617.5" y="642.5125" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">ST-601</text>
     <rect x="648.7" y="636.8" width="49.3" height="15.0" fill="white" />
     <text x="673.33335" y="648.75" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">RD-601</text>
     <rect x="776.6" y="614.2" width="49.3" height="15.0" fill="white" />
     <text x="801.25" y="626.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">RD-602</text>
     <rect x="857.9" y="657.8" width="57.3" height="15.0" fill="white" />
-    <text x="886.5725" y="665.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">NRV-601</text>
+    <text x="886.5737" y="665.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">NRV-601</text>
     <rect x="772.9" y="520.5" width="48.7" height="15.0" fill="white" />
     <text x="797.25" y="532.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-603</text>
     <rect x="826.0" y="513.0" width="48.0" height="15.0" fill="white" />
@@ -446,7 +446,7 @@
     <rect x="1127.9" y="564.8" width="48.7" height="15.0" fill="white" />
     <text x="1152.25" y="572.3075" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-605</text>
     <rect x="1168.9" y="520.2" width="57.3" height="15.0" fill="white" />
-    <text x="1197.5725" y="532.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">NRV-602</text>
+    <text x="1197.5737" y="532.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">NRV-602</text>
     <rect x="1237.9" y="360.5" width="48.7" height="15.0" fill="white" />
     <text x="1262.25" y="372.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-605</text>
     <rect x="1293.9" y="351.9" width="56.7" height="15.0" fill="white" />

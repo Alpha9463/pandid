@@ -797,7 +797,7 @@
     <use href="#sym_reactor_cdef8c078_s80x170" x="1260" y="374.5" width="80" height="170" />
     <use href="#sym_pump" x="1400" y="590" width="70.0" height="67.0" />
     <use href="#sym_hex_straight_tubes_s150x45" x="1580" y="577.5" width="150" height="45" />
-    <use href="#sym_reactor_jacketed_c1810594d_s90x210" x="1860" y="471.2" width="90" height="210" />
+    <use href="#sym_reactor_jacketed_c1810594d_s90x210" x="1860" y="471.22" width="90" height="210" />
     <use href="#sym_separator_s70x130" x="2080" y="675" width="70" height="130" />
     <use href="#sym_separator_s70x130" x="2320" y="815" width="70" height="130" />
     <polygon points="1473.984,387.0 1545.0,387.0 1560.0,400.0 1545.0,413.0 1473.984,413.0" fill="transparent" stroke="black" stroke-width="2" />
@@ -828,7 +828,7 @@
     <path d="M 1300.0,544.5025473014255 L 1300.0,620 L 1400.0,620.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1470.0,600.0 L 1580.0,600.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1730.0,600.0 L 1860.0,600.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1905.0,681.1994837988361 L 1905.0,740 L 2080.0,740.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1905.0,681.2165138958834 L 1905.0,740 L 2080.0,740.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2115.0,675.0 L 2115.0,300.0 L 1122.5,300.0 L 1122.5,457.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2115.0,805.0 L 2115.0,880 L 2320.0,880.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2355.0,815.0 L 2355.0,250.0 L 872.5,250.0 L 872.5,457.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -894,7 +894,7 @@
     <rect x="1635.0" y="555.5" width="40.0" height="15.0" fill="white" />
     <text x="1655.0" y="567.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-903</text>
     <rect x="1884.7" y="449.2" width="40.7" height="15.0" fill="white" />
-    <text x="1905.0" y="461.1994837988361" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">D-901</text>
+    <text x="1905.0" y="461.2165138958834" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">D-901</text>
     <rect x="2160.0" y="732.5" width="40.0" height="15.0" fill="white" />
     <text x="2160.0" y="740.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-901</text>
     <rect x="2400.0" y="872.5" width="40.0" height="15.0" fill="white" />
