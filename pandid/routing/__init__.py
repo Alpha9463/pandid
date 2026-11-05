@@ -311,7 +311,7 @@ class DefaultRouter:
             If an end has no frame or anchor; the stream is skipped.
         """
         from pandid.portgeom import COMPASS, resolve_port
-        from pandid.render.svg import tap_routes
+        from pandid.render.svg import square_taps
         from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
         from pandid.routing.astar import CROSSING_PENALTY, TOUCH_PENALTY, CrossingIndex, find_path
@@ -337,7 +337,7 @@ class DefaultRouter:
         edge_penalties = defaultdict(float)
         for run in hugging:
             edge_penalties[run] += TOUCH_PENALTY
-        taps = [(u.host, points) for u, points in tap_routes(fs)]
+        taps = [(u.host, points) for u, points in square_taps(fs)]
         routed: list["Stream"] = []
         # Ends of each found route's stand-offs.
         escapes: dict[int, tuple[tuple[float, float], tuple[float, float]]] = {}

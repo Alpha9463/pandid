@@ -2692,7 +2692,7 @@ def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
     fs.add_instrument("TIC", 1, near=tt, face="E", offset=50, angle=0)
     fs.route()
 
-    assert _flaws(fs)["tap-crosses-unit"] == 0
+    assert _flaws(fs)["tap-through-unit"] == 0
 
 
 def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():

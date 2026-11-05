@@ -266,6 +266,26 @@ def tap_lines(fs):
     return out
 
 
+def square_taps(fs):
+    """Return the square turn of every tap line.
+
+    Layout and routing weigh tap lines by these; :func:`tap_routes`
+    gives the paths drawn.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[Instrument, list[tuple[float, float]]]]
+        Instrument and :func:`_square_tap` path, in :func:`tap_lines`
+        order.
+    """
+    return [(inst, _square_tap(inst, tap, centre)[0]) for inst, tap, centre in tap_lines(fs)]
+
+
 def tap_routes(fs):
     """Return the drawn path of every tap line.
 
@@ -289,7 +309,6 @@ def tap_routes(fs):
         Instrument and points from the tap to the balloon centre, in
         :func:`tap_lines` order.
     """
-    from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.routing import route_tap
     from pandid.routing.visibility import _tag_halo
@@ -320,7 +339,8 @@ def tap_routes(fs):
         return sum(any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
                    for u, box in obstacles if u is not inst and u is not inst.host)
 
-    pipes = [stream_path(s) for s in fs.streams if s.route is not None]
+    pipes = [stream_polyline(s) for s in fs.streams if s.route is not None
+             and s.source.owner.frame is not None and s.dest.owner.frame is not None]
     taps = tap_lines(fs)
     squares = [_square_tap(inst, tap, centre) for inst, tap, centre in taps]
     crossed = [clashes(inst, path) for (inst, _, _), (path, _) in zip(taps, squares)]
