@@ -69,7 +69,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     from pandid.layout.faces import select_faces
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
@@ -82,7 +82,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     clear = _nozzle_keepouts(fs, skip=set(pending))
     # Drawn lines it must clear too, each with the units it joins.
     lines: list[tuple[tuple[object, ...], list[tuple[float, float]]]] = [
-        ((u.host,), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+        ((u.host,), points) for u, points in tap_routes(fs)]
     lines += [((s.source.owner, s.dest.owner), stream_path(s))
               for s in fs.streams if s.route is not None]
     segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
@@ -243,7 +243,7 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
     from pandid.portgeom import unit_box
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     def crosses(points: list, box: _Box) -> bool:
         """Return whether a polyline crosses a box.
@@ -269,7 +269,7 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
                                for _, box in boxes for h in halos)
     lines = [stream_path(s) for s in fs.streams if s.route is not None]
     flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
-    taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
+    taps = tap_routes(fs)
     for inst, route in taps:
         flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
     runs = [(k, a, b) for k, points in enumerate(lines + [route for _, route in taps])

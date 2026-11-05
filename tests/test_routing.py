@@ -746,7 +746,7 @@ def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
 def test_a_balloons_tap_line_is_counted_as_a_crossing():
     """Route a line clear of a balloon's tap line where an equal route crosses it."""
     from pandid.route_geometry import stream_polyline
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
     from pandid.routing.metrics import crossing_count
 
     fs = Flowsheet("tap-recorded")
@@ -757,7 +757,7 @@ def test_a_balloons_tap_line_is_counted_as_a_crossing():
     fs.add_instrument("LT", 1, sensing=vessel, face="W", offset=60)
     fs.route()
 
-    taps = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
+    taps = [route for _, route in tap_routes(fs)]
     assert len(taps) == 1
     assert crossing_count([stream_polyline(stream), *taps]) == 0
 

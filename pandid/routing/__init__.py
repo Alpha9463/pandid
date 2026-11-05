@@ -307,7 +307,7 @@ class DefaultRouter:
             If an end has no frame or anchor; the stream is skipped.
         """
         from pandid.portgeom import COMPASS, resolve_port
-        from pandid.render.svg import tap_lines, tap_route
+        from pandid.render.svg import tap_routes
         from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
         from pandid.routing.astar import TOUCH_PENALTY, CrossingIndex, find_path
@@ -333,7 +333,7 @@ class DefaultRouter:
         edge_penalties = defaultdict(float)
         for run in hugging:
             edge_penalties[run] += TOUCH_PENALTY
-        taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+        taps = [(u.host, points) for u, points in tap_routes(fs)]
         routed: list["Stream"] = []
         # Ends of each found route's stand-offs.
         escapes: dict[int, tuple[tuple[float, float], tuple[float, float]]] = {}
@@ -471,14 +471,15 @@ class DefaultRouter:
 
 
 def route_tap(inst, tap: tuple[float, float], faces: list[str],
-              centre: tuple[float, float]) -> list[tuple[float, float]]:
+              centre: tuple[float, float],
+              others: list[list[tuple[float, float]]]) -> list[tuple[float, float]]:
     """Return a tap line's path round unit bodies and tags.
 
     The line leaves the tap square along the first of ``faces`` that
     has a path, and reaches the balloon centre on the visibility graph
     at the fewest bends. It may cross its own host's tag. It is priced
-    as a stream routed after every drawn line: by the lines it crosses
-    and the runs it shares.
+    as a stream routed after every drawn stream and ``others``: by the
+    lines it crosses and the runs it shares.
 
     Parameters
     ----------
@@ -490,6 +491,8 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
         Compass directions the line may leave the tap in, in order.
     centre : tuple[float, float]
         Balloon centre.
+    others : list[list[tuple[float, float]]]
+        Other tap lines already drawn.
 
     Returns
     -------
@@ -521,7 +524,7 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
         return []
     index = CrossingIndex()
     used: dict[tuple[tuple[float, float], tuple[float, float]], float] = defaultdict(float)
-    for line in (stream_path(s) for s in fs.streams if s.route is not None):
+    for line in [*(stream_path(s) for s in fs.streams if s.route is not None), *others]:
         _record_route(index, line, True)
         # Charge each graph edge on the line's square runs.
         for (ax, ay), (bx, by) in zip(line, line[1:]):

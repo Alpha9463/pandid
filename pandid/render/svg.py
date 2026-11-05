@@ -266,18 +266,80 @@ def tap_lines(fs):
     return out
 
 
-def tap_route(inst, tap, centre):
-    """Return the orthogonal path of one tap line.
+def tap_routes(fs):
+    """Return the drawn path of every tap line.
+
+    Each line is its square turn (:func:`_square_tap`) unless that
+    crosses a unit body or another unit's tag. Such a line is then
+    routed round them (:func:`pandid.routing.route_tap`), in
+    :func:`tap_lines` order, priced against the streams, every clear
+    tap line and every tap line routed before it, and kept if it
+    crosses fewer.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[Instrument, list[tuple[float, float]]]]
+        Instrument and points from the tap to the balloon centre, in
+        :func:`tap_lines` order.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.routing import route_tap
+    from pandid.routing.visibility import _tag_halo
+
+    obstacles = []
+    for u in fs.units:
+        if u.frame is not None:
+            halo = _tag_halo(u, u.frame)
+            obstacles.append((u, unit_box(u, u.frame)))
+            if halo is not None:
+                obstacles.append((u, (halo.x_min, halo.y_min, halo.x_max, halo.y_max)))
+
+    def clashes(inst, route) -> int:
+        """Count the bodies and tags but its host's a tap line crosses.
+
+        Parameters
+        ----------
+        inst : Instrument
+            Attached balloon.
+        route : list[tuple[float, float]]
+            Tap line points.
+
+        Returns
+        -------
+        int
+            Unit bodies and tag halos crossed.
+        """
+        return sum(any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+                   for u, box in obstacles if u is not inst and u is not inst.host)
+
+    lines = tap_lines(fs)
+    squares = [_square_tap(inst, tap, centre) for inst, tap, centre in lines]
+    crossed = [clashes(inst, path) for (inst, _, _), (path, _) in zip(lines, squares)]
+    drawn = [path for path, _ in squares]
+    for k, ((inst, tap, centre), (path, faces)) in enumerate(zip(lines, squares)):
+        if not crossed[k] or not faces:
+            continue
+        others = [line for j, line in enumerate(drawn) if j < k or (j > k and not crossed[j])]
+        routed = route_tap(inst, tap, faces, centre, others)
+        if routed and clashes(inst, routed) < crossed[k]:
+            drawn[k] = routed
+    return [(inst, path) for (inst, _, _), path in zip(lines, drawn)]
+
+
+def _square_tap(inst, tap, centre):
+    """Return the square path of one tap line and its ways out.
 
     A balloon on a pipe, or ahead of a unit's face, is reached in one
     straight run when aligned with the tap. Otherwise the line leaves
     the tap square to its host and turns once onto the balloon centre
     (ISO 15519-1 12.4). A balloon behind a unit's face is reached one
     module out from the face, and around the unit's box when level
-    with it. Where that path crosses a unit body or another unit's
-    tag, the line leaves the tap the same way, or a pipe from either
-    side, and is routed round them at the fewest bends, if that
-    crosses fewer.
+    with it.
 
     Parameters
     ----------
@@ -288,18 +350,20 @@ def tap_route(inst, tap, centre):
 
     Returns
     -------
-    list[tuple[float, float]]
-        Points from the tap to the balloon centre.
+    tuple[list[tuple[float, float]], list[str]]
+        Points from the tap to the balloon centre, and the compass
+        directions a line may leave the tap in, first the path's own:
+        a unit's face outward, a pipe either side; none for a tap on a
+        slanted run.
     """
     from pandid.layout.attach import _anchor
     from pandid.portgeom import COMPASS
-    from pandid.routing import route_tap
     from pandid.streams import Stream
 
     (tx, ty), (cx, cy) = tap, centre
     anchor = _anchor(inst)
     if anchor is None:
-        return [tap, centre]
+        return [tap, centre], []
     # A unit's reference runs along its face; turned, it is the outward normal.
     rx, ry = anchor[1]
     nx, ny = ry, -rx
@@ -324,48 +388,11 @@ def tap_route(inst, tap, centre):
             x = cx if not x0 < cx < x1 else (x0 - M if cx - x0 < x1 - cx else x1 + M)
             bends = [(sx, sy), (x, sy), (x, cy)]
         square = [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
-    clashes = _tap_clashes(inst, square)
     faces: dict[tuple[float, float], str] = {v: k for k, v in COMPASS.items()}
     face = faces.get((nx, ny))
-    if not clashes or face is None:
-        return square
-    # A pipe may be left on either side.
-    sides = [face, faces[-nx, -ny]] if isinstance(inst.host, Stream) else [face]
-    routed = route_tap(inst, tap, sides, centre)
-    return routed if routed and _tap_clashes(inst, routed) < clashes else square
-
-
-def _tap_clashes(inst, route) -> int:
-    """Count the unit bodies and tags a tap line crosses.
-
-    Leave out the balloon, its host and its host's tag.
-
-    Parameters
-    ----------
-    inst : Instrument
-        Attached balloon.
-    route : list[tuple[float, float]]
-        Tap line points.
-
-    Returns
-    -------
-    int
-        Bodies and tag halos crossed.
-    """
-    from pandid.layout.conflicts import segment_crosses_box
-    from pandid.routing.visibility import _tag_halo
-
-    fs = inst.flowsheet
-    boxes = []
-    for u in fs.units if fs is not None else ():
-        if u.frame is None or u is inst or u is inst.host:
-            continue
-        boxes.append(unit_box(u, u.frame))
-        halo = _tag_halo(u, u.frame)
-        if halo is not None:
-            boxes.append((halo.x_min, halo.y_min, halo.x_max, halo.y_max))
-    return sum(any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
-               for box in boxes)
+    if face is None:
+        return square, []
+    return square, [face, faces[-nx, -ny]] if isinstance(inst.host, Stream) else [face]
 
 
 def impulse_tap(inst) -> bool:
@@ -689,8 +716,7 @@ def _ink(fs, direction: str) -> "list[_Ink]":
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe", s.name or "")
-    for u, tap, centre in tap_lines(fs):
-        route = tap_route(u, tap, centre)
+    for _, route in tap_routes(fs):
         for a, b in zip(route, route[1:]):
             add(a, b, _ink_pad(LineWeight.DETAIL), "tap")
     # A hop belongs to the run that draws it.
@@ -3890,7 +3916,7 @@ class SvgRenderer:
         """Return the lines from tap points to their balloons.
 
         Draw impulse lines solid and signal lines dashed, along
-        :func:`tap_route`.
+        :func:`tap_routes`.
 
         Parameters
         ----------
@@ -3903,10 +3929,9 @@ class SvgRenderer:
             SVG lines, empty when there are no taps.
         """
         out = []
-        for u, tap, centre in tap_lines(fs):
+        for u, route in tap_routes(fs):
             dash = "" if impulse_tap(u) else f' stroke-dasharray="{_TAP_DASH}"'
             pen = f'stroke="black" stroke-width="{LineWeight.DETAIL.width:g}"{dash} />'
-            route = tap_route(u, tap, centre)
             if len(route) == 2:
                 (tx, ty), (cx, cy) = route
                 out.append(f'    <line x1="{fmt(tx, 2)}" y1="{fmt(ty, 2)}" '

@@ -925,7 +925,7 @@ def test_a_hung_controller_clears_a_tap_line():
     """Check that a hung controller stays off a tap line rising past the actuator."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     fs, lic, valve = _hung_controller()
     fs.route()
@@ -934,7 +934,7 @@ def test_a_hung_controller_clears_a_tap_line():
     fs.route()
 
     box = unit_box(lic, frame_of(lic))
-    lines = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
+    lines = [route for _, route in tap_routes(fs)]
     assert lines, "PI-1 draws a tap line"
     for route in lines:
         assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
@@ -968,15 +968,14 @@ def test_a_controller_carrying_a_balloon_is_not_hung() -> None:
     """Check that a controller carrying a balloon is not hung across the valve."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     fs, lic, valve = _hung_controller()
     fs.add_instrument("PI", 1, sensing=lic, face="S", offset=140)
     fs.route()
 
     box = unit_box(valve, frame_of(valve))
-    ((inst, tap, centre),) = tap_lines(fs)
-    route = tap_route(inst, tap, centre)
+    ((inst, route),) = tap_routes(fs)
     assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
 
 
@@ -1135,15 +1134,14 @@ def test_a_hung_controller_that_leaves_a_clash_is_placed_from_its_wiring(
     """Check that a clash from hanging gives way to placing the controller from its wiring."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     fs = build()
     fs.route()
 
     codes = ("route-crosses-unit", "route-diagonal")
     assert [i.code for i in fs.validate() if i.severity == "error" or i.code in codes] == []
-    for inst, tap, centre in tap_lines(fs):
-        route = tap_route(inst, tap, centre)
+    for inst, route in tap_routes(fs):
         for u in fs.units:
             if u is inst or u is inst.host or u.frame is None:
                 continue
@@ -1381,7 +1379,7 @@ def test_hanging_adds_no_tap_line_through_a_tag_halo() -> None:
     """Check that hanging puts no tap line through a tag halo."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.layout.control import _halos
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     fs, lic, _ = _hung_controller()
     xi = fs.add_instrument("XI", 1)
@@ -1390,8 +1388,7 @@ def test_hanging_adds_no_tap_line_through_a_tag_halo() -> None:
     fs.add(U.Pump("P-101", width=44, height=44, label_pos="left")).pin(x=275, y=28)
     fs.route()
 
-    for inst, tap, centre in tap_lines(fs):
-        route = tap_route(inst, tap, centre)
+    for inst, route in tap_routes(fs):
         for halo in _halos(fs):
             assert not any(segment_crosses_box(a, b, halo) for a, b in zip(route, route[1:]))
 
@@ -1421,7 +1418,7 @@ def test_hanging_lays_no_line_along_a_tap_line() -> None:
     """Check that a hung controller's line does not run along a tap line."""
     from pandid.layout.attach import stream_path
     from pandid.layout.control import _shared
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     fs = Flowsheet("tap overlap")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
@@ -1435,8 +1432,7 @@ def test_hanging_lays_no_line_along_a_tap_line() -> None:
     fs.route()
 
     sp = stream_path(signal)
-    for inst, tap, centre in tap_lines(fs):
-        tp = tap_route(inst, tap, centre)
+    for inst, tp in tap_routes(fs):
         assert not any(_shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(tp, tp[1:]))
 
 
@@ -2268,14 +2264,39 @@ def test_a_tap_line_is_routed_round_a_unit_in_its_way() -> None:
     assert edge.count("<mxPoint ") == len(points) - 2
 
 
+def test_two_routed_tap_lines_share_no_run() -> None:
+    """Check that two leaders routed round one column are not drawn as one line."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+    from pandid.render.svg import tap_routes
+
+    fs = Flowsheet("Two readings")
+    a = fs.add(U.Vessel("D-101")).pin(x=100, y=100)
+    b = fs.add(U.Vessel("D-102")).pin(x=100, y=240)
+    c = fs.add(U.Column("T-101", height=500)).pin(x=250, y=50)
+    fs.connect(a.drain, c.ports["feed_1"])
+    fs.connect(c.ports["overhead"], b.inlet)
+    fs.add_instrument("PT", 101, sensing=a, face="E").pin(x=500, y=128)
+    fs.add_instrument("TT", 101, sensing=b, face="E").pin(x=550, y=268)
+    fs.route()
+
+    (_, pt), (_, tt) = tap_routes(fs)
+    pipes = [stream_path(s) for s in fs.streams]
+    for mine, other in [(pt, tt), *((tap, pipe) for tap in (pt, tt) for pipe in pipes)]:
+        assert not any(
+            _shared(p, q, r, t) for p, q in zip(mine, mine[1:]) for r, t in zip(other, other[1:])
+        ), f"{mine} shares a run with {other}"
+    assert "tap-crosses-unit" not in [i.code for i in fs.validate()]
+
+
 def test_a_clear_tap_line_keeps_its_one_turn() -> None:
     """Check that a tap line with nothing in its way is the square turn it always was."""
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_lines, tap_routes
 
     fs, _ = _drum("sensing", angle=45)
     ((inst, tap, centre),) = tap_lines(fs)
 
-    assert tap_route(inst, tap, centre) == [tap, (centre[0], tap[1]), centre]
+    assert tap_routes(fs) == [(inst, [tap, (centre[0], tap[1]), centre])]
 
 
 def test_a_tap_line_with_no_way_round_is_reported() -> None:
@@ -2294,7 +2315,7 @@ def test_a_tap_line_with_no_way_round_is_reported() -> None:
 
 def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
     """A balloon on a manually slanted run is reached with one square turn."""
-    from pandid.render.svg import tap_lines, tap_route
+    from pandid.render.svg import tap_routes
 
     fs = Flowsheet("slant")
     feed = fs.add(U.Feed("Feed")).pin(x=100, y=100)
@@ -2304,8 +2325,7 @@ def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
     fs.add_instrument("PI", 101, sensing=line, at=0.5).pin(x=578, y=578)
     fs.to_svg()
     fs.to_drawio()
-    ((inst, tap, centre),) = tap_lines(fs)
-    route = tap_route(inst, tap, centre)
+    ((inst, route),) = tap_routes(fs)
     assert len(route) == 3
     for (x1, y1), (x2, y2) in zip(route, route[1:]):
         assert x1 == x2 or y1 == y2, route
