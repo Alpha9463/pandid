@@ -609,6 +609,9 @@ class Flowsheet:
         self.warnings: list = []
         # Diagram type of the last render; validate() defaults to it.
         self._drawn_as: str | None = None
+        # Whether the last render drew the stream table; validate()
+        # defaults to it.
+        self._drawn_table: bool | None = None
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
@@ -655,6 +658,9 @@ class Flowsheet:
         # and whether any did since route() turned that on.
         self._keep_clear = False
         self._kept_clear = False
+        # Whether layout keeps equipment and furniture clear of each
+        # balloon pinned on both axes and moves its chain's room there.
+        self._pin_balloons = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2489,6 +2495,7 @@ class Flowsheet:
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
+        from pandid.layout.halo import pinned_balloons
         from pandid.validate import geometry_issues
 
         def place() -> None:
@@ -2606,12 +2613,28 @@ class Flowsheet:
                 self._exit_clear = False
             settle_best()
 
+        def repinned() -> None:
+            """Lay out with each balloon pinned on both axes kept clear,
+            and settle."""
+            self._pin_balloons = True
+            try:
+                self.layout(self._engine)
+                settle_best()
+            finally:
+                self._pin_balloons = False
+
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False
+        if tries and pinned_balloons(self, {}):
+            flaws = _flaws(self)
+            if flaws["unit-overlap"]:
+                # Keep only a drawing with fewer overlaps.
+                flaws["unit-overlap"] -= 1
+                keep_if_better(repinned, flaws)
         self._route_stale = False
 
     def _geometry(self) -> tuple:
@@ -2732,11 +2755,13 @@ class Flowsheet:
         self.renumber_streams()
         check_render_arguments(self, diagram=diagram, **arguments)
         self.warnings = []
-        # Diagram type validate() defaults to, even with check=False.
+        # Settings validate() defaults to, even with check=False.
         self._drawn_as = diagram
+        self._drawn_table = bool(arguments["show_stream_table"])
         found: list = []
         if check:
-            found = model_issues(self, tabulates=tabulates_boundary_flows(diagram))
+            found = model_issues(self, tabulates=tabulates_boundary_flows(diagram),
+                                 table=self._drawn_table)
             self._raise_on_errors(found)
         # Lay out and route where the geometry is missing or stale.
         if (self._layout_stale or any(u.frame is None for u in self.units)
@@ -2975,7 +3000,8 @@ class Flowsheet:
                     used += 1
                     self._name_group([s], used)
 
-    def validate(self, *, diagram: str | None = None) -> list:
+    def validate(self, *, diagram: str | None = None,
+                 show_stream_table: bool | Literal["sheet"] | None = None) -> list:
         """Return validation findings, errors first, then warnings.
 
         Geometric findings need frames and routes; before layout only
@@ -2986,6 +3012,9 @@ class Flowsheet:
         diagram : str or None, optional
             ``"pfd"``, ``"p&id"`` (or ``"pid"``) or ``"bfd"``; ``None``
             uses the last render's type, or ``"pfd"``.
+        show_stream_table : bool, {"sheet"} or None, optional
+            As for :meth:`to_svg`; ``None`` uses the last render's, and
+            before a render the table is not checked.
 
         Returns
         -------
@@ -2995,14 +3024,18 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If ``diagram`` is unknown.
+            If ``diagram`` or ``show_stream_table`` is unknown.
         """
-        from pandid.render.svg import draws_arrowheads, tabulates_boundary_flows
+        from pandid.render.svg import (draws_arrowheads, tabulates_boundary_flows,
+                                       wants_table_sheet)
         from pandid.validate import validate as _validate
         if diagram is None:
             diagram = self._drawn_as
+        wants_table_sheet(show_stream_table)
+        table = (self._drawn_table if show_stream_table is None
+                 else bool(show_stream_table))
         return _validate(self, arrows=draws_arrowheads(diagram),
-                         tabulates=tabulates_boundary_flows(diagram))
+                         tabulates=tabulates_boundary_flows(diagram), table=table)
 
     def to_svg(self, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,

@@ -991,6 +991,22 @@ def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
 
 
+def test_a_controller_is_not_hung_where_its_line_passes_through_it_twice() -> None:
+    """Check that hanging is refused where it adds a leg through the controller."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+
+    fs, lic, _ = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    line.via([(100, 200), (500, 200)])
+    fs.route()
+
+    box, path = unit_box(lic, frame_of(lic)), stream_path(line)
+    assert sum(segment_crosses_box(a, b, box) for a, b in zip(path, path[1:])) == 1
+
+
 def test_a_hung_controllers_line_clears_a_balloon_on_the_actuator() -> None:
     """Check that a hung controller's line misses a balloon hung on the actuator face."""
     fs, _, valve = _hung_controller()
