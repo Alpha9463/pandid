@@ -96,6 +96,88 @@ def test_reactor_duty_is_energy_role():
     assert r.outlet.direction == "outlet"
 
 
+def test_a_jacketed_reactor_has_a_jacket_inlet_and_outlet():
+    """Check that the jacketed body's utility pair replaces its single duty port."""
+    r = D.JacketedReactor("R-1")
+    assert list(r.ports) == ["outlet", "vent", "jacket_in", "jacket_out", "drive", "feed_1"]
+    assert (r.jacket_in.direction, r.jacket_in.role) == ("inlet", "utility")
+    assert (r.jacket_out.direction, r.jacket_out.role) == ("outlet", "utility")
+    # The base class with the variant builds the same nozzles.
+    assert list(U.Reactor("R-2", variant="jacketed").ports) == list(r.ports)
+
+
+def test_the_jacket_nozzles_sit_on_the_jacket_wall():
+    """Check that both nozzles are on the east jacket's outer face, in low and out high."""
+    from pandid.render.symbols import default_registry
+
+    body = default_registry.get("reactor", "jacketed")
+    # The jacket is two boxes either side of the shell; the second is east.
+    rects = re.findall(
+        r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"', body.svg
+    )
+    x, top, w, h = map(float, rects[1])
+    (in_x, in_y), (out_x, out_y) = body.ports["jacket_in"], body.ports["jacket_out"]
+    assert in_x == out_x == x + w == body.width
+    assert top < out_y < in_y < top + h
+    assert body.port_faces["jacket_in"] == {"E": (in_x, in_y)}
+    assert body.port_faces["jacket_out"] == {"E": (out_x, out_y)}
+
+
+def test_the_jacket_supply_and_return_connect_to_their_nozzles():
+    """Check that a supply and a return pipe end on the drawn jacket nozzles."""
+    from pandid import Flowsheet
+    from pandid.portgeom import port_point
+
+    fs = Flowsheet("jacket")
+    r = fs.add(D.JacketedReactor("R-1", width=152, height=360))
+    cws = fs.add(U.Feed("CWS"))
+    cwr = fs.add(U.Product("CWR"))
+    supply = fs.connect(cws.outlet, r.jacket_in)
+    back = fs.connect(r.jacket_out, cwr.inlet)
+    fs.to_svg()
+    assert supply.kind == back.kind == "material"
+    assert r.frame is not None and supply.route is not None and back.route is not None
+    assert supply.route.waypoints[-1] == pytest.approx(port_point(r, r.frame, "jacket_in"))
+    assert back.route.waypoints[0] == pytest.approx(port_point(r, r.frame, "jacket_out"))
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_duty_on_a_jacketed_reactor_is_deprecated_for_jacket_in(same_file):
+    """Check that ``duty`` on a jacketed body warns at the caller's line and is ``jacket_in``."""
+    from pandid import Flowsheet
+
+    fs = Flowsheet("jacket")
+    r = fs.add(U.Reactor("R-1", variant="jacketed"))
+    cws = fs.add(U.Feed("CWS"))
+    with pytest.warns(DeprecationWarning, match="use JacketedReactor, with jacket_in") as caught:
+        duty = r.duty
+    assert len(caught) == 1
+    assert same_file(caught[0].filename) == same_file(__file__)
+    assert duty is r.port("jacket_in")
+    fs.connect(cws.outlet, duty)
+    found = [i.message for i in fs.validate() if i.code == "deprecated"]
+    assert found == [str(caught[0].message)]
+    assert found[0].startswith("R-1: ")
+    # Every other body keeps its duty port without a warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        assert U.Reactor("R-2").duty.name == "duty"
+        assert U.Reactor("R-3", variant="tubular").duty.name == "duty"
+        # The named class never had a duty port.
+        assert getattr(D.JacketedReactor("R-4"), "duty", None) is None
+
+
+def test_duty_on_a_jacketed_reactor_is_placed_where_jacket_in_is():
+    """Check that the layout helpers place ``duty`` on ``jacket_in``'s nozzle."""
+    from pandid.portgeom import is_anchored, port_faces, port_offset
+
+    r = U.Reactor("R-1", variant="jacketed", width=152, height=360)
+    with pytest.warns(DeprecationWarning):
+        assert port_offset(r, "duty") == port_offset(r, "jacket_in")
+        assert port_faces(r, "duty") == port_faces(r, "jacket_in") == ["E"]
+        assert is_anchored(r, "duty")
+
+
 def test_a_column_takes_more_than_one_feed():
     """Check that a column takes a numbered family of feeds."""
     col = U.Column("T-302", n_feeds=2)
@@ -533,8 +615,8 @@ def test_a_probe_for_an_absent_attribute_does_not_list_the_ports():
     pump = U.Pump("P-101")
     ports = _CountingPorts(pump.ports)
     pump.__dict__["ports"] = ports
-    assert getattr(pump, "large_end", "inlet") == "inlet"
-    assert not hasattr(pump, "normal_position")
+    assert getattr(pump, "host", None) is None
+    assert not hasattr(pump, "tap")
     assert _CountingPorts.listed == 0
     misspelt = "dischrage"
     with pytest.raises(AttributeError) as typo:
@@ -543,6 +625,37 @@ def test_a_probe_for_an_absent_attribute_does_not_list_the_ports():
         "Pump 'P-101' has no attribute or port 'dischrage'; "
         "available ports: ['discharge', 'suction']"
     )
+
+
+def test_drawing_a_unit_never_misses_the_attributes_only_some_units_set(monkeypatch):
+    """Check that a symbol lookup reads overlays, large_end and normal_position without a miss."""
+    from pandid.render.symbols import default_registry
+
+    drawn = [U.Pump("P-1"), U.Vessel("V-1"), U.Tank("T-1"), U.Valve("HV-1"), U.Reducer("R-1")]
+    missed: list[str] = []
+    lookup = getattr(U.Unit, "__getattr__")
+
+    def spy(unit: U.Unit, name: str) -> object:
+        missed.append(name)
+        return lookup(unit, name)
+
+    monkeypatch.setattr(U.Unit, "__getattr__", spy)
+    for unit in drawn:
+        default_registry.for_unit(unit)
+    assert {"overlays", "large_end", "normal_position"}.isdisjoint(missed), missed
+
+
+def test_an_optional_attribute_set_on_a_unit_without_it_is_still_read():
+    """Check that a normal position set on a pump is still drawn, and unset ones read as defaults."""
+    from pandid.render.symbols import default_registry
+
+    pump = U.Pump("P-1")
+    pump.normal_position = "closed"
+    with pytest.raises(ValueError, match="drawn one way"):
+        default_registry.for_unit(pump)
+    unset = U.Pump("P-2")
+    read = [getattr(unset, name) for name in ("overlays", "large_end", "normal_position")]
+    assert read == [(), "inlet", "open"]
 
 
 # The flash drum's nozzles in declaration order, written out rather than read off the class.

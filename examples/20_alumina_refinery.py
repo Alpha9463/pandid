@@ -21,6 +21,7 @@ from pandid import (
     Flowsheet,
     FluidizedBedCalciner,
     Furnace,
+    JacketedReactor,
     JawCrusher,
     Mill,
     Product,
@@ -152,9 +153,9 @@ def digestion():
     steam_heater = fs.add(ShellAndTubeExchanger(
         "E-903", variant="straight_tubes", width=150, height=45,
         description="Live Steam Digestion Heater"))
-    digester = fs.add(Reactor(
-        "D-901", variant="jacketed", agitator="turbine", width=90,
-        height=210, description="Digester"))
+    digester = fs.add(JacketedReactor(
+        "D-901", agitator="turbine", width=90, height=210,
+        description="Digester"))
 
     # --- Flash train --------------------------------------------------
     # Counter-current: the hotter flash heats the feed nearer the digester.

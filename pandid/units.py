@@ -278,6 +278,13 @@ class Unit:
     # Backing store for pin_.
     _pin: "Pin | None" = None
 
+    # What a unit with no composed parts, large end or normal position
+    # reads as. Hidden from type checkers.
+    if not TYPE_CHECKING:
+        overlays = ()
+        large_end = "inlet"
+        normal_position = "open"
+
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
         """Return PORTS from the nearest class that declares it.
@@ -3997,6 +4004,16 @@ def _stage_fractions(
     return fractions
 
 
+#: Deprecation of ``duty`` on a jacketed reactor.
+_JACKET_DUTY = Deprecation(
+    what="duty on a jacketed Reactor",
+    instead=("JacketedReactor, with jacket_in for the jacket's supply and "
+             "jacket_out for its return"),
+    removed_in="0.4.0",
+    note="duty draws jacket_in, low on the jacket",
+)
+
+
 class Reactor(Unit):
     """Reactor: a vessel body with an agitator and internals.
 
@@ -4005,7 +4022,9 @@ class Reactor(Unit):
     ``internals="fluidised_bed"`` a fluidised bed. The agitator is
     drawn with its motor, which carries the ``drive`` port. ``vent``
     is the off-gas port, absent on ``"tubular"``; ``duty`` is the
-    jacket or coil connection.
+    heating or cooling connection. ``"jacketed"`` has ``jacket_in``,
+    low on the jacket, and ``jacket_out``, high on it, in place of
+    ``duty``.
 
     Parameters
     ----------
@@ -4055,6 +4074,8 @@ class Reactor(Unit):
     feed_7: Port
     feed_8: Port
 
+    # "jacketed" builds jacket_in and jacket_out in place of duty;
+    # JacketedReactor declares them.
     outlet: Port
     vent: Port
     duty: Port
@@ -4074,6 +4095,12 @@ class Reactor(Unit):
         ("duty", "inlet", "energy"),
     ]
     _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {
+        "jacketed": [
+            ("outlet", "outlet", "process"),
+            ("vent", "outlet", "vapor"),
+            ("jacket_in", "inlet", "utility"),
+            ("jacket_out", "outlet", "utility"),
+        ],
         "tubular": [
             ("outlet", "outlet", "process"),
             ("duty", "inlet", "energy"),
@@ -4135,6 +4162,7 @@ class Reactor(Unit):
             self._add_port(*spec)
         # Internals are drawn first, under the stirrer shaft.
         from pandid.render.iso_parts import agitator_overlays, internals_overlays
+        from pandid.render.symbols import default_registry
 
         _compose_onto(
             self,
@@ -4143,10 +4171,49 @@ class Reactor(Unit):
             ("agitator", agitator, lambda name, body: agitator_overlays(name, self.kind, body)),
         )
         if agitator is not None:
+            # An agitator hangs from the head of an upright body.
+            bodies = {v: default_registry.get(self.kind, v)
+                      for v in default_registry.variants(self.kind)}
+            upright = [v for v, body in bodies.items() if body.height >= body.width]
+            if self.variant not in upright:
+                raise ValueError(
+                    f"{name}: {type(self).__name__} variant {self.variant!r} cannot carry "
+                    f"agitator={agitator!r}; variants that can: {', '.join(upright)}"
+                )
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
             self.feed = self.feeds[0]
+
+    # Hidden from type checkers.
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Return ``jacket_in`` for ``duty`` on a jacketed body.
+
+            Only a body whose ports come from the variant table
+            answers; a class with its own ``PORTS`` does not.
+
+            Parameters
+            ----------
+            name : str
+                Attribute asked for.
+
+            Returns
+            -------
+            Any
+                ``jacket_in``, after a deprecation warning.
+
+            Raises
+            ------
+            AttributeError
+                For any other missing attribute; it lists the ports.
+            """
+            jacket = self.__dict__.get("ports", {}).get("jacket_in")
+            if name == "duty" and jacket is not None and not self._declared_ports():
+                _JACKET_DUTY.warn(self, where=self.name)
+                return jacket
+            return super().__getattr__(name)
 
 
 class Separator(Unit):

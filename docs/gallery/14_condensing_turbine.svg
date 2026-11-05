@@ -85,7 +85,7 @@
     <path d="M 2044.7906666666668,258.5575 L 2044.7906666666668,346.5575" fill="none" stroke="black" stroke-width="1" />
     <line x1="2039.8" y1="297.1" x2="2049.8" y2="303.1" stroke="black" stroke-width="1" />
     <line x1="2039.8" y1="301.1" x2="2049.8" y2="307.1" stroke="black" stroke-width="1" />
-    <path d="M 2044.7906666666668,214.5575 L 2044.7906666666668,179.5575 L 1999.7906666666668,179.5575 L 1999.7906666666668,144.5575 L 2025.7906666666668,144.5575" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 2044.7906666666668,214.5575 L 2044.7906666666668,187.0 L 1999.7906666666668,187.0 L 1999.7906666666668,144.5575 L 2025.7906666666668,144.5575" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 2063.7906666666668,144.5575 L 2103.097333333333,144.5575 L 2103.097333333333,336.5" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 818.557,297.0 L 818.557,254.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <rect x="186.9" y="467.5" width="18.2" height="13.0" fill="white" />

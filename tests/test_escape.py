@@ -346,7 +346,6 @@ def test_an_inch_mark_is_escaped_and_stays_escaped():
 def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
     """Measure ``R&D`` as the three characters drawn, in both backends."""
     from pandid.render.drawio import _tag_pass
-    from pandid.render.symbols import default_registry
 
     fs = Flowsheet("halo")
     fs.add(U.Pump("R&D")).pin(x=100, y=100)
@@ -354,7 +353,7 @@ def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
     labels = svg[svg.index('<g id="unit_labels">') :]
     halo = re.search(r'<rect [^>]*width="([\d.]+)"[^>]*/>\s*<text [^>]*>R&amp;D</text>', labels)
     assert halo is not None and halo.group(1) == "33.3"
-    plates = _tag_pass(fs, default_registry, None, "vertical").plates
+    plates = _tag_pass(fs, None, "vertical").plates
     assert [round(x1 - x0, 1) for x0, _y0, x1, _y1 in plates] == [33.3]
 
 

@@ -1060,17 +1060,23 @@ def test_series_members_lie_on_drawn_geometry(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_every_port_series_sets_two_members_an_arrowhead_pitch_apart(entry):
-    """Verify every series pitch, and two members' gap, is MIN_NOZZLE_PITCH."""
+def test_every_port_series_sets_its_members_an_arrowhead_pitch_apart(entry):
+    """Verify every series pitch, and its members' gaps, is MIN_NOZZLE_PITCH.
+
+    Every series is checked at two members, and a reactor's at three.
+    """
     (kind, variant), sym = entry
     for series in sym.port_series:
         assert series.pitch >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}"
         band = sym.bands.get(series.face)
-        (x0, y0), (x1, y1) = (
-            series.placement(i, 2, sym.width, sym.height, band=band) for i in (0, 1)
-        )
-        gap = abs(y1 - y0) if series.face in ("W", "E") else abs(x1 - x0)
-        assert gap >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}: {gap}"
+        axis = 1 if series.face in ("W", "E") else 0
+        for count in (2, 3) if kind == "reactor" else (2,):
+            along = [
+                series.placement(i, count, sym.width, sym.height, band=band)[axis]
+                for i in range(count)
+            ]
+            gap = min(b - a for a, b in zip(along, along[1:]))
+            assert gap >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix} x{count}: {gap}"
 
 
 def test_a_lone_member_lands_where_the_fixed_nozzle_did():
@@ -1463,6 +1469,34 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
         assert drawn.bands == sym.bands, (
             f"vessel/{variant} on {supports}s lost the wall its body declares"
         )
+
+
+@pytest.mark.parametrize(("kind", "variant"), _COMPOSABLE, ids=_COMPOSABLE_IDS)
+@pytest.mark.parametrize("supports", [None, "leg", "skirt", "bracket", "ring"])
+def test_every_member_of_a_family_leaves_the_face_it_is_drawn_on(kind, variant, supports):
+    """Verify a supported family is drawn nearest its own face, for every count."""
+    sym = default_registry.get(kind, variant)
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            for count in range(2, 9):
+                faces = [face] * count
+                try:
+                    vessel = (
+                        units.Vessel("X-1", variant=variant, supports=supports, inputs=faces)
+                        if role == "inlet"
+                        else units.Vessel("X-1", variant=variant, supports=supports, outputs=faces)
+                    )
+                except ValueError as exc:
+                    assert not _has_wall(sym, face) or "cannot carry" in str(exc), exc
+                    continue
+                drawn = vessel.symbol()
+                for i in range(1, count + 1):
+                    x, y = drawn.ports[f"{prefix}{i}"]
+                    lands = outward_dir(x, y, drawn.width, drawn.height)
+                    assert lands == face, (
+                        f"{kind}/{variant} on {supports}: {prefix}{i} of {count} on {face} "
+                        f"leaves {lands}"
+                    )
 
 
 def test_a_wall_moves_with_the_ink_when_a_part_grows_the_box_upwards():

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a port, `socket_1`, `socket_2`, and so on.
 - On a PFD, `validate()` warns when an energy line does not name its carrier.
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
+- `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
+  a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
+  and `jacket_out`, high on it.
 - On a PFD whose lines state properties, a render without the stream table
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
@@ -32,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   electric. `add_control_loop()` infers its output line the same way, so a
   loop acting on a motor or solenoid valve, or on another controller, now
   draws an electric signal.
+- `render()` lays out and checks a sheet faster, most of all when units are
+  pinned by a nozzle.
 
 ### Deprecated
 
@@ -39,6 +44,9 @@ These are removed in 0.4.0.
 
 - `pandid.document.equipment_list()`, the drawn box, and the spec box
   `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
+- `duty` on `Reactor(variant="jacketed")`, which now draws `jacket_in`. Use
+  `JacketedReactor`, with `jacket_in` for the jacket's supply and `jacket_out`
+  for its return.
 
 ### Fixed
 
@@ -52,6 +60,9 @@ These are removed in 0.4.0.
   run straight in with one bend fewer.
 - A `Reactor` sets its feeds far enough apart that their arrowheads do not
   touch, so `Reactor("R-1", n_feeds=2)` no longer raises `nozzles-crowded`.
+- The tubular reactor is drawn taller, so `Reactor("R-1", variant="tubular",
+  n_feeds=3)` sets its three feeds far enough apart that their arrowheads do not
+  touch.
 - Lines drawn side by side no longer push a pipe into a unit body: a run moved
   off a shared track, and the segments either side of it, keep clear of every unit.
   A run with no clear track nearby stays on the track the router laid it on.
@@ -69,6 +80,9 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- A vessel whose supports, manholes or sockets widen its box draws every inlet
+  or outlet on the wall it was given, so
+  `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
 - A valve's actuator sits on the body's centre line, so a balloon added with
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
