@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
 - On a PFD whose lines state properties, a render without the stream table
   warns that none of them is drawn. `validate()` follows the last render, and
-  `validate(show_stream_table=False)` asks about a sheet drawn without it.
+  `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
+  about a sheet drawn with it.
 
 ### Changed
 

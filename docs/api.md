@@ -388,7 +388,7 @@ built-in spec format.
 ```text
 pandid draw SPEC [-o OUT] [--diagram {pfd,p&id,bfd}] [--page-size SIZE]
                    [--border {none,zone}] [--stream-table [sheet]]
-pandid validate SPEC [--diagram {pfd,p&id,bfd}]
+pandid validate SPEC [--diagram {pfd,p&id,bfd}] [--stream-table [sheet]]
 pandid symbols [--kind KIND]
 ```
 

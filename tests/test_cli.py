@@ -191,7 +191,7 @@ def test_draw_refuses_a_flowsheet_validation_rejects(tmp_path, capsys):
 
 def test_validate_passes_a_sound_flowsheet(tmp_path, capsys):
     spec = _spec_file(tmp_path)
-    assert main(["validate", str(spec)]) == EXIT_OK
+    assert main(["validate", str(spec), "--stream-table"]) == EXIT_OK
     assert capsys.readouterr().out == f"{spec}: no problems found (4 units, 3 streams)\n"
 
 
@@ -204,7 +204,7 @@ def test_validate_fails_on_an_error_and_names_it(tmp_path, capsys):
 
 def test_validate_passes_on_warnings_alone(tmp_path, capsys):
     """Check that validate exits 0 on a sheet with only a warning and reports it."""
-    assert main(["validate", str(_spec_file(tmp_path, DETOUR))]) == EXIT_OK
+    assert main(["validate", str(_spec_file(tmp_path, DETOUR)), "--stream-table"]) == EXIT_OK
     out = capsys.readouterr().out
     assert "warning: route-detour:" in out
     assert "0 errors, 1 warning" in out
@@ -232,6 +232,24 @@ def test_draw_sends_the_reader_to_validate_for_the_sheet_it_drew(tmp_path, capsy
 
     assert main([*argv, "--diagram", "p&id"]) == EXIT_OK
     assert "see: pandid validate --diagram 'p&id' " in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("table", "count"), [([], "2 warnings"), (["--stream-table"], "1 warning")]
+)
+def test_the_validate_hint_after_draw_reports_every_warning_draw_counted(
+    tmp_path, capsys, table, count
+):
+    """Check that the validate hint carries ``--stream-table`` and finds what draw counted."""
+    spec = str(_spec_file(tmp_path, DETOUR))
+    assert main(["draw", spec, "-o", str(tmp_path / "d.svg"), *table]) == EXIT_OK
+    err = capsys.readouterr().err
+    assert f"{count}; see: pandid validate {' '.join([spec, *table])}" in err
+
+    assert main(["validate", spec, *table]) == EXIT_OK
+    out = capsys.readouterr().out
+    assert f"0 errors, {count}" in out
+    assert ("stream-table-undrawn" in out) == (not table)
 
 
 # --- symbols ------------------------------------------------------------------
