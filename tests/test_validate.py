@@ -985,6 +985,18 @@ def test_a_default_mixer_is_not_a_finding():
     assert _found(fs, "nozzles-crowded") == []
 
 
+@pytest.mark.parametrize("variant", ["default", "jacketed", "tubular"])
+def test_a_default_two_feed_reactor_is_not_a_finding(variant: str):
+    """Check that a stock reactor's two feeds are not reported crowded."""
+    fs = Flowsheet("reactor")
+    r = fs.add(U.Reactor("R-1", n_feeds=2, variant=variant))
+    for i in (1, 2):
+        fs.connect(fs.add(U.Feed(f"F{i}")).outlet, r.ports[f"feed_{i}"])
+    fs.connect(r.outlet, fs.add(U.Product("P")).inlet)
+    fs.route()
+    assert _found(fs, "nozzles-crowded") == []
+
+
 def test_overlapping_heads_are_worded_as_the_overlap_they_are():
     """Check that overlapping arrowheads are reported as an overlap, not a negative gap."""
     fs, _ = _fed_mixer(n_inlets=4, height=50)
