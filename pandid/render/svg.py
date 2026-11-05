@@ -2974,7 +2974,7 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
 
 
 def drawing_bounds(fs) -> "tuple[float, float, float, float]":
-    """Return the bounding box of every unit box and route waypoint.
+    """Return the bounding box of every unit box, route and tap line.
 
     Parameters
     ----------
@@ -3008,6 +3008,10 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
             for px, py in s.route.waypoints:
                 x0, y0 = min(x0, px), min(y0, py)
                 x1, y1 = max(x1, px), max(y1, py)
+    for _, route in tap_routes(fs):
+        for px, py in route:
+            x0, y0 = min(x0, px), min(y0, py)
+            x1, y1 = max(x1, px), max(y1, py)
     return (x0, y0, x1, y1)
 
 

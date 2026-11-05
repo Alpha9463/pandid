@@ -2322,6 +2322,21 @@ def test_a_routed_tap_line_shares_no_run_the_square_one_did_not(pt: str, tt: str
     assert "tap-crosses-unit" not in [i.code for i in fs.validate()]
 
 
+def test_the_title_block_clears_a_routed_tap_line() -> None:
+    """Check that the title strip is docked clear of a leader routed below the drawing."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.render.svg import TITLE, diagram_plan, tap_routes
+
+    fs = _two_readings("E", "E")
+
+    plan = diagram_plan(fs, None, "zone", False)
+    ((_, x, y, w, h),) = [d for d in plan.placed if d.obj is TITLE]
+    for _, route in tap_routes(fs):
+        assert not any(
+            segment_crosses_box(a, b, (x, y, x + w, y + h)) for a, b in zip(route, route[1:])
+        )
+
+
 def test_a_clear_tap_line_keeps_its_one_turn() -> None:
     """Check that a tap line with nothing in its way is the square turn it always was."""
     from pandid.render.svg import tap_lines, tap_routes
