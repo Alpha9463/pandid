@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a port, `socket_1`, `socket_2`, and so on.
 - On a PFD, `validate()` warns when an energy line does not name its carrier.
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
+- On a PFD whose lines state properties, a render without the stream table
+  warns that none of them is drawn. `validate()` follows the last render, and
+  `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
+  about a sheet drawn with it.
 
 ### Changed
 
