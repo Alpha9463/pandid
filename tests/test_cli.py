@@ -172,7 +172,8 @@ def test_draw_debug_takes_a_spacing_or_none(tmp_path, flag, debug):
 
 def test_draw_says_how_many_warnings_the_drawing_carries(tmp_path, capsys):
     out = tmp_path / "d.svg"
-    assert main(["draw", str(_spec_file(tmp_path, DETOUR)), "-o", str(out)]) == EXIT_OK
+    argv = ["draw", str(_spec_file(tmp_path, DETOUR)), "-o", str(out), "--stream-table"]
+    assert main(argv) == EXIT_OK
     captured = capsys.readouterr()
     assert captured.out.startswith("wrote ")
     assert "1 warning" in captured.err
