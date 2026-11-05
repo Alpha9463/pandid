@@ -750,7 +750,8 @@ def _along(legs: list[Leg], point: Point) -> float:
         (ax, ay), (bx, by) = leg
         size = path_length(leg)
         level = _level(leg)
-        ahead = (point[0] - ax) * (1 if bx >= ax else -1) if level else             (point[1] - ay) * (1 if by >= ay else -1)
+        ahead = ((point[0] - ax) * (1 if bx >= ax else -1) if level
+                 else (point[1] - ay) * (1 if by >= ay else -1))
         across = abs(point[1] - ay) if level else abs(point[0] - ax)
         lo = -float("inf") if index == 0 else 0.0
         hi = float("inf") if index == len(legs) - 1 else size
