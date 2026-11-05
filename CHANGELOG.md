@@ -122,6 +122,9 @@ These are removed in 0.4.0.
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- Where `route()` finds no path for a line and draws it through a unit, it
+  draws it round the units in its way along a clear lane where that draws no
+  worse; otherwise `validate()` reports `route-crosses-unit` as before.
 
 ## [0.2.0] - 2026-11-05
 
