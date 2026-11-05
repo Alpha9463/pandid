@@ -115,6 +115,8 @@ These are removed in 0.4.0.
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- A balloon attached with `face=` to a face whose middle a line leaves from taps
+  the face beside that nozzle, so its tap line no longer runs along the pipe.
 
 ## [0.2.0] - 2026-11-05
 

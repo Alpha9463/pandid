@@ -220,8 +220,8 @@ def nozzle_tap(inst: "Instrument") -> Point | None:
 
     A balloon drawn from a face the author named taps the face's middle.
     Where a line leaves a nozzle there, the tap slides one nozzle pitch
-    along the face, to the side farther from the face's other connected
-    nozzles, if that stays on the face and off them.
+    along the face, if that stays on the face and off its other connected
+    nozzles: to the side with more room, else toward the balloon.
 
     Parameters
     ----------
@@ -247,12 +247,14 @@ def nozzle_tap(inst: "Instrument") -> Point | None:
     if not any(math.dist(point, n) < 0.5 for n in nozzles):
         return None
     x0, y0, x1, y1 = drawn_box(host, host.frame)
+    f = inst.frame
+    lean = 0.0 if f is None else (f.cx - point[0]) * -ny + (f.cy - point[1]) * nx
     sides = [(point[0] - sign * ny * MIN_NOZZLE_PITCH, point[1] + sign * nx * MIN_NOZZLE_PITCH)
              for sign in (1, -1)]
-    room = [(min(math.dist(q, n) for n in nozzles), q) for q in sides
-            if x0 <= q[0] <= x1 and y0 <= q[1] <= y1]
+    room = [(min(MIN_NOZZLE_PITCH, *(math.dist(q, n) for n in nozzles)), sign * lean, q)
+            for sign, q in zip((1, -1), sides) if x0 <= q[0] <= x1 and y0 <= q[1] <= y1]
     best = max(room, default=None)
-    return best[1] if best is not None and best[0] >= 0.5 else None
+    return best[2] if best is not None and best[0] >= 0.5 else None
 
 
 def free_face(inst: "Instrument") -> str | None:
