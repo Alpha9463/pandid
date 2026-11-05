@@ -6,7 +6,7 @@ import re
 import pytest
 
 from pandid import Evaporator, Feed, Flowsheet, Product, Vessel
-from pandid.portgeom import port_point
+from pandid.portgeom import outward_dir, port_point
 from pandid.render.iso_parts import MANHOLE_DEPTH, MANHOLE_SPAN, SOCKET_DEPTH, SOCKET_SPAN
 from pandid.render.symbols import PortSeries, default_registry, overlay_boxes
 from pandid.spec import SpecError, from_dict, to_dict
@@ -233,10 +233,17 @@ def test_a_part_that_crowds_a_nozzle_off_its_wall_is_refused():
         Vessel("D-101", outputs=4, height=40, sockets=[("E", 0.8)])
 
 
-def test_a_squeezed_body_that_turns_a_nozzle_onto_another_face_is_refused():
+def test_a_squeezed_body_keeps_its_family_on_the_wall_beside_a_wall_part():
+    """Check that a family is spread where the wall part leaves it nearest its face."""
+    sym = Vessel("D-101", width=40, inputs=4, manholes=[("W", 0.8)]).symbol()
+    for name in ("in_1", "in_2", "in_3", "in_4"):
+        assert outward_dir(*sym.ports[name], sym.width, sym.height) == "W", name
+
+
+def test_a_squeezed_body_with_no_room_on_the_wall_for_its_family_is_refused():
     """Check that a wall part may not leave a family nozzle nearer another edge of the drawing."""
     with pytest.raises(ValueError, match="in_1 is drawn on the W wall at"):
-        Vessel("D-101", width=40, inputs=4, manholes=[("W", 0.8)])
+        Vessel("D-101", width=34, inputs=4, manholes=[("W", 0.8)])
 
 
 @pytest.mark.parametrize(
