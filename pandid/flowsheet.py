@@ -2518,7 +2518,7 @@ class Flowsheet:
                 self._plain_state, self._plain_stale = plain_state
 
         def snapshot() -> tuple:
-            """Return the drawing and the caches a trial starts from.
+            """Return the drawing, its caches and the trial it was drawn in.
 
             Returns
             -------
@@ -2526,7 +2526,8 @@ class Flowsheet:
                 State for :func:`restore`.
             """
             return (self._state(), self._plain_state, self._plain_stale,
-                    self._layout_stale, self._route_stale)
+                    self._layout_stale, self._route_stale,
+                    self._family_faces, self._added_faces)
 
         def restore(snap: tuple) -> None:
             """Put back what :func:`snapshot` returned.
@@ -2536,7 +2537,8 @@ class Flowsheet:
             snap : tuple
                 What :func:`snapshot` returned.
             """
-            state, self._plain_state, self._plain_stale, layout_stale, route_stale = snap
+            (state, self._plain_state, self._plain_stale, layout_stale, route_stale,
+             self._family_faces, self._added_faces) = snap
             self._put_state(state)
             self._layout_stale, self._route_stale = layout_stale, route_stale
 
@@ -2711,7 +2713,7 @@ class Flowsheet:
                         self._rows_out, self._tees_away, self._fannable,
                         tuple((u, u._stock_face) for u in self.units
                               if hasattr(u, "_stock_face")),
-                        self._family_faces, self._added_faces, self._lanes, self._relaned))
+                        self._lanes, self._relaned))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2723,8 +2725,8 @@ class Flowsheet:
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out, self._tees_away, self._fannable, stock, self._family_faces,
-         self._added_faces, self._lanes, self._relaned) = _copied(state)
+         self._rows_out, self._tees_away, self._fannable, stock, self._lanes,
+         self._relaned) = _copied(state)
         for u, flag in stock:
             u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)

@@ -521,3 +521,33 @@ def test_the_family_face_trial_never_draws_worse_than_main(case, crossings, bend
     assert quality.bends <= bends
     assert fs.route_converged
     assert _taps_off(fs) == set()
+
+
+def test_a_second_route_draws_no_line_on_another():
+    """Route a sheet twice without the trials' caches joining two lines."""
+    from pandid.layout.control import _flaws
+
+    fs = Flowsheet("tank to mixer")
+    tank = fs.add(units.Tank("TK-1", inputs=2)).pin(x=900, y=600)
+    vessel = fs.add(units.Vessel("V-1", variant="jacketed")).pin(x=900, y=100)
+    pump = fs.add(units.Pump("P-1")).pin(x=900, y=350)
+    mixer = fs.add(units.Mixer("M-1")).pin(x=1200, y=100)
+    product = fs.add(units.Product("Product")).pin(x=300, y=100)
+    feeds = [
+        fs.add(units.Feed(name)).pin(x=70, y=y)
+        for name, y in (("Feed-0", 100), ("Feed-1", 340), ("Vessel feed", 950))
+    ]
+    for a, b in [
+        (feeds[0].outlet, tank.inlets[0]),
+        (feeds[1].outlet, tank.inlets[1]),
+        (tank.outlets[0], pump.suction),
+        (pump.discharge, mixer.inlets[0]),
+        (feeds[2].outlet, vessel.inlet),
+        (vessel.outlet, mixer.inlets[1]),
+        (mixer.outlet, product.inlet),
+    ]:
+        fs.connect(a, b)
+    fs.layout()
+    for _ in range(2):
+        fs.route()
+        assert _flaws(fs)["line-on-line"] == 0
