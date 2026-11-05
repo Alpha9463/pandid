@@ -124,6 +124,9 @@ These are removed in 0.4.0.
 - Where neither side of a symbol has room for both codes of a pair, such as
   `annotate(high="TAH", low="TAL")`, one is written on each side instead of
   over a line.
+- `route()` ends the run a line leaves a nozzle on clear of every other unit,
+  so a signal line between two balloons no longer cuts through a third
+  standing between them.
 
 ## [0.2.0] - 2026-11-05
 
