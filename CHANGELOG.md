@@ -53,6 +53,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A `Tee` whose branch serves a unit drawn above the run turns its branch north,
+  so a header of tees no longer draws each branch as a box crossing back through
+  the run. `tee.pin(mirrored=False)` keeps the branch south.
 - A balloon takes any number of signal lines. Lines on one side of it leave
   from separate points on its outline instead of stacking on one point.
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
@@ -102,6 +105,8 @@ These are removed in 0.4.0.
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
   `port_offset()` can differ in the second decimal.
+- A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
+  draws its run, bypass and drains in the line's `color` and `dasharray`.
 
 ## [0.2.0] - 2026-11-05
 
