@@ -456,6 +456,64 @@ def test_row_only_pins_hold_beside_a_column_split_by_a_row_pin() -> None:
     assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
 
 
+def test_row_only_pins_order_units_in_different_layers() -> None:
+    """Draw a unit pinned to a lower row above one pinned to a higher row in the next layer."""
+    fs = Flowsheet("Row pins")
+    b = fs.add(Block("B", inputs=["W"], outputs=["E"])).pin(row=2)
+    d = fs.add(Block("D", inputs=["W"], outputs=["E"])).pin(row=3)
+    fs.connect(b.ports["out_1"], d.ports["in_1"])
+    fs.route()
+
+    assert b.frame is not None and d.frame is not None
+    assert b.frame.cx < d.frame.cx
+    assert b.frame.cy < d.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+def test_row_only_pins_order_a_train_across_three_layers() -> None:
+    """Draw three units pinned by row alone in row order, each in a layer of its own."""
+    fs = Flowsheet("Row pins")
+    a = fs.add(Block("A", inputs=["W"], outputs=["E"])).pin(row=1)
+    b = fs.add(Block("B", inputs=["W"], outputs=["E"])).pin(row=3)
+    c = fs.add(Block("C", inputs=["W"], outputs=["E"])).pin(row=2)
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.connect(b.ports["out_1"], c.ports["in_1"])
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None and c.frame is not None
+    assert a.frame.cx < b.frame.cx < c.frame.cx
+    assert a.frame.cy < c.frame.cy < b.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+def test_row_only_pins_hold_level_where_row_order_would_cross_lines() -> None:
+    """Keep a drawing whose row order crosses lines, reporting the row pin it breaks."""
+    fs = Flowsheet("Row pins")
+    a = fs.add(Block("A", inputs=[], outputs=["E", "E"])).pin(row=1)
+    b = fs.add(Block("B", inputs=["W"], outputs=["E"])).pin(row=2)
+    c = fs.add(Block("C", inputs=["W", "W"], outputs=[]))
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.connect(b.ports["out_1"], c.ports["in_1"])
+    fs.connect(a.ports["out_2"], c.ports["in_2"])
+    fs.route()
+
+    assert measure_final(fs).crossings == 0
+    assert [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+def test_row_and_column_pins_in_different_columns_stay_level() -> None:
+    """Leave units pinned by row and column in different columns level on their pipe."""
+    fs = Flowsheet("Row pins")
+    b = fs.add(Block("B", inputs=["W"], outputs=["E"])).pin(col=0, row=2)
+    d = fs.add(Block("D", inputs=["W"], outputs=["E"])).pin(col=1, row=3)
+    fs.connect(b.ports["out_1"], d.ports["in_1"])
+    fs.route()
+
+    assert b.frame is not None and d.frame is not None
+    assert b.frame.cy == d.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
 def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
     """Report a unit drawn in another turn or mirror than its author stated."""
     fs, line = _line()
