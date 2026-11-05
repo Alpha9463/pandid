@@ -102,9 +102,9 @@ _OUTPUT_FORMATS = frozenset({"", ".svg", ".pdf", ".png", ".drawio"})
 def _inferred_kind(src: "Port", dst: "Port") -> str:
     """Return the stream kind two ports imply.
 
-    Two signal ports imply ``"pneumatic"`` when one is a valve's
-    actuator, else ``"electric"``; two energy or utility ports imply
-    ``"energy"``.
+    Two signal ports imply ``"pneumatic"`` when one is the actuator of
+    a valve drawn with a diaphragm or with no actuator, else
+    ``"electric"``; two energy or utility ports imply ``"energy"``.
 
     Parameters
     ----------
@@ -117,7 +117,12 @@ def _inferred_kind(src: "Port", dst: "Port") -> str:
         ``"pneumatic"``, ``"electric"``, ``"energy"`` or ``"material"``.
     """
     if src.role == "signal":
-        return "pneumatic" if "actuator" in (src.name, dst.name) else "electric"
+        from pandid.render.symbols import variant_actuator
+
+        air = any(p.name == "actuator"
+                  and variant_actuator(p.owner.variant) in ("", "diaphragm")
+                  for p in (src, dst))
+        return "pneumatic" if air else "electric"
     return ("energy" if src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES
             else "material")
 
@@ -1332,7 +1337,7 @@ class Flowsheet:
         controller_offset: float | None = None,
         transmitter_letters: str | None = None, controller_letters: str | None = None,
         controller_variant: str = "shared",
-        measurement_kind: str = "electric", output_kind: str = "pneumatic",
+        measurement_kind: str = "electric", output_kind: str | None = None,
     ) -> "ControlLoop":
         """Add a control loop around a final control element.
 
@@ -1370,8 +1375,9 @@ class Flowsheet:
             Controller balloon symbol.
         measurement_kind : str, default="electric"
             Kind of the transmitter-to-controller signal.
-        output_kind : str, default="pneumatic"
-            Kind of the controller-to-element signal.
+        output_kind : str or None, optional
+            Kind of the controller-to-element signal; ``None`` infers
+            it as :meth:`connect` does.
 
         Returns
         -------
@@ -1786,9 +1792,10 @@ class Flowsheet:
             Destination port, or a unit for a signal line.
         kind : str or None, optional
             One of :data:`~pandid.streams.STREAM_KINDS`. ``None`` infers
-            ``"pneumatic"`` for a signal line to a valve's actuator,
-            ``"electric"`` for another signal line, ``"energy"`` between
-            two energy or utility ports, else ``"material"``.
+            ``"pneumatic"`` for a signal line to the actuator of a valve
+            drawn with a diaphragm or with no actuator, ``"electric"``
+            for another signal line, ``"energy"`` between two energy or
+            utility ports, else ``"material"``.
         name : str or None, optional
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False

@@ -4,7 +4,14 @@ import warnings
 
 import pytest
 
-from pandid import ControlValve, Flowsheet, Instrument, units as U
+from pandid import (
+    ControlValve,
+    Flowsheet,
+    Instrument,
+    MotorOperatedValve,
+    SolenoidValve,
+    units as U,
+)
 from pandid.document import equipment_list
 from pandid.spec import from_dict, to_dict
 from pandid.validate import validate
@@ -551,8 +558,50 @@ def test_a_long_hand_loop_with_no_kind_draws_what_the_helper_draws(by_unit):
     one_liner, drum, lv = _feedback_sheet()
     one_liner.add_control_loop("L", 101, measuring=drum, acting_on=lv)
 
+    assert [s.kind for s in long_hand.streams][-2:] == ["electric", "pneumatic"]
     assert [s.kind for s in long_hand.streams] == [s.kind for s in one_liner.streams]
     assert one_liner.to_svg() == long_hand.to_svg()
+
+
+def _valve_on_a_line(cls: type[U.Valve], actuator: str):
+    """Return a sheet with a valve built with ``actuator`` in one line, the line and the valve."""
+    fs = Flowsheet("actuated")
+    feed, valve = fs.add(U.Feed("Feed")), fs.add(cls("XV-101", actuator=actuator))
+    line = fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, fs.add(U.Product("Product")).inlet)
+    return fs, line, valve
+
+
+_ACTUATED = [
+    (U.Valve, "diaphragm", "pneumatic"),
+    (ControlValve, "", "pneumatic"),
+    (U.Valve, "", "pneumatic"),
+    (U.Valve, "motor", "electric"),
+    (MotorOperatedValve, "", "electric"),
+    (U.Valve, "solenoid", "electric"),
+    (SolenoidValve, "", "electric"),
+    (U.Valve, "hydraulic", "electric"),
+]
+
+
+@pytest.mark.parametrize("cls, actuator, kind", _ACTUATED)
+def test_the_signal_to_a_valve_takes_the_kind_its_actuator_reads(cls, actuator, kind):
+    """Check that an unstated output kind is pneumatic to a diaphragm, electric to a motor."""
+    fs, line, valve = _valve_on_a_line(cls, actuator)
+    assert fs.add_control_loop("F", 101, measuring=line, acting_on=valve).output.kind == kind
+
+    fs, line, valve = _valve_on_a_line(cls, actuator)
+    assert fs.connect(fs.add_instrument("FIC", 101), valve).kind == kind
+
+
+def test_a_stated_output_kind_wins_over_the_valves_actuator():
+    """Check that an explicit kind to a motor-operated valve is kept."""
+    fs, line, valve = _valve_on_a_line(U.Valve, "motor")
+    loop = fs.add_control_loop("F", 101, measuring=line, acting_on=valve, output_kind="pneumatic")
+    assert loop.output.kind == "pneumatic"
+
+    fs, line, valve = _valve_on_a_line(U.Valve, "motor")
+    assert fs.connect(fs.add_instrument("FIC", 101), valve, kind="pneumatic").kind == "pneumatic"
 
 
 def test_the_balloons_it_places_land_clear_of_the_sheet():

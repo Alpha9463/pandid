@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `connect()` no longer needs `kind=` for a signal line: a line to a valve's
-  actuator is pneumatic and any other is electric, as `add_control_loop()`
-  draws them.
+- `connect()` no longer needs `kind=` for a signal line: a line to a valve
+  with a diaphragm actuator, or none drawn, is pneumatic and any other is
+  electric. `add_control_loop()` infers its output line the same way, so a
+  loop acting on a motor or solenoid valve, or on another controller, now
+  draws an electric signal.
 
 ## [0.2.0] - 2026-11-05
 
