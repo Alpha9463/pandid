@@ -56,6 +56,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- Lines that cross on their way into a mixer are laid on lanes even where they
+  share their stretch of the gap with only some of the lines beside them, so the
+  last two pumps of a header of tees no longer cross into the mixer.
 - The equipment list and `fs.equipment_list()` include centrifuges and
   crushing machines.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,
