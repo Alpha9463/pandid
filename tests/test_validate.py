@@ -1718,9 +1718,8 @@ def test_the_corner_it_names_is_the_cure():
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
-def test_neither_route_finding_beside_it_can_see_a_diagonal():
-    """Check that route-detour and segment_crosses_box cannot detect a diagonal."""
-    from pandid.layout.conflicts import segment_crosses_box
+def test_route_detour_cannot_see_a_diagonal():
+    """Check that route-detour measures a diagonal as its squared-up corner."""
 
     def detour(fs):
         return next(i for i in fs.validate() if i.code == "route-detour").message
@@ -1728,8 +1727,22 @@ def test_neither_route_finding_beside_it_can_see_a_diagonal():
     assert detour(_hand_routed((320.0, 200.0))[0]) == detour(
         _hand_routed((320.0, 200.0), (440.0, 200.0))[0]
     )
-    assert not segment_crosses_box((0, 0), (100, 100), (10, 10, 90, 90))
-    assert segment_crosses_box((50, 0), (50, 100), (10, 10, 90, 90))
+
+
+def test_a_segment_crosses_a_box_on_the_slant_as_well_as_square():
+    """Check that segment_crosses_box tests diagonal and orthogonal segments."""
+    from pandid.layout.conflicts import segment_crosses_box
+
+    box = (10.0, 10.0, 90.0, 90.0)
+    assert segment_crosses_box((0, 0), (100, 100), box)
+    assert segment_crosses_box((50, 50), (200, 120), box)
+    assert not segment_crosses_box((80, -10), (110, 20), box)
+    assert not segment_crosses_box((0, 20), (20, 0), box)
+    assert not segment_crosses_box((120, 120), (95, 95), box)
+    assert segment_crosses_box((50, 0), (50, 100), box)
+    assert segment_crosses_box((0, 50), (100, 50), box)
+    assert not segment_crosses_box((10, 0), (10, 100), box)
+    assert not segment_crosses_box((0, 95), (100, 95), box)
 
 
 # --- what the sheet drew but nothing said -------------------------------------
@@ -2032,6 +2045,27 @@ def test_a_line_that_leaves_through_the_wrong_face_of_its_source_is_reported():
     (said,) = _own_unit_findings(fs)
     assert said.startswith("stream S2 is drawn through E-101, which it leaves from")
     assert "E-101.shell_out" in said and "S face" in said
+
+
+def test_a_diagonal_drawn_through_the_unit_it_runs_to_is_reported():
+    """Check that a slanted via() leg through its unit to an N-face nozzle is reported."""
+    fs, e, feed, _ = _exchanger_run()
+    (x, y), (_, fy) = port_point(e, e.frame, "shell_in"), port_point(feed, feed.frame, "outlet")
+    fs.streams[0].via([(x + 90, fy), (x + 90, y + 90)])
+
+    (said,) = _own_unit_findings(fs)
+    assert said.startswith("stream S1 is drawn through E-101, which it runs to")
+    assert len(_found(fs, "route-diagonal")) == 1
+
+
+def test_a_diagonal_that_clears_the_unit_it_runs_to_is_not_reported():
+    """Check that a slanted via() leg past its unit's corner is not reported."""
+    fs, e, feed, _ = _exchanger_run()
+    (x, y), (_, fy) = port_point(e, e.frame, "shell_in"), port_point(feed, feed.frame, "outlet")
+    fs.streams[0].via([(x + 120, fy), (x + 120, y + 90), (x, y - 60)])
+
+    assert _own_unit_findings(fs) == []
+    assert len(_found(fs, "route-diagonal")) == 1
 
 
 def test_a_line_that_reaches_its_nozzle_from_the_nozzle_face_is_not_reported():
