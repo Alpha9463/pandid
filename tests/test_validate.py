@@ -1323,6 +1323,25 @@ def test_only_a_pfd_owes_a_flow_on_every_boundary_line(diagram, reported):
     assert len([w for w in fs.warnings if w.code == "boundary-flow-missing"]) == reported
 
 
+def _table_columns(drawn: str) -> list[str]:
+    """Return the stream names heading the table columns of an SVG or draw.io export."""
+    if "<mxfile" in drawn:
+        return re.findall(r'id="[^"]*-r0-c\d+"[^>]*value="(S\d+)"', drawn)
+    tables = re.findall(r'<g id="stream_table[^"]*">.*?</g>', drawn, re.S)
+    return re.findall(r">(S\d+)</text>", "".join(tables))
+
+
+@pytest.mark.parametrize("draw", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize("table", [True, "sheet"])
+@pytest.mark.parametrize(
+    ("diagram", "columns"), [("pfd", ["S1", "S2"]), ("p&id", ["S1"]), ("bfd", ["S1"])]
+)
+def test_only_a_pfd_keeps_an_empty_column_for_a_boundary_line(draw, table, diagram, columns):
+    """Check that the table keeps S2's empty boundary column on a PFD alone."""
+    fs = _partly_tabulated()
+    assert _table_columns(getattr(fs, draw)(diagram=diagram, show_stream_table=table)) == columns
+
+
 # --- stream-table-missing --------------------------------------------------
 
 

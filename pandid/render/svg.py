@@ -3162,7 +3162,8 @@ class TableSheetPlan(NamedTuple):
     findings: list
 
 
-def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
+def table_sheet_plan(fs, sheet: "_Sheet | None",
+                     diagram: "str | None" = None) -> TableSheetPlan:
     """Lay out the stream table's own sheet.
 
     Wrap the table to the page, dock the title strip and frame both.
@@ -3173,6 +3174,8 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
         Sheet.
     sheet : _Sheet or None
         Fixed page, or ``None`` to fit the sheet to the table.
+    diagram : str or None, optional
+        Diagram type the table belongs to; ``None`` is a PFD.
 
     Returns
     -------
@@ -3190,7 +3193,7 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
     # Wrap to the frame width less the dock clearance.
     room = None if sheet is None else (
         sheet.width - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER)
-    table = F.stream_table_sheet(fs, room)
+    table = F.stream_table_sheet(fs, room, diagram)
     if table is None:
         raise ValueError(
             "show_stream_table='sheet' draws a sheet whose body is the stream "
@@ -3263,7 +3266,8 @@ class DiagramPlan(NamedTuple):
 
 
 def diagram_plan(fs, sheet: "_Sheet | None", border: str,
-                 show_stream_table: bool) -> DiagramPlan:
+                 show_stream_table: bool,
+                 diagram: "str | None" = None) -> DiagramPlan:
     """Lay out the diagram's sheet and dock its furniture.
 
     Furniture is the annotation boxes, a title strip for a title block
@@ -3279,6 +3283,8 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
         ``"none"`` or ``"zone"``.
     show_stream_table : bool
         Whether to dock the stream table.
+    diagram : str or None, optional
+        Diagram type; ``None`` is a PFD.
 
     Returns
     -------
@@ -3303,7 +3309,7 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
              for a in fs.annotations]
     if fs.title_block is not None or border == "zone":
         items.append((TITLE, "bottom-right", *F.measure_title_strip(block)))
-    table = F.stream_table_layout(fs) if show_stream_table else None
+    table = F.stream_table_layout(fs, diagram) if show_stream_table else None
     if table is not None:
         items.append((table, "bottom-left", table.w, table.h))
     # The frame sits where a border would.
@@ -3391,7 +3397,7 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
     was = fs.warnings
     contents = list(was)
     try:
-        table_sheet_plan(fs, page)
+        table_sheet_plan(fs, page, kind)
     finally:
         was[:] = contents
         fs.warnings = was
@@ -3470,10 +3476,10 @@ class SvgRenderer:
         joints = sheet_connections(diagram, connections)
         sheet = _page(page_size)
         if table_sheet:
-            return self._table_sheet(fs, sheet, border)
+            return self._table_sheet(fs, sheet, border, diagram)
 
         # 1. The sheet: furniture docked round the drawing.
-        plan = diagram_plan(fs, sheet, border, bool(show_stream_table))
+        plan = diagram_plan(fs, sheet, border, bool(show_stream_table), diagram)
         fit_issues: list[Issue] = []
         # Findings from the label passes.
         self._findings: list[Issue] = []
@@ -3573,7 +3579,7 @@ class SvgRenderer:
         OUT = F.OUTER_MARGIN
         return furniture, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT)
 
-    def _table_sheet(self, fs, sheet, border) -> str:
+    def _table_sheet(self, fs, sheet, border, diagram) -> str:
         """Return the stream table drawn as a sheet of its own.
 
         Parameters
@@ -3584,6 +3590,8 @@ class SvgRenderer:
             Fixed page, or ``None`` to size to the table.
         border : str
             ``"none"`` or ``"zone"``.
+        diagram : str
+            Diagram type the table belongs to.
 
         Returns
         -------
@@ -3593,7 +3601,7 @@ class SvgRenderer:
         from pandid.document import _drawn_text
 
         fit_issues: list[Issue] = []
-        plan = table_sheet_plan(fs, sheet)
+        plan = table_sheet_plan(fs, sheet, diagram)
         furniture: list[str] = []
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
             furniture.extend(F.draw_stream_table(

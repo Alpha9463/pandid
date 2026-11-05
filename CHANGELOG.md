@@ -54,6 +54,9 @@ These are removed in 0.4.0.
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
   connected with `draw_as_recycle=True`, before or after the sheet is rendered.
+- On a sheet drawn with `diagram="p&id"` or `diagram="bfd"`, the stream table
+  drops the column of a line that crosses the sheet edge and states no property.
+  A PFD keeps that column.
 
 ## [0.2.0] - 2026-11-05
 
