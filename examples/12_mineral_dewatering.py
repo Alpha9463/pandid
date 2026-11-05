@@ -31,7 +31,7 @@ from pandid import (
     Vent,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_table
-from pandid.portgeom import pinned_x
+from pandid.portgeom import pinned_x, pinned_y
 
 # --- Stream property table --------------------------------------------
 # An empty value renders as "-".
@@ -183,7 +183,7 @@ def main():
     thickener.pin(port="feed", x=380, y=feed_y)
     overflow.pin(port="inlet", x=520, y=feed_y)     # dead level off the launder
 
-    # The eccentric reducer's outlet sits 2.4 units above its inlet.
+    # The eccentric reducer's outlet sits above its inlet.
     suction_y = 330.0
     underflow_pump.pin(port="suction", x=520.7, y=suction_y)
     # Reducers a spool clear of the pump, to leave room for their tags.
@@ -235,7 +235,7 @@ def main():
 
     # Straight down out of the cone, clear of RD-401's tag.
     fs.connect(thickener.underflow, suction_red.inlet, name="S-408").via(
-        [(420, 332.4)])
+        [(420, pinned_y(suction_red, "inlet"))])
     fs.connect(suction_red.outlet, underflow_pump.suction, name="S-408")
 
     fs.connect(underflow_pump.discharge, disch_red.inlet, name="S-409")
