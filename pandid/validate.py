@@ -17,7 +17,10 @@ from pandid.portgeom import COMPASS
 from pandid.routing.visibility import EDGE_TOL as _EDGE_TOL
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pandid.flowsheet import Flowsheet
+    from pandid.streams import Stream
 
 _TOL = 1.0  # tolerance in px
 
@@ -524,7 +527,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
     for assembly in fs._station_assemblies:
         station = assembly.station
         corner = (station.control, station.inlet.owner, station.outlet.owner)
-        if not all(u.pin_ is not None and u.pin_.x is not None and u.pin_.y is not None
+        if not all(u._pin is not None and u._pin.x is not None and u._pin.y is not None
                    for u in corner):
             continue
         short = {axis: max((-v for m in station.members if m.pin_ is not None
@@ -997,7 +1000,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
                                   f"drawn at {drawn:g}, {abs(drawn - want):g} away")
             # Check that a stated turn or mirror is drawn as stated.
-            pin = u.pin_
+            pin = u._pin
             if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
                 missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
                               f"drawn at {u.frame.orientation:g}")
@@ -1048,7 +1051,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # Grid pins in order: a lower col is drawn further west, and a
         # lower row higher up its column.
         graded = [(u, pin) for u in placed
-                  if u.kind != "instrument" and (pin := u.pin_) is not None]
+                  if u.kind != "instrument" and (pin := u._pin) is not None]
         for a, pa in graded:
             for b, pb in graded:
                 fa, fb = a.frame, b.frame
@@ -1194,8 +1197,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if s.route is None:
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
-            sp = port_point(src_u, src_u.frame, s.source.name)
-            dp = port_point(dst_u, dst_u.frame, s.dest.name)
+            src = resolve_port(src_u, src_u.frame, s.source.name)
+            dst = resolve_port(dst_u, dst_u.frame, s.dest.name)
+            sp, dp = src.point, dst.point
             pts = [sp] + list(s.route.waypoints) + [dp]
 
             for k in range(len(pts) - 1):
@@ -1218,9 +1222,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
-            ends = [(u, name, drawn_box(u, u.frame), resolve_port(u, u.frame, name).face)
-                    if is_anchored(u, name) else None
-                    for u, name in ((src_u, s.source.name), (dst_u, s.dest.name))]
+            ends = [(u, name, drawn_box(u, u.frame), end.face) if is_anchored(u, name) else None
+                    for u, name, end in ((src_u, s.source.name, src), (dst_u, s.dest.name, dst))]
             pierced = _pierced_end(path, ends) if len(path) > 1 else None
             if pierced is not None:
                 u, name, _, face = pierced
@@ -1301,7 +1304,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 continue
             su, du = s.source.owner, s.dest.owner
             # Only where an elevation was pinned by hand.
-            if not any(getattr(u.pin_, "y", None) is not None for u in (su, du)):
+            if not any(getattr(u._pin, "y", None) is not None for u in (su, du)):
                 continue
             src = resolve_port(su, su.frame, s.source.name)
             dst = resolve_port(du, du.frame, s.dest.name)
@@ -1323,26 +1326,27 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"That is corner arithmetic rather than a step: pin the nozzle, "
                 f"{dev.name}.pin(port={port!r}, y={target:g})"))
 
-    # Soft: parallel runs closer than ISO 10628-1 5.3.2 allows.
-    warnings.extend(_crowded_lines(fs))
+        # Soft: parallel runs closer than ISO 10628-1 5.3.2 allows.
+        warnings.extend(_crowded_lines(zip(drawn, lines.values())))
 
     return errors + warnings
 
 
-def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
+def _crowded_lines(lines: "Iterable[tuple[Stream, list[tuple[float, float]]]]"
+                   ) -> list["Issue"]:
     """Return ``lines-crowded`` findings (ISO 10628-1 5.3.2).
 
     Parameters
     ----------
-    fs : Flowsheet
-        Sheet to check.
+    lines : Iterable[tuple[Stream, list[tuple[float, float]]]]
+        Each drawn stream and its polyline.
 
     Returns
     -------
     list[Issue]
         One warning per pair of streams with crowded parallel runs.
     """
-    from pandid.render.svg import stream_polyline, _stream_rung
+    from pandid.render.svg import _stream_rung
     from pandid.render.weights import M
     from pandid.streams import SIGNAL_KINDS
 
@@ -1350,12 +1354,8 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
     floor_mm = 1.0              # the clause's absolute minimum
 
     segments = []
-    # Only streams with both ends placed have a drawn path.
-    for s in fs.streams:
-        if s.source.owner.frame is None or s.dest.owner.frame is None:
-            continue
+    for s, points in lines:
         w = _stream_rung(s.kind in SIGNAL_KINDS).width
-        points = stream_polyline(s)
         for (x1, y1), (x2, y2) in zip(points, points[1:]):
             if y1 == y2 and x1 != x2:
                 segments.append((s, "h", min(x1, x2), max(x1, x2), y1, w))

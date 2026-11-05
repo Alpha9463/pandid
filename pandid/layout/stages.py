@@ -20,17 +20,12 @@ def slot(unit: "Unit") -> "_Slot":
     Parameters
     ----------
     unit : Unit
-        Unit being laid out.
+        Unit being laid out, with its slot seeded.
 
     Returns
     -------
     _Slot
         The unit's slot.
-
-    Raises
-    ------
-    AttributeError
-        If layout has not seeded the slot.
     """
     assert unit._slot is not None, f"{unit.name} has no slot; layout ran out of order"
     return unit._slot

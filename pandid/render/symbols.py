@@ -1239,6 +1239,33 @@ def _face_point(face: str, t: float, inset: float, width: float, height: float
     return t, height - inset  # "S"
 
 
+def _nearest_stretch(band: "tuple[float, float] | None", along: float,
+                     inset: float, count: int) -> "tuple[float, float] | None":
+    """Return the stretch of a band nearer its face than either end.
+
+    Parameters
+    ----------
+    band : tuple[float, float] or None
+        ``(lo, hi)`` a family may use; the whole face if ``None``.
+    along : float
+        Face length.
+    inset : float
+        Distance in from the face's edge to the wall the family is on.
+    count : int
+        Family size.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        The band cut to points nearer the face than the ends of the
+        box, or ``band`` when that leaves too little room to keep
+        ``count`` members apart.
+    """
+    lo, hi = (0.0, along) if band is None else band
+    near = (max(lo, inset + _COINCIDENT), min(hi, along - inset - _COINCIDENT))
+    return near if near[1] - near[0] >= (count - 1) * _COINCIDENT else band
+
+
 # Pitch and extent of tank and vessel inlet and outlet families.
 _VESSEL_PITCH = 20.0
 _VESSEL_EXTENT = 0.7
@@ -1251,11 +1278,12 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   ) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
-    Each family is spread about the stencil's anchor within
-    :attr:`Symbol.bands`; a role with one member keeps its full menu.
-    If a member lands nearer a stencil nozzle on its band than the
-    family's pitch, the band's stencil nozzles are spread with the
-    family, in order along the wall.
+    Each family is spread about the stencil's anchor within the part of
+    :attr:`Symbol.bands` nearer its face than either end of the box; a
+    role with one member keeps its full menu. If a member lands nearer
+    a stencil nozzle on its band than the family's pitch, the band's
+    stencil nozzles are spread with the family, in order along the
+    wall.
 
     Parameters
     ----------
@@ -1327,6 +1355,8 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
             order = sorted(beside, key=beside.__getitem__)
             members = ([n for n in order if beside[n] <= t0] + members
                        + [n for n in order if beside[n] > t0])
+        if len(members) > 1:
+            band = _nearest_stretch(band, along, inset, len(members))
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
@@ -3317,16 +3347,17 @@ class SymbolRegistry:
             trim=True),
             "interlock")
 
-        # Tubular reactor: a rectangular shell with a serpentine tube.
+        # Tubular reactor: a rectangular shell with a serpentine tube. The
+        # shell is 64 tall, so three feeds fit 16 apart in half its W face.
         self.register("reactor", Symbol(
             svg='<g id="sym_reactor_tubular">'
-                f'<rect x="0" y="0" width="120" height="40" {_OUTLINE}/>'
-                '<path d="M 15 10 L 105 10 A 5 5 0 0 1 105 20 L 15 20 '
-                f'A 5 5 0 0 0 15 30 L 105 30" {_DETAIL}/></g>',
-            width=120.0, height=40.0,
-            ports={"outlet": (120.0, 20.0), "duty": (60.0, 0.0)},
+                f'<rect x="0" y="0" width="120" height="64" {_OUTLINE}/>'
+                '<path d="M 15 16 L 105 16 A 8 8 0 0 1 105 32 L 15 32 '
+                f'A 8 8 0 0 0 15 48 L 105 48" {_DETAIL}/></g>',
+            width=120.0, height=64.0,
+            ports={"outlet": (120.0, 32.0), "duty": (60.0, 0.0)},
             port_series=(PortSeries(prefix="feed_", face="W", pitch=MIN_NOZZLE_PITCH,
-                                    extent=0.5, at=20.0, singular="feed"),),
+                                    extent=0.5, at=32.0, singular="feed"),),
         ), "tubular")
 
         # ISO 10628-2 group 4: boiler, stack and flare.

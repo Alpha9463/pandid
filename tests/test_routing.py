@@ -9,10 +9,12 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from _layout_cases import build_unpinned
 
 from pandid import ControlValve, ShellAndTubeExchanger
 from pandid.flowsheet import Flowsheet
 from pandid.geometry import Route
+from pandid.route_geometry import SNAP
 from pandid.streams import Stream
 from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.portgeom import outward_dir
@@ -114,6 +116,36 @@ def test_a_lane_beside_a_tag_or_its_own_unit_stays_a_way_through(valve_at):
     fs.add_control_loop("T", 101, measuring=cooler, acting_on=valve)
     fs.to_svg(diagram="p&id")
     assert fs.validate(diagram="p&id") == []
+
+
+def _hairline_runs(points: list[tuple[float, float]]) -> list[tuple[tuple[float, float], ...]]:
+    """Return each run of a route shorter than ``SNAP``."""
+    return [
+        (p, q) for p, q in zip(points, points[1:]) if 0 < abs(p[0] - q[0]) + abs(p[1] - q[1]) < SNAP
+    ]
+
+
+def test_nozzles_out_of_line_by_rounding_error_are_joined_straight():
+    """Route one straight run between nozzles 1e-14 px out of line."""
+    fs = Flowsheet("rounding error")
+    feed = fs.add(Feed("F")).pin(port="outlet", x=100, y=200.3)
+    product = fs.add(Product("P")).pin(port="inlet", x=400, y=200.1 + 0.2)
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.route()
+    assert line.route is not None
+    assert not _hairline_runs(line.route.waypoints), line.route.waypoints
+
+
+def test_no_line_on_the_stripped_dryer_jogs_by_rounding_error():
+    """Route 400-WG-501-CS straight to XV-501B, 1e-14 px out of line."""
+    fs = build_unpinned("19_molecular_sieve_dryer")[0]
+    fs.route()
+    jogs = [
+        (s.name, _hairline_runs(s.route.waypoints))
+        for s in fs.streams
+        if s.route is not None and not s.route.manual
+    ]
+    assert not [(name, runs) for name, runs in jogs if runs]
 
 
 def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():
@@ -1056,3 +1088,38 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
     assert s2_recordings[-1][1][1] == 106.0, s2_recordings[-1]
+
+
+def test_a_stream_to_a_unit_with_no_frame_is_left_unrouted_with_a_warning(
+    same_file: Callable[[str], str],
+) -> None:
+    """Check that routing before layout skips the stream and says to call layout()."""
+    fs = Flowsheet("unplaced")
+    feed, product = fs.add(Feed("F")), fs.add(Product("P"))
+    line = fs.connect(feed.outlet, product.inlet, name="S1")
+
+    with pytest.warns(
+        UserWarning, match=r"'F' has no frame.*Call layout\(\) before route\(\)"
+    ) as caught:
+        DefaultRouter().route(fs)
+
+    assert line.route is None
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+
+
+def test_a_stream_to_a_port_the_graph_does_not_anchor_is_left_unrouted_with_a_warning(
+    same_file: Callable[[str], str],
+) -> None:
+    """Check that a stream to a placed unit off the sheet's unit list is skipped and named."""
+    fs = Flowsheet("unanchored")
+    feed = fs.add(Feed("F")).pin(x=100, y=100)
+    product = fs.add(Product("P")).pin(x=400, y=100)
+    line = fs.connect(feed.outlet, product.inlet, name="S1")
+    fs.layout()
+    fs.units.remove(product)
+
+    with pytest.warns(UserWarning, match=r"no anchor for port P\.inlet") as caught:
+        DefaultRouter().route(fs)
+
+    assert line.route is None
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]

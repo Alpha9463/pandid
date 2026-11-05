@@ -2594,10 +2594,7 @@ def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
 def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
     """Settle a balloon chain whose asked spot lies on the tapped line.
 
-    Returns
-    -------
-    None
-        Routing settles, the line runs straight, and TIC keeps off it.
+    Routing settles, the line runs straight, and TIC keeps off it.
     """
     from pandid.layout.attach import stream_path
 
@@ -2624,10 +2621,7 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
 
-    Returns
-    -------
-    None
-        TIC's free x is the one its asked offset and angle give.
+    TIC's free x is the one its asked offset and angle give.
     """
     from pandid.layout.attach import _anchor, _standoff_box
     from pandid.portgeom import resolve_size
@@ -2652,10 +2646,7 @@ def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
 def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
     """Keep the first drawing when keeping TIC off its line adds a clash.
 
-    Returns
-    -------
-    None
-        No tap line crosses a unit.
+    No tap line crosses a unit.
     """
     from pandid.layout.control import _flaws
 
@@ -2673,10 +2664,7 @@ def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
 def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():
     """Keep the first drawing when the keep-off attempt does not settle either.
 
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
+    TT's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2699,10 +2687,7 @@ def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():
 def test_routing_again_draws_the_same_sheet():
     """Route a sheet whose keep-off attempt is kept twice, to the same drawing.
 
-    Returns
-    -------
-    None
-        The second route() gives the first route()'s drawing.
+    The second route() gives the first route()'s drawing.
     """
     fs = Flowsheet("second route")
     feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
@@ -2721,10 +2706,7 @@ def test_routing_again_draws_the_same_sheet():
 def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
     """Keep the hung drawing when keeping chained balloons clear adds a crossing.
 
-    Returns
-    -------
-    None
-        No line crosses a unit.
+    No line crosses a unit.
     """
     fs = Flowsheet("crossing")
     feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=100)
@@ -2743,10 +2725,7 @@ def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
 def test_keeping_chained_balloons_clear_disconnects_no_tap():
     """Keep the first drawing when keeping chained balloons clear moves a tap off its line.
 
-    Returns
-    -------
-    None
-        TT-1's tap lies on the final line.
+    TT-1's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2771,10 +2750,7 @@ def test_keeping_chained_balloons_clear_disconnects_no_tap():
 def test_a_run_that_doubles_back_is_two_runs():
     """Split a straight run where it reverses along its track.
 
-    Returns
-    -------
-    None
-        The excursion and its return are separate runs.
+    The excursion and its return are separate runs.
     """
     from pandid.layout.control import _straight_runs
 
@@ -2796,10 +2772,7 @@ def test_a_run_that_doubles_back_is_two_runs():
 def test_an_unsettled_hang_is_not_kept():
     """Keep the unhung drawing when hanging the controller takes a tap off its line.
 
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
+    TT's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2824,10 +2797,7 @@ def test_an_unsettled_hang_is_not_kept():
 def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
     """Keep an unsettled hang whose tap lies on its line where the unhung one does not.
 
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
+    TT's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2852,10 +2822,7 @@ def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
 def test_a_hang_whose_taps_end_on_their_line_is_kept():
     """Keep a hang that takes a tap off its line where keeping balloons clear puts it back.
 
-    Returns
-    -------
-    None
-        The sheet settles with both taps on the final line.
+    The sheet settles with both taps on the final line.
     """
     from pandid.layout.attach import stream_path
 
