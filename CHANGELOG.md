@@ -111,6 +111,8 @@ These are removed in 0.4.0.
 - A vessel whose supports, manholes or sockets widen its box draws every inlet
   or outlet on the wall it was given, so
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
+- `line.color` and `line.dasharray` set after `on=` has split the line style
+  the whole line, including the pipework of a valve station on it.
 - A valve's actuator sits on the body's centre line, so a balloon added with
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
