@@ -210,7 +210,49 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return None
     face = free_face(inst) or inst.face
     (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
-    return (px, py), (-ny, nx)
+    fs = inst.flowsheet
+    moved = nozzle_tap(inst) if fs is not None and fs._clear_taps else None
+    return (moved or (px, py)), (-ny, nx)
+
+
+def nozzle_tap(inst: "Instrument") -> Point | None:
+    """Return where a tap on a nozzle a line leaves from moves to, if any.
+
+    A balloon drawn from a face the author named taps the face's middle.
+    Where a line leaves a nozzle there, the tap slides one nozzle pitch
+    along the face, to the side farther from the face's other connected
+    nozzles, if that stays on the face and off them.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    Point or None
+        The moved tap point, or None if the tap stays.
+    """
+    from pandid.portgeom import drawn_box, face_point, port_point
+    from pandid.render.symbols import MIN_NOZZLE_PITCH
+    from pandid.streams import Stream
+
+    host = inst.host
+    if (isinstance(host, Stream) or host is None or host.frame is None
+            or not inst._face_stated or inst.relation == "near"):
+        return None
+    point, (nx, ny) = face_point(host, host.frame, inst.face or "E")
+    nozzles = [port_point(host, host.frame, name)
+               for name, port in host.ports.items() if port.stream is not None]
+    if not any(math.dist(point, n) < 0.5 for n in nozzles):
+        return None
+    x0, y0, x1, y1 = drawn_box(host, host.frame)
+    sides = [(point[0] - sign * ny * MIN_NOZZLE_PITCH, point[1] + sign * nx * MIN_NOZZLE_PITCH)
+             for sign in (1, -1)]
+    room = [(min(math.dist(q, n) for n in nozzles), q) for q in sides
+            if x0 <= q[0] <= x1 and y0 <= q[1] <= y1]
+    best = max(room, default=None)
+    return best[1] if best is not None and best[0] >= 0.5 else None
 
 
 def free_face(inst: "Instrument") -> str | None:

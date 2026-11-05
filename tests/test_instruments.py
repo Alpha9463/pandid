@@ -2264,6 +2264,32 @@ def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
         assert x1 == x2 or y1 == y2, route
 
 
+@pytest.mark.parametrize("pinned", [False, True])
+def test_a_tap_is_drawn_off_a_nozzle_its_face_carries(pinned: bool) -> None:
+    """Check that a balloon on a face a line leaves from taps the face beside the nozzle."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("leader")
+    drum = fs.add(U.Vessel("D-101"))
+    line = fs.connect(drum.outlet, fs.add(U.Pump("P-101")).suction)
+    lt = fs.add_instrument("LT", 101, sensing=drum, face="E")
+    if pinned:
+        lt.pin(x=700, y=180)
+    fs.route()
+
+    ((inst, tap, centre),) = tap_lines(fs)
+    box = frame_of(drum)
+    assert tap[0] == box.x_max and box.y < tap[1] < box.y_max, f"{tap} is on the east face"
+    nozzle = port_point(drum, box, line.source.name)
+    assert math.dist(tap, nozzle) >= 12, f"{tap} sits on {line.name}'s nozzle {nozzle}"
+    route, pipe = tap_route(inst, tap, centre), stream_path(line)
+    assert not any(
+        _shared(a, b, c, d) for a, b in zip(route, route[1:]) for c, d in zip(pipe, pipe[1:])
+    ), f"{route} runs along {pipe}"
+
+
 def test_a_placement_is_still_a_placement():
     """Check that ``near=`` still hangs the balloon off the face it names."""
     _, standing = _drum("near")
