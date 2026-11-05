@@ -212,6 +212,7 @@ GRAVITY_FIXED = {
     ("evaporator", "climbing_film"),
     ("evaporator", "falling_film"),
     ("evaporator", "plate"),
+    ("crystallizer", "default"),
     ("kiln", "default"),
     ("kiln", "fluidized_bed"),
     ("kiln", "shaft"),
