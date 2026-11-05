@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from _render_cases import SCENARIOS as SCENARIOS, copy_settled_case
-from pandid.document import equipment_list
+from pandid.document import equipment_table
 from pandid.render.debug import _BOX, _PORT
 from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
@@ -125,7 +125,7 @@ def test_the_fractionator_schedules_only_equipment_that_exists():
     assert col.bottoms.stream.dest.owner is reb
     assert reb.bottoms.stream is not None
     assert reb.bottoms.stream.dest.owner.name == "Bottoms"
-    assert [tag for tag, _ in equipment_list(fs).rows] == [
+    assert [tag for tag, _ in equipment_table(fs).rows] == [
         "T-701",
         "E-701",
         "V-701",

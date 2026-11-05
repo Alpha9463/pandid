@@ -647,14 +647,14 @@ def test_a_port_series_spreads_its_members_with_the_shared_rule(count, extent):
 
 def test_a_block_is_not_scheduled_equipment():
     """Check that a block is left off the equipment list unless named."""
-    from pandid.document import _MAJOR_EQUIPMENT, equipment_list
+    from pandid.document import _MAJOR_EQUIPMENT, equipment_table
 
     assert "block" not in _MAJOR_EQUIPMENT
     fs = Flowsheet("bfd")
     fs.add(units.Block("Reaction"))
     fs.add(units.Pump("P-101"))
-    assert [row[0] for row in equipment_list(fs).rows] == ["P-101"]
-    assert equipment_list(fs, include=["Reaction"]).rows == [("Reaction", "Process Block")]
+    assert [row[0] for row in equipment_table(fs).rows] == ["P-101"]
+    assert equipment_table(fs, include=["Reaction"]).rows == [("Reaction", "Process Block")]
 
 
 def test_a_block_round_trips_through_a_spec():

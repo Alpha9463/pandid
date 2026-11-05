@@ -12,7 +12,7 @@ Nothing is pinned; the engine places and routes the whole sheet.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid.document import Revision, TitleBlock, equipment_list
+from pandid.document import Revision, TitleBlock, equipment_table
 
 from pandid import (
     Blower,
@@ -98,7 +98,7 @@ def main():
         ],
     )
     # List every item but the strainer and the outlet valve.
-    fs.add_annotation(equipment_list(fs, align="top", include=[
+    fs.add_annotation(equipment_table(fs, align="top", include=[
         "T-801", "P-801A/B", "F-801", "F-802", "IX-801", "D-801", "B-801",
         "P-802A/B", "IX-802", "IX-803", "T-802",
     ]))

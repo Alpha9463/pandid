@@ -119,6 +119,32 @@ def spread(index: int, count: int, along: float, pitch: float,
     return first + span * index / (count - 1)
 
 
+def pinned(pin: float, along: float,
+           band: "tuple[float, float] | None" = None) -> float:
+    """Return the point a fraction of the way along a face.
+
+    The fraction runs from 0 at the face's top or left end to 1 at its
+    bottom or right end, and the point is kept inside the band.
+
+    Parameters
+    ----------
+    pin : float
+        Fraction of the face.
+    along : float
+        Face length.
+    band : tuple[float, float], optional
+        ``(lo, hi)`` part of the face to keep to; the whole face if
+        omitted.
+
+    Returns
+    -------
+    float
+        Coordinate along the face.
+    """
+    lo, hi = (0.0, along) if band is None else band
+    return min(max(pin * along, lo), hi)
+
+
 def bandless_face(who: str, face: str, at: float, members: "list[str]",
                   sym: "Symbol") -> ValueError:
     """Return the error for several nozzles on a one-point face.
@@ -238,8 +264,7 @@ class PortSeries:
         """
         along = height if self.face in ("W", "E") else width
         if pin is not None:
-            lo, hi = (0.0, along) if band is None else band
-            t = min(max(pin * along, lo), hi)
+            t = pinned(pin, along, band)
         else:
             t = spread(index, count, along, self.pitch, self.extent, self.at,
                        self.align, band)
@@ -424,6 +449,9 @@ class Symbol:
         Port families, each on N, S, E or W and apart from ``ports``.
     bands : dict[str, tuple[float, float]]
         Stretch ``(lo, hi)`` a family may use, from each face's start.
+    rim : tuple[tuple[float, float], ...]
+        Outline of the artwork as a convex polygon, which lines sharing
+        a face are drawn to; the box when empty.
     label_pos : str or None
         Fixed tag side, such as ``"center"``.
     id_suffix : str
@@ -466,6 +494,7 @@ class Symbol:
     faceless_ports: frozenset[str] = frozenset()
     port_series: tuple[PortSeries, ...] = ()
     bands: dict[str, tuple[float, float]] = field(default_factory=dict)
+    rim: tuple[tuple[float, float], ...] = ()
     label_pos: str | None = None
     id_suffix: str = ""
     stretchable: bool = True
@@ -1217,7 +1246,9 @@ _VESSEL_EXTENT = 0.7
 
 @lru_cache(maxsize=None)
 def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
-                  overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
+                  overlays: "tuple[Overlay, ...]" = (),
+                  ports: "tuple[tuple[str, tuple[float, float]], ...]" = ()
+                  ) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
     Each family is spread about the stencil's anchor within
@@ -1233,6 +1264,8 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         ``(port_name, face)`` for the inlet and outlet families.
     overlays : tuple[Overlay, ...], default=()
         The unit's composed parts.
+    ports : tuple[tuple[str, tuple[float, float]], ...], default=()
+        ``(name, point)`` nozzles the parts add, in body coordinates.
 
     Returns
     -------
@@ -1247,9 +1280,11 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         If a role has no placement on a requested face.
     ValueError
         If two or more nozzles share a face whose band is one point.
+    ValueError
+        If the parts leave a nozzle nearer another edge than its face.
     """
-    base = default_registry.composed(kind, variant, overlays)
-    ports = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
+    base = default_registry.composed(kind, variant, overlays, ports)
+    placed = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
     port_faces = {
         name: dict(menu) for name, menu in base.port_faces.items()
         if name not in ("inlet", "outlet")
@@ -1277,7 +1312,16 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
-            ports[name] = _face_point(face, t, inset, base.width, base.height)
+            placed[name] = _face_point(face, t, inset, base.width, base.height)
+            lands = outward_dir(*placed[name], base.width, base.height)
+            if lands != face:
+                raise ValueError(
+                    f"{kind}/{variant}: {name} is drawn on the {face} wall at "
+                    f"{placed[name]}, which the parts beside the body leave nearer the "
+                    f"{lands} edge of the {base.width:g}x{base.height:g} box, so its "
+                    f"line would leave {lands}. Put fewer nozzles on {face}, or the "
+                    f"parts on another wall"
+                )
     # Inlets and outlets count together on a point face.
     for face, on_face in by_face.items():
         band = base.bands.get(face)
@@ -1287,7 +1331,7 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     for role, members in members_by_role.items():
         if len(members) == 1 and menus[role]:
             port_faces[members[0]] = dict(menus[role])
-    return replace(base, ports=ports, port_faces=port_faces)
+    return replace(base, ports=placed, port_faces=port_faces)
 
 
 # Builders of symbols drawn per unit, by (kind, variant). A ``None``
@@ -1302,6 +1346,7 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("splitter", "default"): _junction,
     ("tank", None): lambda unit: unit.symbol(),
     ("vessel", None): lambda unit: unit.symbol(),
+    ("evaporator", None): lambda unit: unit.symbol(),
 }
 
 
@@ -1338,6 +1383,22 @@ ACTUATED: dict[tuple[str, str], str] = {
 #: Actuators that may be named.
 ACTUATORS: tuple[str, ...] = ("diaphragm", "motor", "solenoid", "hydraulic",
                               "handwheel")
+
+
+def variant_actuator(variant: str) -> str:
+    """Return the actuator a valve variant draws, from :data:`ACTUATED`.
+
+    Parameters
+    ----------
+    variant : str
+        Resolved valve variant.
+
+    Returns
+    -------
+    str
+        One of :data:`ACTUATORS`, or ``""`` if the variant draws none.
+    """
+    return next((a for (_, a), drawn in ACTUATED.items() if drawn == variant), "")
 
 
 def actuated_variant(body: str, actuator: str) -> str:
@@ -1871,6 +1932,29 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         overlays=tuple(overlay for overlay, _ in parts),
         iso_reg=iso_reg,
     )
+
+
+def overlay_boxes(body: Symbol, overlays: "tuple[Overlay, ...]"
+                  ) -> "list[tuple[float, float, float, float]]":
+    """Return where :func:`compose` draws each stretchable part.
+
+    Parameters
+    ----------
+    body : Symbol
+        Body the parts are composed onto.
+    overlays : tuple[Overlay, ...]
+        Every part on the body.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Each part's ``(left, top, right, bottom)`` in the composed box.
+    """
+    ox = -min([0.0, *(o.x * body.width for o in overlays)])
+    oy = -min([0.0, *(o.y * body.height for o in overlays)])
+    return [(o.x * body.width + ox, o.y * body.height + oy,
+             (o.x + o.w) * body.width + ox, (o.y + o.h) * body.height + oy)
+            for o in overlays]
 
 
 # The ISO 10628-2 group-8 separating vessel outline, a body for
@@ -2644,6 +2728,8 @@ def _evaporator(name: str, *detail: str,
             "heating_in": (0.0, top + _EVAP_STEAM_INSET),
             "condensate": (_EVAP_W, bot - _EVAP_STEAM_INSET),
         },
+        # The straight shell, held 10 off each head.
+        bands={face: (_EVAP_HEAD + 10, _EVAP_HEAD + _EVAP_SHELL - 10) for face in ("W", "E")},
         gravity_fixed=True,
     )
 
@@ -2885,10 +2971,13 @@ class SymbolRegistry:
         return [self._parts[key] for key in sorted(self._parts)]
 
     def composed(self, kind: str, variant: str = "default",
-                 overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
+                 overlays: "tuple[Overlay, ...]" = (),
+                 ports: "tuple[tuple[str, tuple[float, float]], ...]" = ()
+                 ) -> Symbol:
         """Return ``(kind, variant)`` with ``overlays`` drawn on it.
 
-        Compositions are cached. With no overlays the body is returned.
+        Compositions are cached. With no overlays and no ports the body
+        is returned.
 
         Parameters
         ----------
@@ -2898,6 +2987,9 @@ class SymbolRegistry:
             Registered variant name.
         overlays : tuple[Overlay, ...], default=()
             Parts to draw, each registered with :meth:`register_part`.
+        ports : tuple[tuple[str, tuple[float, float]], ...], default=()
+            ``(name, point)`` nozzles to add to the body, in body
+            coordinates.
 
         Returns
         -------
@@ -2911,12 +3003,15 @@ class SymbolRegistry:
         ValueError
             If a part is unregistered or cannot be composed.
         """
-        if not overlays:
+        if not overlays and not ports:
             return self.get(kind, variant)
-        key = (kind, variant, tuple(overlays))
+        key = (kind, variant, tuple(overlays), tuple(ports))
         if key not in self._composed:
+            body = self.get(kind, variant)
+            if ports:
+                body = replace(body, ports={**body.ports, **dict(ports)})
             self._composed[key] = compose(
-                self.get(kind, variant),
+                body,
                 [(overlay, self.part(overlay.group, overlay.name))
                  for overlay in overlays],
             )
@@ -3143,21 +3238,24 @@ class SymbolRegistry:
         # The face menus overlap (faceless_ports).
         _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
         _inst_faceless = frozenset(_inst_ports)
+        # A 64-gon traces the circle.
+        _inst_rim = tuple((22.0 + 21.0 * math.cos(math.pi * k / 32),
+                           22.0 + 21.0 * math.sin(math.pi * k / 32)) for k in range(64))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True))
+            faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
+            stretchable=False, trim=True))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True), "panel")
+            faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
+            stretchable=False, trim=True), "panel")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="2"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True), "aux")
+            faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
+            stretchable=False, trim=True), "aux")
         # Shared display: a circle in a square with one bar
         # (ISO 15519-2 Table 1).
         self.register("instrument", Symbol(
@@ -3174,6 +3272,8 @@ class SymbolRegistry:
             # N and S stubs on the flat top and bottom.
             port_faces={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
                         for n in _inst_ports},
+            rim=((11.0, 3.0), (33.0, 3.0), (43.0, 22.0), (33.0, 41.0), (11.0, 41.0),
+                 (1.0, 22.0)),
             trim=True), "computer")
         # ISA-5.1 trip and logic symbols. Ports sit on the diamond's
         # vertices.
@@ -3193,7 +3293,8 @@ class SymbolRegistry:
                 '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
                 '</g>',
             width=40.0, height=40.0, label_pos="center", stretchable=False,
-            ports=_logic_ports, trim=True),
+            ports=_logic_ports, rim=((20.0, 1.0), (39.0, 20.0), (20.0, 39.0), (1.0, 20.0)),
+            trim=True),
             "interlock")
 
         # Tubular reactor: a rectangular shell with a serpentine tube.

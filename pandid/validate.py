@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from string import Formatter
 from typing import TYPE_CHECKING
 
 from pandid._checks import suggest
@@ -412,6 +413,79 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     return (offset, span, sh <= dh) if offset < span else None
 
 
+def _wall_clashes(u) -> list[Issue]:
+    """Return a placed unit's lines and parts drawn over its wall parts.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    list[Issue]
+        One ``wall-part-clash`` error per manhole or socket drawn over a
+        part, or crossed by a line on its way into the unit.
+    """
+    from pandid.portgeom import _xform, resolve_port, symbol_to_box
+    from pandid.render.symbols import default_registry, overlay_boxes
+    from pandid.units import _drawn_walls
+
+    walls = [(part, place) for part in ("manhole", "socket")
+             for place in getattr(u, f"{part}s", ())]
+    if not walls:
+        return []
+    base = tuple(getattr(u, "overlays", ()) or ())
+    parts, _, _ = _drawn_walls(u, base)
+    boxes = overlay_boxes(default_registry.get(u.kind, u.variant), base + parts)
+    named = [f"the {part} at {place!r}" for part, place in walls]
+    drawn = [(f"the {o.name} support", box) for o, box in zip(base, boxes)]
+    drawn += list(zip(named, boxes[len(base):]))
+    issues = []
+    for i, (name, box) in enumerate(drawn[len(base):]):
+        issues += [Issue("error", "wall-part-clash",
+                         f"{u.name}: {name} is drawn over {other}. Build {u.name} "
+                         f"with them further apart along the wall")
+                   for other, under in drawn[:len(base) + i]
+                   if boxes_overlap(box, under, -_TOL)]
+    mine = [(part, name, box) for (part, _), (name, box) in zip(walls, drawn[len(base):])]
+    sym, f = default_registry.for_unit(u), u.frame
+    rot, mirror_x, mirror_y = _xform(f)
+
+    def on_sheet(box):
+        """Return a box in the drawing's coordinates on the sheet.
+
+        Parameters
+        ----------
+        box : tuple[float, float, float, float]
+            Box in the drawing's own coordinates.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Box placed by the unit's frame.
+        """
+        (x0, y0, w, h), (x1, y1, _, _) = (
+            symbol_to_box(x, y, sym.width, sym.height, rot, mirror_x, mirror_y)
+            for x, y in (box[:2], box[2:]))
+        kx, ky = f.w / w, f.h / h
+        return (f.x + min(x0, x1) * kx, f.y + min(y0, y1) * ky,
+                f.x + max(x0, x1) * kx, f.y + max(y0, y1) * ky)
+
+    for port_name, port in u.ports.items():
+        if port.stream is None:
+            continue
+        stub = resolve_port(u, f, port_name)
+        issues += [Issue("error", "wall-part-clash",
+                         f"{u.name}: the line on {port_name} meets it through {name}, so it "
+                         f"reads as piped to the {part}. Build {u.name} with the {part} "
+                         f"elsewhere on the wall, or take the line to another face with "
+                         f"{u.name}.nozzle({port_name!r}, face)")
+                   for part, name, box in mine
+                   if segment_crosses_box(stub.anchor, stub.point, on_sheet(box))]
+    return issues
+
+
 def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     """Return the findings that need no layout, errors first.
 
@@ -420,7 +494,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     fs : Flowsheet
         Sheet to check.
     tabulates : bool, default=True
-        Whether the diagram owes a stream table.
+        Whether the diagram must state boundary flow rates.
 
     Returns
     -------
@@ -760,9 +834,9 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"the revision and let the block fill the row"))
 
     # --- an ingoing or outgoing material with nothing to report ---
-    # ISO 10628-1 4.3.2 d), when any stream states a property.
+    # ISO 10628-1 4.3.2 d), on a PFD where any stream states a property.
     runs = fs._named_runs()
-    if any(s.properties for segments in runs.values() for s in segments):
+    if tabulates and any(s.properties for segments in runs.values() for s in segments):
         for name, segments in runs.items():
             if any(s.properties for s in segments):
                 continue
@@ -803,6 +877,40 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                     f"render(show_stream_table=True) to report it."
                     + (" If this sheet is a P&ID, render with diagram=\"p&id\"."
                        if any(isinstance(u, Instrument) for u in fs.units) else "")))
+
+    # --- an energy line on a PFD that draws no carrier ---
+    # ISO 10628-1 4.3.2 e); the line number draws the service.
+    if tabulates:
+        scheme = fs.line_numbering_scheme
+        # shortcut: a callable scheme is taken to draw the service; call it
+        # if one turns out not to.
+        numbered = callable(scheme) or any(
+            field == "service" for _, field, _, _ in Formatter().parse(scheme))
+        for s in fs.streams:
+            if s.kind != "energy":
+                continue
+            given = not s.auto_named
+            if s.service and (str(s.service) in s.name if given else numbered):
+                continue
+            # Keep every value the author gave; suggest one only for service.
+            carrier = str(s.service) if s.service else "LP steam"
+            keys = [] if s.service else [f"service={carrier!r}"]
+            if given:
+                # A given name is drawn in place of the line number.
+                keys.append(f"name={f'{s.name} {carrier}'!r}")
+            a, b = s.source, s.dest
+            fixes = [f"fs.connect({a.owner.name}.{a.name}, {b.owner.name}.{b.name}, "
+                     f"..., {', '.join(keys)})"] if keys else []
+            if not (given or numbered):
+                wider = f"{scheme}-{{service}}"
+                fixes.append(f"Flowsheet(..., line_numbering_scheme={wider!r})")
+            warnings.append(Issue(
+                "warning", "energy-carrier-missing",
+                f"{s.name}, the energy line from {a.owner.name} to "
+                f"{b.owner.name}, does not name its energy carrier on the "
+                f"sheet (ISO 10628-1:2014 4.3.2 e)). Write what it carries "
+                f"into the label drawn on it, keeping the other arguments: "
+                f"{' and '.join(fixes)}"))
 
     return errors + warnings
 
@@ -940,6 +1048,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 warnings.append(Issue("warning", "pin-not-honored",
                                       f"{said}, and is not drawn so. Something moved one of "
                                       "them after layout read the pins"))
+
+        # Hard: a line or a part drawn over a manhole or socket.
+        for u in placed:
+            errors += _wall_clashes(u)
 
         boxes = [(u, drawn_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.

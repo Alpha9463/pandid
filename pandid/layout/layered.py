@@ -6,9 +6,10 @@ reduce crossings, then moved up or down to line up each pipe's nozzles.
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import dataclass, field
-from itertools import accumulate
+from itertools import accumulate, groupby
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
@@ -300,7 +301,11 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     _order(layers, segs)
     _row_pins(layers)
     _rank(layers)
-    _straighten(layers, segs)
+    _straighten(layers, segs, {})
+    held = _row_order(layers)
+    fs._rows_out = bool(held)
+    if held and fs._order_rows:
+        _straighten(layers, segs, held)
     xs = _columns(layers, segs, fs._lanes)
     plain = _columns(layers, segs, False)
     fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
@@ -794,6 +799,46 @@ def _row_pins(layers: dict[int, list[_Node]]) -> None:
             layer[i] = n
 
 
+def _row_order(layers: dict[int, list[_Node]]) -> dict[_Node, float]:
+    """Return stack tops that draw units pinned by row alone in row order.
+
+    A unit other than an instrument, pinned by ``row`` with no ``col``
+    or ``y``, whose centre is no lower than that of such a unit pinned to
+    a lower row moves down, with the nodes below it in its layer, to
+    ``ROW_GAP`` below the lowest bottom of those units.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order, set in height.
+
+    Returns
+    -------
+    dict[_Node, float]
+        Top of each stack holding a unit pinned by row alone, or an
+        empty dict if no unit moves.
+    """
+    rowed = sorted(((u.pin_.row, n, u) for layer in layers.values() for n in layer
+                    for u in n.members
+                    if u.kind != "instrument" and u.pin_ is not None and u.pin_.row is not None
+                    and u.pin_.col is None and u.pin_.y is None), key=lambda e: e[0])
+    y = {n: n.y for layer in layers.values() for n in layer}
+    floor = ceiling = -math.inf
+    moved = False
+    for _, same in groupby(rowed, key=lambda e: e[0]):
+        group = [(n, u) for _, n, u in same]
+        for n, u in group:
+            top = y[n] + n.dy[u]
+            if top + slot(u).h / 2 <= ceiling:
+                layer = layers[n.layer]
+                for m in layer[layer.index(n):]:
+                    y[m] += floor - top
+                moved = True
+        ceiling = max(ceiling, *(y[n] + n.dy[u] + slot(u).h / 2 for n, u in group))
+        floor = max(floor, *(y[n] + n.dy[u] + slot(u).h + ROW_GAP for n, u in group))
+    return {n: y[n] for _, n, _ in rowed} if moved else {}
+
+
 def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
              widen: bool) -> dict[_Node, float]:
     """Return each node's left edge.
@@ -875,7 +920,8 @@ def _lanes(segs: list[_Seg]) -> dict[int, int]:
     return {k: max(accumulate(step for _, step in sorted(e))) for k, e in events.items()}
 
 
-def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
+def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
+                held: dict[_Node, float]) -> None:
     """Set each stack's top to level its pipes, keeping layer order.
 
     Parameters
@@ -884,6 +930,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         Stacks and dummies in each layer, in order.
     segs : list[_Seg]
         Pipe steps between adjacent layers.
+    held : dict[_Node, float]
+        Top to keep each of these stacks at, unless a ``y`` pin sets it.
     """
     lead = {"N": LEAD, "S": -LEAD}
     near: dict[_Node, list[tuple[_Node, float, float, float, float, float]]] = {}
@@ -899,7 +947,7 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             near.setdefault(own, []).append((other, _offset(other, theirs)[1], _offset(own, mine)[1],
                                              lead.get(_face(mine) or "", 0.0),
                                              lead.get(_face(theirs) or "", 0.0), w))
-    pinned = {}
+    pinned = dict(held)
     for layer in layers.values():
         for n in layer:
             for u in n.members:

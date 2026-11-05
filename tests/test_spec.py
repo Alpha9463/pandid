@@ -716,6 +716,24 @@ def test_signal_lines_take_a_kind():
     assert fs.streams[0].kind == "pneumatic"
 
 
+def test_a_signal_line_with_no_kind_reads_and_writes_as_connect_infers():
+    """Check that a signal line's kind is omitted where connect() infers it."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [{"kind": "Valve", "name": "FV-1"}, {"kind": "Valve", "name": "FV-2"}],
+            "instruments": [{"type": "FT", "number": 101}, {"type": "FIC", "number": 101}],
+            "streams": [
+                {"from": ["FT-101", "sig_out"], "to": ["FIC-101", "sig_in"]},
+                {"from": ["FIC-101", "sig_out"], "to": ["FV-1", "actuator"]},
+                {"from": ["FIC-101", "sig_out"], "to": ["FV-2", "actuator"], "kind": "electric"},
+            ],
+        }
+    )
+    assert [s.kind for s in fs.streams] == ["electric", "pneumatic", "electric"]
+    assert [entry.get("kind") for entry in fs.to_dict()["streams"]] == [None, None, "electric"]
+
+
 def test_endpoints_may_be_spelled_out():
     fs = Flowsheet.from_dict(
         _spec(
@@ -1048,7 +1066,7 @@ def test_annotation_boxes():
             units=[{"kind": "Pump", "name": "P-101", "description": "Feed Pump"}],
             streams=[],
             annotations=[
-                {"type": "equipment_list", "align": "top-right", "margin": 6},
+                {"type": "equipment_table", "align": "top-right", "margin": 6},
                 {"type": "notes", "items": ["Sample every product line."], "align": "top"},
                 {"type": "legend", "entries": {"SS": "316L"}, "align": "top-left"},
                 {

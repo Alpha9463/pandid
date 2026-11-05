@@ -181,6 +181,24 @@ def test_a_control_loop_closing_on_a_valve_actuator_is_accepted(kind):
     assert fs.connect(fic.sig_out, valve.actuator, kind=kind).kind == kind
 
 
+@pytest.mark.parametrize(
+    "src_unit, dst_unit", [(False, False), (False, True), (True, False), (True, True)]
+)
+def test_a_signal_line_with_no_kind_is_pneumatic_to_an_actuator_else_electric(src_unit, dst_unit):
+    """Check that an unstated signal kind is pneumatic to an actuator, else electric."""
+    fs, feed, valve, fic, ft = _loop()
+    measurement = fs.connect(ft if src_unit else ft.sig_out, fic if dst_unit else fic.sig_in)
+    output = fs.connect(fic if src_unit else fic.sig_out, valve if dst_unit else valve.actuator)
+    assert (measurement.kind, output.kind) == ("electric", "pneumatic")
+
+
+def test_a_stated_signal_kind_wins_over_the_inferred_one():
+    """Check that an explicit kind is kept on both signal lines of a loop."""
+    fs, feed, valve, fic, ft = _loop()
+    assert fs.connect(ft, fic, kind="pneumatic").kind == "pneumatic"
+    assert fs.connect(fic, valve, kind="electric").kind == "electric"
+
+
 def test_a_refused_connect_leaves_the_sheet_as_it_found_it():
     """Check that a refused ``connect()`` leaves streams, nozzles and lines unchanged."""
     fs, feed, valve, fic, ft = _loop()

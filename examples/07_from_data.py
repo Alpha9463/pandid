@@ -109,7 +109,7 @@ SPEC = {
         ],
     },
     "annotations": [
-        {"type": "equipment_list", "align": "top-right"},
+        {"type": "equipment_table", "align": "top-right"},
         {"type": "notes", "align": "top-right", "items": [
             "Deaerator vent to atmosphere; no isolation permitted.",
             "FV-201 maintains P-201A/B above 10% of rated flow.",

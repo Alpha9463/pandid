@@ -7,7 +7,7 @@ import re
 import pytest
 
 from pandid import Flowsheet, units
-from pandid.document import equipment_list
+from pandid.document import equipment_table
 from pandid.portgeom import port_offset, port_point
 
 RUN_Y = 220.0
@@ -278,12 +278,12 @@ def test_the_bypass_and_the_drains_are_drawn(cv303):
 
 
 def test_a_tee_is_not_equipment(cv303):
-    assert equipment_list(cv303).rows == []
+    assert equipment_table(cv303).rows == []
 
 
 def test_a_tee_still_has_a_name_for_an_explicit_schedule(cv303):
     """Check that ``include=`` puts named tees on an equipment schedule."""
-    rows = equipment_list(cv303, include=["TEE", "TEE (2)"]).rows
+    rows = equipment_table(cv303, include=["TEE", "TEE (2)"]).rows
     assert rows == [("TEE", "Pipe Tee"), ("TEE (2)", "Pipe Tee")]
 
 

@@ -25,7 +25,7 @@ from pandid import (
     SolenoidValve,
     Tee,
 )
-from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
+from pandid.document import Revision, TitleBlock, equipment_table, legend, notes
 
 
 def main():
@@ -196,7 +196,7 @@ def main():
             Revision("B", "18/02/26", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
-    fs.add_annotation(equipment_list(fs, align="top-right", include=[
+    fs.add_annotation(equipment_table(fs, align="top-right", include=[
         "K-301", "E-301", "H-301", "R-301", "E-302", "V-301", "K-302",
     ]))
     fs.add_annotation(notes([

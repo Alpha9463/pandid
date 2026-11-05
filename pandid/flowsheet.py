@@ -54,6 +54,45 @@ INLINE_KINDS = _INLINE_KINDS | {"tee"}
 #: Attribute types :func:`_restore` refills in place.
 _CONTAINERS = (list, dict, set)
 
+#: Line fields a line-list row reports.
+_LINE_FIELDS = ("size", "schedule", "service", "spec", "insulation")
+
+#: Keys every line-list row has before its properties.
+_LINE_LIST_COLUMNS = ("line", "kind", *_LINE_FIELDS,
+                      "from_unit", "from_nozzle", "to_unit", "to_nozzle")
+
+
+def _line_ends(run: "list[Stream]") -> "tuple[list[Port], list[Port]]":
+    """Return the nozzles a line starts and ends at.
+
+    The line passes through a unit it both enters and leaves; where
+    that leaves it no start or no end, it passes through only its
+    valves, reducers, fittings and tees. A valve, reducer, fitting or
+    tee at an end is dropped when the line has another end that side.
+
+    Parameters
+    ----------
+    run : list[Stream]
+        Segments of one line.
+
+    Returns
+    -------
+    tuple[list[Port], list[Port]]
+        Start nozzles and end nozzles, in segment order.
+    """
+    left = {id(s.source.owner) for s in run}
+    starts: list[Port] = []
+    ends: list[Port] = []
+    for entered in ({id(s.dest.owner) for s in run},
+                    {id(s.dest.owner) for s in run if s.dest.owner.kind in INLINE_KINDS}):
+        through = entered & left
+        starts = [s.source for s in run if id(s.source.owner) not in through]
+        ends = [s.dest for s in run if id(s.dest.owner) not in through]
+        if starts and ends:
+            break
+    return ([p for p in starts if p.owner.kind not in INLINE_KINDS] or starts,
+            [p for p in ends if p.owner.kind not in INLINE_KINDS] or ends)
+
 
 def _snapshot(obj) -> dict:
     """Save every attribute of an object for :func:`_restore`.
@@ -102,7 +141,9 @@ _OUTPUT_FORMATS = frozenset({"", ".svg", ".pdf", ".png", ".drawio"})
 def _inferred_kind(src: "Port", dst: "Port") -> str:
     """Return the stream kind two ports imply.
 
-    Two energy or utility ports imply ``"energy"``.
+    Two signal ports imply ``"pneumatic"`` when one is the actuator of
+    a valve drawn with a diaphragm or with no actuator, else
+    ``"electric"``; two energy or utility ports imply ``"energy"``.
 
     Parameters
     ----------
@@ -112,8 +153,15 @@ def _inferred_kind(src: "Port", dst: "Port") -> str:
     Returns
     -------
     str
-        ``"energy"`` or ``"material"``.
+        ``"pneumatic"``, ``"electric"``, ``"energy"`` or ``"material"``.
     """
+    if src.role == "signal":
+        from pandid.render.symbols import variant_actuator
+
+        air = any(p.name == "actuator"
+                  and variant_actuator(p.owner.variant) in ("", "diaphragm")
+                  for p in (src, dst))
+        return "pneumatic" if air else "electric"
     return ("energy" if src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES
             else "material")
 
@@ -570,10 +618,13 @@ class Flowsheet:
         self._exit_tight = False
         # Whether layout leaves two units unstacked where another unit in
         # their column is pinned to a row between theirs, whether the last
-        # layout stacked any such pair, and the stacked drawing route()
-        # held where it kept them unstacked.
+        # layout stacked any such pair, whether layout moves units pinned
+        # by row alone into row order, whether the last layout drew any out
+        # of it, and the drawing route() held where it kept either change.
         self._split_stacks = False
         self._stack_spans = False
+        self._order_rows = False
+        self._rows_out = False
         self._stacked: tuple | None = None
         # Engine the last layout ran.
         self._engine = None
@@ -1331,7 +1382,7 @@ class Flowsheet:
         controller_offset: float | None = None,
         transmitter_letters: str | None = None, controller_letters: str | None = None,
         controller_variant: str = "shared",
-        measurement_kind: str = "electric", output_kind: str = "pneumatic",
+        measurement_kind: str = "electric", output_kind: str | None = None,
     ) -> "ControlLoop":
         """Add a control loop around a final control element.
 
@@ -1369,8 +1420,9 @@ class Flowsheet:
             Controller balloon symbol.
         measurement_kind : str, default="electric"
             Kind of the transmitter-to-controller signal.
-        output_kind : str, default="pneumatic"
-            Kind of the controller-to-element signal.
+        output_kind : str or None, optional
+            Kind of the controller-to-element signal; ``None`` infers
+            it as :meth:`connect` does.
 
         Returns
         -------
@@ -1784,9 +1836,12 @@ class Flowsheet:
         dst : Port or Unit
             Destination port, or a unit for a signal line.
         kind : str or None, optional
-            One of :data:`~pandid.streams.STREAM_KINDS`, required for a
-            signal line; ``None`` infers ``"energy"`` between two energy
-            or utility ports, else ``"material"``.
+            One of :data:`~pandid.streams.STREAM_KINDS`. ``None`` infers
+            ``"pneumatic"`` for a signal line to the actuator of a valve
+            drawn with a diaphragm or with no actuator, ``"electric"``
+            for another signal line, ``"energy"`` between two energy or
+            utility ports, else ``"material"``. An energy line names its
+            carrier with ``service``, which its line number draws.
         name : str or None, optional
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False
@@ -1889,8 +1944,12 @@ class Flowsheet:
             check_connections(ends)
         stated = kind is not None
         if kind is None:
-            # Check as material; the inferred kind is applied last.
-            kind = "material"
+            # Check as signal or process; apply the inferred kind last.
+            from pandid.ports import Port
+            from pandid.units import Instrument
+            signal = any(end.role == "signal" if isinstance(end, Port)
+                         else isinstance(end, Instrument) for end in (src, dst))
+            kind = "electric" if signal else "material"
         elif kind not in STREAM_KINDS:
             raise ValueError(
                 f"Stream kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}"
@@ -2066,6 +2125,117 @@ class Flowsheet:
         from pandid.spec import to_dict as _to_dict
         return _to_dict(self)
 
+    def line_list(self) -> list[dict]:
+        """Return the line list: one row per line on the sheet.
+
+        A line is a run as the stream table groups it: the material or
+        energy segments that share a number. Every row has the keys
+        ``line``, ``kind``, ``size``, ``schedule``, ``service``,
+        ``spec``, ``insulation``, ``from_unit``, ``from_nozzle``,
+        ``to_unit`` and ``to_nozzle``, then one key per stream property
+        on the sheet, in stream-table order. A line with more than one
+        start or end lists each, comma-separated. A property takes the
+        stream table's value; a field or property the line does not
+        state is ``None``.
+
+        Returns
+        -------
+        list[dict]
+            Rows in order of each line's first segment.
+
+        Raises
+        ------
+        ValueError
+            If a stream property is named like a column, more than one
+            segment of a line is marked ``tabulate``, or a naming
+            scheme cannot name a line.
+        """
+        from pandid.render.furniture import _run_values
+
+        self.renumber_streams()
+        runs = list(self._named_runs().values())
+        keys = dict.fromkeys(k for run in runs for s in run for k in s.properties)
+        clash = next((k for k in keys if k in _LINE_LIST_COLUMNS), None)
+        if clash is not None:
+            carrier = next(s for run in runs for s in run if clash in s.properties)
+            free = next(k for k in (clash.title(), *(f"{clash.title()} {n}" for n in range(2, 99)))
+                        if k not in carrier.properties)
+            raise ValueError(
+                f"{carrier.name}: the stream property {clash!r} has the name of a "
+                f"line_list() column, so a row cannot hold both. Rename it on that "
+                f"stream, keeping its value: stream.properties[{free!r}] = "
+                f"stream.properties.pop({clash!r})"
+            )
+        rows = []
+        for run in runs:
+            starts, ends = _line_ends(run)
+            values = _run_values(run)
+            rows.append({
+                "line": run[0].name,
+                "kind": run[0].kind,
+                **{f: next((getattr(s, f) for s in run if getattr(s, f) is not None), None)
+                   for f in _LINE_FIELDS},
+                "from_unit": ", ".join(p.owner.name for p in starts),
+                "from_nozzle": ", ".join(p.name for p in starts),
+                "to_unit": ", ".join(p.owner.name for p in ends),
+                "to_nozzle": ", ".join(p.name for p in ends),
+                **{k: values.get(k) for k in keys},
+            })
+        return rows
+
+    def equipment_list(self) -> list[dict]:
+        """Return the equipment list: one row per tagged equipment item.
+
+        The rows are the units
+        :func:`pandid.document.equipment_table` lists by default. Every
+        row has the keys ``tag``, ``description`` (the table's text),
+        ``class`` (the unit's class name) and ``variant``.
+
+        Returns
+        -------
+        list[dict]
+            Rows in sheet order.
+        """
+        from pandid.document import _described, _scheduled_units
+
+        return [{"tag": u.name, "description": _described(u),
+                 "class": type(u).__name__, "variant": u.variant}
+                for u in _scheduled_units(self)]
+
+    def instrument_index(self) -> list[dict]:
+        """Return the instrument index: one row per instrument balloon.
+
+        Every row has the keys ``tag``, ``loop`` (the measured
+        variable and loop number as ``Loop.name`` spells them, such as
+        ``"F-101"``),
+        ``measured_variable`` (the first letter), ``function_letters``,
+        ``location`` (``"field"``, ``"central"`` or ``"subsidiary"``),
+        ``on`` (the line or unit the balloon is attached to) and
+        ``relation`` (``"sensing"``, ``"acting_on"`` or ``"near"``).
+        ``on`` and ``relation`` are ``None`` on an unattached balloon.
+
+        Returns
+        -------
+        list[dict]
+            Rows in sheet order.
+
+        Raises
+        ------
+        ValueError
+            If a naming scheme cannot name a line.
+        """
+        from pandid.units import Instrument
+
+        self.renumber_streams()
+        return [{"tag": u.tag,
+                 "loop": f"{u.type[:1].upper()}-{u.number}" if u.number else "",
+                 "measured_variable": u.type[:1],
+                 "function_letters": u.type,
+                 "location": u.display,
+                 "on": None if u.host is None else u.host.name,
+                 "relation": None if u.host is None else u.relation}
+                for u in self.units if isinstance(u, Instrument)]
+
     def layout(self, engine=None) -> None:
         """Lay out every unit, replacing any previous frames.
 
@@ -2078,7 +2248,7 @@ class Flowsheet:
 
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
-        self._mounted_layout = self._exit_tight = self._stack_spans = False
+        self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2129,7 +2299,11 @@ class Flowsheet:
         unit pinned to a row between theirs, the sheet is laid out and
         routed again with those two unstacked, kept only if no tap leaves
         its line and no finding, clash, crossing or fallback route grows.
-        Where kept, the next route() starts from the stacked drawing.
+        Then, where a unit pinned by row alone is drawn no lower than one
+        pinned to a lower row, the sheet is laid out and routed again with
+        each such unit below those pinned to lower rows, kept on the same
+        terms. Where either is kept, the next route() starts from the
+        drawing before them.
 
         Parameters
         ----------
@@ -2151,9 +2325,13 @@ class Flowsheet:
                                      or any(u.frame is None for u in self.units)):
             self._put_state(held)
         self._route_faces(router)
-        if (self._stack_spans and not self._laying_out
+        if ((self._stack_spans or self._rows_out) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
-            self._unstack(router)
+            first = self._state()
+            split = self._stack_spans and self._relayout(router, True, False)
+            if (self._rows_out and self._relayout(router, split, True)) or split:
+                self._stacked = first
+            self._stack_spans = self._rows_out = self._route_stale = False
 
     def _route_faces(self, router=None) -> None:
         """Route the sheet, with counted connections moved where that draws
@@ -2256,18 +2434,27 @@ class Flowsheet:
         finally:
             self._routing = False
 
-    def _unstack(self, router=None) -> None:
-        """Lay out and route the sheet again with two units unstacked where
-        another unit in their column is pinned to a row between theirs.
+    def _relayout(self, router, split: bool, order: bool) -> bool:
+        """Lay out and route the sheet again with stacks split or rows ordered.
 
         The new drawing is kept only if no tap leaves its line and no
-        finding, clash, crossing or fallback route grows; a kept drawing
-        holds the one it replaced for the next route().
+        finding, clash, crossing or fallback route grows; otherwise the
+        drawing before is put back.
 
         Parameters
         ----------
-        router : object or None, optional
+        router : object or None
             Router with ``route(fs)``; ``None`` uses the default.
+        split : bool
+            Leave two units unstacked where another unit in their column
+            is pinned to a row between theirs.
+        order : bool
+            Move units pinned by row alone into row order.
+
+        Returns
+        -------
+        bool
+            Whether the new drawing is kept.
         """
         from pandid.layout.conflicts import analyze_conflicts
         from pandid.layout.control import _flaws, _taps_off
@@ -2286,8 +2473,8 @@ class Flowsheet:
                          if c.kind in ("crossing", "fallback"))
             return flaws
 
-        before, off, stacked = count(), _taps_off(self), self._state()
-        self._split_stacks = self._routing = True
+        before, off, drawn = count(), _taps_off(self), self._state()
+        self._split_stacks, self._order_rows, self._routing = split, order, True
         try:
             self.layout(self._engine)
             self._route_once(router)
@@ -2296,12 +2483,10 @@ class Flowsheet:
         except Exception:
             kept = False
         finally:
-            self._split_stacks = self._routing = False
-        if kept:
-            self._stacked = stacked
-        else:
-            self._put_state(stacked)
-        self._stack_spans = self._route_stale = False
+            self._split_stacks = self._order_rows = self._routing = False
+        if not kept:
+            self._put_state(drawn)
+        return kept
 
     def _state(self) -> tuple:
         """Return a copy of the geometry and the state laid out with it.
@@ -2312,7 +2497,8 @@ class Flowsheet:
             State for :meth:`_put_state`.
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
-                        self._mounted_layout, self._widened, self._stack_spans))
+                        self._mounted_layout, self._widened, self._stack_spans,
+                        self._rows_out))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2323,7 +2509,8 @@ class Flowsheet:
             What :meth:`_state` returned.
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
-         self._mounted_layout, self._widened, self._stack_spans) = _copied(state)
+         self._mounted_layout, self._widened, self._stack_spans,
+         self._rows_out) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 

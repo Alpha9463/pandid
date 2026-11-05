@@ -46,6 +46,7 @@ text.
 | `validate(*, diagram=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
 | `to_dict()` / `from_dict(spec)` | Serialize intent or build an equivalent sheet. |
 | `from_json(path)` / `from_yaml(path)` | Read a spec file; YAML needs `pandid[yaml]`. |
+| `line_list()` / `equipment_list()` / `instrument_index()` | Return a schedule as rows; see [Schedules](#schedules). |
 
 The main collections are `fs.units`, `fs.streams`, `fs.components` and
 `fs.loops`. `fs.warnings` contains findings from the last render. The sheet
@@ -118,6 +119,24 @@ Use `variant=` on a base class for a drawing without its own equipment class:
 `units.Valve("HV-101", variant="gate")`. Run `pandid symbols` to list the
 current registry, or `pandid symbols --kind valve` to narrow it. The installed
 registry is the source of available variant names.
+
+### Manholes and sockets
+
+`Vessel` and `Evaporator` take `manholes=` and `sockets=`, each a list of
+`(face, fraction)` pairs: the wall, and how far along it from its top or left
+end, 0 to 1. A manhole (ISO 10628-2 26.5) is drawn on the wall and has no port.
+A socket (26.6) is an outlet, `socket_1`, `socket_2`, and so on in the order
+given. A face with no straight wall, or a fraction off the wall, is refused.
+
+```python
+from pandid import Flowsheet, Product, Vessel
+
+fs = Flowsheet("Drum")
+d101 = fs.add(Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)]))
+sample = fs.add(Product("Sample"))
+fs.connect(d101.socket_1, sample.inlet)
+fs.render("drum.svg")
+```
 
 ### `Block`: the block flow diagram
 
@@ -198,8 +217,13 @@ Validation reports `gravity-turned` when one is rotated away from it.
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
-`software` or `capillary`. When omitted, two energy/utility ports make an energy
-stream; other process ports make a material stream.
+`software` or `capillary`. When omitted, a signal line to a valve with a
+diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
+electric; two energy/utility ports make an energy stream; other process ports
+make a material stream. `add_control_loop()` infers its output line the same way
+unless `output_kind=` is given. On a PFD, `validate()` reports
+`energy-carrier-missing` until the label drawn on an energy line names its
+carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
 
 `connect()` also accepts `name`, `draw_as_recycle`, `ends` and line-number fields
 `size`, `schedule`, `service`, `sequence`, `spec` and `insulation`. The first
@@ -258,7 +282,7 @@ station.
 
 Assign a `TitleBlock` to `fs.title_block`; `Revision` entries carry its issue
 history. `Annotation` and `TableBox` add notes and tables with
-`fs.add_annotation()`. The `pandid.document` helpers `equipment_list()`,
+`fs.add_annotation()`. The `pandid.document` helpers `equipment_table()`,
 `notes()` and `legend()` create common boxes. A date left blank in a title block
 is filled at render time; set it for reproducible output.
 
@@ -271,6 +295,41 @@ fs.title_block = TitleBlock(
 )
 ```
 
+## Schedules
+
+`fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return the
+sheet's schedules as a `list[dict]`: one dict per row, with the same keys in
+every row of a list. `csv.DictWriter` and `pandas.DataFrame` take them as they
+are.
+
+```python
+import csv
+import sys
+
+from pandid import Feed, Flowsheet, Product, Pump
+
+fs = Flowsheet("Transfer")
+feed = fs.add(Feed("Feed"))
+pump = fs.add(Pump("P-101"))
+product = fs.add(Product("Product"))
+line = fs.connect(feed.outlet, pump.suction, size='4"', service="P", spec="A1A")
+fs.connect(pump.discharge, product.inlet)
+line.properties = {"Flow (kg/h)": 1200}
+
+rows = fs.line_list()
+writer = csv.DictWriter(sys.stdout, fieldnames=list(rows[0]))
+writer.writeheader()
+writer.writerows(rows)
+```
+
+| Schedule | One row per | Keys |
+|---|---|---|
+| `line_list()` | Line, grouped as the stream table groups it | `line`, `kind`, `size`, `schedule`, `service`, `spec`, `insulation`, `from_unit`, `from_nozzle`, `to_unit`, `to_nozzle`, then one per stream property |
+| `equipment_list()` | Unit that `equipment_table()` lists by default | `tag`, `description`, `class`, `variant` |
+| `instrument_index()` | Instrument balloon | `tag`, `loop`, `measured_variable`, `function_letters`, `location`, `on`, `relation` |
+
+A field or property the sheet does not state is `None`.
+
 ## Validation
 
 `fs.validate()` returns `Issue` objects with `severity`, `code` and `message`.
@@ -279,6 +338,40 @@ routes through unrelated units, large detours, crowded nozzles and undrawn
 labels. `fs.render(..., check=True)` raises on errors; warnings from the last
 render are in `fs.warnings`. The `diagram` argument selects the drawing
 conventions used by validation.
+
+### A set of sheets
+
+```python
+from pandid import Document, Feed, Flowsheet, Product, Pump, TitleBlock
+
+crude = Flowsheet("Crude unit")
+crude.title_block = TitleBlock(drawing_number="PFD-001")
+feed = crude.add(Feed("Crude Oil"))
+pump = crude.add(Pump("P-101"))
+to_residue = crude.add(Product("Crude", reference="PFD-002"))
+crude.connect(feed.outlet, pump.suction)
+crude.connect(pump.discharge, to_residue.inlet)
+
+residue = Flowsheet("Residue unit")
+residue.title_block = TitleBlock(drawing_number="PFD-002")
+from_crude = residue.add(Feed("Crude", reference="PFD-001"))
+product = residue.add(Product("Residue"))
+residue.connect(from_crude.outlet, product.inlet)
+
+print(Document([crude, residue]).validate())  # []
+```
+
+`Document(sheets).validate()` checks sheets against each other and returns
+`Issue` objects, errors first. A sheet's drawing number is its
+`title_block.drawing_number`. A `Feed` or `Product` with `reference=` is an
+off-page connector. Its partner is the flag of the other direction on the
+referenced sheet whose `reference=` names this sheet and that has the same tag,
+or else the same line number. Errors are a connector without a partner,
+partners whose lines differ in line number, service or size, one tag on
+different kinds of equipment, a drawing number on two sheets, and a sheet
+without a number that another sheet has to point back at. A reference to a
+drawing outside the set is a warning. Each sheet's own findings still come
+from `fs.validate()`.
 
 ## Declaring a flowsheet as data
 
