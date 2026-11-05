@@ -3,7 +3,7 @@
 import pytest
 
 from pandid import Flowsheet, units
-from pandid.document import equipment_list
+from pandid.document import equipment_table
 from pandid.portgeom import port_point
 from pandid.render.symbols import Symbol, default_registry
 from pandid.spec import SpecError
@@ -193,9 +193,9 @@ def test_a_custom_unit_is_scheduled_only_when_it_is_named(crystalliser):
     """Check that a custom unit is on the equipment list only when named."""
     cr = Crystalliser("CR-106", description="Salt Crystalliser")
     fs = _plant(cr)
-    assert [row for row in equipment_list(fs).rows if row[0] == "CR-106"] == []
-    assert equipment_list(fs, include=["CR-106"]).rows == [("CR-106", "Salt Crystalliser")]
-    assert equipment_list(_plant(Crystalliser("CR-107")), include=["CR-107"]).rows == [
+    assert [row for row in equipment_table(fs).rows if row[0] == "CR-106"] == []
+    assert equipment_table(fs, include=["CR-106"]).rows == [("CR-106", "Salt Crystalliser")]
+    assert equipment_table(_plant(Crystalliser("CR-107")), include=["CR-107"]).rows == [
         ("CR-107", "Crystalliser")
     ]
 

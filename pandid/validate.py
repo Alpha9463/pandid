@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from string import Formatter
 from typing import TYPE_CHECKING
 
 from pandid._checks import suggest
@@ -876,6 +877,40 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                     f"render(show_stream_table=True) to report it."
                     + (" If this sheet is a P&ID, render with diagram=\"p&id\"."
                        if any(isinstance(u, Instrument) for u in fs.units) else "")))
+
+    # --- an energy line on a PFD that draws no carrier ---
+    # ISO 10628-1 4.3.2 e); the line number draws the service.
+    if tabulates:
+        scheme = fs.line_numbering_scheme
+        # shortcut: a callable scheme is taken to draw the service; call it
+        # if one turns out not to.
+        numbered = callable(scheme) or any(
+            field == "service" for _, field, _, _ in Formatter().parse(scheme))
+        for s in fs.streams:
+            if s.kind != "energy":
+                continue
+            given = not s.auto_named
+            if s.service and (str(s.service) in s.name if given else numbered):
+                continue
+            # Keep every value the author gave; suggest one only for service.
+            carrier = str(s.service) if s.service else "LP steam"
+            keys = [] if s.service else [f"service={carrier!r}"]
+            if given:
+                # A given name is drawn in place of the line number.
+                keys.append(f"name={f'{s.name} {carrier}'!r}")
+            a, b = s.source, s.dest
+            fixes = [f"fs.connect({a.owner.name}.{a.name}, {b.owner.name}.{b.name}, "
+                     f"..., {', '.join(keys)})"] if keys else []
+            if not (given or numbered):
+                wider = f"{scheme}-{{service}}"
+                fixes.append(f"Flowsheet(..., line_numbering_scheme={wider!r})")
+            warnings.append(Issue(
+                "warning", "energy-carrier-missing",
+                f"{s.name}, the energy line from {a.owner.name} to "
+                f"{b.owner.name}, does not name its energy carrier on the "
+                f"sheet (ISO 10628-1:2014 4.3.2 e)). Write what it carries "
+                f"into the label drawn on it, keeping the other arguments: "
+                f"{' and '.join(fixes)}"))
 
     return errors + warnings
 

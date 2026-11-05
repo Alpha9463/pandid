@@ -46,6 +46,7 @@ text.
 | `validate(*, diagram=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
 | `to_dict()` / `from_dict(spec)` | Serialize intent or build an equivalent sheet. |
 | `from_json(path)` / `from_yaml(path)` | Read a spec file; YAML needs `pandid[yaml]`. |
+| `line_list()` / `equipment_list()` / `instrument_index()` | Return a schedule as rows; see [Schedules](#schedules). |
 
 The main collections are `fs.units`, `fs.streams`, `fs.components` and
 `fs.loops`. `fs.warnings` contains findings from the last render. The sheet
@@ -198,8 +199,13 @@ Validation reports `gravity-turned` when one is rotated away from it.
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
-`software` or `capillary`. When omitted, two energy/utility ports make an energy
-stream; other process ports make a material stream.
+`software` or `capillary`. When omitted, a signal line to a valve with a
+diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
+electric; two energy/utility ports make an energy stream; other process ports
+make a material stream. `add_control_loop()` infers its output line the same way
+unless `output_kind=` is given. On a PFD, `validate()` reports
+`energy-carrier-missing` until the label drawn on an energy line names its
+carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
 
 `connect()` also accepts `name`, `draw_as_recycle`, `ends` and line-number fields
 `size`, `schedule`, `service`, `sequence`, `spec` and `insulation`. The first
@@ -258,7 +264,7 @@ station.
 
 Assign a `TitleBlock` to `fs.title_block`; `Revision` entries carry its issue
 history. `Annotation` and `TableBox` add notes and tables with
-`fs.add_annotation()`. The `pandid.document` helpers `equipment_list()`,
+`fs.add_annotation()`. The `pandid.document` helpers `equipment_table()`,
 `notes()` and `legend()` create common boxes. A date left blank in a title block
 is filled at render time; set it for reproducible output.
 
@@ -270,6 +276,41 @@ fs.title_block = TitleBlock(
     revisions=[Revision("A", "2026-09-29", "Issued for review")],
 )
 ```
+
+## Schedules
+
+`fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return the
+sheet's schedules as a `list[dict]`: one dict per row, with the same keys in
+every row of a list. `csv.DictWriter` and `pandas.DataFrame` take them as they
+are.
+
+```python
+import csv
+import sys
+
+from pandid import Feed, Flowsheet, Product, Pump
+
+fs = Flowsheet("Transfer")
+feed = fs.add(Feed("Feed"))
+pump = fs.add(Pump("P-101"))
+product = fs.add(Product("Product"))
+line = fs.connect(feed.outlet, pump.suction, size='4"', service="P", spec="A1A")
+fs.connect(pump.discharge, product.inlet)
+line.properties = {"Flow (kg/h)": 1200}
+
+rows = fs.line_list()
+writer = csv.DictWriter(sys.stdout, fieldnames=list(rows[0]))
+writer.writeheader()
+writer.writerows(rows)
+```
+
+| Schedule | One row per | Keys |
+|---|---|---|
+| `line_list()` | Line, grouped as the stream table groups it | `line`, `kind`, `size`, `schedule`, `service`, `spec`, `insulation`, `from_unit`, `from_nozzle`, `to_unit`, `to_nozzle`, then one per stream property |
+| `equipment_list()` | Unit that `equipment_table()` lists by default | `tag`, `description`, `class`, `variant` |
+| `instrument_index()` | Instrument balloon | `tag`, `loop`, `measured_variable`, `function_letters`, `location`, `on`, `relation` |
+
+A field or property the sheet does not state is `None`.
 
 ## Validation
 

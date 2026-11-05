@@ -24,7 +24,7 @@ from pandid import (
     Tee,
     Valve,
 )
-from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
+from pandid.document import Revision, TitleBlock, equipment_table, legend, notes
 from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 
@@ -256,7 +256,7 @@ def main():
             Revision("B", "04/02/26", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
-    fs.add_annotation(equipment_list(fs, align="top-right", include=[
+    fs.add_annotation(equipment_table(fs, align="top-right", include=[
         "R-101", "P-201A/B", "E-201",
     ]))
     fs.add_annotation(notes([

@@ -3,6 +3,7 @@
 import dataclasses
 import html
 import re
+from typing import Any
 
 import pytest
 
@@ -34,11 +35,11 @@ def test_title_block_draws_without_a_border():
 
 def test_annotations_draw_without_a_border():
     """Verify annotations draw without a border."""
-    from pandid.document import equipment_list, notes
+    from pandid.document import equipment_table, notes
 
     fs = _sheet()
     fs.add(U.Pump("P-101", description="Transfer Pump"))
-    fs.add_annotation(equipment_list(fs))
+    fs.add_annotation(equipment_table(fs))
     fs.add_annotation(notes(["Sampling point on every product line."]))
     svg = fs.to_svg()
     for token in ("EQUIPMENT LIST", "P-101", "Transfer Pump", "NOTES", "Sampling point"):
@@ -192,7 +193,7 @@ def test_title_block_fits_narrow_sheet():
 
 def test_furniture_boxes_rendered():
     """Verify furniture boxes rendered."""
-    from pandid.document import equipment_list, notes, legend
+    from pandid.document import equipment_table, notes, legend
 
     fs = Flowsheet("Furnished")
     feed = fs.add(U.Feed("Crude", reference="PFD-000"))
@@ -200,7 +201,7 @@ def test_furniture_boxes_rendered():
     prod = fs.add(U.Product("Top", reference="PFD-002"))
     fs.connect(feed.outlet, col.feed)
     fs.connect(col.overhead, prod.inlet)
-    fs.add_annotation(equipment_list(fs))
+    fs.add_annotation(equipment_table(fs))
     fs.add_annotation(notes(["First note", "Second note"]))
     fs.add_annotation(legend({"SS": "Stainless Steel"}))
     svg = fs.to_svg(border="zone", diagram="p&id")
@@ -296,11 +297,11 @@ def test_annotation_absolute_position():
 # --- what the equipment list schedules, and what it calls it ------------------
 
 
-def _schedule(fs: Flowsheet, **kwargs: object) -> list[tuple[str, str]]:
+def _schedule(fs: Flowsheet, **kwargs: Any) -> list[tuple[str, str]]:
     """Return equipment-schedule rows for a flowsheet."""
-    from pandid.document import equipment_list
+    from pandid.document import equipment_table
 
-    return equipment_list(fs, **kwargs).rows
+    return equipment_table(fs, **kwargs).rows
 
 
 def test_bulk_items_and_junctions_are_not_scheduled():
