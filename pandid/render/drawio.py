@@ -369,6 +369,8 @@ _APPROXIMATIONS = {
         None, "the dished heads and the long tube bundle"),
     ("evaporator", "plate"): _Approximation(
         None, "the dished heads and the plate pack between them"),
+    ("flotation_cell", "default"): _Approximation(
+        None, "the open tank, the launder outside its lip, the air standpipe and the froth"),
     ("kiln", "default"): _Approximation(
         None, "the shell's fall from feed end to discharge, its riding rings and its drive"),
     ("kiln", "fluidized_bed"): _Approximation(

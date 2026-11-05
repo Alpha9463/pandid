@@ -1165,7 +1165,14 @@ def test_the_reactor_forms_that_did_not_change():
 _PART_KEYWORDS = {"supports": 26, "rake": 28, "agitator": 28, "internals": 27}
 _COMPOSING = [
     (cls, keyword, variant)
-    for cls in (units.Vessel, units.Evaporator, units.Thickener, units.Column, units.Reactor)
+    for cls in (
+        units.Vessel,
+        units.Evaporator,
+        units.Thickener,
+        units.FlotationCell,
+        units.Column,
+        units.Reactor,
+    )
     for keyword in cls.COMPOSITION
     if keyword in _PART_KEYWORDS
     for variant in default_registry.variants(cls.kind)
