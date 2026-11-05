@@ -89,6 +89,10 @@ These are removed in 0.4.0.
 - A vessel whose supports, manholes or sockets widen its box draws every inlet
   or outlet on the wall it was given, so
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
+- A valve's actuator sits on the body's centre line, so a balloon added with
+  `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
+  nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
+  `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
 
