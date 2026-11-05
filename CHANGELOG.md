@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a port, `socket_1`, `socket_2`, and so on.
 - On a PFD, `validate()` warns when an energy line does not name its carrier.
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
+- `Crystallizer` draws a draft-tube baffle crystallizer with `feed`, `vapor`,
+  `overflow` and `product` nozzles. `agitator=` names the stirrer in its draft
+  tube, or `None`.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
