@@ -40,6 +40,8 @@ __all__ = [
     "Reactor",
     "Separator",
     "Thickener",
+    "FlotationCell",
+    "Crystallizer",
     "Absorber",
     "Stripper",
     "DistillationColumn",
@@ -4135,6 +4137,130 @@ class Thickener(Unit):
 
         self.rake = rake
         _compose_onto(self, ("rake", rake, lambda name, _body: rake_overlays(name)))
+
+
+class Crystallizer(Unit):
+    """Draft-tube baffle crystallizer.
+
+    ``feed`` enters the west wall, ``vapor`` leaves the head,
+    ``overflow`` takes clear liquor from the settling zone behind the
+    baffle and ``product`` draws the slurry from the leg. ``validate``
+    reports a turned crystallizer as ``gravity-turned``.
+
+    Parameters
+    ----------
+    name : str
+        Tag.
+    variant : str, default="default"
+        Body drawing.
+    agitator : str or None, default="propeller"
+        Agitator in the draft tube, one of :class:`Reactor`'s
+        ``agitator`` names, or ``None``. Fixed at construction.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
+
+    Attributes
+    ----------
+    agitator : str or None
+        Agitator drawn in the draft tube.
+
+    Raises
+    ------
+    ValueError
+        If ``agitator`` is unknown or the variant cannot carry it.
+    """
+
+    feed: Port
+    vapor: Port
+    overflow: Port
+    product: Port
+
+    kind = "crystallizer"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("overflow", "outlet", "liquid"),
+        ("product", "outlet", "process"),
+    ]
+    COMPOSITION = {"agitator": "propeller"}
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator"})
+
+    def __init__(  # numpydoc ignore=GL08
+        self,
+        name: str,
+        variant: str = "default",
+        agitator: str | None = "propeller",
+        **options: Unpack[_UnitOptions],
+    ):
+        super().__init__(name, variant=variant, **options)
+        from pandid.render.iso_parts import draft_tube_overlays
+
+        self.agitator = agitator
+        _compose_onto(self, ("agitator", agitator,
+                             lambda name, _body: draft_tube_overlays(name)))
+
+
+class FlotationCell(Unit):
+    """Mechanical flotation cell.
+
+    ``feed`` enters the west wall, ``concentrate`` leaves the froth
+    launder on the east, ``tailings`` leaves the floor and ``air``
+    enters the standpipe beside the shaft. ``validate`` reports a
+    turned cell as ``gravity-turned``.
+
+    Parameters
+    ----------
+    name : str
+        Tag.
+    variant : str, default="default"
+        Body drawing.
+    agitator : str or None, default="turbine"
+        Rotor on the shaft, one of :class:`Reactor`'s ``agitator``
+        names, or ``None``. Fixed at construction.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
+
+    Attributes
+    ----------
+    agitator : str or None
+        Rotor drawn on the shaft.
+
+    Raises
+    ------
+    ValueError
+        If ``agitator`` is unknown or the variant cannot carry it.
+    """
+
+    feed: Port
+    concentrate: Port
+    tailings: Port
+    air: Port
+
+    kind = "flotation_cell"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("concentrate", "outlet", "process"),
+        ("tailings", "outlet", "process"),
+        ("air", "inlet", "utility"),
+    ]
+    COMPOSITION = {"agitator": "turbine"}
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator"})
+
+    def __init__(  # numpydoc ignore=GL08
+        self,
+        name: str,
+        variant: str = "default",
+        agitator: str | None = "turbine",
+        **options: Unpack[_UnitOptions],
+    ):
+        super().__init__(name, variant=variant, **options)
+        from pandid.render.iso_parts import flotation_overlays
+
+        self.agitator = agitator
+        _compose_onto(self, ("agitator", agitator,
+                             lambda name, _body: flotation_overlays(name)))
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
