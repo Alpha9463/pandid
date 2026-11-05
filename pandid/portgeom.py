@@ -411,7 +411,8 @@ def drawn_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     if unit.kind not in ("feed", "product"):
         return x0, y0, x1, y1
     inset = FLAG_INSET_REF if _flag_reference(unit) else FLAG_INSET
-    return x0, y0 + inset, x1, y1 - inset
+    top, bottom = sorted((y0 + inset, y1 - inset))
+    return x0, top, x1, bottom
 
 
 def tag_width(tag: str) -> float:

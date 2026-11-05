@@ -2321,6 +2321,14 @@ def _run_over_flag(offset: float) -> Flowsheet:
     return fs
 
 
+def test_a_flag_shorter_than_its_insets_draws_its_nozzle_on_its_pennant():
+    """Check that a 20px flag, whose pennant is 10px, has its nozzle on the pennant."""
+    fs = Flowsheet("short flag")
+    fs.add(U.Feed("Air", height=20)).pin(x=300, y=200)
+    fs.layout()
+    assert _found(fs, "nozzle-off-body") == []
+
+
 def test_a_flag_is_measured_by_the_pennant_it_draws():
     """Check that a run inside a flag's box but clear of its pennant is not reported."""
     from pandid.portgeom import unit_box

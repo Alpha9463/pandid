@@ -89,6 +89,8 @@ These are removed in 0.4.0.
 - A vessel whose supports, manholes or sockets widen its box draws every inlet
   or outlet on the wall it was given, so
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
+- A `Feed` or `Product` given a small `height`, such as
+  `Feed("Air", height=20)`, draws instead of raising `nozzle-off-body`.
 
 ## [0.2.0] - 2026-11-05
 
