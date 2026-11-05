@@ -2280,28 +2280,45 @@ def test_a_tap_line_is_routed_round_a_unit_in_its_way() -> None:
     assert edge.count("<mxPoint ") == len(points) - 2
 
 
-def test_two_routed_tap_lines_share_no_run() -> None:
-    """Check that two leaders routed round one column are not drawn as one line."""
-    from pandid.layout.attach import stream_path
-    from pandid.layout.control import _shared
-    from pandid.render.svg import tap_routes
-
+def _two_readings(pt: str, tt: str) -> Flowsheet:
+    """Return PT on D-101 and TT on D-102, both pinned past a tall column."""
     fs = Flowsheet("Two readings")
     a = fs.add(U.Vessel("D-101")).pin(x=100, y=100)
     b = fs.add(U.Vessel("D-102")).pin(x=100, y=240)
     c = fs.add(U.Column("T-101", height=500)).pin(x=250, y=50)
     fs.connect(a.drain, c.ports["feed_1"])
     fs.connect(c.ports["overhead"], b.inlet)
-    fs.add_instrument("PT", 101, sensing=a, face="E").pin(x=500, y=128)
-    fs.add_instrument("TT", 101, sensing=b, face="E").pin(x=550, y=268)
+    at = {"E": [(500, 128), (550, 268)], "S": [(500, 100)], "N": [(500, 200)]}
+    (px, py), (tx, ty) = at[pt][0], at[tt][-1]
+    fs.add_instrument("PT", 101, sensing=a, face=pt).pin(x=px, y=py)
+    fs.add_instrument("TT", 101, sensing=b, face=tt).pin(x=tx, y=ty)
     fs.route()
+    return fs
 
-    (_, pt), (_, tt) = tap_routes(fs)
-    pipes = [stream_path(s) for s in fs.streams]
-    for mine, other in [(pt, tt), *((tap, pipe) for tap in (pt, tt) for pipe in pipes)]:
-        assert not any(
+
+@pytest.mark.parametrize(("pt", "tt"), [("E", "E"), ("S", "N")])
+def test_a_routed_tap_line_shares_no_run_the_square_one_did_not(pt: str, tt: str) -> None:
+    """Check that a leader routed round a column is not laid along a pipe or another leader."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+    from pandid.render.svg import _square_tap, tap_lines, tap_routes
+
+    def shared(mine: list[tuple[float, float]], other: list[tuple[float, float]]) -> int:
+        return sum(
             _shared(p, q, r, t) for p, q in zip(mine, mine[1:]) for r, t in zip(other, other[1:])
-        ), f"{mine} shares a run with {other}"
+        )
+
+    fs = _two_readings(pt, tt)
+
+    drawn = [route for _, route in tap_routes(fs)]
+    squares = [_square_tap(inst, tap, centre)[0] for inst, tap, centre in tap_lines(fs)]
+    pipes = [stream_path(s) for s in fs.streams]
+    for k, (route, square) in enumerate(zip(drawn, squares)):
+        lines = pipes + drawn[:k] + drawn[k + 1 :]
+        assert route != square, f"{route} was not routed"
+        assert sum(shared(route, line) for line in lines) <= sum(
+            shared(square, line) for line in lines
+        ), f"{route} shares a run its square turn {square} did not"
     assert "tap-crosses-unit" not in [i.code for i in fs.validate()]
 
 

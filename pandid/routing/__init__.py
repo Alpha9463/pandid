@@ -3,7 +3,7 @@
 import math
 import warnings
 from collections import defaultdict
-from typing import Protocol, TYPE_CHECKING
+from typing import Iterator, Protocol, TYPE_CHECKING
 
 from pandid.deprecation import Deprecation
 from pandid.geometry import Route
@@ -472,14 +472,15 @@ class DefaultRouter:
 
 def route_tap(inst, tap: tuple[float, float], faces: list[str],
               centre: tuple[float, float],
-              others: list[list[tuple[float, float]]]) -> list[tuple[float, float]]:
-    """Return a tap line's path round unit bodies and tags.
+              lines: list[list[tuple[float, float]]]) -> Iterator[list[tuple[float, float]]]:
+    """Yield a tap line's paths round unit bodies and tags, best first.
 
-    The line leaves the tap square along the first of ``faces`` that
-    has a path, and reaches the balloon centre on the visibility graph
-    at the fewest bends. It may cross its own host's tag. It is priced
-    as a stream routed after every drawn stream and ``others``: by the
-    lines it crosses and the runs it shares.
+    Each path leaves the tap square along one of ``faces``, in order,
+    to a stand-off :data:`~pandid.routing.visibility.MIN_ESCAPE` out or
+    else half that, and reaches the balloon centre on the visibility
+    graph at the fewest bends. It may cross its own host's tag. It is
+    priced as a stream routed after ``lines``: by the lines it crosses
+    and the runs it shares.
 
     Parameters
     ----------
@@ -491,17 +492,17 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
         Compass directions the line may leave the tap in, in order.
     centre : tuple[float, float]
         Balloon centre.
-    others : list[list[tuple[float, float]]]
-        Other tap lines already drawn.
+    lines : list[list[tuple[float, float]]]
+        Streams and other tap lines already drawn.
 
-    Returns
-    -------
+    Yields
+    ------
     list[tuple[float, float]]
-        Points from ``tap`` to ``centre``, or ``[]`` if no path is clear.
+        Points from ``tap`` to ``centre``, one path per way out that
+        reaches it.
     """
     from bisect import bisect_left, bisect_right
 
-    from pandid.layout.attach import stream_path
     from pandid.portgeom import COMPASS, unit_box
     from pandid.routing.astar import CrossingIndex, find_path
     from pandid.routing.visibility import MIN_ESCAPE, Rect, VisibilityGraph, _tag_halo
@@ -509,22 +510,20 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
 
     host, fs = inst.host, inst.flowsheet
     if fs is None or inst.frame is None:
-        return []
+        return
     x0, y0, x1, y1 = unit_box(inst, inst.frame)
     omit = [Rect(x0, x1, y0, y1)]
     owner = host if isinstance(host, Unit) else inst
     if owner.frame is not None and (halo := _tag_halo(owner, owner.frame)) is not None:
         omit.append(halo)
-    stubs: dict[str, tuple[float, float]] = {}
-    for face in faces:
-        dx, dy = COMPASS[face]
-        stubs[face] = (tap[0] + MIN_ESCAPE * dx, tap[1] + MIN_ESCAPE * dy)
-    graph = VisibilityGraph(fs, lanes=(*stubs.values(), centre), omit=omit)
+    stubs = [(face, (tap[0] + escape * COMPASS[face][0], tap[1] + escape * COMPASS[face][1]))
+             for face in faces for escape in (MIN_ESCAPE, MIN_ESCAPE / 2)]
+    graph = VisibilityGraph(fs, lanes=(*(stub for _, stub in stubs), centre), omit=omit)
     if not graph.edges.get(centre):
-        return []
+        return
     index = CrossingIndex()
     used: dict[tuple[tuple[float, float], tuple[float, float]], float] = defaultdict(float)
-    for line in [*(stream_path(s) for s in fs.streams if s.route is not None), *others]:
+    for line in lines:
         _record_route(index, line, True)
         # Charge each graph edge on the line's square runs.
         for (ax, ay), (bx, by) in zip(line, line[1:]):
@@ -538,13 +537,11 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
                 if q in graph.edges.get(p, ()):
                     used[(p, q)] += 2000.0
                     used[(q, p)] += 2000.0
-    for face, stub in stubs.items():
+    for face, stub in stubs:
         start = graph.reachable_projection(tap, stub, face, owner)
         path = find_path(graph, start, centre, face, None, used, False, index) if start else []
         if path:
-            break
-    else:
-        return []
-    points = [tap, *path]
-    return [points[0], *(b for a, b, c in zip(points, points[1:], points[2:])
-                         if not (a[0] == b[0] == c[0] or a[1] == b[1] == c[1])), points[-1]]
+            points = [tap, *path]
+            yield [points[0], *(b for a, b, c in zip(points, points[1:], points[2:])
+                                if not (a[0] == b[0] == c[0] or a[1] == b[1] == c[1])),
+                   points[-1]]

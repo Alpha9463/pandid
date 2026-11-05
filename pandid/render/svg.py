@@ -273,8 +273,9 @@ def tap_routes(fs):
     crosses a unit body or another unit's tag. Such a line is then
     routed round them (:func:`pandid.routing.route_tap`), in
     :func:`tap_lines` order, priced against the streams, every clear
-    tap line and every tap line routed before it, and kept if it
-    crosses fewer.
+    tap line and every tap line routed before it. The first route that
+    crosses fewer bodies and tags, and shares no more runs with those
+    lines, is kept.
 
     Parameters
     ----------
@@ -287,7 +288,9 @@ def tap_routes(fs):
         Instrument and points from the tap to the balloon centre, in
         :func:`tap_lines` order.
     """
+    from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import segment_crosses_box
+    from pandid.layout.control import _shared
     from pandid.routing import route_tap
     from pandid.routing.visibility import _tag_halo
 
@@ -317,18 +320,39 @@ def tap_routes(fs):
         return sum(any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
                    for u, box in obstacles if u is not inst and u is not inst.host)
 
-    lines = tap_lines(fs)
-    squares = [_square_tap(inst, tap, centre) for inst, tap, centre in lines]
-    crossed = [clashes(inst, path) for (inst, _, _), (path, _) in zip(lines, squares)]
+    def shared(route, lines) -> int:
+        """Count the segments of other lines a tap line runs along.
+
+        Parameters
+        ----------
+        route : list[tuple[float, float]]
+            Tap line points.
+        lines : list[list[tuple[float, float]]]
+            Other drawn lines.
+
+        Returns
+        -------
+        int
+            Pairs of segments that share a run.
+        """
+        return sum(_shared(a, b, c, d) for line in lines for c, d in zip(line, line[1:])
+                   for a, b in zip(route, route[1:]))
+
+    pipes = [stream_path(s) for s in fs.streams if s.route is not None]
+    taps = tap_lines(fs)
+    squares = [_square_tap(inst, tap, centre) for inst, tap, centre in taps]
+    crossed = [clashes(inst, path) for (inst, _, _), (path, _) in zip(taps, squares)]
     drawn = [path for path, _ in squares]
-    for k, ((inst, tap, centre), (path, faces)) in enumerate(zip(lines, squares)):
+    for k, ((inst, tap, centre), (path, faces)) in enumerate(zip(taps, squares)):
         if not crossed[k] or not faces:
             continue
-        others = [line for j, line in enumerate(drawn) if j < k or (j > k and not crossed[j])]
-        routed = route_tap(inst, tap, faces, centre, others)
-        if routed and clashes(inst, routed) < crossed[k]:
-            drawn[k] = routed
-    return [(inst, path) for (inst, _, _), path in zip(lines, drawn)]
+        lines = pipes + [line for j, line in enumerate(drawn)
+                         if j < k or (j > k and not crossed[j])]
+        runs = shared(path, lines)
+        drawn[k] = next((routed for routed in route_tap(inst, tap, faces, centre, lines)
+                         if clashes(inst, routed) < crossed[k]
+                         and shared(routed, lines) <= runs), path)
+    return [(inst, path) for (inst, _, _), path in zip(taps, drawn)]
 
 
 def _square_tap(inst, tap, centre):
