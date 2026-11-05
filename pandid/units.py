@@ -268,6 +268,9 @@ class Unit:
     # Attributes __setattr__ refuses to reassign after __init__.
     _FIXED_AT_CONSTRUCTION: frozenset[str] = frozenset()
 
+    # Composition parts, redrawn when the variant is reassigned.
+    _composition: "tuple[_Part, ...]" = ()
+
     COMPOSITION: dict[str, Any] = {}
 
     COMPOSITION_VARIANT: str = ""
@@ -441,7 +444,8 @@ class Unit:
             number.
         ValueError
             If ``width`` or ``height`` is a number that is not positive
-            and finite.
+            and finite, or a reassigned ``variant`` cannot carry the
+            unit's parts.
         AttributeError
             If an attribute fixed at construction is reassigned.
         """
@@ -462,7 +466,10 @@ class Unit:
                 f"leave the drawing disagreeing with the object. Build a new "
                 f"{type(self).__name__} with {name}={value!r} instead."
             )
+        old = self.__dict__.get(name)
         super().__setattr__(name, value)
+        if name == "variant" and old is not None and self._composition:
+            _recompose(self, old)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
 
@@ -1470,6 +1477,7 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     """
     from pandid.render.symbols import default_registry
 
+    unit._composition = parts
     stated = [(keyword, value, place) for keyword, value, place in parts if value is not None]
     overlays = _placed(stated, unit.variant)
     if not overlays:
@@ -1489,6 +1497,32 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
             f"{named}; variants that can: {', '.join(able) or 'none'}"
         )
     unit.overlays = overlays
+
+
+def _recompose(unit: "Unit", old: str) -> None:
+    """Redraw a unit's parts on its new variant, or restore ``old``.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit whose variant was reassigned.
+    old : str
+        Variant it had.
+
+    Raises
+    ------
+    ValueError
+        If the new variant cannot carry the parts; the unit keeps
+        ``old`` and its parts.
+    """
+    overlays = unit.__dict__.get("overlays")
+    try:
+        _compose_onto(unit, *unit._composition)
+    except ValueError:
+        unit.__dict__["variant"] = old
+        if overlays is not None:
+            unit.__dict__["overlays"] = overlays
+        raise
 
 
 #: Placements of a wall part, ``(face, fraction)`` each.

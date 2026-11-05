@@ -2,6 +2,7 @@
 
 import pytest
 
+from pandid import Flowsheet
 from pandid import units as U
 
 
@@ -47,3 +48,43 @@ def test_width_and_height_are_unaffected_and_still_live():
     assert col.width == 80
     col.description = "revised"
     assert col.description == "revised"
+
+
+@pytest.mark.parametrize(
+    ("build", "variant", "built"),
+    [
+        (
+            lambda: U.Vessel("D-2", supports="ring"),
+            "horizontal",
+            lambda: U.Vessel("D-2", variant="horizontal", supports="ring"),
+        ),
+        (
+            lambda: U.Reactor("R-1", agitator="propeller"),
+            "tubular",
+            lambda: U.Reactor("R-1", variant="tubular", agitator="propeller"),
+        ),
+    ],
+)
+def test_a_variant_the_parts_cannot_go_on_is_refused_as_the_constructor_refuses_it(
+    build, variant, built
+):
+    """Check that the refusal is the constructor's and leaves the unit as built."""
+    unit = build()
+    before = (unit.variant, unit.__dict__.get("overlays"))
+    with pytest.raises(ValueError) as built_error:
+        built()
+    with pytest.raises(ValueError) as error:
+        unit.variant = variant
+    assert str(error.value) == str(built_error.value)
+    assert (unit.variant, unit.__dict__.get("overlays")) == before
+    sheet = Flowsheet("x")
+    sheet.add(unit)
+    sheet.to_svg()
+
+
+def test_a_variant_the_parts_can_go_on_draws_them_as_the_constructor_would():
+    """Check that a carried variant places the parts on the new body."""
+    reactor = U.Reactor("R-1", agitator="propeller")
+    reactor.variant = "jacketed"
+    built = U.Reactor("R-1", variant="jacketed", agitator="propeller")
+    assert reactor.__dict__["overlays"] == built.__dict__["overlays"]
