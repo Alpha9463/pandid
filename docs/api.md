@@ -98,8 +98,8 @@ Ports are available by attribute (`pump.suction`) or through `unit.ports`.
 The names depend on the class and variant. Common patterns are:
 
 - `Feed.outlet` connects to a unit's inlet; `Product.inlet` receives its output.
-- Pumps use `suction` and `discharge`; valves use `inlet`, `outlet` and a signal
-  `actuator`.
+- Pumps, compressors and fans use `suction` and `discharge`; valves use
+  `inlet`, `outlet` and a signal `actuator`.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`

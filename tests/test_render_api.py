@@ -744,6 +744,12 @@ def test_a_hand_called_layout_takes_the_routes_with_it():
     assert not sloping, "; ".join(sloping)
 
 
+def _retype(fs: Flowsheet) -> None:
+    """Reassign HV-1's variant, expecting the deprecation."""
+    with pytest.warns(DeprecationWarning, match="variant"):
+        _unit(fs, "HV-1").variant = "ball"
+
+
 #: Every way to change a rendered sheet that can move a drawn box or a routed run.
 MUTATIONS = {
     "pin": lambda fs: _unit(fs, "HV-1").pin(x=300, y=300),
@@ -760,7 +766,7 @@ MUTATIONS = {
     "attach": lambda fs: _unit(fs, "PI-101").attach(fs.streams[0], at=0.8, offset=70),
     "width": lambda fs: setattr(_unit(fs, "T-1"), "width", 90),
     "height": lambda fs: setattr(_unit(fs, "T-1"), "height", 90),
-    "variant": lambda fs: setattr(_unit(fs, "HV-1"), "variant", "ball"),
+    "variant": _retype,
     "label_pos": lambda fs: setattr(_unit(fs, "HV-1"), "label_pos", "bottom"),
     "name": lambda fs: setattr(_unit(fs, "HV-1"), "name", "HV-1-A-VERY-LONG-TAG"),
     "normal_position": lambda fs: setattr(_unit(fs, "HV-1"), "normal_position", "closed"),
