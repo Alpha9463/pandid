@@ -71,6 +71,9 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- A vessel whose supports, manholes or sockets widen its box draws every inlet
+  or outlet on the wall it was given, so
+  `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
 
 ## [0.2.0] - 2026-11-05
 

@@ -1239,6 +1239,33 @@ def _face_point(face: str, t: float, inset: float, width: float, height: float
     return t, height - inset  # "S"
 
 
+def _nearest_stretch(band: "tuple[float, float] | None", along: float,
+                     inset: float, count: int) -> "tuple[float, float] | None":
+    """Return the stretch of a band nearer its face than either end.
+
+    Parameters
+    ----------
+    band : tuple[float, float] or None
+        ``(lo, hi)`` a family may use; the whole face if ``None``.
+    along : float
+        Face length.
+    inset : float
+        Distance in from the face's edge to the wall the family is on.
+    count : int
+        Family size.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        The band cut to points nearer the face than the ends of the
+        box, or ``band`` when that leaves too little room to keep
+        ``count`` members apart.
+    """
+    lo, hi = (0.0, along) if band is None else band
+    near = (max(lo, inset + _COINCIDENT), min(hi, along - inset - _COINCIDENT))
+    return near if near[1] - near[0] >= (count - 1) * _COINCIDENT else band
+
+
 # Pitch and extent of tank and vessel inlet and outlet families.
 _VESSEL_PITCH = 20.0
 _VESSEL_EXTENT = 0.7
@@ -1251,11 +1278,12 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   ) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
-    Each family is spread about the stencil's anchor within
-    :attr:`Symbol.bands`; a role with one member keeps its full menu.
-    If a member lands nearer a stencil nozzle on its band than the
-    family's pitch, the band's stencil nozzles are spread with the
-    family, in order along the wall.
+    Each family is spread about the stencil's anchor within the part of
+    :attr:`Symbol.bands` nearer its face than either end of the box; a
+    role with one member keeps its full menu. If a member lands nearer
+    a stencil nozzle on its band than the family's pitch, the band's
+    stencil nozzles are spread with the family, in order along the
+    wall.
 
     Parameters
     ----------
@@ -1327,6 +1355,8 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
             order = sorted(beside, key=beside.__getitem__)
             members = ([n for n in order if beside[n] <= t0] + members
                        + [n for n in order if beside[n] > t0])
+        if len(members) > 1:
+            band = _nearest_stretch(band, along, inset, len(members))
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
