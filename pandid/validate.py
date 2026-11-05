@@ -17,7 +17,10 @@ from pandid.portgeom import COMPASS
 from pandid.routing.visibility import EDGE_TOL as _EDGE_TOL
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pandid.flowsheet import Flowsheet
+    from pandid.streams import Stream
 
 _TOL = 1.0  # tolerance in px
 
@@ -1178,8 +1181,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if s.route is None:
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
-            sp = port_point(src_u, src_u.frame, s.source.name)
-            dp = port_point(dst_u, dst_u.frame, s.dest.name)
+            src = resolve_port(src_u, src_u.frame, s.source.name)
+            dst = resolve_port(dst_u, dst_u.frame, s.dest.name)
+            sp, dp = src.point, dst.point
             pts = [sp] + list(s.route.waypoints) + [dp]
 
             for k in range(len(pts) - 1):
@@ -1202,9 +1206,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
-            ends = [(u, name, drawn_box(u, u.frame), resolve_port(u, u.frame, name).face)
-                    if is_anchored(u, name) else None
-                    for u, name in ((src_u, s.source.name), (dst_u, s.dest.name))]
+            ends = [(u, name, drawn_box(u, u.frame), end.face) if is_anchored(u, name) else None
+                    for u, name, end in ((src_u, s.source.name, src), (dst_u, s.dest.name, dst))]
             pierced = _pierced_end(path, ends) if len(path) > 1 else None
             if pierced is not None:
                 u, name, _, face = pierced
@@ -1296,26 +1299,27 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"That is corner arithmetic rather than a step: pin the nozzle, "
                 f"{dev.name}.pin(port={port!r}, y={target:g})"))
 
-    # Soft: parallel runs closer than ISO 10628-1 5.3.2 allows.
-    warnings.extend(_crowded_lines(fs))
+        # Soft: parallel runs closer than ISO 10628-1 5.3.2 allows.
+        warnings.extend(_crowded_lines(zip(drawn, lines.values())))
 
     return errors + warnings
 
 
-def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
+def _crowded_lines(lines: "Iterable[tuple[Stream, list[tuple[float, float]]]]"
+                   ) -> list["Issue"]:
     """Return ``lines-crowded`` findings (ISO 10628-1 5.3.2).
 
     Parameters
     ----------
-    fs : Flowsheet
-        Sheet to check.
+    lines : Iterable[tuple[Stream, list[tuple[float, float]]]]
+        Each drawn stream and its polyline.
 
     Returns
     -------
     list[Issue]
         One warning per pair of streams with crowded parallel runs.
     """
-    from pandid.render.svg import stream_polyline, _stream_rung
+    from pandid.render.svg import _stream_rung
     from pandid.render.weights import M
     from pandid.streams import SIGNAL_KINDS
 
@@ -1323,12 +1327,8 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
     floor_mm = 1.0              # the clause's absolute minimum
 
     segments = []
-    # Only streams with both ends placed have a drawn path.
-    for s in fs.streams:
-        if s.source.owner.frame is None or s.dest.owner.frame is None:
-            continue
+    for s, points in lines:
         w = _stream_rung(s.kind in SIGNAL_KINDS).width
-        points = stream_polyline(s)
         for (x1, y1), (x2, y2) in zip(points, points[1:]):
             if y1 == y2 and x1 != x2:
                 segments.append((s, "h", min(x1, x2), max(x1, x2), y1, w))
