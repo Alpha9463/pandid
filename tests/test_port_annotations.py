@@ -261,6 +261,7 @@ def test_only_these_classes_supersede_a_declaration():
         "PlateExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "SpiralExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "ThinFilmEvaporator": ["shell_in", "shell_out", "tube_in", "tube_out"],
+        "JacketedReactor": ["duty"],
         "CheckValve": ["actuator"],
     }
 

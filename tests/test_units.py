@@ -98,11 +98,12 @@ def test_reactor_duty_is_energy_role():
 
 def test_a_jacketed_reactor_has_a_jacket_inlet_and_outlet():
     """Check that the jacketed body's utility pair replaces its single duty port."""
-    r = U.Reactor("R-1", variant="jacketed")
+    r = D.JacketedReactor("R-1")
     assert list(r.ports) == ["outlet", "vent", "jacket_in", "jacket_out", "drive", "feed_1"]
-    jacket_in, jacket_out = r.port("jacket_in"), r.port("jacket_out")
-    assert (jacket_in.direction, jacket_in.role) == ("inlet", "utility")
-    assert (jacket_out.direction, jacket_out.role) == ("outlet", "utility")
+    assert (r.jacket_in.direction, r.jacket_in.role) == ("inlet", "utility")
+    assert (r.jacket_out.direction, r.jacket_out.role) == ("outlet", "utility")
+    # The base class with the variant builds the same nozzles.
+    assert list(U.Reactor("R-2", variant="jacketed").ports) == list(r.ports)
 
 
 def test_the_jacket_nozzles_sit_on_the_jacket_wall():
@@ -128,11 +129,11 @@ def test_the_jacket_supply_and_return_connect_to_their_nozzles():
     from pandid.portgeom import port_point
 
     fs = Flowsheet("jacket")
-    r = fs.add(U.Reactor("R-1", variant="jacketed", width=152, height=360))
+    r = fs.add(D.JacketedReactor("R-1", width=152, height=360))
     cws = fs.add(U.Feed("CWS"))
     cwr = fs.add(U.Product("CWR"))
-    supply = fs.connect(cws.outlet, r.port("jacket_in"))
-    back = fs.connect(r.port("jacket_out"), cwr.inlet)
+    supply = fs.connect(cws.outlet, r.jacket_in)
+    back = fs.connect(r.jacket_out, cwr.inlet)
     fs.to_svg()
     assert supply.kind == back.kind == "material"
     assert r.frame is not None and supply.route is not None and back.route is not None
@@ -148,7 +149,7 @@ def test_duty_on_a_jacketed_reactor_is_deprecated_for_jacket_in(same_file):
     fs = Flowsheet("jacket")
     r = fs.add(U.Reactor("R-1", variant="jacketed"))
     cws = fs.add(U.Feed("CWS"))
-    with pytest.warns(DeprecationWarning, match="use jacket_in") as caught:
+    with pytest.warns(DeprecationWarning, match="use JacketedReactor, with jacket_in") as caught:
         duty = r.duty
     assert len(caught) == 1
     assert same_file(caught[0].filename) == same_file(__file__)
@@ -162,6 +163,8 @@ def test_duty_on_a_jacketed_reactor_is_deprecated_for_jacket_in(same_file):
         warnings.simplefilter("error", DeprecationWarning)
         assert U.Reactor("R-2").duty.name == "duty"
         assert U.Reactor("R-3", variant="tubular").duty.name == "duty"
+        # The named class never had a duty port.
+        assert getattr(D.JacketedReactor("R-4"), "duty", None) is None
 
 
 def test_a_column_takes_more_than_one_feed():

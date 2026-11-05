@@ -4000,7 +4000,8 @@ def _stage_fractions(
 #: Deprecation of ``duty`` on a jacketed reactor.
 _JACKET_DUTY = Deprecation(
     what="duty on a jacketed Reactor",
-    instead="jacket_in for the jacket's supply and jacket_out for its return",
+    instead=("JacketedReactor, with jacket_in for the jacket's supply and "
+             "jacket_out for its return"),
     removed_in="0.4.0",
     note="duty draws jacket_in, low on the jacket",
 )
@@ -4066,8 +4067,8 @@ class Reactor(Unit):
     feed_7: Port
     feed_8: Port
 
-    # "jacketed" builds jacket_in and jacket_out in place of duty; use
-    # ``rx.port(name)`` for them.
+    # "jacketed" builds jacket_in and jacket_out in place of duty;
+    # JacketedReactor declares them.
     outlet: Port
     vent: Port
     duty: Port
@@ -4173,6 +4174,9 @@ class Reactor(Unit):
         def __getattr__(self, name: str) -> Any:
             """Return ``jacket_in`` for ``duty`` on a jacketed body.
 
+            Only a body whose ports come from the variant table
+            answers; a class with its own ``PORTS`` does not.
+
             Parameters
             ----------
             name : str
@@ -4189,7 +4193,7 @@ class Reactor(Unit):
                 For any other missing attribute; it lists the ports.
             """
             jacket = self.__dict__.get("ports", {}).get("jacket_in")
-            if name == "duty" and jacket is not None:
+            if name == "duty" and jacket is not None and not self._declared_ports():
                 _JACKET_DUTY.warn(self, where=self.name)
                 return jacket
             return super().__getattr__(name)

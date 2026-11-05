@@ -16,9 +16,9 @@ from pandid import (
     Fitting,
     FlowElement,
     Flowsheet,
+    JacketedReactor,
     Product,
     Pump,
-    Reactor,
     ShellAndTubeExchanger,
     SolenoidValve,
     Tee,
@@ -41,9 +41,9 @@ def main():
     # --- Equipment ----------------------------------------------------
     # agitator= adds the stirrer, its drive motor and the drive nozzle.
     # Sized in the symbol's proportions so the motor stays round.
-    rx = fs.add(Reactor("R-101", variant="jacketed", agitator="turbine",
-                        width=152, height=360,
-                        description="Propylene Glycol Reactor"))
+    rx = fs.add(JacketedReactor("R-101", agitator="turbine", width=152,
+                                height=360,
+                                description="Propylene Glycol Reactor"))
     cooler = fs.add(ShellAndTubeExchanger("E-201", variant="straight_tubes", width=130,
                                           height=40, description="Product Cooler"))
     pump = fs.add(Pump("P-201A/B", description="Propylene Oxide Charge Pump"))
@@ -174,8 +174,8 @@ def main():
                sequence=207, spec="CS")
     fs.connect(hv205.outlet, fe205.inlet)
     fs.connect(fe205.outlet, cv205.inlet)
-    fs.connect(cv205.outlet, rx.port("jacket_in"))
-    fs.connect(rx.port("jacket_out"), hv209.inlet, size=150, service="CWR",
+    fs.connect(cv205.outlet, rx.jacket_in)
+    fs.connect(rx.jacket_out, hv209.inlet, size=150, service="CWR",
                sequence=212, spec="CS")
     fs.connect(hv209.outlet, cwr_jkt.inlet)
 

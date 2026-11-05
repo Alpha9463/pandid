@@ -104,9 +104,8 @@ The names depend on the class and variant. Common patterns are:
   `overflow`/`underflow`.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.
-- Reactors use `feed`, `outlet`, `vent` and `duty`. A jacketed reactor,
-  `Reactor("R-101", variant="jacketed")`, has `jacket_in` low on the jacket
-  and `jacket_out` high on it in place of `duty`.
+- Reactors use `feed`, `outlet`, `vent` and `duty`. A `JacketedReactor` has
+  `jacket_in` low on the jacket and `jacket_out` high on it in place of `duty`.
 - Multi-feed equipment exposes `feed_1`, `feed_2`, and so on when configured.
 
 ### Equipment classes

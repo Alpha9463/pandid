@@ -183,7 +183,7 @@ def test_a_jacketed_reactors_jacket_nozzles_round_trip():
         "name": "T",
         "units": [
             {"kind": "Feed", "name": "CWS"},
-            {"kind": "Reactor", "name": "R-1", "variant": "jacketed"},
+            {"kind": "JacketedReactor", "name": "R-1"},
             {"kind": "Product", "name": "CWR"},
         ],
         "streams": [
@@ -208,7 +208,7 @@ def test_a_spec_naming_a_jacketed_reactors_duty_warns_and_writes_jacket_in():
         ],
         "streams": [{"from": ["CWS", "outlet"], "to": ["R-1", "duty"]}],
     }
-    with pytest.warns(DeprecationWarning, match="use jacket_in"):
+    with pytest.warns(DeprecationWarning, match="use JacketedReactor"):
         fs = Flowsheet.from_dict(spec)
     assert [i.code for i in fs.validate()].count("deprecated") == 1
     assert fs.to_dict()["streams"][0]["to"] == ["R-1", "jacket_in"]
