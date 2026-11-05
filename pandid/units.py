@@ -1659,9 +1659,78 @@ class _FaceFamilies(Unit):
 
     # Family port name -> face, in drawn order.
     _faces: dict[str, str]
+    # Family ports whose face a list named, and those whose face the
+    # author named by a list or nozzle().
+    _listed: frozenset[str]
+    _stated: set[str]
 
     # Error wording: the unit noun, a variable name and a family port.
     _NOUN, _VAR, _MEMBER = "unit", "v", "inlet or outlet"
+
+    def _record_lists(self, inputs: "int | Sequence[str]",
+                      outputs: "int | Sequence[str]") -> None:
+        """Record which families were declared by a list of faces.
+
+        Parameters
+        ----------
+        inputs, outputs : int or Sequence[str]
+            Count, or one face per port, as declared.
+        """
+        self._listed = frozenset(
+            port.name
+            for family, spec in ((self.inlets, inputs), (self.outlets, outputs))
+            if not isinstance(spec, int)
+            for port in family
+        )
+        self._stated = set(self._listed)
+
+    def _offered(self, port_name: str) -> list[str]:
+        """Return the faces a family port may take, its own face first.
+
+        Parameters
+        ----------
+        port_name : str
+            Family port name.
+
+        Returns
+        -------
+        list[str]
+            Faces on the unit's own axes.
+        """
+        raise NotImplementedError
+
+    def _fits(self, faces: dict[str, str], frame: Frame) -> bool:
+        """Return whether a placed box can draw the families on faces.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Family port name to face, in drawn order.
+        frame : Frame
+            The unit's placed box.
+
+        Returns
+        -------
+        bool
+            True if every face has room for its ports.
+        """
+        raise NotImplementedError
+
+    def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
+        """Return the symbol with the families on the given faces.
+
+        Parameters
+        ----------
+        faces : dict[str, str], optional
+            Family port name to face, in drawn order; the declared
+            faces when omitted.
+
+        Returns
+        -------
+        Symbol
+            Artwork with the families placed.
+        """
+        raise NotImplementedError
 
     @property
     def input_faces(self) -> tuple[str, ...]:
@@ -1987,6 +2056,47 @@ class _MultiPortVessel(_FaceFamilies):
             self.inlet = self.inlets[0]
         if len(self.outlets) == 1:
             self.outlet = self.outlets[0]
+        self._record_lists(inputs, outputs)
+
+    def _offered(self, port_name: str) -> list[str]:
+        """Return the faces the artwork offers a family port's role.
+
+        Parameters
+        ----------
+        port_name : str
+            Family port name.
+
+        Returns
+        -------
+        list[str]
+            Faces on the unit's own axes, the port's face first.
+        """
+        role = "inlet" if port_name.startswith("in_") else "outlet"
+        sym = self._registry_symbol()
+        menu = sym.port_faces.get(role, {}) if sym is not None else {}
+        home = self._faces[port_name]
+        return [home, *(face for face in menu if face != home)]
+
+    def _fits(self, faces: dict[str, str], frame: Frame) -> bool:
+        """Return whether the artwork can draw the families on faces.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Family port name to face, in drawn order.
+        frame : Frame
+            The unit's placed box.
+
+        Returns
+        -------
+        bool
+            True if the symbol builds with the families on ``faces``.
+        """
+        try:
+            self.symbol(faces)
+        except ValueError:
+            return False
+        return True
 
     def _connect(self, name: str, direction: str, face: str) -> Port:
         """Check a family port's face, then create the port.
@@ -2049,12 +2159,18 @@ class _MultiPortVessel(_FaceFamilies):
         resolved = _block_face(face, self.name)
         self._validate_face(role, canonical, resolved)
         self._faces[canonical] = resolved
-        self._port_faces[canonical] = resolved
+        self._stated.add(canonical)
         self._invalidate_layout()
         return self
 
-    def symbol(self) -> "Symbol":
-        """Return the symbol with the current port faces and overlays.
+    def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
+        """Return the symbol with the families on faces, and overlays.
+
+        Parameters
+        ----------
+        faces : dict[str, str], optional
+            Family port name to face, in drawn order; the declared
+            faces when omitted.
 
         Returns
         -------
@@ -2070,9 +2186,10 @@ class _MultiPortVessel(_FaceFamilies):
         from pandid.render.symbols import vessel_symbol
 
         overlays = tuple(getattr(self, "overlays", ()) or ())
+        on = self._faces if faces is None else faces
         walls, ports, scale = _drawn_walls(self, overlays)
         return _kept_on_walls(self, vessel_symbol(
-            self.kind, self.variant, tuple(self._faces.items()), overlays + walls, ports), scale)
+            self.kind, self.variant, tuple(on.items()), overlays + walls, ports), scale)
 
 
 class Vessel(_MultiPortVessel):
@@ -4885,6 +5002,7 @@ class Block(_FaceFamilies):
             self._add_connection(f"out_{i}", "outlet", face)
             for i, face in enumerate(out_faces, start=1)
         )
+        self._record_lists(inputs, outputs)
         self._check_box()
 
     def _add_connection(self, name: str, direction: str, face: str) -> Port:
@@ -5024,11 +5142,18 @@ class Block(_FaceFamilies):
         except ValueError:
             self._faces[port_name] = was
             raise
+        self._stated.add(port_name)
         self._invalidate_layout()
         return self
 
-    def symbol(self) -> "Symbol":
+    def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
         """Return this block's symbol, built to its connections.
+
+        Parameters
+        ----------
+        faces : dict[str, str], optional
+            Connection name to face, in drawn order; the declared faces
+            when omitted.
 
         Returns
         -------
@@ -5037,8 +5162,75 @@ class Block(_FaceFamilies):
         """
         from pandid.render.symbols import block_symbol
 
+        on = self._faces if faces is None else faces
         # Pass the name only when it sizes the box.
-        return block_symbol(tuple(self._faces.items()), "" if self.width is not None else self.tag)
+        return block_symbol(tuple(on.items()), "" if self.width is not None else self.tag)
+
+    def _offered(self, port_name: str) -> list[str]:
+        """Return every face of the box, the connection's own first.
+
+        Parameters
+        ----------
+        port_name : str
+            Connection name.
+
+        Returns
+        -------
+        list[str]
+            Faces on the box's own axes.
+        """
+        home = self._faces[port_name]
+        return [home, *(face for face in ("W", "E", "N", "S") if face != home)]
+
+    def _fits(self, faces: dict[str, str], frame: Frame) -> bool:
+        """Return whether the placed box holds each face's connections.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Connection name to face, in drawn order.
+        frame : Frame
+            The block's placed box.
+
+        Returns
+        -------
+        bool
+            True if no face is shorter than its connections need.
+        """
+        turned = int(frame.orientation) % 360 in (90, 270)
+        return self._crowded(faces, frame.w, frame.h, turned) is None
+
+    def _crowded(self, faces: dict[str, str], w: float, h: float,
+                 turned: bool) -> tuple[str, int, str, float, float] | None:
+        """Return the first face too short for its connections, or None.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Connection name to face, in drawn order.
+        w, h : float
+            Placed box size.
+        turned : bool
+            Whether the block is turned a quarter.
+
+        Returns
+        -------
+        tuple[str, int, str, float, float] or None
+            Face, connection count, box axis, its drawn length and the
+            length needed.
+        """
+        sym = self.symbol(faces)
+        for face, count in Counter(faces.values()).items():
+            # A single connection needs no spacing.
+            if count < 2:
+                continue
+            upright = face in ("W", "E")
+            along = sym.height if upright else sym.width
+            # A quarter turn swaps which box axis a face runs along.
+            drawn, axis = (w, "width") if upright == turned else (h, "height")
+            if drawn < along - 1e-9:
+                return face, count, axis, drawn, along
+        return None
 
     def _check_box(self) -> None:
         """Raise if the placed box crowds a face's connections.
@@ -5052,20 +5244,12 @@ class Block(_FaceFamilies):
         from pandid.portgeom import resolve_size
         from pandid.render.symbols import block_box_too_small
 
-        sym = self.symbol()
         placed = self.pin_
         w, h = resolve_size(self, placed)
         turned = int(getattr(placed, "orientation", 0) or 0) in (90, 270)
-        for face, count in Counter(self._faces.values()).items():
-            # A single connection needs no spacing.
-            if count < 2:
-                continue
-            upright = face in ("W", "E")
-            along = sym.height if upright else sym.width
-            # A quarter turn swaps which box axis a face runs along.
-            drawn, axis = (w, "width") if upright == turned else (h, "height")
-            if drawn < along - 1e-9:
-                raise block_box_too_small(self.name, face, count, axis, drawn, along, turned=turned)
+        crowded = self._crowded(self._faces, w, h, turned)
+        if crowded is not None:
+            raise block_box_too_small(self.name, *crowded, turned=turned)
 
 
 # Defined at run time only; type checkers still report a missing name.

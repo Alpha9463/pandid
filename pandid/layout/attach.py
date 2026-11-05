@@ -381,12 +381,13 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                     w: float, h: float,
                     obstacles: list[Box],
                     keepouts: list[Box],
-                    runs: tuple[Box, ...] = ()) -> tuple[float, float]:
+                    runs: tuple[Box, ...] = (),
+                    clearance: float = TOUCHING) -> tuple[float, float]:
     """Return the distance and angle to hang a balloon at.
 
     A balloon whose requested box straddles its stream tap keeps it. No
     candidate's box, moved to the balloon's pin, may come within
-    :data:`TOUCHING` of ``runs``.
+    ``clearance`` of ``runs``.
 
     Parameters
     ----------
@@ -406,6 +407,8 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
         Boxes a moved candidate is also tested against.
     runs : tuple[Box, ...], optional
         Runs to keep off, each as a flat box.
+    clearance : float, optional
+        Gap kept from ``runs``.
 
     Returns
     -------
@@ -434,7 +437,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
             y0 = box[1] if pin is None or pin.y is None else float(pin.y)
             drawn = (x0, y0, x0 + w, y0 + h)
             if not (any(_intrusion(box, o, gap) > 0.0 for o in against)
-                    or any(_intrusion(drawn, r, TOUCHING) > 0.0 for r in runs)):
+                    or any(_intrusion(drawn, r, clearance) > 0.0 for r in runs)):
                 return distance, angle
             # Rank fallbacks by the overlap validation reports.
             crowding = sum(_intrusion(box, o, -TOUCHING) for o in obstacles)
@@ -598,7 +601,7 @@ def place_attached(fs: "Flowsheet") -> bool:
             distance, angle = _clear_standoff(
                 inst, (tx, ty), ref, w, h,
                 (obstacles + keepouts if mounted else obstacles) + clear,
-                [] if mounted else keepouts, runs)
+                [] if mounted else keepouts, runs, fs._keep_clear)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis.

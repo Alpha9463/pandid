@@ -2577,6 +2577,120 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
 
 
+@pytest.mark.parametrize(("offset", "hung", "angle"), [(50, 35, 135), (60, 35, 90)])
+def test_a_balloon_hung_across_the_tapped_line_settles_clear_of_it(
+    offset: float, hung: float, angle: float
+) -> None:
+    """Settle a chain whose asked spot crosses the tapped line, with the line drawn straight."""
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("hung across")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=offset, angle=90)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=hung, angle=angle)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    assert {y for _, y in stream_path(line)} == {200.0}
+    assert [i.code for i in fs.validate() if i.code.startswith("route-")] == []
+
+
+def test_keeping_a_hung_balloon_further_off_keeps_a_settled_drawing() -> None:
+    """Keep the settled drawing the touch-clear step finds when a wider gap does worse."""
+    from pandid.layout.control import _flaws, _taps_off
+
+    fs = Flowsheet("wider gap")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=200)
+    fs.add(U.Vessel("V")).pin(x=300, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.7, offset=60, angle=270)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="N", offset=45, angle=90)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+    assert _flaws(fs)["tap-through-unit"] == 0
+
+
+def test_a_refused_retry_keeps_the_hung_balloons_it_started_from() -> None:
+    """Put back the drawing before a refused retry, not the one before every step."""
+    from pandid.layout.control import _flaws, _taps_off
+
+    fs = Flowsheet("refused retry")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=100)
+    fs.add(U.Vessel("V")).pin(x=300, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=70, angle=180)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="E", offset=100, angle=45)
+    pt = fs.add_instrument("PT", 1, sensing=line, at=0.3, offset=70)
+    fs.add_instrument("PIC", 1, near=pt, face="S", offset=50)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert id(pt) not in _taps_off(fs)
+    assert _flaws(fs)["tap-through-unit"] == 0
+
+
+def _chains_by_a_vessel(
+    product: tuple[float, float],
+    chains: list[tuple[float, float, float, str, float, float]],
+    vessel: tuple[float, float] = (300, 100),
+) -> Flowsheet:
+    """Return a routed line past a vessel, with a TT-TIC chain per (TT at, offset, angle, TIC face, offset, angle)."""
+    fs = Flowsheet("chains")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=product[0], y=product[1])
+    fs.add(U.Vessel("V")).pin(x=vessel[0], y=vessel[1])
+    line = fs.connect(feed.outlet, prod.inlet)
+    for n, (at, offset, angle, face, hung, hung_angle) in enumerate(chains, 1):
+        tt = fs.add_instrument("TT", n, sensing=line, at=at, offset=offset, angle=angle)
+        tic = fs.add_instrument("TIC", n, near=tt, face=face, offset=hung, angle=hung_angle)
+        fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+    return fs
+
+
+def test_keeping_hung_balloons_further_off_leaves_the_priced_fallback_to_run() -> None:
+    """Settle with every tap on its line, as the priced fallback does before any wider gap."""
+    from pandid.layout.control import _taps_off
+
+    fs = _chains_by_a_vessel(
+        (500, 200), [(0.5, 60, 90, "W", 35, 135), (0.3, 35, 135, "E", 25, 180)]
+    )
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+
+
+def test_keeping_hung_balloons_further_off_leaves_the_priced_remedy_judged_as_before() -> None:
+    """Keep the line off the vessel's wall, as the priced remedy does before any wider gap."""
+    fs = _chains_by_a_vessel((400, 100), [(0.7, 60, 135, "N", 70, 0), (0.7, 35, 0, "S", 45, 90)])
+
+    assert "route-along-unit" not in [i.code for i in fs.validate()]
+
+
+def test_a_second_route_starts_from_the_drawing_before_balloons_were_kept_further_off() -> None:
+    """Settle a second route() as it settles where no balloon was kept further off."""
+    from pandid.layout.control import _taps_off
+
+    chains: list[tuple[float, float, float, str, float, float]] = [
+        (0.8, 50, 90, "W", 35, 180),
+        (0.3, 50, 225, "S", 50, 90),
+        (0.2, 40, 135, "N", 100, 90),
+    ]
+    fs = _chains_by_a_vessel((600, 100), chains, vessel=(220, 200))
+    fs.route()
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+
+
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
 

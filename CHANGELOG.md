@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   electric. `add_control_loop()` infers its output line the same way, so a
   loop acting on a motor or solenoid valve, or on another controller, now
   draws an electric signal.
+- A counted `Block`, `Tank` or `Vessel` connection, as in `inputs=2`, moves to
+  the face toward its peer where that draws fewer bends; a list such as
+  `inputs=["W", "N"]` keeps every face as given, even on a single inlet.
 - `render()` lays out and checks a sheet faster, most of all when units are
   pinned by a nozzle.
 
@@ -68,6 +71,9 @@ These are removed in 0.4.0.
 - Lines drawn side by side no longer push a pipe into a unit body: a run moved
   off a shared track, and the segments either side of it, keep clear of every unit.
   A run with no clear track nearby stays on the track the router laid it on.
+- A balloon hung from a transmitter, as in `add_instrument("TIC", 1, near=tt,
+  face="S")`, is set at least an arrowhead clear of the line the transmitter
+  taps, so `route()` settles instead of drawing that line through the balloon.
 - `validate()` reports a `route-crosses-unit` warning for a slanted `via()` leg
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
@@ -82,9 +88,16 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- `route()` routes a line again where moving it off a shared track makes it
+  cross lines its route did not count, and keeps the new drawing only if it
+  has no more crossings, bends or findings.
 - A vessel whose supports, manholes or sockets widen its box draws every inlet
   or outlet on the wall it was given, so
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
+- A valve's actuator sits on the body's centre line, so a balloon added with
+  `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
+  nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
+  `port_offset()` can differ in the second decimal.
 
 ## [0.2.0] - 2026-11-05
 

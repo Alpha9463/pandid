@@ -115,9 +115,8 @@ def main():
     cond.pin(x=col_axis - cond_w / 2, y=56, mirrored="y")
 
     # orientation=90 puts the tee's run down the page, its branch west.
-    drum_x, drum_y, drum_w = 700.0, 100.0, 110.0
-    drum.pin(x=drum_x, y=drum_y)
-    drum_draw_x = drum_x + (68 / 91.5) * drum_w      # liquid draw down the shell
+    drum.pin(x=700.0, y=100.0)
+    drum_draw_x = pinned_x(drum, "out_1")            # liquid draw down the shell
     refl.pin(x=drum_draw_x - tee_w / 2, y=col_reflux_y - tee_w / 2, orientation=90)
     ethanol.pin(x=1330, y=275)
 

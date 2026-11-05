@@ -605,8 +605,9 @@ def test_port_faces():
             ],
         }
     )
-    # ``inlet`` is stored under its canonical name ``in_1``.
-    assert fs.units[0]._port_faces == {"in_1": "N"}
+    # ``inlet`` is moved under its canonical name ``in_1``.
+    assert fs.units[0].face("in_1") == "N"
+    assert fs.to_dict()["units"][0]["port_faces"] == {"in_1": "N"}
 
 
 def test_a_tanks_face_list_round_trips_through_a_spec():

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, NamedTuple
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
 
-    from pandid.units import Unit
+    from pandid.units import Unit, _FaceFamilies
 
 
 def _sym(unit: "Unit"):
@@ -93,6 +93,9 @@ COMPASS: dict[str, tuple[int, int]] = {
     "NE": (1, -1), "NW": (-1, -1), "SE": (1, 1), "SW": (-1, 1),
 }
 
+#: The four faces of a box.
+COMPASS_FACES = ("N", "E", "S", "W")
+
 
 def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
     """Return the faces a port may be drawn on.
@@ -115,7 +118,86 @@ def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
         placed = unit.pin_ if unit.pin_ is not None else unit.frame
     rot, mx, my = _xform(placed) if placed is not None else (0, False, False)
     w, h = resolve_size(unit, placed)
-    return list(_drawn_placements(unit, port_name, w, h, rot, mx, my))
+    return list(_drawn_placements(unit, port_name, w, h, rot, mx, my,
+                                  _placed_sym(unit, placed)))
+
+
+def drawn_side(face: str, rot: int, mirrored: bool, mirror_y: bool) -> str:
+    """Return the face a symbol's own face is drawn on when placed.
+
+    Parameters
+    ----------
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"`` on the symbol's own axes.
+    rot : int
+        Clockwise turn in degrees: 0, 90, 180 or 270.
+    mirrored, mirror_y : bool
+        Left-right and top-bottom flips.
+
+    Returns
+    -------
+    str
+        Face as drawn.
+    """
+    px, py = {"N": (0.5, 0.0), "S": (0.5, 1.0), "W": (0.0, 0.5), "E": (1.0, 0.5)}[face]
+    bx, by, bw, bh = symbol_to_box(px, py, 1.0, 1.0, rot, mirrored, mirror_y)
+    return outward_dir(bx, by, bw, bh)
+
+
+def family_faces(unit: "_FaceFamilies", placed) -> dict[str, str] | None:
+    """Return a unit's family faces with the engine's choices applied.
+
+    A lone port its symbol offers a menu of faces is drawn from that
+    menu and is left out.
+
+    Parameters
+    ----------
+    unit : _FaceFamilies
+        Block, tank or vessel.
+    placed : Frame or None
+        Placement whose ``port_faces`` holds the choices, as drawn.
+
+    Returns
+    -------
+    dict[str, str] or None
+        Port name to face on the unit's own axes, in drawn order, or
+        None if the placement moves no family port.
+    """
+    chosen = getattr(placed, "port_faces", None)
+    if not chosen:
+        return None
+    rot, mx, my = _xform(placed)
+    own = {drawn_side(face, rot, mx, my): face for face in COMPASS_FACES}
+    menus = _sym(unit).port_faces
+    moved = {name: own[face] for name, face in chosen.items()
+             if name in unit._faces and name not in unit._stated
+             and len(menus.get(name, ())) < 2 and own[face] != unit._faces[name]}
+    return {**unit._faces, **moved} if moved else None
+
+
+def _placed_sym(unit: "Unit", placed):
+    """Return the symbol a placement draws a unit with.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to look up.
+    placed : Pin, Frame, _Slot or None
+        Placement, whose ``port_faces`` may move family ports.
+
+    Returns
+    -------
+    Symbol
+        The unit's symbol, with its families on the chosen faces.
+    """
+    if getattr(placed, "port_faces", None):
+        from pandid.units import _FaceFamilies
+
+        if isinstance(unit, _FaceFamilies):
+            faces = family_faces(unit, placed)
+            if faces is not None:
+                return unit.symbol(faces)
+    return _sym(unit)
 
 
 def unreachable_face(unit: "Unit", port_name: str, face: str,
@@ -146,8 +228,8 @@ def unreachable_face(unit: "Unit", port_name: str, face: str,
 
 
 def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
-                      rot: int, mirrored: bool, mirror_y: bool
-                      ) -> dict[str, tuple[float, float]]:
+                      rot: int, mirrored: bool, mirror_y: bool,
+                      sym=None) -> dict[str, tuple[float, float]]:
     """Return a port's drawn point on each face it may take.
 
     Parameters
@@ -162,13 +244,16 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
         Clockwise turn in degrees: 0, 90, 180 or 270.
     mirrored, mirror_y : bool
         Left-right and top-bottom flips.
+    sym : Symbol, optional
+        Symbol to read; the unit's own when omitted.
 
     Returns
     -------
     dict[str, tuple[float, float]]
         Face to point from the box's top-left, own face first.
     """
-    sym = _sym(unit)
+    if sym is None:
+        sym = _sym(unit)
     port_name = unit._canonical_port_name(port_name)
     anchor = unit._symbol_anchor(port_name)
     menu = (getattr(sym, "port_faces", None) or {}).get(anchor)
@@ -579,7 +664,8 @@ def _face_and_point(unit: "Unit", frame, port_name: str
     want = (getattr(unit, "_port_faces", None) or {}).get(canonical)
     if want is None:
         want = (getattr(frame, "port_faces", None) or {}).get(canonical)
-    placements = _drawn_placements(unit, port_name, frame.w, frame.h, rot, mirrored, mirror_y)
+    placements = _drawn_placements(unit, port_name, frame.w, frame.h, rot, mirrored,
+                                   mirror_y, _placed_sym(unit, frame))
     if want is not None and want not in placements:
         raise unreachable_face(unit, port_name, want, list(placements))
     return next(iter(placements.items())) if want is None else (want, placements[want])
