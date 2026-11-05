@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
   (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
   rotor on its shaft, or `None`.
+- `CentrifugalFan` and `AxialFan` draw those fans, and
+  `Blower(variant="general")` draws the ISO 10628-2 fan.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -60,6 +62,9 @@ These are removed in 0.4.0.
 - `duty` on `Reactor(variant="jacketed")`, which now draws `jacket_in`. Use
   `JacketedReactor`, with `jacket_in` for the jacket's supply and `jacket_out`
   for its return.
+- Reassigning `variant` on a built `Valve`, `Vessel`, `Tank`, `Filter`,
+  `HeatExchanger`, `Reactor` or `Separator`, whose ports or faces come from it.
+  Build a new unit with `variant=`.
 
 ### Fixed
 
@@ -113,6 +118,8 @@ These are removed in 0.4.0.
 - A vessel whose supports, manholes or sockets widen its box draws every inlet
   or outlet on the wall it was given, so
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
+- `line.color` and `line.dasharray` set after `on=` has split the line style
+  the whole line, including the pipework of a valve station on it.
 - A valve's actuator sits on the body's centre line, so a balloon added with
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
