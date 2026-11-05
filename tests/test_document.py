@@ -5,7 +5,19 @@ from typing import Any
 import pytest
 
 from _render_cases import SCENARIOS
-from pandid import Document, Feed, Flowsheet, Product, Stream, Tank, TitleBlock, Unit, Valve, Vessel
+from pandid import (
+    Document,
+    Feed,
+    Flowsheet,
+    Product,
+    Reducer,
+    Stream,
+    Tank,
+    TitleBlock,
+    Unit,
+    Valve,
+    Vessel,
+)
 
 
 def _sheet(name: str, number: str, *units: Unit) -> Flowsheet:
@@ -117,6 +129,23 @@ def test_a_connector_compares_the_line_through_a_valve_by_its_whole_run(size: st
         assert issue.code == "connector-line-mismatch"
         assert "line number '6-P-1001' on PFD-001 and '4-P-1001' on PFD-002" in issue.message
         assert "size '6' on PFD-001 and '4' on PFD-002" in issue.message
+
+
+def test_a_connector_compares_the_size_stated_at_its_own_segment():
+    """Check that a size changed past a reducer is the one compared at the flag."""
+    a = _sheet("Crude Unit", "PFD-001")
+    feed, reducer = a.add(Feed("Crude Oil")), a.add(Reducer("R-1"))
+    out = a.add(Product("Crude", reference="PFD-002"))
+    a.connect(feed.outlet, reducer.inlet, name="P-1001", size="6", service="P")
+    a.connect(reducer.outlet, out.inlet, size="4")
+    b = _sheet("Residue Unit", "PFD-002")
+    into, residue = b.add(Feed("Crude", reference="PFD-001")), b.add(Product("Residue"))
+    b.connect(into.outlet, residue.inlet, name="P-1001", size="6", service="P")
+
+    (issue,) = Document([a, b]).validate()
+
+    assert issue.code == "connector-line-mismatch"
+    assert "size '4' on PFD-001 and '6' on PFD-002" in issue.message
 
 
 def test_one_tag_on_two_kinds_of_equipment_is_an_error():
