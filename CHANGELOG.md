@@ -72,6 +72,9 @@ These are removed in 0.4.0.
 - Lines drawn side by side no longer push a pipe into a unit body: a run moved
   off a shared track, and the segments either side of it, keep clear of every unit.
   A run with no clear track nearby stays on the track the router laid it on.
+- A balloon hung from a transmitter, as in `add_instrument("TIC", 1, near=tt,
+  face="S")`, is set at least an arrowhead clear of the line the transmitter
+  taps, so `route()` settles instead of drawing that line through the balloon.
 - `validate()` reports a `route-crosses-unit` warning for a slanted `via()` leg
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
