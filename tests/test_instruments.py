@@ -2642,6 +2642,32 @@ def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     assert tic.frame.y == pytest.approx(500)
 
 
+@pytest.mark.parametrize(("face", "x", "y"), [("W", 210, 250), ("E", 280, 300)])
+def test_a_balloon_hung_on_a_pinned_balloon_keeps_off_its_tap_line(
+    face: str, x: float, y: float
+) -> None:
+    """Check that LIC hung on a pinned LT is not drawn across the LT's own tap line."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("chain")
+    drum = fs.add(U.Vessel("D-101"))
+    pump = fs.add(U.Pump("P-101"))
+    fs.connect(drum.outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Vessel("D-102")).inlet)
+    lt = fs.add_instrument("LT", 101, sensing=drum, face=face).pin(x=x, y=y)
+    lic = fs.add_instrument("LIC", 101, near=lt, face="N")
+    fs.route()
+
+    ((inst, tap, centre),) = tap_lines(fs)
+    assert inst is lt
+    route, box = tap_route(inst, tap, centre), unit_box(lic, frame_of(lic))
+    assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:])), (
+        f"{route} crosses LIC-101 at {box}"
+    )
+
+
 def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
     """Keep the first drawing when keeping TIC off its line adds a clash.
 

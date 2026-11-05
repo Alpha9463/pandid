@@ -644,6 +644,9 @@ class Flowsheet:
         # whether an unfaced balloon on equipment may leave its E face.
         self._priced = False
         self._free_faces = False
+        # Whether a balloon hung from a balloon keeps off that balloon's
+        # tap line.
+        self._off_leaders = False
         # Whether the router routes again each stream whose separated route
         # crosses lines its search did not price, and whether the routes
         # drawn hold such a route.
@@ -2607,9 +2610,9 @@ class Flowsheet:
         tuple
             State for :meth:`_put_state`.
         """
-        return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
-                        self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out, self._tees_away, self._fannable))
+        return _copied((self._geometry(), self._unhung, self._free_faces, self._off_leaders,
+                        self._exit_tight, self._mounted_layout, self._widened,
+                        self._stack_spans, self._rows_out, self._tees_away, self._fannable))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2619,9 +2622,9 @@ class Flowsheet:
         state : tuple
             What :meth:`_state` returned.
         """
-        (geometry, self._unhung, self._free_faces, self._exit_tight,
-         self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out, self._tees_away, self._fannable) = _copied(state)
+        (geometry, self._unhung, self._free_faces, self._off_leaders,
+         self._exit_tight, self._mounted_layout, self._widened,
+         self._stack_spans, self._rows_out, self._tees_away, self._fannable) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2640,15 +2643,16 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
-        # Start from main's faces for unfaced balloons.
-        self._free_faces = False
+        # Start from main's faces for unfaced balloons, and main's balloons.
+        self._free_faces = self._off_leaders = False
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         from pandid.routing import DefaultRouter
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES, TOUCHING, _chained, free_face
+        from pandid.layout.attach import (MAX_PLACEMENT_PASSES, TOUCHING, _chained, free_face,
+                                          on_leader)
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
         from pandid.layout.halo import pinned_balloons
@@ -2735,7 +2739,7 @@ class Flowsheet:
                 when omitted.
             """
             prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
-            free = self._free_faces
+            free, leaders = self._free_faces, self._off_leaders
             try:
                 redo()
                 kept = _taps_off(self) <= off and not any(
@@ -2743,7 +2747,7 @@ class Flowsheet:
             except Exception:
                 kept = False
             if not kept:
-                self._free_faces = free
+                self._free_faces, self._off_leaders = free, leaders
                 self._put_geometry(prior, keep_manual=False)
                 self._unhung = unhung
 
@@ -2802,6 +2806,12 @@ class Flowsheet:
                 self._exit_clear = False
             settle_best()
 
+        def off_leaders() -> None:
+            """Settle the sheet with each balloon hung from a balloon kept
+            off that balloon's tap line."""
+            self._off_leaders = True
+            settle_best()
+
         def repinned() -> None:
             """Lay out with each balloon pinned on both axes kept clear,
             and settle."""
@@ -2828,6 +2838,11 @@ class Flowsheet:
                 keep_if_better(repinned, flaws)
         if tries and self._undercharged:
             keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
+        if tries and on_leader(self):
+            score = _score(self)[0]
+            # Keep only a drawing with fewer tap lines through units.
+            score["tap-through-unit"] -= 1
+            keep_if_better(off_leaders, score, lambda fs: _score(fs)[0])
         self._route_stale = False
 
     def _geometry(self) -> tuple:

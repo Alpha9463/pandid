@@ -119,6 +119,8 @@ These are removed in 0.4.0.
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- A balloon hung on another balloon, such as `fs.add_instrument("LIC", 101,
+  near=lt)` on a pinned `LT`, is no longer drawn across that balloon's tap line.
 
 ## [0.2.0] - 2026-11-05
 
