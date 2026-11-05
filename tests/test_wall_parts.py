@@ -108,6 +108,17 @@ def test_a_socket_is_an_outlet_a_line_connects_to_where_it_is_drawn():
     assert x == pytest.approx(frame.x + frame.w)
 
 
+def test_a_vessel_with_wall_parts_pins_by_a_nozzle():
+    """Check that a vessel with a manhole lands its pinned nozzle on the pin."""
+    fs = Flowsheet("pinned")
+    vessel = fs.add(Vessel("D-101", manholes=[("E", 0.3)])).pin(x=200, y=100, port="inlet")
+    fs.connect(fs.add(Feed("Feed")).outlet, vessel.inlet)
+    fs.to_svg(diagram="p&id")
+    frame = vessel.frame
+    assert frame is not None
+    assert port_point(vessel, frame, "inlet") == pytest.approx((200, 100))
+
+
 def test_a_socket_takes_no_line_in():
     """Check that a socket refuses to be a line's destination."""
     fs = Flowsheet("sockets")

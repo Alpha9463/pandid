@@ -1632,7 +1632,7 @@ def _drawn_walls(unit: "Unit", overlays: tuple) -> tuple[tuple, tuple, tuple[flo
     if not manholes and not sockets:
         return (), (), (1.0, 1.0)
     # A quarter turn swaps the stated sizes onto the drawing's axes.
-    turn = getattr(unit, "pin_", None)
+    turn = getattr(unit, "_pin", None)
     quarter = int(getattr(turn, "orientation", 0) or 0) in (90, 270)
     size = (unit.height, unit.width) if quarter else (unit.width, unit.height)
     return wall_overlays(unit.kind, unit.variant, overlays, manholes, sockets, size,
