@@ -72,7 +72,7 @@ def boxes_overlap(
 def segment_crosses_box(
     a: tuple[float, float], b: tuple[float, float], box: tuple[float, float, float, float]
 ) -> bool:
-    """Return whether an orthogonal segment enters a box interior.
+    """Return whether a segment enters a box interior.
 
     Parameters
     ----------
@@ -88,7 +88,7 @@ def segment_crosses_box(
     bool
         True if the segment enters the box. A segment within
         ``_SQUARE_TOL`` of an axis is read as on it; any other is
-        False.
+        clipped to the box.
     """
     bx0, by0, bx1, by1 = box
     if abs(a[0] - b[0]) < _SQUARE_TOL:
@@ -103,7 +103,14 @@ def segment_crosses_box(
             and min(a[0], b[0]) < bx1 - _BODY_TOL
             and max(a[0], b[0]) > bx0 + _BODY_TOL
         )
-    return False
+    lo, hi = 0.0, 1.0
+    for start, end, low, high in ((a[0], b[0], bx0, bx1), (a[1], b[1], by0, by1)):
+        t0 = (low + _BODY_TOL - start) / (end - start)
+        t1 = (high - _BODY_TOL - start) / (end - start)
+        if end < start:
+            t0, t1 = t1, t0
+        lo, hi = max(lo, t0), min(hi, t1)
+    return lo < hi
 
 
 def _same_point(a: tuple[float, float], b: tuple[float, float]) -> bool:

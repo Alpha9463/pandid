@@ -1245,9 +1245,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     "warning", "route-diagonal",
                     f"stream {s.name} is drawn on the slant, ({x1:g}, {y1:g}) to "
                     f"({x2:g}, {y2:g}){more}. ISO 15519-1:2010 12.1 has connecting "
-                    f"lines oriented horizontally or vertically, and a diagonal is "
-                    f"also invisible to the check that reports a line crossing a "
-                    f"vessel. {cure}"))
+                    f"lines oriented horizontally or vertically. {cure}"))
 
             length = sum(abs(pts[k + 1][0] - pts[k][0]) + abs(pts[k + 1][1] - pts[k][1])
                          for k in range(len(pts) - 1))
