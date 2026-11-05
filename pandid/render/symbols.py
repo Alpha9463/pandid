@@ -20,7 +20,7 @@ from typing import Callable
 from pandid._checks import suggest
 from pandid.portgeom import outward_dir
 from pandid.render.iso_parts import _DASH_LONG, _SQ2
-from pandid.render.weights import LineWeight
+from pandid.render.weights import M, LineWeight
 from pandid.streams import SIGNAL_KINDS
 
 # Placements closer than this are the same point.
@@ -2888,6 +2888,32 @@ _FLOT_PORTS = {
 }
 
 
+# ISO 10628-2 items 1.8 and 1.9: walls 6 M apart and 6 M deep over a
+# 3 M cone, fed through the west wall a module below the rim and
+# emptied at the apex. Item 1.9 closes the top; item 1.8 leaves it open.
+_BIN_PORTS = {"feed": (0.0, M), "discharge": (3 * M, 9 * M)}
+_BIN_WALLS = f"M 0 0 L 0 {6 * M:g} L {3 * M:g} {9 * M:g} L {6 * M:g} {6 * M:g} L {6 * M:g} 0"
+
+# Item 1.9, X2062, closed tank with conical bottom, vented at the
+# middle of its roof.
+_SILO = Symbol(
+    svg=f'<g id="sym_silo"><path d="{_BIN_WALLS} Z" {_OUTLINE}/></g>',
+    width=6 * M, height=9 * M,
+    ports={**_BIN_PORTS, "vent": (3 * M, 0.0)},
+    gravity_fixed=True,
+    iso_reg="X2062",
+)
+
+# Item 1.8, 2064, bunker with conical bottom.
+_BUNKER = Symbol(
+    svg=f'<g id="sym_silo_bunker"><path d="{_BIN_WALLS}" {_INK}/></g>',
+    width=6 * M, height=9 * M,
+    ports=dict(_BIN_PORTS),
+    gravity_fixed=True,
+    iso_reg="2064",
+)
+
+
 # Rotary kiln shell: 26 units of fall over 180 of length.
 _KILN_W = 180.0
 _KILN_BORE = 28.0
@@ -3519,6 +3545,8 @@ class SymbolRegistry:
         self._register_evaporators()
         self._register_crystallizer()
         self._register_flotation_cell()
+        self.register("silo", _SILO)
+        self.register("silo", _BUNKER, "bunker")
         self._register_kilns()
         self._register_steam_trap()
 

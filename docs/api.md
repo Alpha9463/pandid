@@ -106,6 +106,7 @@ The names depend on the class and variant. Common patterns are:
   names the stirrer in its draft tube, or `None` for none.
 - A `FlotationCell` uses `feed`, `concentrate`, `tailings` and `air`;
   `agitator=` names the rotor on its shaft, or `None` for none.
+- A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.
 - Reactors use `feed`, `outlet`, `vent` and `duty`. A `JacketedReactor` has

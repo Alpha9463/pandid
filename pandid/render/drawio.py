@@ -373,6 +373,10 @@ _APPROXIMATIONS = {
         None, "the dished head, the cone and leg, the draft tube and the baffle"),
     ("flotation_cell", "default"): _Approximation(
         None, "the open tank, the launder outside its lip, the air standpipe and the froth"),
+    ("silo", "default"): _Approximation(
+        None, "the cone under the shell"),
+    ("silo", "bunker"): _Approximation(
+        None, "the open top and the cone under the walls"),
     ("kiln", "default"): _Approximation(
         None, "the shell's fall from feed end to discharge, its riding rings and its drive"),
     ("kiln", "fluidized_bed"): _Approximation(

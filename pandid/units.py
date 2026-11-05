@@ -41,6 +41,7 @@ __all__ = [
     "Separator",
     "Thickener",
     "FlotationCell",
+    "Silo",
     "Crystallizer",
     "Absorber",
     "Stripper",
@@ -4219,6 +4220,32 @@ class FlotationCell(Unit):
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
                              lambda name, _body: flotation_overlays(name)))
+
+
+class Silo(_VariantPorted):
+    """Silo or bunker for bulk solids, with a conical bottom.
+
+    ``"default"`` draws the closed silo of ISO 10628-2 item 1.9, with a
+    ``vent`` in its roof; ``"bunker"`` draws the open bunker of item
+    1.8, with none. Solids enter the west wall at ``feed`` and leave the
+    cone at ``discharge``. ``validate`` reports a turned silo as
+    ``gravity-turned``. Parameters are those of :class:`Unit`.
+    """
+
+    feed: Port
+    vent: Port
+    discharge: Port
+
+    kind = "silo"
+    PORTS: list[tuple[str, str, str]] = []
+    _DEFAULT_PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vent", "outlet", "vapor"),
+        ("discharge", "outlet", "process"),
+    ]
+    _VARIANT_PORTS = {
+        "bunker": [("feed", "inlet", "feed"), ("discharge", "outlet", "process")],
+    }
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
