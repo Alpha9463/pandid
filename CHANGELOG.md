@@ -55,6 +55,8 @@ These are removed in 0.4.0.
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
   connected with `draw_as_recycle=True`, before or after the sheet is rendered.
+- A controller is not hung off its valve's actuator where its `via()` line would
+  pass through it more often than where it stands unhung.
 - A tank or vessel with several inlets or outlets on one wall, such as
   `Tank("TK-1", outputs=["S"] * 4)`, gives each its own nozzle clear of the
   vent, relief and drain on that wall.
