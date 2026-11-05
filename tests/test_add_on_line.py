@@ -6,7 +6,7 @@ import pytest
 
 from pandid import Feed, Flowsheet, Mixer, Product, Reactor, Splitter, Stream, Tee, Valve
 from pandid.layout.mounted import mounted_runs
-from pandid.layout.quality import measure_final
+from _quality import measure_final
 from pandid.portgeom import port_point
 from pandid.state import State
 

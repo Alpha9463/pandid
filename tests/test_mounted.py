@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from pandid import ControlValve, Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
-from pandid.layout.quality import measure_final
+from _quality import measure_final
 from pandid.portgeom import port_point
 
 
