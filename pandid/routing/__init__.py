@@ -285,6 +285,10 @@ class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         """Route and separate the sheet's automatic streams.
 
+        Where the sheet asks for a re-check, each stream whose separated
+        route crosses more of the lines routed before it than its search
+        priced is routed again against those lines as separated, each run
+        charged its unpriced crossings, and the sheet separated again.
         Outside layout, and unless the sheet asks for none, laterals that
         cross, share a run or wind are then laid on ordered lanes
         (:func:`pandid.routing.lanes.relane`).
@@ -310,7 +314,7 @@ class DefaultRouter:
         from pandid.render.svg import tap_lines, tap_route
         from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
-        from pandid.routing.astar import TOUCH_PENALTY, CrossingIndex, find_path
+        from pandid.routing.astar import CROSSING_PENALTY, TOUCH_PENALTY, CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
@@ -338,17 +342,22 @@ class DefaultRouter:
         # Ends of each found route's stand-offs.
         escapes: dict[int, tuple[tuple[float, float], tuple[float, float]]] = {}
 
-        def crossable(stream: "Stream") -> "CrossingIndex":
+        # Each searched stream's crossing index and graph path.
+        searched: dict[int, tuple["CrossingIndex", list[tuple[float, float]]]] = {}
+
+        def crossable(stream: "Stream", lines: "dict[int, list[tuple[float, float]]] | None") -> "CrossingIndex":
             """Return the drawn lines a route for a stream would cross.
 
             The index holds every tap line but those on the stream
-            itself, and a preview of every routed stream's separated
-            waypoints.
+            itself, and every stream routed before it.
 
             Parameters
             ----------
             stream : Stream
-                Stream about to be routed.
+                Stream to route.
+            lines : dict or None
+                Waypoints of the routed streams by ``id(stream)``, or
+                ``None`` for a preview of them separated.
 
             Returns
             -------
@@ -359,18 +368,35 @@ class DefaultRouter:
             for host, points in taps:
                 if host is not stream:
                     _record_route(index, points, True)
-            preview = preview_separated_waypoints(routed, fs.units)
+            if lines is None:
+                lines = preview_separated_waypoints(routed, fs.units)
             for s in routed:
+                if s is stream:
+                    break
                 assert s.route is not None
-                wp = preview.get(id(s), s.route.waypoints)
-                _record_route(index, wp, s.route.manual)
+                _record_route(index, lines.get(id(s), s.route.waypoints), s.route.manual)
             return index
 
-        for stream in fs.streams:
-            if stream.route and stream.route.manual:
-                routed.append(stream)
-                continue
+        def route_one(stream: "Stream", lines: "dict[int, list[tuple[float, float]]] | None") -> bool:
+            """Route one automatic stream.
 
+            Parameters
+            ----------
+            stream : Stream
+                Stream to route.
+            lines : dict or None
+                What :func:`crossable` draws the routed streams from.
+
+            Returns
+            -------
+            bool
+                Whether the stream was routed.
+
+            Warns
+            -----
+            UserWarning
+                If an end has no frame or anchor; the stream is skipped.
+            """
             src_u = stream.source.owner
             dst_u = stream.dest.owner
             if src_u.frame is None or dst_u.frame is None:
@@ -381,7 +407,7 @@ class DefaultRouter:
                     f"Call layout() before route().",
                     stacklevel=2,
                 )
-                continue
+                return False
 
             s_key, d_key = (src_u.name, stream.source.name), (dst_u.name, stream.dest.name)
             start, goal = graph.port_anchors.get(s_key), graph.port_anchors.get(d_key)
@@ -393,7 +419,7 @@ class DefaultRouter:
                     f"graph carries no anchor for port {missing}.",
                     stacklevel=2,
                 )
-                continue
+                return False
 
             start_dir, goal_dir = graph.port_dirs[s_key], graph.port_dirs[d_key]
             start_proj, goal_proj = graph.port_projs[s_key], graph.port_projs[d_key]
@@ -416,7 +442,7 @@ class DefaultRouter:
                     clear_stubs = False
 
             is_recycle = getattr(stream, "is_recycle", False)
-            crossing_index = crossable(stream)
+            crossing_index = crossable(stream, lines)
             # A run beside only the stream's own ends goes uncharged.
             own = [run for run, units in hugging.items()
                    if units <= {id(src_u), id(dst_u)}]
@@ -435,11 +461,13 @@ class DefaultRouter:
             if path:
                 escapes[id(stream)] = (start_proj, goal_proj)
                 path = [start] + path + [goal]
+                searched[id(stream)] = (crossing_index, path)
                 # Penalise used segments for later streams.
                 for u_node, v_node in zip(path, path[1:]):
                     edge_penalties[(u_node, v_node)] += 2000.0
                     edge_penalties[(v_node, u_node)] += 2000.0
             else:
+                searched[id(stream)] = (crossing_index, [])
                 path = _fallback_path(
                     start, start_proj, goal_proj, goal, graph.obstacles, crossing_index
                 )
@@ -460,11 +488,49 @@ class DefaultRouter:
                 simplified.append(path[-1])
 
             stream.route = Route(waypoints=simplified, used_fallback=not path_found)
-            routed.append(stream)
+            return True
+
+        for stream in fs.streams:
+            if (stream.route and stream.route.manual) or route_one(stream, None):
+                routed.append(stream)
 
         from pandid.routing.lanes import relane
         from pandid.routing.separation import separate_streams
+        found = {id(s): s.route.waypoints for s in routed if id(s) in searched and s.route}
         separate_streams(fs)
+        drawn = {id(s): s.route.waypoints for s in routed if s.route}
+        # Crossings each separated run draws beyond those its search priced.
+        unpriced = []
+        if not fs._laying_out:
+            for s in routed:
+                if id(s) in found:
+                    index, real = searched[id(s)][0], crossable(s, drawn)
+                    runs = zip(drawn[id(s)], drawn[id(s)][1:], found[id(s)], found[id(s)][1:])
+                    extra = [real.crossings_along(a, b) - index.crossings_along(c, d)
+                             for a, b, c, d in runs]
+                    if sum(extra) > 0:
+                        unpriced.append((s, extra))
+        fs._undercharged = bool(unpriced)
+        if unpriced and fs._recheck:
+            for s in routed:
+                if id(s) in found:
+                    assert s.route is not None
+                    s.route.waypoints = found[id(s)]
+            for s, extra in unpriced:
+                nodes = searched[id(s)][1]
+                after = {a: b for a, b in zip(nodes, nodes[1:]) if a != b}
+                # Charge each run's unpriced crossings on its first edge, and
+                # lift the charge on the runs the stream used.
+                charges = {(c, after[c]): CROSSING_PENALTY * n
+                           for c, n in zip(found[id(s)], extra) if n > 0 and c in after}
+                for a, b in after.items():
+                    for edge in ((a, b), (b, a)):
+                        edge_penalties[edge] += charges.get((a, b), 0.0) - 2000.0
+                route_one(s, drawn)
+                for (a, b), cost in charges.items():
+                    edge_penalties[(a, b)] -= cost
+                    edge_penalties[(b, a)] -= cost
+            separate_streams(fs)
         # Keep the routes layout sets pipe furniture on.
         if fs._lanes and not fs._laying_out and relane(fs, escapes, graph):
             fs._relaned = True
