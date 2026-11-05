@@ -491,6 +491,12 @@ class Unit:
         """
         return "" if self.balloon is not None else self.name
 
+    def _check_parts(self) -> None:
+        """Refuse parts this unit's rules forbid on its variant.
+
+        A plain unit refuses none.
+        """
+
     def repeats(self, other: "Unit") -> bool:
         """Return whether this unit is another drawing of ``other``.
 
@@ -1542,6 +1548,7 @@ def _recompose(unit: "Unit", old: str) -> None:
                 f"instead"
             )
         _compose_onto(unit, *unit._composition)
+        unit._check_parts()
         added = current[len(built):]
         if added:
             drawn = _placed(stated, unit.variant) + added
@@ -4182,6 +4189,28 @@ class Reactor(Unit):
             else None,
         }
 
+    def _check_parts(self) -> None:
+        """Refuse an agitator on a body wider than it is tall.
+
+        Raises
+        ------
+        ValueError
+            If the reactor has an agitator and its body is not upright.
+        """
+        from pandid.render.symbols import default_registry
+
+        if self.agitator is None:
+            return
+        # An agitator hangs from the head of an upright body.
+        bodies = {v: default_registry.get(self.kind, v)
+                  for v in default_registry.variants(self.kind)}
+        upright = [v for v, body in bodies.items() if body.height >= body.width]
+        if self.variant not in upright:
+            raise ValueError(
+                f"{self.name}: {type(self).__name__} variant {self.variant!r} cannot carry "
+                f"agitator={self.agitator!r}; variants that can: {', '.join(upright)}"
+            )
+
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
@@ -4202,7 +4231,6 @@ class Reactor(Unit):
             self._add_port(*spec)
         # Internals are drawn first, under the stirrer shaft.
         from pandid.render.iso_parts import agitator_overlays, internals_overlays
-        from pandid.render.symbols import default_registry
 
         _compose_onto(
             self,
@@ -4210,16 +4238,8 @@ class Reactor(Unit):
             # Placed by the body's aspect.
             ("agitator", agitator, lambda name, body: agitator_overlays(name, self.kind, body)),
         )
+        self._check_parts()
         if agitator is not None:
-            # An agitator hangs from the head of an upright body.
-            bodies = {v: default_registry.get(self.kind, v)
-                      for v in default_registry.variants(self.kind)}
-            upright = [v for v, body in bodies.items() if body.height >= body.width]
-            if self.variant not in upright:
-                raise ValueError(
-                    f"{name}: {type(self).__name__} variant {self.variant!r} cannot carry "
-                    f"agitator={agitator!r}; variants that can: {', '.join(upright)}"
-                )
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
