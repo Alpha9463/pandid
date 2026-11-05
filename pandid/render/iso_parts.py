@@ -7,8 +7,12 @@ places each part on a body as fractions of the body's box.
 
 import functools
 import math
+from typing import TYPE_CHECKING
 
 from pandid.render.weights import M, LineWeight
+
+if TYPE_CHECKING:
+    from pandid.render.symbols import Overlay, Symbol
 
 #: Stroke width of every part, in drawing units.
 PART_STROKE = LineWeight.DETAIL.width
@@ -735,7 +739,8 @@ _CLUTTERED = {
 }
 
 
-def wall_point(kind: str, variant: str, face: str, fraction: float, what: str) -> float:
+def wall_point(kind: str, variant: str, face: str, fraction: float, what: str,
+               body: "Symbol | None" = None) -> float:
     """Return where a fraction of the way along a wall falls on a body.
 
     Parameters
@@ -751,6 +756,8 @@ def wall_point(kind: str, variant: str, face: str, fraction: float, what: str) -
     what : str
         The unit and the part, for messages, such as
         ``"D-101: the manhole at ('E', 0.3)"``.
+    body : Symbol, optional
+        The body drawn; the registered one if omitted.
 
     Returns
     -------
@@ -764,7 +771,7 @@ def wall_point(kind: str, variant: str, face: str, fraction: float, what: str) -
         it.
     """
     from pandid.render.symbols import default_registry, pinned
-    body = default_registry.get(kind, variant)
+    body = body or default_registry.get(kind, variant)
     walls = [f for f, (lo, hi) in body.bands.items()
              if lo < hi and f not in _CLUTTERED.get((kind, variant), ())]
     if face not in walls:
@@ -811,7 +818,8 @@ def _fit(stated: "float | None", ends: list) -> float:
 
 
 def wall_overlays(kind: str, variant: str, overlays: tuple, manholes: tuple,
-                  sockets: tuple, size: tuple, who: str) -> tuple:
+                  sockets: tuple, size: tuple, who: str,
+                  body: "Symbol | None" = None) -> tuple:
     """Return manholes and sockets placed on a body at their drawn size.
 
     A stated size is the drawn box, parts included; the body and its
@@ -831,6 +839,8 @@ def wall_overlays(kind: str, variant: str, overlays: tuple, manholes: tuple,
         Stated width and height of the drawn box, unturned.
     who : str
         Unit name, for messages.
+    body : Symbol, optional
+        The body drawn; the registered one if omitted.
 
     Returns
     -------
@@ -846,10 +856,10 @@ def wall_overlays(kind: str, variant: str, overlays: tuple, manholes: tuple,
         leaves no room for the body.
     """
     from pandid.render.symbols import Overlay, default_registry
-    body = default_registry.get(kind, variant)
+    body = body or default_registry.get(kind, variant)
     bw, bh = body.width, body.height
     placed = [(name, face, wall_point(kind, variant, face, fraction,
-                                      f"{who}: the {name} at {(face, fraction)!r}"))
+                                      f"{who}: the {name} at {(face, fraction)!r}", body))
               for name, entries in (("manhole", manholes), ("socket", sockets))
               for face, fraction in entries]
     sizes = {"manhole": (MANHOLE_DEPTH, MANHOLE_SPAN), "socket": (SOCKET_DEPTH, SOCKET_SPAN)}
@@ -927,6 +937,60 @@ def support_overlays(name: str) -> tuple:
                 Overlay(26, name, 1.0, 0.62, depth, drop, mirror=True))
     return (Overlay(26, name, 0.14, _SUPPORT_TOP, 0.10, _SUPPORT_DROP),
             Overlay(26, name, 0.76, _SUPPORT_TOP, 0.10, _SUPPORT_DROP))
+
+
+def _kept(start: float, size: float, natural: float, drawn: float) -> tuple[float, float]:
+    """Return one axis of a part moved onto a body of another size.
+
+    A part across the body's middle keeps its gap to either end of the
+    body; any other part keeps its own size and its gap to the nearer
+    end.
+
+    Parameters
+    ----------
+    start, size : float
+        The part's start and size, as fractions of the natural body.
+    natural, drawn : float
+        The natural and the drawn body's length on this axis.
+
+    Returns
+    -------
+    tuple[float, float]
+        Start and size as fractions of the drawn body.
+    """
+    lead, length, tail = start * natural, size * natural, (1 - start - size) * natural
+    if start < 0.5 < start + size and start >= 0 and start + size <= 1:
+        return lead / drawn, (drawn - lead - tail) / drawn
+    if start + size / 2 <= 0.5:
+        return lead / drawn, length / drawn
+    return (drawn - tail - length) / drawn, length / drawn
+
+
+def anchored(overlay: "Overlay", natural: "Symbol", body: "Symbol") -> "Overlay":
+    """Return a part placed for a natural body, moved onto a drawn one.
+
+    The part keeps its own size and its distance from the body's nearer
+    edges, so a support on a taller shell is the same support.
+
+    Parameters
+    ----------
+    overlay : Overlay
+        Placement on the natural body.
+    natural : Symbol
+        The body at its natural size.
+    body : Symbol
+        The body drawn.
+
+    Returns
+    -------
+    Overlay
+        Placement on ``body``.
+    """
+    from dataclasses import replace
+
+    x, w = _kept(overlay.x, overlay.w, natural.width, body.width)
+    y, h = _kept(overlay.y, overlay.h, natural.height, body.height)
+    return replace(overlay, x=x, y=y, w=w, h=h)
 
 
 # Rake rectangle as fractions of the thickener body.
