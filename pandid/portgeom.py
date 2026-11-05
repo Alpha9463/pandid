@@ -147,6 +147,9 @@ def drawn_side(face: str, rot: int, mirrored: bool, mirror_y: bool) -> str:
 def family_faces(unit: "_FaceFamilies", placed) -> dict[str, str] | None:
     """Return a unit's family faces with the engine's choices applied.
 
+    A lone port its symbol offers a menu of faces is drawn from that
+    menu and is left out.
+
     Parameters
     ----------
     unit : _FaceFamilies
@@ -165,9 +168,10 @@ def family_faces(unit: "_FaceFamilies", placed) -> dict[str, str] | None:
         return None
     rot, mx, my = _xform(placed)
     own = {drawn_side(face, rot, mx, my): face for face in COMPASS_FACES}
+    menus = _sym(unit).port_faces
     moved = {name: own[face] for name, face in chosen.items()
              if name in unit._faces and name not in unit._stated
-             and own[face] != unit._faces[name]}
+             and len(menus.get(name, ())) < 2 and own[face] != unit._faces[name]}
     return {**unit._faces, **moved} if moved else None
 
 
