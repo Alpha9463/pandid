@@ -426,6 +426,12 @@ _KIND_LABELS = {
     "tee": "Pipe Tee",
 }
 
+# Equipment-table description of a drawing its kind's title misnames.
+_VARIANT_LABELS = {
+    ("furnace", "general"): "Furnace",
+    ("furnace", "combustion_chamber"): "Combustion Chamber",
+}
+
 
 #: Deprecation of the drawn box's old name.
 _EQUIPMENT_LIST = Deprecation(
@@ -462,9 +468,11 @@ def _described(unit):
     Returns
     -------
     str
-        The stated description, else the kind's name.
+        The stated description, else the drawing's or the kind's
+        name.
     """
     return (getattr(unit, "description", "")
+            or _VARIANT_LABELS.get((unit.kind, unit.variant))
             or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
 
 

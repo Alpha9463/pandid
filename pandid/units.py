@@ -2755,6 +2755,9 @@ class Funnel(Unit):
 class Furnace(Unit):
     """Fired heater or furnace: a stream heated by burning fuel.
 
+    ``"default"`` draws a fired heater with its coil and stack,
+    ``"general"`` the ISO 10628-2 furnace (item 4.3) and
+    ``"combustion_chamber"`` a chamber making hot gas (item 4.5).
     Parameters are those of :class:`Unit`.
     """
 
