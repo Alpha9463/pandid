@@ -18,7 +18,7 @@ from pandid import (
     Splitter,
     Vessel,
 )
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x, port_offset
 
 
 def main():
@@ -59,11 +59,10 @@ def main():
     cond.pin(x=cond_x, y=cond_y, mirrored="x")
     cond_drain_x = cond_x + 0.75 * cond_w
 
-    # Drum's top inlet (20/91.5 along the shell) under the condenser drain.
-    drum_w, drum_y = 130, 170
-    drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
-    drum_x = cond_drain_x - (20 / 91.5) * drum_w
-    drum_draw_x = drum_x + (68 / 91.5) * drum_w        # bottom liquid draw
+    # Drum's top inlet under the condenser drain.
+    drum.nozzle("in_1", "N")
+    drum.pin(port="in_1", x=cond_drain_x, y=170)
+    drum_draw_x = pinned_x(drum, "out_1")              # bottom liquid draw
     vent.pin(x=880, y=125)                             # flag tip clears the condenser
 
     # Splitter turned inlet up, under the drum's draw.
