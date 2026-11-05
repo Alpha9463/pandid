@@ -26,56 +26,28 @@ _HARD_CODES = (
 
 @dataclass(frozen=True)
 class Quality:
-    """Hold the hard findings and measured costs of one drawing.
+    """Hold the hard findings and measured costs of one drawing."""
 
-    Attributes
-    ----------
-    hard : tuple[int, ...]
-        Error, fallback, finding-code and undrawn-stream counts.
-    crossings : int
-        Proper crossings between routed paths.
-    bends : int
-        Direction changes between orthogonal runs of routed paths.
-    excess_bends : int
-        Bends beyond each automatic route's minimum.
-    length : float
-        Total Manhattan route length.
-    area : float
-        Bounding-box area of the unit frames.
-    hard_conflicts : frozenset[Conflict]
-        Routing and placement defects other than crossings.
-    crossing_pairs : frozenset[tuple[int, int]]
-        Stream index pairs that cross.
-    """
-
+    # Error, fallback, finding-code and undrawn-stream counts.
     hard: tuple[int, ...]
+    # Proper crossings between routed paths.
     crossings: int
+    # Direction changes between orthogonal runs of routed paths.
     bends: int
+    # Bends beyond each automatic route's minimum.
     excess_bends: int
+    # Total Manhattan route length.
     length: float
+    # Bounding-box area of the unit frames.
     area: float
+    # Routing and placement defects other than crossings.
     hard_conflicts: frozenset[Conflict] = frozenset()
+    # Stream index pairs that cross.
     crossing_pairs: frozenset[tuple[int, int]] = frozenset()
 
 
 def measure_final(fs: Flowsheet) -> Quality:
-    """Measure the frames and routes of a laid-out and routed sheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet with completed layout and routing.
-
-    Returns
-    -------
-    Quality
-        Findings and costs of the drawing.
-
-    Raises
-    ------
-    ValueError
-        If layout or routing is stale.
-    """
+    """Measure the frames and routes of a laid-out and routed sheet."""
     if fs._layout_stale or fs._route_stale:
         raise ValueError("measure_final requires completed layout and routing")
     issues = fs.validate()
@@ -83,8 +55,10 @@ def measure_final(fs: Flowsheet) -> Quality:
     routes = [stream.route for stream in fs.streams]
     drawn_paths = [
         stream_polyline(stream)
-        if stream.route is not None and stream.source.owner.frame is not None
-        and stream.dest.owner.frame is not None else None
+        if stream.route is not None
+        and stream.source.owner.frame is not None
+        and stream.dest.owner.frame is not None
+        else None
         for stream in fs.streams
     ]
     paths = [path for path in drawn_paths if path is not None]
@@ -123,8 +97,7 @@ def measure_final(fs: Flowsheet) -> Quality:
         sum(issue.severity == "error" for issue in issues),
         sum(route is not None and not route.manual and route.used_fallback for route in routes),
         *(codes.count(code) for code in _HARD_CODES),
-        sum(route is None or (not route.manual and len(route.waypoints) < 2)
-            for route in routes),
+        sum(route is None or (not route.manual and len(route.waypoints) < 2) for route in routes),
     )
     return Quality(
         hard=hard,
