@@ -1783,7 +1783,8 @@ class Flowsheet:
         kind : str or None, optional
             One of :data:`~pandid.streams.STREAM_KINDS`, required for a
             signal line; ``None`` infers ``"energy"`` between two energy
-            or utility ports, else ``"material"``.
+            or utility ports, else ``"material"``. An energy line names
+            its carrier with ``service``, which its line number draws.
         name : str or None, optional
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False

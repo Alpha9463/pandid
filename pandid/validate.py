@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from string import Formatter
 from typing import TYPE_CHECKING
 
 from pandid._checks import suggest
@@ -803,6 +804,34 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                     f"render(show_stream_table=True) to report it."
                     + (" If this sheet is a P&ID, render with diagram=\"p&id\"."
                        if any(isinstance(u, Instrument) for u in fs.units) else "")))
+
+    # --- an energy line on a PFD that draws no carrier ---
+    # ISO 10628-1 4.3.2 e); the line number draws the service.
+    if tabulates:
+        scheme = fs.line_numbering_scheme
+        # shortcut: a callable scheme is taken to draw the service; call it
+        # if one turns out not to.
+        numbered = callable(scheme) or any(
+            field == "service" for _, field, _, _ in Formatter().parse(scheme))
+        for s in fs.streams:
+            if s.kind != "energy":
+                continue
+            given = not s.auto_named
+            if s.service and (str(s.service) in s.name if given else numbered):
+                continue
+            a, b = s.source, s.dest
+            warnings.append(Issue(
+                "warning", "energy-carrier-missing",
+                f"{s.name}, the energy line from {a.owner.name} to "
+                f"{b.owner.name}, does not name its energy carrier on the "
+                f"sheet (ISO 10628-1:2014 4.3.2 e)). Write what it carries "
+                f"into the line number drawn on it, "
+                f"fs.connect({a.owner.name}.{a.name}, {b.owner.name}.{b.name}, "
+                f"service=\"LP steam\")"
+                + (" without name=, since a given name is drawn in place of "
+                   "the line number" if given else "")
+                + (", with {service} in line_numbering_scheme"
+                   if not numbered else "")))
 
     return errors + warnings
 

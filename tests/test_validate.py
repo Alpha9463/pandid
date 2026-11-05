@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from pandid import Condenser, Flowsheet, Pin, units as U
+from pandid import Condenser, Flowsheet, Pin, Stream, units as U
 from pandid.portgeom import pin_intent, pinned_x, pinned_y, port_point
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
@@ -1377,6 +1377,84 @@ def test_a_soft_finding_is_a_warning_and_the_sheet_still_draws(build, code, rend
     fs = build()
     assert [i.severity for i in _found(fs, code)] == ["warning"]
     fs.to_svg(**render)
+
+
+# --- energy-carrier-missing ------------------------------------------------
+
+
+def heat_integrated(fs: Flowsheet | None = None, **connect: Any) -> tuple[Flowsheet, Stream]:
+    """Build a sheet whose cooler passes its duty to its heater."""
+    if fs is None:
+        fs = Flowsheet("heat")
+    feed = fs.add(U.Feed("F"))
+    cooler = fs.add(U.Cooler("E-2"))
+    heater = fs.add(U.Heater("E-1"))
+    product = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, cooler.inlet)
+    fs.connect(cooler.outlet, heater.inlet)
+    fs.connect(heater.outlet, product.inlet)
+    duty = fs.connect(cooler.utility_out, heater.utility_in, **connect)
+    assert duty.kind == "energy"
+    return fs, duty
+
+
+def _drawn_label(fs: Flowsheet, text: str) -> bool:
+    """Return whether a label drawn on the sheet contains *text*."""
+    return re.search(rf">[^<]*{re.escape(text)}[^<]*</text>", fs.to_svg()) is not None
+
+
+def test_an_energy_line_that_names_no_carrier_is_reported_on_a_pfd():
+    fs, duty = heat_integrated()
+    (found,) = _found(fs, "energy-carrier-missing")
+    assert found.severity == "warning"
+    assert found.message.startswith(f"{duty.name}, the energy line from E-2 to E-1,")
+    assert "4.3.2 e)" in found.message
+
+
+@pytest.mark.parametrize(
+    ("connect", "diagram"),
+    [
+        ({"service": "LP steam"}, "pfd"),
+        ({"name": "LP steam", "service": "LP steam"}, "pfd"),
+        ({}, "p&id"),
+        ({}, "bfd"),
+    ],
+)
+def test_an_energy_line_is_not_reported_once_its_carrier_is_drawn_or_off_a_pfd(connect, diagram):
+    """Check a drawn carrier, a P&ID and a BFD each leave the finding quiet."""
+    fs, _ = heat_integrated(**connect)
+    assert _found(fs, "energy-carrier-missing", diagram=diagram) == []
+
+
+def test_following_the_advice_draws_the_carrier_and_clears_the_finding():
+    """Check the call the finding names puts the carrier on the sheet."""
+    fs, _ = heat_integrated()
+    (found,) = _found(fs, "energy-carrier-missing")
+    call = re.search(
+        r'fs\.connect\(E-2\.utility_out, E-1\.utility_in, (\w+)="([^"]+)"\)', found.message
+    )
+    assert call is not None, found.message
+    keyword, carrier = call.groups()
+    advice: dict[str, Any] = {keyword: carrier}
+    fs, _ = heat_integrated(**advice)
+    assert _drawn_label(fs, carrier)
+    assert _found(fs, "energy-carrier-missing") == []
+
+
+@pytest.mark.parametrize(
+    ("scheme", "connect", "remedy"),
+    [
+        (None, {"name": "Q-1", "service": "LP steam"}, "without name="),
+        ("{size}-{sequence}", {"service": "LP steam"}, "{service} in line_numbering_scheme"),
+    ],
+)
+def test_a_carrier_set_but_not_drawn_is_reported_with_what_keeps_it_off(scheme, connect, remedy):
+    """Check a given name or a scheme without the service still leaves the carrier off."""
+    fs = Flowsheet("heat") if scheme is None else Flowsheet("heat", line_numbering_scheme=scheme)
+    fs, _ = heat_integrated(fs, **connect)
+    assert not _drawn_label(fs, "LP steam")
+    (found,) = _found(fs, "energy-carrier-missing")
+    assert remedy in found.message
 
 
 # --- validate() answers about the sheet that was drawn ------------------------
