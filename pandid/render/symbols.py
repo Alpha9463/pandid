@@ -1280,7 +1280,10 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
 
     Each family is spread about the stencil's anchor within the part of
     :attr:`Symbol.bands` nearer its face than either end of the box; a
-    role with one member keeps its full menu.
+    role with one member keeps its full menu. If a member lands nearer
+    a stencil nozzle on its band than the family's pitch, the band's
+    stencil nozzles are spread with the family, in order along the
+    wall.
 
     Parameters
     ----------
@@ -1317,6 +1320,7 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         name: dict(menu) for name, menu in base.port_faces.items()
         if name not in ("inlet", "outlet")
     }
+    fixed = [name for name in placed if name not in dict(ports)]
     menus = {"inlet": base.port_faces.get("inlet", {}), "outlet": base.port_faces.get("outlet", {})}
     members_by_role: dict[str, list[str]] = {"inlet": [], "outlet": []}
     groups: dict[tuple[str, str], list[str]] = {}
@@ -1337,12 +1341,28 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         t0, inset = _face_local(face, *menu[face], base.width, base.height)
         along = base.height if face in ("W", "E") else base.width
         band = base.bands.get(face)
+        lo, hi = band or (0.0, along)
+        on_wall = {
+            name: _face_local(face, *placed[name], base.width, base.height)[0]
+            for name in fixed if outward_dir(*placed[name], base.width, base.height) == face
+        }
+        beside = {name: t for name, t in on_wall.items() if lo <= t <= hi}
+        run = [spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT, at=t0, band=band)
+               for i in range(len(members))]
+        pitch = (run[-1] - run[0]) / (len(run) - 1) if len(run) > 1 else 0.0
+        if any(abs(t - f) < pitch for t in run for f in beside.values()):
+            # Spread the wall's own nozzles with the family, in order.
+            order = sorted(beside, key=beside.__getitem__)
+            members = ([n for n in order if beside[n] <= t0] + members
+                       + [n for n in order if beside[n] > t0])
         if len(members) > 1:
             band = _nearest_stretch(band, along, inset, len(members))
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
             placed[name] = _face_point(face, t, inset, base.width, base.height)
+            if face in port_faces.get(name, {}):
+                port_faces[name][face] = placed[name]
             lands = outward_dir(*placed[name], base.width, base.height)
             if lands != face:
                 raise ValueError(

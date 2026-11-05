@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+import warnings
 import xml.etree.ElementTree as ET
 from typing import Any, NamedTuple
 
@@ -1303,6 +1304,42 @@ def test_a_holdup_family_stays_on_its_wall_and_its_ink_at_every_count(kind, vari
                     )
                     d = _nearest_distance((x, y), segments)
                     assert d <= GEOM_TOL, f"{where} is {d:.1f}u from the nearest drawn stroke"
+
+
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_a_holdup_family_keeps_its_pitch_from_the_fixed_nozzles_on_its_wall(kind, variant):
+    """Verify no vent, relief or drain sits nearer a family than its pitch."""
+    sym = default_registry.get(kind, variant)
+    segments = _collect_segments(sym.svg)
+    w, h = sym.width, sym.height
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            for count in range(2, 9 if _has_wall(sym, face) else 2):
+                unit = _holdup(kind, variant, role, [face] * count)
+                run = [
+                    _face_local(face, *port_offset(unit, f"{prefix}{i}"), w, h)[0]
+                    for i in range(1, count + 1)
+                ]
+                pitch = min(abs(b - a) for a, b in zip(run, run[1:]))
+                for name in ("vent", "relief", "drain"):
+                    at = port_offset(unit, name)
+                    if outward_dir(at[0], at[1], w, h) != face:
+                        continue
+                    t = _face_local(face, at[0], at[1], w, h)[0]
+                    gap = min(abs(t - member) for member in run)
+                    where = f"{kind}/{variant} {name} beside {count} {role}s on {face}"
+                    assert gap >= pitch - 1e-6, f"{where}: {gap:.1f}u off, pitch {pitch:.1f}u"
+                    d = _nearest_distance(at, segments)
+                    assert d <= GEOM_TOL, f"{where} is {d:.1f}u from the nearest drawn stroke"
+
+
+def test_four_bottom_outlets_leave_a_tanks_drain_its_own_nozzle():
+    """Verify ``outputs=["S"] * 4`` builds without stacking out_1 on the drain."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tank = units.Tank("X-1", outputs=["S"] * 4)
+        points = [port_offset(tank, name) for name in ("drain", "out_1", "out_2", "out_3", "out_4")]
+    assert len(set(points)) == 5
 
 
 @pytest.mark.parametrize(("kind", "variant"), _BANDED, ids=_BANDED_IDS)
