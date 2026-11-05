@@ -655,6 +655,9 @@ class Flowsheet:
         # for none, and whether any kept one since route() set it.
         self._keep_clear = 0.0
         self._kept_clear = False
+        # Whether layout keeps equipment and furniture clear of each
+        # balloon pinned on both axes and moves its chain's room there.
+        self._pin_balloons = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2490,6 +2493,7 @@ class Flowsheet:
         from pandid.render.symbols import ARROWHEAD
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
+        from pandid.layout.halo import pinned_balloons
         from pandid.validate import geometry_issues
 
         def place() -> None:
@@ -2635,12 +2639,28 @@ class Flowsheet:
                 self._exit_clear = False
             settle_best()
 
+        def repinned() -> None:
+            """Lay out with each balloon pinned on both axes kept clear,
+            and settle."""
+            self._pin_balloons = True
+            try:
+                self.layout(self._engine)
+                settle_best()
+            finally:
+                self._pin_balloons = False
+
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False
+        if tries and pinned_balloons(self, {}):
+            flaws = _flaws(self)
+            if flaws["unit-overlap"]:
+                # Keep only a drawing with fewer overlaps.
+                flaws["unit-overlap"] -= 1
+                keep_if_better(repinned, flaws)
         self._route_stale = False
 
     def _geometry(self) -> tuple:
