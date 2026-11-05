@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pandid import Feed, Flowsheet, Product, Reactor, Tee, Valve
+from pandid import Feed, Flowsheet, Mixer, Product, Reactor, Splitter, Stream, Tee, Valve
 from pandid.layout.mounted import mounted_runs
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
@@ -388,3 +388,35 @@ def test_a_refused_valve_station_leaves_the_sheet_unchanged(on_line: bool) -> No
 
     assert [u.name for u in fs.units] == units
     assert [s.name for s in fs.streams] == streams
+
+
+def _recycle_loop(marked: bool) -> tuple[Flowsheet, Stream]:
+    """Build a mixer, reactor and splitter loop and return its return line."""
+    fs = Flowsheet("Recycle")
+    feed, mixer = fs.add(Feed("F")), fs.add(Mixer("M", n_inlets=2))
+    reactor, split = fs.add(Reactor("R")), fs.add(Splitter("S", n_outlets=2))
+    fs.connect(feed.outlet, mixer.in_1)
+    fs.connect(mixer.outlet, reactor.feed_1)
+    fs.connect(reactor.outlet, split.inlet)
+    fs.connect(split.out_1, fs.add(Product("P")).inlet)
+    return fs, fs.connect(split.out_2, mixer.in_2, draw_as_recycle=marked)
+
+
+@pytest.mark.parametrize("marked", [False, True], ids=["chosen by layout", "draw_as_recycle"])
+def test_on_a_recycle_line_is_the_same_before_and_after_a_render(marked: bool) -> None:
+    """Split a recycle line whether or not a render drew it as the recycle."""
+    sheets = []
+    for rendered in (False, True):
+        fs, line = _recycle_loop(marked)
+        if rendered:
+            fs.to_svg()
+        fs.add(Valve("HV-1"), on=line, at=0.6)
+        fs.add_valve_station("FV-1", on=line, at=0.3)
+        sheets.append(fs.to_dict())
+        fs.to_svg(diagram="p&id")
+        assert fs.validate(diagram="p&id") == []
+        segments = [s for s in fs.streams if s is line or s._logical_root is line]
+        assert [s.draw_as_recycle for s in segments] == [marked] * 3
+        assert [s.is_recycle for s in segments] == [False, False, True]
+        assert Flowsheet.from_dict(sheets[-1]).to_dict() == sheets[-1]
+    assert sheets[0] == sheets[1]
