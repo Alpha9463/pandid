@@ -662,10 +662,14 @@ class Flowsheet:
         self._plain_state: tuple | None = None
         self._plain_stale = False
         self._routing = False
-        # Whether a balloon hung from a balloon keeps off the tapped line,
-        # and whether any did since route() turned that on.
-        self._keep_clear = False
+        # Gap a balloon hung from a balloon keeps from the tapped line, 0
+        # for none, and whether any kept one since route() set it.
+        self._keep_clear = 0.0
         self._kept_clear = False
+        # The state route() left before it placed balloons hung from
+        # balloons further off, which the next route() or layout() starts
+        # from.
+        self._unkept: tuple | None = None
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes and moves its chain's room there.
         self._pin_balloons = False
@@ -2239,6 +2243,7 @@ class Flowsheet:
         """
         from pandid.layout import default_layout_engine
 
+        self._put_unkept()
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
@@ -2302,6 +2307,13 @@ class Flowsheet:
         terms. Where either is kept, the next route() starts from the
         drawing before them.
 
+        Last, with the default router, each balloon hung from a balloon is
+        placed again an arrowhead clear of the line its chain taps, and,
+        where that does not settle, again from the sheet with its automatic
+        routes cleared, each kept only if no tap leaves its line and no
+        finding or clash grows. Where one is kept, the next route() or
+        layout() starts from the drawing before them.
+
         Parameters
         ----------
         router : object or None, optional
@@ -2316,6 +2328,7 @@ class Flowsheet:
         """
         from pandid.routing import DefaultRouter
 
+        self._put_unkept()
         # Start a repeated call from the stacked drawing held last time.
         held, self._stacked = self._stacked, None
         if held is not None and not (self._layout_stale
@@ -2329,6 +2342,81 @@ class Flowsheet:
             if (self._rows_out and self._relayout(router, split, True)) or split:
                 self._stacked = first
             self._stack_spans = self._rows_out = self._route_stale = False
+        if not self._laying_out and (router is None or type(router) is DefaultRouter):
+            unkept = self._state()
+            if self._keep_further_off(router or DefaultRouter()):
+                self._unkept = unkept
+
+    def _put_unkept(self) -> None:
+        """Put back the state held from before balloons were kept further off.
+
+        Whether the layout is stale is kept as it stands.
+        """
+        held, self._unkept = self._unkept, None
+        if held is not None:
+            stale = self._layout_stale
+            self._put_state(held)
+            self._layout_stale = stale
+
+    def _keep_further_off(self, router) -> bool:
+        """Place each balloon hung from a balloon an arrowhead clear of its
+        tapped line, kept only if no tap leaves its line and no finding or
+        clash grows, and, where the sheet has not settled, again from the
+        sheet with its automatic routes cleared, on the same terms. Both
+        route without lanes.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+
+        Returns
+        -------
+        bool
+            Whether either placement was kept.
+        """
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
+        from pandid.layout.control import _flaws, _taps_off, place_control
+        from pandid.render.symbols import ARROWHEAD
+
+        if not any(_chained(u) for u in self.units):
+            return False
+        changed = False
+        lanes, relaned = self._lanes, self._relaned
+        self._lanes = False
+        for unrouted in (False, True):
+            if unrouted and self.route_converged:
+                break
+            prior, unplaced = self._geometry(), list(self.unplaced_instruments)
+            before, off = _flaws(self, full=True), _taps_off(self)
+            self._may_hang, self._hung = self._unhung is not None, set()
+            self._keep_clear, self._kept_clear = ARROWHEAD, False
+            try:
+                if unrouted:
+                    for st in self.streams:
+                        if st.route is not None and not st.route.manual:
+                            st.route = None
+                    place_control(self)
+                    router.route(self)
+                self.route_converged = False
+                for _ in range(MAX_PLACEMENT_PASSES):
+                    if not place_control(self):
+                        self.route_converged = True
+                        break
+                    router.route(self)
+                kept = self._kept_clear and _taps_off(self) <= off and not any(
+                    n > before[k] for k, n in _flaws(self, full=True).items())
+            except Exception:
+                kept = False
+            finally:
+                self._may_hang, self._keep_clear = False, 0.0
+            if kept:
+                changed = True
+            else:
+                self._put_geometry(prior, keep_manual=False)
+                self.unplaced_instruments = unplaced
+        self._lanes, self._relaned = lanes, relaned
+        return changed
 
     def _route_faces(self, router=None) -> None:
         """Route the sheet, with counted connections moved where that draws
@@ -2534,7 +2622,7 @@ class Flowsheet:
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, TOUCHING, _chained, free_face
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
         from pandid.layout.halo import pinned_balloons
@@ -2567,7 +2655,7 @@ class Flowsheet:
             prior = self._geometry()
             before, off = _flaws(self, full=keep_clear), _taps_off(self)
             self._may_hang, self._hung = may_hang, set()
-            self._keep_clear, self._kept_clear = keep_clear, False
+            self._keep_clear, self._kept_clear = TOUCHING if keep_clear else 0.0, False
             try:
                 place()
                 done = (self._kept_clear and _taps_off(self) <= off) if keep_clear else self._hung
@@ -2576,7 +2664,7 @@ class Flowsheet:
             except Exception:
                 kept = False
             finally:
-                self._may_hang = self._keep_clear = False
+                self._may_hang, self._keep_clear = False, 0.0
             if not kept:
                 self._put_geometry(prior, keep_manual=False)
             elif self._unhung is None:
