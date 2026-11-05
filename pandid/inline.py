@@ -286,10 +286,15 @@ def insert_station(fs: Flowsheet, line: Stream, station: ValveStation, *,
     """
     segments, index = split_point(fs, line, at)
     record = next(i for i, item in enumerate(fs._station_assemblies) if item.station is station)
-    old_dest = segments[index].dest
+    selected = segments[index]
+    old_dest = selected.dest
     with fs._unchanged_if_it_raises((fs, *fs.streams, old_dest, station.inlet, station.outlet)):
         _splice(fs, line, segments, index, station.inlet, station.outlet, at)
-        line._logical_pipework += _pipework(fs, station)
+        pipework = _pipework(fs, station)
+        # Draw the station's own pipework as the line it sits on.
+        for stream in pipework:
+            stream.color, stream.dasharray = selected.color, selected.dasharray
+        line._logical_pipework += pipework
         fs._station_assemblies[record] = replace(
             fs._station_assemblies[record], run=line, at=None if at is None else float(at),
         )

@@ -304,6 +304,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
         _shape(node, stacked, pads)
     _order(layers, segs)
     _row_pins(layers)
+    _face_tees(fs, layers, segs)
     _rank(layers)
     _straighten(layers, segs, {})
     held = _row_order(layers)
@@ -790,6 +791,49 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             peer[s.right] = pos[s.left] + a
     for k in keys:
         layers[k].sort(key=lambda n: peer.get(n, pos[n]))
+
+
+def _face_tees(fs: Flowsheet, layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
+    """Note free tees whose branch peer is above the run, and turn them.
+
+    A tee is free when it is no station member and its turn and mirror
+    are unstated. Its branch peer and its run peer on the branch's side
+    are compared by their places in their layer. ``fs._tees_away``
+    records whether any such tee is found; with ``fs._face_tees`` set,
+    each such tee's branch turns north.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being laid out.
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    segs : list[_Seg]
+        Pipe steps between adjacent layers.
+    """
+    members = {u for a in fs._station_assemblies for u in a.station.members}
+    pos = {n: i for layer in layers.values() for i, n in enumerate(layer)}
+    # The far node of each nozzle's step, and whether it lies east.
+    peer: dict[int, tuple[_Node, bool]] = {}
+    for s in segs:
+        if s.lport is not None:
+            peer[id(s.lport)] = (s.right, True)
+        if s.rport is not None:
+            peer[id(s.rport)] = (s.left, False)
+    for layer in layers.values():
+        for node in layer:
+            for tee in node.members:
+                if (tee.kind != "tee" or tee in members or tee._turn_stated
+                        or tee._mirror_stated):
+                    continue
+                branch = peer.get(id(tee.ports["branch"]))
+                if branch is None:
+                    continue
+                run = next((end for p in (tee.ports["outlet"], tee.ports["inlet"])
+                            if (end := peer.get(id(p))) is not None and end[1] == branch[1]), None)
+                if run is not None and pos[branch[0]] < pos[run[0]]:
+                    fs._tees_away = True
+                    slot(tee).mirror_y = fs._face_tees
 
 
 def _row_pins(layers: dict[int, list[_Node]]) -> None:
