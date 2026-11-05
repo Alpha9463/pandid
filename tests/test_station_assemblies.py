@@ -8,7 +8,7 @@ from pandid import Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
 from pandid.layout.attach import logical_stream_path
 from pandid.layout.layered import END_ROOM
 from pandid.layout.mounted import _station_width
-from pandid.layout.quality import measure_final
+from _quality import measure_final
 from pandid.portgeom import port_point
 from pandid.spec import SpecError
 
