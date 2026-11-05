@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loop acting on a motor or solenoid valve, or on another controller, now
   draws an electric signal.
 
+### Fixed
+
+- The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
+  drawn with `diagram="p&id"` or `diagram="bfd"`.
+
 ## [0.2.0] - 2026-11-05
 
 Every sheet without pins draws differently from 0.1.5.
@@ -301,6 +306,7 @@ First public release.
 - Licensed under the PolyForm Small Business License 1.0.0; the vendored
   symbols are Apache-2.0.
 
+[Unreleased]: https://github.com/Alpha9463/pandid/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Alpha9463/pandid/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/Alpha9463/pandid/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/Alpha9463/pandid/compare/v0.1.3...v0.1.4

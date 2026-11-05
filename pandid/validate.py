@@ -420,7 +420,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     fs : Flowsheet
         Sheet to check.
     tabulates : bool, default=True
-        Whether the diagram owes a stream table.
+        Whether the diagram must state boundary flow rates.
 
     Returns
     -------
@@ -760,9 +760,9 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"the revision and let the block fill the row"))
 
     # --- an ingoing or outgoing material with nothing to report ---
-    # ISO 10628-1 4.3.2 d), when any stream states a property.
+    # ISO 10628-1 4.3.2 d), on a PFD where any stream states a property.
     runs = fs._named_runs()
-    if any(s.properties for segments in runs.values() for s in segments):
+    if tabulates and any(s.properties for segments in runs.values() for s in segments):
         for name, segments in runs.items():
             if any(s.properties for s in segments):
                 continue
