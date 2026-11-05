@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pandid import Block, Feed, Flowsheet, Product
 from pandid.layout.conflicts import Conflict, analyze_conflicts
-from pandid.layout.quality import measure_final
+from _quality import measure_final
 from pandid.portgeom import resolve_port
 from pandid.routing.metrics import crossing_pairs
 

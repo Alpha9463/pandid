@@ -235,8 +235,9 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, tap lines through units or tag halos, and runs
-        two lines or tap lines share.
+        through tag halos, line segments through units other than
+        balloons on that line, tap lines through units or tag halos, and
+        runs two lines or tap lines share.
     """
     from collections import Counter
 
@@ -267,8 +268,13 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     flaws["unit-on-tag"] = sum(boxes_overlap(box, h, -_BODY_TOL)
                                for _, box in boxes for h in halos)
-    lines = [stream_path(s) for s in fs.streams if s.route is not None]
+    drawn = [s for s in fs.streams if s.route is not None]
+    lines = [stream_path(s) for s in drawn]
     flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
+    flaws["line-through-unit"] = sum(
+        segment_crosses_box(a, b, box) for s, points in zip(drawn, lines)
+        for a, b in zip(points, points[1:])
+        for u, box in boxes if getattr(u, "host", None) is not s)
     taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
     for inst, route in taps:
         flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
