@@ -445,7 +445,7 @@ class Unit:
         ValueError
             If ``width`` or ``height`` is a number that is not positive
             and finite, or a reassigned ``variant`` cannot carry the
-            unit's parts.
+            unit's parts, manholes or sockets.
         AttributeError
             If an attribute fixed at construction is reassigned.
         """
@@ -1512,12 +1512,19 @@ def _recompose(unit: "Unit", old: str) -> None:
     Raises
     ------
     ValueError
-        If the new variant cannot carry the parts; the unit keeps
-        ``old`` and its parts.
+        If the new variant cannot carry the parts, manholes or sockets;
+        the unit keeps ``old`` and its parts.
     """
+    from pandid.render.symbols import default_registry
+
     overlays = unit.__dict__.get("overlays")
+    walls = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
     try:
         _compose_onto(unit, *unit._composition)
+        for keyword, placed in zip(("manholes", "sockets"), walls):
+            _on_walls(unit, keyword, placed)
+        if any(walls):
+            default_registry.for_unit(unit)
     except ValueError:
         unit.__dict__["variant"] = old
         if overlays is not None:

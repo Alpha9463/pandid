@@ -48,6 +48,9 @@ These are removed in 0.4.0.
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
   connected with `draw_as_recycle=True`, before or after the sheet is rendered.
+- Reassigning `variant` on a unit built with supports, an agitator, internals,
+  manholes or sockets redraws them on the new body, or refuses a body that
+  cannot carry them with the constructor's message and keeps the old one.
 
 ## [0.2.0] - 2026-11-05
 

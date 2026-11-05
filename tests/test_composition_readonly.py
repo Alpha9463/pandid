@@ -63,6 +63,11 @@ def test_width_and_height_are_unaffected_and_still_live():
             "tubular",
             lambda: U.Reactor("R-1", variant="tubular", agitator="propeller"),
         ),
+        (
+            lambda: U.Vessel("D-3", manholes=[("E", 0.5)]),
+            "horizontal",
+            lambda: U.Vessel("D-3", variant="horizontal", manholes=[("E", 0.5)]),
+        ),
     ],
 )
 def test_a_variant_the_parts_cannot_go_on_is_refused_as_the_constructor_refuses_it(
