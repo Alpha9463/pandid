@@ -1502,6 +1502,8 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
 def _recompose(unit: "Unit", old: str) -> None:
     """Redraw a unit's parts on its new variant, or restore ``old``.
 
+    Overlays added after the parts are kept, after the redrawn parts.
+
     Parameters
     ----------
     unit : Unit
@@ -1512,15 +1514,32 @@ def _recompose(unit: "Unit", old: str) -> None:
     Raises
     ------
     ValueError
-        If the new variant cannot carry the parts, manholes or sockets;
-        the unit keeps ``old`` and its parts.
+        If the overlays no longer begin with the parts the unit was
+        built with, or the new variant cannot carry the parts, the
+        added overlays, the manholes or the sockets; the unit keeps
+        ``old`` and its overlays.
     """
     from pandid.render.symbols import default_registry
 
     overlays = unit.__dict__.get("overlays")
+    stated = [(keyword, value, place) for keyword, value, place in unit._composition
+              if value is not None]
+    built, current = _placed(stated, old), tuple(overlays or ())
     walls = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
     try:
+        if current[:len(built)] != built:
+            raise ValueError(
+                f"{unit.name}: its overlays no longer begin with the parts it was built "
+                f"with, so a new variant cannot redraw them. Build "
+                f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
+                f"instead"
+            )
         _compose_onto(unit, *unit._composition)
+        added = current[len(built):]
+        if added:
+            drawn = _placed(stated, unit.variant) + added
+            unit.overlays = drawn
+            default_registry.composed(unit.kind, unit.variant, drawn)
         for keyword, placed in zip(("manholes", "sockets"), walls):
             _on_walls(unit, keyword, placed)
         if any(walls):

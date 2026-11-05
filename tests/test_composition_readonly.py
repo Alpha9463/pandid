@@ -4,6 +4,7 @@ import pytest
 
 from pandid import Flowsheet
 from pandid import units as U
+from pandid.render.symbols import Overlay, default_registry
 
 
 @pytest.mark.parametrize(
@@ -93,3 +94,25 @@ def test_a_variant_the_parts_can_go_on_draws_them_as_the_constructor_would():
     reactor.variant = "jacketed"
     built = U.Reactor("R-1", variant="jacketed", agitator="propeller")
     assert reactor.__dict__["overlays"] == built.__dict__["overlays"]
+
+
+@pytest.mark.parametrize("variant", ["default", "jacketed"], ids=["unchanged", "changed"])
+def test_a_reassigned_variant_keeps_the_overlays_the_author_added(variant):
+    """Check that only the composed parts are redrawn on the new body."""
+    added = Overlay(27, "packing", 0, 0.3, 1, 0.3)
+    reactor = U.Reactor("R-1", agitator="propeller")
+    reactor.overlays = (*reactor.__dict__["overlays"], added)
+    reactor.variant = variant
+    built = U.Reactor("R-1", variant=variant, agitator="propeller")
+    assert reactor.__dict__["overlays"] == (*built.__dict__["overlays"], added)
+    assert added in default_registry.for_unit(reactor).overlays
+
+
+def test_a_variant_is_refused_once_the_built_parts_are_edited():
+    """Check that edited composed parts refuse a new body and stay as the author left them."""
+    reactor = U.Reactor("R-1", agitator="propeller")
+    edited = reactor.__dict__["overlays"][:1]
+    reactor.overlays = edited
+    with pytest.raises(ValueError, match=r"Reactor\('R-1', \.\.\., variant='jacketed'\)"):
+        reactor.variant = "jacketed"
+    assert (reactor.variant, reactor.__dict__["overlays"]) == ("default", edited)
