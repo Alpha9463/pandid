@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   electric. `add_control_loop()` infers its output line the same way, so a
   loop acting on a motor or solenoid valve, or on another controller, now
   draws an electric signal.
+- A counted `Block`, `Tank` or `Vessel` connection, as in `inputs=2`, moves to
+  the face toward its peer where that draws fewer bends; a list such as
+  `inputs=["W", "N"]` keeps every face as given, even on a single inlet.
 - `render()` lays out and checks a sheet faster, most of all when units are
   pinned by a nozzle.
 

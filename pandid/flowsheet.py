@@ -653,6 +653,9 @@ class Flowsheet:
         self._lanes = True
         self._widened = False
         self._relaned = False
+        # Whether layout may move a counted block, tank or vessel
+        # connection off its declared face.
+        self._family_faces = True
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -2282,6 +2285,12 @@ class Flowsheet:
         by them; otherwise, and wherever lanes changed no route and no face
         grew, the sheet is drawn without them.
 
+        Where layout moves a counted block, tank or vessel connection off
+        its declared face, the sheet is also laid out and drawn with every
+        such connection on its declared face. The moves are kept only if no
+        crossing, bend, fallback, finding, clash or tap off its line grows
+        by them and one of them falls.
+
         Last, where the drawing stacks two units in a column with another
         unit pinned to a row between theirs, the sheet is laid out and
         routed again with those two unstacked, kept only if no tap leaves
@@ -2311,7 +2320,7 @@ class Flowsheet:
         if held is not None and not (self._layout_stale
                                      or any(u.frame is None for u in self.units)):
             self._put_state(held)
-        self._route_lanes(router)
+        self._route_faces(router)
         if ((self._stack_spans or self._rows_out) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
             first = self._state()
@@ -2319,6 +2328,46 @@ class Flowsheet:
             if (self._rows_out and self._relayout(router, split, True)) or split:
                 self._stacked = first
             self._stack_spans = self._rows_out = self._route_stale = False
+
+    def _route_faces(self, router=None) -> None:
+        """Route the sheet, with counted connections moved where that draws
+        better.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.portgeom import family_faces
+        from pandid.routing import DefaultRouter
+        from pandid.routing.lanes import _score
+        from pandid.units import _FaceFamilies
+
+        if not self._family_faces:
+            self._family_faces = self._layout_stale = True
+        self._route_lanes(router)
+        if (self._laying_out or not (router is None or type(router) is DefaultRouter)
+                or not any(isinstance(u, _FaceFamilies) and family_faces(u, u.frame)
+                           for u in self.units)):
+            return
+        kept, judged = self._state(), _score(self)
+        plain_state = self._plain_state, self._plain_stale
+        self._family_faces, self._layout_stale = False, True
+        self._route_lanes(router)
+        plain = _score(self)
+        if (judged[1] <= plain[1]
+                and not any(n > plain[0][k] for k, n in judged[0].items())
+                and any(n > judged[0][k] for k, n in plain[0].items())):
+            self._family_faces = True
+            self._put_state(kept)
+            self._plain_state, self._plain_stale = plain_state
 
     def _route_lanes(self, router=None) -> None:
         """Route the sheet, with lanes and grown faces where they draw no
