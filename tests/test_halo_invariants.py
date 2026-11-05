@@ -322,6 +322,13 @@ def _codes_beside_another_balloon() -> "tuple[Flowsheet, dict]":
     return fs, kwargs
 
 
+def _codes_between_a_line_and_a_balloon() -> "tuple[Flowsheet, dict]":
+    """Build a sheet whose pair of codes has a line on one side and another balloon's on the other."""
+    fs, kwargs = _codes_beside_another_balloon()
+    fs.units[3].pin(x=389.53, y=437.35)
+    return fs, kwargs
+
+
 def _codes_beside_a_closed_valve() -> "tuple[Flowsheet, dict]":
     """Build a flanged sheet whose codes could leave a flange only for a valve's NC."""
     fs, kwargs = CORPUS["codes_beside_a_flange"]()
@@ -386,6 +393,7 @@ CROWDED_CODES = {
     "a_flange_and_a_line": _codes_between_a_flange_and_a_line,
     "a_fixed_tag": _codes_beside_a_fixed_tag,
     "another_balloon": _codes_beside_another_balloon,
+    "a_line_and_a_balloon": _codes_between_a_line_and_a_balloon,
     "a_closed_valve": _codes_beside_a_closed_valve,
     "a_pneumatic_line": _codes_beside_a_pneumatic_line,
     "a_stacked_tag": _codes_beside_a_stacked_tag,

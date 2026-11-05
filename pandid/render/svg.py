@@ -470,7 +470,9 @@ def _quadrant_pairs(fs, direction: str) -> list:
 def _quadrant_side(box, codes, prefers: int, ink, symbols):
     """Return a pair of codes placed on the cleaner side of a symbol.
 
-    The other side wins only if it is cleaner.
+    The other side wins only if it is cleaner. Where neither side is
+    clean, each quadrant takes its own cleaner side if that is cleaner
+    still.
 
     Parameters
     ----------
@@ -499,6 +501,12 @@ def _quadrant_side(box, codes, prefers: int, ink, symbols):
         if damage == (0, 0, 0):
             break
     assert best is not None
+    if best[0] != (0, 0, 0) and len(codes) > 1 and all(codes.values()):
+        (one, upper), (two, lower) = (_quadrant_side(box, {name: quadrant}, prefers, ink, symbols)
+                                      for name, quadrant in codes.items())
+        split = (one[0] + two[0], one[1] + two[1], one[2] + two[2])
+        if split < best[0]:
+            best = (split, upper + lower)
     return best
 
 

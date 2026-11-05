@@ -94,6 +94,9 @@ These are removed in 0.4.0.
 - Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
   as its pennant is drawn, not of the blank paper above and below it, so a
   sheet with a flag at its top or bottom is framed tighter.
+- Where neither side of a symbol has room for both codes of a pair, such as
+  `annotate(high="TAH", low="TAL")`, one is written on each side instead of
+  over a line.
 
 ## [0.2.0] - 2026-11-05
 

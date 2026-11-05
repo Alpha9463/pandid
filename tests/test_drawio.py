@@ -1075,6 +1075,7 @@ def test_a_letter_code_is_exported_clear_of_a_flange_mark():
         "a_flange_and_a_line",
         "a_fixed_tag",
         "another_balloon",
+        "a_line_and_a_balloon",
         "a_closed_valve",
         "a_pneumatic_line",
         "a_stacked_tag",
