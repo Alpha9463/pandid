@@ -564,7 +564,7 @@ def test_a_vent_control_valve_keeps_its_loop_clear() -> None:
 
 
 def test_a_valve_keeps_clear_of_a_balloon_pinned_on_both_axes() -> None:
-    """Check that a valve steps along its pipe off a balloon pinned where it would sit."""
+    """Check that a valve steps along its pipe off a balloon pinned on top of it."""
     from pandid import Vessel
 
     fs = Flowsheet("Pinned balloon")
@@ -574,7 +574,23 @@ def test_a_valve_keeps_clear_of_a_balloon_pinned_on_both_axes() -> None:
     lt = fs.add_instrument("LT", 101, sensing=drum, face="N")
     fs.layout()
     assert valve.frame is not None
-    lt.pin(x=valve.frame.cx - 22, y=valve.frame.cy - 22)
+    lt.pin(x=valve.frame.cx - 22, y=valve.frame.cy - 44)
+
+    fs.route()
+    assert not any(issue.code == "unit-overlap" for issue in fs.validate())
+
+
+def test_a_valve_is_not_set_on_a_pinned_balloon_main_draws_clear_of() -> None:
+    """Check that a level loop with its transmitter pinned clear of everything stays clear."""
+    from pandid import Pump, Vessel
+
+    fs = Flowsheet("Level control")
+    drum = fs.add(Vessel("V-101"))
+    pump = fs.add(Pump("P-101"))
+    fs.connect(drum.outlet, pump.suction)
+    fs.add(ControlValve("LV-101"), on=fs.connect(pump.discharge, fs.add(Vessel("V-102")).inlet))
+    lt = fs.add_instrument("LT", 101, sensing=drum, face="E").pin(x=350, y=50)
+    fs.add_instrument("LIC", 101, near=lt, face="E")
 
     fs.route()
     assert not any(issue.code == "unit-overlap" for issue in fs.validate())

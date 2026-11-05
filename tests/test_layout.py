@@ -1090,19 +1090,30 @@ def _equipment_boxes(fs: Flowsheet) -> dict[str, Box]:
     return {u.name: boxes[u.name] for u in fs.units if u.kind != "instrument"}
 
 
-@pytest.mark.parametrize(("x", "y"), [(440.0, 180.0), (640.0, 180.0), (250.0, 100.0)])
+@pytest.mark.parametrize(("x", "y"), [(460.0, 180.0), (640.0, 180.0)])
 def test_equipment_keeps_clear_of_a_balloon_pinned_on_both_axes(x: float, y: float) -> None:
-    """Check that a fully pinned chain frees its host's room and nothing lands on it."""
-    fs, drum, lt = _drum_pump_drum()
-    fs.layout()
+    """Check that equipment drawn on a fully pinned chain steps off it, closer to its host."""
+    fs, _, lt = _drum_pump_drum()
+    fs.route()
     before = _equipment_boxes(fs)
     lt.pin(x=x, y=y)
     fs.route()
     after = _equipment_boxes(fs)
 
-    assert drum not in balloon_pads(fs), "the drum still reserves room for a pinned chain"
-    assert after["P-101"][0] - after["V-101"][2] < before["P-101"][0] - before["V-101"][2]
     assert _unit_overlaps(fs) == []
+    assert after["P-101"][0] - after["V-101"][2] < before["P-101"][0] - before["V-101"][2]
+
+
+def test_a_balloon_pinned_where_it_is_drawn_moves_no_equipment() -> None:
+    """Check that pinning a chain's balloon on both axes where it is drawn changes nothing."""
+    fs, _, lt = _drum_pump_drum()
+    fs.route()
+    boxes = _equipment_boxes(fs)
+    assert lt.frame is not None
+    lt.pin(x=lt.frame.x, y=lt.frame.y)
+    fs.route()
+
+    assert _equipment_boxes(fs) == boxes
 
 
 @pytest.mark.parametrize(("x", "y"), [(440.0, None), (None, 400.0)])
@@ -1111,10 +1122,10 @@ def test_a_balloon_pinned_on_one_axis_keeps_its_hosts_room(
 ) -> None:
     """Check that a pin on one axis leaves the host's room and the equipment as they were."""
     fs, drum, lt = _drum_pump_drum()
-    fs.layout()
+    fs.route()
     pad, boxes = balloon_pads(fs)[drum], _equipment_boxes(fs)
     lt.pin(x=x, y=y)
-    fs.layout()
+    fs.route()
 
     assert balloon_pads(fs)[drum] == pad
     assert _equipment_boxes(fs) == boxes

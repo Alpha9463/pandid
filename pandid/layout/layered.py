@@ -271,6 +271,9 @@ def _flag(port: Port | None) -> bool:
 def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None:
     """Give every unit a frame by layered drawing, keeping pins.
 
+    With ``fs._pin_balloons`` set, units step off each balloon pinned
+    on both axes and its chain.
+
     Parameters
     ----------
     fs : Flowsheet
@@ -330,7 +333,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
                     s.col = pin.col
                 if pin is not None and pin.row is not None:
                     s.row = pin.row
-    _clear_pins(units, pinned_balloons(fs, pads))
+    _clear_pins(units, pinned_balloons(fs, pads) if fs._pin_balloons else [])
     for unit in units:
         s = slot(unit)
         unit.frame = Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, col=s.col, row=s.row,

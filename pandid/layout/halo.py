@@ -1,7 +1,8 @@
 """Reserve room around process units for the balloons attached to them.
 
-A balloon on a stream reserves room on both units the stream joins. A
-balloon pinned on both axes reserves its chain's room around itself.
+A balloon on a stream reserves room on both units the stream joins.
+With ``fs._pin_balloons`` set, a balloon pinned on both axes reserves
+its chain's room around itself.
 """
 
 from __future__ import annotations
@@ -83,11 +84,12 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
     """
     from pandid.layout.stages import is_control
 
+    fixed = {id(u) for u in fs.units if fs._pin_balloons and _pinned_corner(u) is not None}
     pads: dict["Unit", Pad] = {}
     for inst in fs.units:
         if not is_control(inst) or getattr(inst, "host", None) is None:
             continue
-        charge = _charge(inst)
+        charge = _charge(inst, fixed)
         if charge is None:
             continue
         reach, girth, face, hosts = charge
@@ -144,20 +146,23 @@ def _pinned_corner(unit: "Unit") -> tuple[float, float] | None:
     return float(pin.x), float(pin.y)
 
 
-def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
+def _charge(inst: "Unit", fixed: set[int]
+            ) -> tuple[float, float, str, list["Unit"]] | None:
     """Return a chain's reach, girth, face and hosts, or None.
 
     Parameters
     ----------
     inst : Unit
         Balloon at the end of the chain.
+    fixed : set[int]
+        ``id()`` of each balloon the chain stops at, which is then its
+        host.
 
     Returns
     -------
     tuple[float, float, str, list[Unit]] or None
-        None for a closed chain, an unpinned free root balloon, or a
-        balloon pinned on both axes. The chain stops at a balloon
-        pinned on both axes, which is then its host.
+        None for a closed chain, a free root balloon not in ``fixed``,
+        or ``inst`` in ``fixed``.
     """
     from pandid.layout.attach import _rotate_ccw
     from pandid.layout.stages import is_control
@@ -169,7 +174,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     # stops a chain that closes on itself.
     seen: set[int] = set()
     while (is_control(node) and getattr(node, "host", None) is not None
-           and _pinned_corner(node) is None):
+           and id(node) not in fixed):
         if id(node) in seen:
             return None
         seen.add(id(node))
@@ -189,7 +194,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
         flow = ((1.0 if across > 0 else -1.0, 0.0) if across
                 else (0.0, 1.0 if down >= 0 else -1.0))
         hosts = [src] if src is dst else [src, dst]
-    elif is_control(node) and _pinned_corner(node) is None:
+    elif is_control(node) and id(node) not in fixed:
         return None
     else:
         nx, ny = COMPASS[getattr(root, "face", None) or "E"]
