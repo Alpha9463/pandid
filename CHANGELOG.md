@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-through-support` when a line enters a vessel through
+  its legs, brackets or ring. Leave the vessel's `height` unset, or give a
+  larger one, so its shell grows clear.
 
 ### Changed
 
@@ -38,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A counted `Block`, `Tank` or `Vessel` connection, as in `inputs=2`, moves to
   the face toward its peer where that draws fewer bends; a list such as
   `inputs=["W", "N"]` keeps every face as given, even on a single inlet.
+- A `Vessel` is drawn to the size it is given rather than stretched to it:
+  `width` and `height` are the drawn box, the heads, supports, manholes and
+  sockets keep their own size, and the straight shell takes the rest. With no
+  size given, the shell grows until its inlets and outlets clear the supports.
 - `render()` lays out and checks a sheet faster, most of all when units are
   pinned by a nozzle.
 
