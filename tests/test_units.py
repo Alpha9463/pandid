@@ -167,6 +167,17 @@ def test_duty_on_a_jacketed_reactor_is_deprecated_for_jacket_in(same_file):
         assert getattr(D.JacketedReactor("R-4"), "duty", None) is None
 
 
+def test_duty_on_a_jacketed_reactor_is_placed_where_jacket_in_is():
+    """Check that the layout helpers place ``duty`` on ``jacket_in``'s nozzle."""
+    from pandid.portgeom import is_anchored, port_faces, port_offset
+
+    r = U.Reactor("R-1", variant="jacketed", width=152, height=360)
+    with pytest.warns(DeprecationWarning):
+        assert port_offset(r, "duty") == port_offset(r, "jacket_in")
+        assert port_faces(r, "duty") == port_faces(r, "jacket_in") == ["E"]
+        assert is_anchored(r, "duty")
+
+
 def test_a_column_takes_more_than_one_feed():
     """Check that a column takes a numbered family of feeds."""
     col = U.Column("T-302", n_feeds=2)
