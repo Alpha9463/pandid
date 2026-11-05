@@ -46,6 +46,9 @@ These are removed in 0.4.0.
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
 - A `Reactor` sets its feeds far enough apart that their arrowheads do not
   touch, so `Reactor("R-1", n_feeds=2)` no longer raises `nozzles-crowded`.
+- The tubular reactor is drawn taller, so `Reactor("R-1", variant="tubular",
+  n_feeds=3)` sets its three feeds far enough apart that their arrowheads do not
+  touch.
 - Lines drawn side by side no longer push a pipe into a unit body: a run moved
   off a shared track, and the segments either side of it, keep clear of every unit.
 - `validate()` reports a `route-crosses-unit` warning for a slanted `via()` leg

@@ -980,12 +980,13 @@ def test_a_default_mixer_is_not_a_finding():
     assert _found(fs, "nozzles-crowded") == []
 
 
+@pytest.mark.parametrize("n_feeds", [2, 3])
 @pytest.mark.parametrize("variant", ["default", "jacketed", "tubular"])
-def test_a_default_two_feed_reactor_is_not_a_finding(variant: str):
-    """Check that a stock reactor's two feeds are not reported crowded."""
+def test_a_stock_reactors_feeds_are_not_a_finding(variant: str, n_feeds: int):
+    """Check that a stock reactor's two or three feeds are not reported crowded."""
     fs = Flowsheet("reactor")
-    r = fs.add(U.Reactor("R-1", n_feeds=2, variant=variant))
-    for i in (1, 2):
+    r = fs.add(U.Reactor("R-1", n_feeds=n_feeds, variant=variant))
+    for i in range(1, n_feeds + 1):
         fs.connect(fs.add(U.Feed(f"F{i}")).outlet, r.ports[f"feed_{i}"])
     fs.connect(r.outlet, fs.add(U.Product("P")).inlet)
     fs.route()

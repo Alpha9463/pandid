@@ -3297,16 +3297,17 @@ class SymbolRegistry:
             trim=True),
             "interlock")
 
-        # Tubular reactor: a rectangular shell with a serpentine tube.
+        # Tubular reactor: a rectangular shell with a serpentine tube. The
+        # shell is 64 tall, so three feeds fit 16 apart in half its W face.
         self.register("reactor", Symbol(
             svg='<g id="sym_reactor_tubular">'
-                f'<rect x="0" y="0" width="120" height="40" {_OUTLINE}/>'
-                '<path d="M 15 10 L 105 10 A 5 5 0 0 1 105 20 L 15 20 '
-                f'A 5 5 0 0 0 15 30 L 105 30" {_DETAIL}/></g>',
-            width=120.0, height=40.0,
-            ports={"outlet": (120.0, 20.0), "duty": (60.0, 0.0)},
+                f'<rect x="0" y="0" width="120" height="64" {_OUTLINE}/>'
+                '<path d="M 15 16 L 105 16 A 8 8 0 0 1 105 32 L 15 32 '
+                f'A 8 8 0 0 0 15 48 L 105 48" {_DETAIL}/></g>',
+            width=120.0, height=64.0,
+            ports={"outlet": (120.0, 32.0), "duty": (60.0, 0.0)},
             port_series=(PortSeries(prefix="feed_", face="W", pitch=MIN_NOZZLE_PITCH,
-                                    extent=0.5, at=20.0, singular="feed"),),
+                                    extent=0.5, at=32.0, singular="feed"),),
         ), "tubular")
 
         # ISO 10628-2 group 4: boiler, stack and flare.
