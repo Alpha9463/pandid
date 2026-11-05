@@ -2815,6 +2815,110 @@ def _evaporator(name: str, *detail: str,
     )
 
 
+# Draft-tube baffle crystallizer: dished head, straight shell, cone and
+# elutriation leg.
+CRYST_W = 90.0
+_CRYST_HEAD = 12.0
+_CRYST_SHELL = 110.0
+_CRYST_CONE = 35.0
+_CRYST_LEG_W, _CRYST_LEG_H = 20.0, 15.0
+CRYST_H = _CRYST_HEAD + _CRYST_SHELL + _CRYST_CONE + _CRYST_LEG_H
+
+_CRYST_OUTLINE = (
+    f'<path d="M 0 {_CRYST_HEAD:g} '
+    f'A {CRYST_W / 2:g} {_CRYST_HEAD:g} 0 0 1 {CRYST_W:g} {_CRYST_HEAD:g} '
+    f'L {CRYST_W:g} {_CRYST_HEAD + _CRYST_SHELL:g} '
+    f'L {(CRYST_W + _CRYST_LEG_W) / 2:g} {CRYST_H - _CRYST_LEG_H:g} '
+    f'L {(CRYST_W + _CRYST_LEG_W) / 2:g} {CRYST_H:g} '
+    f'L {(CRYST_W - _CRYST_LEG_W) / 2:g} {CRYST_H:g} '
+    f'L {(CRYST_W - _CRYST_LEG_W) / 2:g} {CRYST_H - _CRYST_LEG_H:g} '
+    f'L 0 {_CRYST_HEAD + _CRYST_SHELL:g} Z" {_OUTLINE}/>'
+)
+
+# Draft tube: width, top and bottom.
+_CRYST_TUBE_W = 36.0
+_CRYST_TUBE_TOP, _CRYST_TUBE_BOT = 40.0, 120.0
+
+# Baffle skirt: inset from the shell, from its top down to the cone.
+_CRYST_BAFFLE_INSET = 10.0
+_CRYST_BAFFLE_TOP = 70.0
+
+_CRYST_INTERNALS = (
+    '<path d="'
+    + " ".join(
+        f"M {x:g} {_CRYST_TUBE_TOP:g} L {x:g} {_CRYST_TUBE_BOT:g}"
+        for x in ((CRYST_W - _CRYST_TUBE_W) / 2, (CRYST_W + _CRYST_TUBE_W) / 2))
+    + " "
+    + " ".join(
+        f"M {x:g} {_CRYST_BAFFLE_TOP:g} L {x:g} {_CRYST_HEAD + _CRYST_SHELL:g}"
+        for x in (_CRYST_BAFFLE_INSET, CRYST_W - _CRYST_BAFFLE_INSET))
+    + f'" {_DETAIL}/>'
+)
+
+#: Agitator in the draft tube: width, and the depth of its foot.
+CRYST_AGITATOR_W, CRYST_AGITATOR_FOOT = 28.0, 115.0
+
+# Vapour nozzle on the head, this far east of the shaft.
+_CRYST_VAPOR_DX = 22.5
+
+# Feed above the baffle, overflow from the settling zone behind it,
+# product from the leg.
+_CRYST_PORTS = {
+    "feed": (0.0, 50.0),
+    "vapor": (CRYST_W / 2 + _CRYST_VAPOR_DX,
+              round(_CRYST_HEAD * (1 - math.sqrt(1 - (2 * _CRYST_VAPOR_DX / CRYST_W) ** 2)), 4)),
+    "overflow": (CRYST_W, 96.0),
+    "product": (CRYST_W / 2, CRYST_H),
+}
+
+
+# Flotation cell: an open tank whose east wall is the froth lip, with
+# the launder hung outside it.
+FLOT_TANK_W = 100.0
+_FLOT_TANK_H = 80.0
+_FLOT_LAUNDER_W = 20.0
+# The launder's outer wall stands this far above the lip.
+_FLOT_LAUNDER_RISE = 10.0
+_FLOT_LAUNDER_DEPTH = 25.0
+FLOT_W = FLOT_TANK_W + _FLOT_LAUNDER_W
+FLOT_H = _FLOT_LAUNDER_RISE + _FLOT_TANK_H
+_FLOT_LIP = _FLOT_LAUNDER_RISE
+_FLOT_LAUNDER_FLOOR = _FLOT_LIP + _FLOT_LAUNDER_DEPTH
+
+_FLOT_OUTLINE = (
+    f'<path d="M 0 {_FLOT_LIP:g} L 0 {FLOT_H:g} L {FLOT_TANK_W:g} {FLOT_H:g} '
+    f'L {FLOT_TANK_W:g} {_FLOT_LIP:g} '
+    f'M {FLOT_TANK_W:g} {_FLOT_LAUNDER_FLOOR:g} L {FLOT_W:g} {_FLOT_LAUNDER_FLOOR:g} '
+    f'L {FLOT_W:g} 0" {_INK}/>'
+)
+
+# Air standpipe beside the shaft, from the top to above the impeller.
+_FLOT_AIR_X = 60.0
+_FLOT_AIR_FOOT = 50.0
+_FLOT_AIR = (
+    f'<line x1="{_FLOT_AIR_X:g}" y1="0" x2="{_FLOT_AIR_X:g}" '
+    f'y2="{_FLOT_AIR_FOOT:g}" {_DETAIL}/>'
+)
+
+# Froth: bubbles between the standpipe and the lip.
+_FLOT_BUBBLE_R = 2.5
+_FLOT_BUBBLES = "".join(
+    f'<circle cx="{x:g}" cy="{y:g}" r="{_FLOT_BUBBLE_R:g}" {_DETAIL}/>'
+    for x, y in ((70.0, 17.0), (78.0, 13.0), (80.0, 22.0), (88.0, 16.0), (94.0, 23.0)))
+
+#: Agitator on the tank's centre line: width, and the depth of its foot.
+FLOT_AGITATOR_W, FLOT_AGITATOR_FOOT = 24.0, 75.0
+
+# Feed through the west wall, froth out of the launder, tailings out of
+# the floor and air down the standpipe.
+_FLOT_PORTS = {
+    "feed": (0.0, 45.0),
+    "concentrate": (FLOT_W, 30.0),
+    "tailings": (80.0, FLOT_H),
+    "air": (_FLOT_AIR_X, 0.0),
+}
+
+
 # Rotary kiln shell: 26 units of fall over 180 of length.
 _KILN_W = 180.0
 _KILN_BORE = 28.0
@@ -3444,6 +3548,8 @@ class SymbolRegistry:
         self._register_mixers()
         self._register_screens()
         self._register_evaporators()
+        self._register_crystallizer()
+        self._register_flotation_cell()
         self._register_kilns()
         self._register_steam_trap()
 
@@ -3622,6 +3728,22 @@ class SymbolRegistry:
             _evap_tubes(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT, _EVAP_TUBE_XS),
             feed_y=_EVAP_FEED_LOW), "climbing_film")
         self.register("evaporator", _evaporator("plate", _EVAP_PLATES), "plate")
+
+    def _register_crystallizer(self):
+        """Register the draft-tube baffle crystallizer."""
+        self.register("crystallizer", Symbol(
+            svg=f'<g id="sym_crystallizer">{_CRYST_OUTLINE}{_CRYST_INTERNALS}</g>',
+            width=CRYST_W, height=CRYST_H, ports=dict(_CRYST_PORTS),
+            gravity_fixed=True,
+        ))
+
+    def _register_flotation_cell(self):
+        """Register the mechanical flotation cell."""
+        self.register("flotation_cell", Symbol(
+            svg=f'<g id="sym_flotation_cell">{_FLOT_OUTLINE}{_FLOT_AIR}{_FLOT_BUBBLES}</g>',
+            width=FLOT_W, height=FLOT_H, ports=dict(_FLOT_PORTS),
+            gravity_fixed=True,
+        ))
 
     def _register_kilns(self):
         """Register the rotary, fluidised-bed and shaft kilns."""

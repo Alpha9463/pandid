@@ -65,6 +65,8 @@ class Link:
         Level pipe its furniture needs.
     rise : float
         Upright pipe its furniture needs when its ends stack.
+    beside : bool
+        Whether its furniture needs its room beside its gap's lanes.
     """
 
     source: Port
@@ -72,6 +74,7 @@ class Link:
     recycle: bool = False
     room: float = 0.0
     rise: float = 0.0
+    beside: bool = False
 
 
 @dataclass(eq=False)
@@ -304,6 +307,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
         _shape(node, stacked, pads)
     _order(layers, segs)
     _row_pins(layers)
+    _face_tees(fs, layers, segs)
     _rank(layers)
     _straighten(layers, segs, {})
     held = _row_order(layers)
@@ -792,6 +796,49 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         layers[k].sort(key=lambda n: peer.get(n, pos[n]))
 
 
+def _face_tees(fs: Flowsheet, layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
+    """Note free tees whose branch peer is above the run, and turn them.
+
+    A tee is free when it is no station member and its turn and mirror
+    are unstated. Its branch peer and its run peer on the branch's side
+    are compared by their places in their layer. ``fs._tees_away``
+    records whether any such tee is found; with ``fs._face_tees`` set,
+    each such tee's branch turns north.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being laid out.
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    segs : list[_Seg]
+        Pipe steps between adjacent layers.
+    """
+    members = {u for a in fs._station_assemblies for u in a.station.members}
+    pos = {n: i for layer in layers.values() for i, n in enumerate(layer)}
+    # The far node of each nozzle's step, and whether it lies east.
+    peer: dict[int, tuple[_Node, bool]] = {}
+    for s in segs:
+        if s.lport is not None:
+            peer[id(s.lport)] = (s.right, True)
+        if s.rport is not None:
+            peer[id(s.rport)] = (s.left, False)
+    for layer in layers.values():
+        for node in layer:
+            for tee in node.members:
+                if (tee.kind != "tee" or tee in members or tee._turn_stated
+                        or tee._mirror_stated):
+                    continue
+                branch = peer.get(id(tee.ports["branch"]))
+                if branch is None:
+                    continue
+                run = next((end for p in (tee.ports["outlet"], tee.ports["inlet"])
+                            if (end := peer.get(id(p))) is not None and end[1] == branch[1]), None)
+                if run is not None and pos[branch[0]] < pos[run[0]]:
+                    fs._tees_away = True
+                    slot(tee).mirror_y = fs._face_tees
+
+
 def _row_pins(layers: dict[int, list[_Node]]) -> None:
     """Sort row-pinned stacks into pin order in the places they hold.
 
@@ -872,12 +919,15 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
     east = {k: max((n.pad.east for n in layers.get(k, [])), default=0.0) for k in width}
     west = {k: max((n.pad.west for n in layers.get(k, [])), default=0.0) for k in width}
     room = dict.fromkeys(width, 0.0)
+    beside = dict.fromkeys(width, 0.0)
     # Furniture room goes in the gap after the pipe's west end.
     for s in segs:
         if s.link.room and s.lport is not None:
             room[s.left.layer] = max(room[s.left.layer], s.link.room + END_ROOM)
+            if s.link.beside:
+                beside[s.left.layer] = max(beside[s.left.layer], s.link.room)
     for k, lanes in (_lanes(segs) if widen else {}).items():
-        room[k] = max(room[k], 2 * MIN_ESCAPE + (lanes + 1) * LANE_PITCH)
+        room[k] = max(room[k], 2 * MIN_ESCAPE + (lanes + 1) * LANE_PITCH + beside[k])
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
         left[k] = x
