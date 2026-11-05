@@ -618,10 +618,13 @@ class Flowsheet:
         self._exit_tight = False
         # Whether layout leaves two units unstacked where another unit in
         # their column is pinned to a row between theirs, whether the last
-        # layout stacked any such pair, and the stacked drawing route()
-        # held where it kept them unstacked.
+        # layout stacked any such pair, whether layout moves units pinned
+        # by row alone into row order, whether the last layout drew any out
+        # of it, and the drawing route() held where it kept either change.
         self._split_stacks = False
         self._stack_spans = False
+        self._order_rows = False
+        self._rows_out = False
         self._stacked: tuple | None = None
         # Engine the last layout ran.
         self._engine = None
@@ -2242,7 +2245,7 @@ class Flowsheet:
 
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
-        self._mounted_layout = self._exit_tight = self._stack_spans = False
+        self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2287,7 +2290,11 @@ class Flowsheet:
         unit pinned to a row between theirs, the sheet is laid out and
         routed again with those two unstacked, kept only if no tap leaves
         its line and no finding, clash, crossing or fallback route grows.
-        Where kept, the next route() starts from the stacked drawing.
+        Then, where a unit pinned by row alone is drawn no lower than one
+        pinned to a lower row, the sheet is laid out and routed again with
+        each such unit below those pinned to lower rows, kept on the same
+        terms. Where either is kept, the next route() starts from the
+        drawing before them.
 
         Parameters
         ----------
@@ -2309,9 +2316,13 @@ class Flowsheet:
                                      or any(u.frame is None for u in self.units)):
             self._put_state(held)
         self._route_lanes(router)
-        if (self._stack_spans and not self._laying_out
+        if ((self._stack_spans or self._rows_out) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
-            self._unstack(router)
+            first = self._state()
+            split = self._stack_spans and self._relayout(router, True, False)
+            if (self._rows_out and self._relayout(router, split, True)) or split:
+                self._stacked = first
+            self._stack_spans = self._rows_out = self._route_stale = False
 
     def _route_lanes(self, router=None) -> None:
         """Route the sheet, with lanes and grown faces where they draw no
@@ -2374,18 +2385,27 @@ class Flowsheet:
         finally:
             self._routing = False
 
-    def _unstack(self, router=None) -> None:
-        """Lay out and route the sheet again with two units unstacked where
-        another unit in their column is pinned to a row between theirs.
+    def _relayout(self, router, split: bool, order: bool) -> bool:
+        """Lay out and route the sheet again with stacks split or rows ordered.
 
         The new drawing is kept only if no tap leaves its line and no
-        finding, clash, crossing or fallback route grows; a kept drawing
-        holds the one it replaced for the next route().
+        finding, clash, crossing or fallback route grows; otherwise the
+        drawing before is put back.
 
         Parameters
         ----------
-        router : object or None, optional
+        router : object or None
             Router with ``route(fs)``; ``None`` uses the default.
+        split : bool
+            Leave two units unstacked where another unit in their column
+            is pinned to a row between theirs.
+        order : bool
+            Move units pinned by row alone into row order.
+
+        Returns
+        -------
+        bool
+            Whether the new drawing is kept.
         """
         from pandid.layout.conflicts import analyze_conflicts
         from pandid.layout.control import _flaws, _taps_off
@@ -2404,8 +2424,8 @@ class Flowsheet:
                          if c.kind in ("crossing", "fallback"))
             return flaws
 
-        before, off, stacked = count(), _taps_off(self), self._state()
-        self._split_stacks = self._routing = True
+        before, off, drawn = count(), _taps_off(self), self._state()
+        self._split_stacks, self._order_rows, self._routing = split, order, True
         try:
             self.layout(self._engine)
             self._route_once(router)
@@ -2414,12 +2434,10 @@ class Flowsheet:
         except Exception:
             kept = False
         finally:
-            self._split_stacks = self._routing = False
-        if kept:
-            self._stacked = stacked
-        else:
-            self._put_state(stacked)
-        self._stack_spans = self._route_stale = False
+            self._split_stacks = self._order_rows = self._routing = False
+        if not kept:
+            self._put_state(drawn)
+        return kept
 
     def _state(self) -> tuple:
         """Return a copy of the geometry and the state laid out with it.
@@ -2430,7 +2448,8 @@ class Flowsheet:
             State for :meth:`_put_state`.
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
-                        self._mounted_layout, self._widened, self._stack_spans))
+                        self._mounted_layout, self._widened, self._stack_spans,
+                        self._rows_out))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2441,7 +2460,8 @@ class Flowsheet:
             What :meth:`_state` returned.
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
-         self._mounted_layout, self._widened, self._stack_spans) = _copied(state)
+         self._mounted_layout, self._widened, self._stack_spans,
+         self._rows_out) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
