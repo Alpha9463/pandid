@@ -204,10 +204,11 @@ sheet has fewer bends or crossings and no new finding. The faces on offer:
 | Unit | Inlets | Outlets |
 |---|---|---|
 | `Block` | `"W"`, `"E"`, `"N"`, `"S"` | `"W"`, `"E"`, `"N"`, `"S"` |
-| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"` | `"S"`; `"gas_holder"`: `"E"` |
-| `Vessel` | `"W"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`; `"horizontal"`: `"S"` |
+| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"`, `"E"` | `"S"`; `"default"`, `"conical"` and `"floating_roof"` also `"W"`, `"E"` low on the wall; `"gas_holder"`: `"E"`, `"W"` |
+| `Vessel` | `"W"`, `"E"`, `"N"` (the top head); `"dome"`: `"W"`, `"E"`; `"electrical_heating"`: `"W"`, `"N"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`, `"W"`; `"horizontal"`: `"S"` |
 
-A head, roof or cone drawn to a point takes one connection. Fix a face with a
+An inlet and an outlet on one wall are spread apart along it, the inlet
+above. A head, roof or cone drawn to a point takes one connection. Fix a face with a
 list, with `unit.nozzle("in_2", "N")`, or by pinning the nozzle with
 `unit.pin(port="in_2", x=..., y=...)`.
 

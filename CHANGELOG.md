@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- A flat-floored `Tank` draws off from either wall as well as the floor, and an
+  upright `Vessel` takes its inlet on either wall or the top head and its outlet
+  on either wall: `Tank("TK-1").nozzle("outlet", "E")`. A counted one moves
+  there toward its peer where that draws fewer bends.
 
 ### Changed
 
