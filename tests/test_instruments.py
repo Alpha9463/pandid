@@ -2263,6 +2263,7 @@ def test_a_tap_line_is_routed_round_a_unit_in_its_way() -> None:
     (x0, y0), (x1, y1) = points[:2]
     assert y0 == y1 and x1 > x0, f"leaves the east face square: {points}"
     assert all(a[0] == b[0] or a[1] == b[1] for a, b in zip(points, points[1:])), points
+    assert "tap-crosses-unit" not in [i.code for i in fs.validate()]
     edge = fs.to_drawio().split('id="t0"', 1)[1].split("</mxCell>", 1)[0]
     assert edge.count("<mxPoint ") == len(points) - 2
 
@@ -2275,6 +2276,20 @@ def test_a_clear_tap_line_keeps_its_one_turn() -> None:
     ((inst, tap, centre),) = tap_lines(fs)
 
     assert tap_route(inst, tap, centre) == [tap, (centre[0], tap[1]), centre]
+
+
+def test_a_tap_line_with_no_way_round_is_reported() -> None:
+    """Check that a tap line still drawn through a unit names the unit to move."""
+    fs = Flowsheet("boxed in")
+    drum = fs.add(U.Vessel("D-101", width=60, height=100)).pin(x=100, y=100)
+    fs.add(U.Pump("P-101", width=60, height=160)).pin(x=165, y=70)
+    fs.add_instrument("LT", 101, sensing=drum, face="E").pin(x=400, y=128)
+    fs.route()
+
+    found = [i.message for i in fs.validate() if i.code == "tap-crosses-unit"]
+    assert len(found) == 1, found
+    assert "LT-101" in found[0] and "P-101" in found[0]
+    assert "call .pin(x=..., y=...) on P-101" in found[0]
 
 
 def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
@@ -2584,7 +2599,7 @@ def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
     fs.add_instrument("TIC", 1, near=tt, face="E", offset=50, angle=0)
     fs.route()
 
-    assert _flaws(fs)["tap-through-unit"] == 0
+    assert _flaws(fs)["tap-crosses-unit"] == 0
 
 
 def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():

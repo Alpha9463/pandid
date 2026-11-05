@@ -235,8 +235,8 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, tap lines through units or tag halos, and runs
-        two lines or tap lines share.
+        through tag halos, tap lines through tag halos, and runs two
+        lines or tap lines share.
     """
     from collections import Counter
 
@@ -271,8 +271,6 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
     taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
     for inst, route in taps:
-        flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
-                                         if u is not inst and u is not inst.host)
         flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
     runs = [(k, a, b) for k, points in enumerate(lines + [route for _, route in taps])
             for a, b in (_straight_runs(points) if full else zip(points, points[1:]))]

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 _HARD_CODES = (
     "unit-overlap",
     "route-crosses-unit",
+    "tap-crosses-unit",
     "pin-not-honored",
     "route-diagonal",
     "route-not-settled",

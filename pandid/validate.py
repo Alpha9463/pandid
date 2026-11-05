@@ -934,7 +934,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (drawn_box, is_anchored, pin_intent, port_faces,
                                  port_point, resolve_port)
-    from pandid.render.svg import crossings, stream_polyline
+    from pandid.render.svg import crossings, stream_polyline, tap_lines, tap_route
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
                                        label_span, wears_arrowhead)
@@ -1254,6 +1254,18 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 warnings.append(Issue("warning", "route-detour",
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
+
+        # Soft: a tap line drawn through a unit, with no clear way round.
+        for inst, tap, centre in tap_lines(fs):
+            route = tap_route(inst, tap, centre)
+            for u, box in boxes:
+                if u is inst or u is inst.host:
+                    continue
+                if any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:])):
+                    warnings.append(Issue(
+                        "warning", "tap-crosses-unit",
+                        f"the tap line from {inst.host.name} to {inst.name} finds no way "
+                        f"round {u.name}, so it is drawn through it. {_move_cure(u)}"))
 
         # Soft: a crossing within an arrowhead length of either line's nozzle.
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
