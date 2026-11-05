@@ -413,6 +413,79 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     return (offset, span, sh <= dh) if offset < span else None
 
 
+def _wall_clashes(u) -> list[Issue]:
+    """Return a placed unit's lines and parts drawn over its wall parts.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    list[Issue]
+        One ``wall-part-clash`` error per manhole or socket drawn over a
+        part, or crossed by a line on its way into the unit.
+    """
+    from pandid.portgeom import _xform, resolve_port, symbol_to_box
+    from pandid.render.symbols import default_registry, overlay_boxes
+    from pandid.units import _drawn_walls
+
+    walls = [(part, place) for part in ("manhole", "socket")
+             for place in getattr(u, f"{part}s", ())]
+    if not walls:
+        return []
+    base = tuple(getattr(u, "overlays", ()) or ())
+    parts, _, _ = _drawn_walls(u, base)
+    boxes = overlay_boxes(default_registry.get(u.kind, u.variant), base + parts)
+    named = [f"the {part} at {place!r}" for part, place in walls]
+    drawn = [(f"the {o.name} support", box) for o, box in zip(base, boxes)]
+    drawn += list(zip(named, boxes[len(base):]))
+    issues = []
+    for i, (name, box) in enumerate(drawn[len(base):]):
+        issues += [Issue("error", "wall-part-clash",
+                         f"{u.name}: {name} is drawn over {other}. Build {u.name} "
+                         f"with them further apart along the wall")
+                   for other, under in drawn[:len(base) + i]
+                   if boxes_overlap(box, under, -_TOL)]
+    mine = [(part, name, box) for (part, _), (name, box) in zip(walls, drawn[len(base):])]
+    sym, f = default_registry.for_unit(u), u.frame
+    rot, mirror_x, mirror_y = _xform(f)
+
+    def on_sheet(box):
+        """Return a box in the drawing's coordinates on the sheet.
+
+        Parameters
+        ----------
+        box : tuple[float, float, float, float]
+            Box in the drawing's own coordinates.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Box placed by the unit's frame.
+        """
+        (x0, y0, w, h), (x1, y1, _, _) = (
+            symbol_to_box(x, y, sym.width, sym.height, rot, mirror_x, mirror_y)
+            for x, y in (box[:2], box[2:]))
+        kx, ky = f.w / w, f.h / h
+        return (f.x + min(x0, x1) * kx, f.y + min(y0, y1) * ky,
+                f.x + max(x0, x1) * kx, f.y + max(y0, y1) * ky)
+
+    for port_name, port in u.ports.items():
+        if port.stream is None:
+            continue
+        stub = resolve_port(u, f, port_name)
+        issues += [Issue("error", "wall-part-clash",
+                         f"{u.name}: the line on {port_name} meets it through {name}, so it "
+                         f"reads as piped to the {part}. Build {u.name} with the {part} "
+                         f"elsewhere on the wall, or take the line to another face with "
+                         f"{u.name}.nozzle({port_name!r}, face)")
+                   for part, name, box in mine
+                   if segment_crosses_box(stub.anchor, stub.point, on_sheet(box))]
+    return issues
+
+
 def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     """Return the findings that need no layout, errors first.
 
@@ -969,6 +1042,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 warnings.append(Issue("warning", "pin-not-honored",
                                       f"{said}, and is not drawn so. Something moved one of "
                                       "them after layout read the pins"))
+
+        # Hard: a line or a part drawn over a manhole or socket.
+        for u in placed:
+            errors += _wall_clashes(u)
 
         boxes = [(u, drawn_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.
