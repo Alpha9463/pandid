@@ -1030,6 +1030,8 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "centrifuge/skimmer": "X8039",
     # ISO 10628-2 group 4, STEAM GENERATORS, FURNACES, RECOOLING DEVICE.
     "boiler/default": "2532",
+    # Group 17, BLOWERS, FANS.
+    "blower/general": "X8164",
     "stack/default": "2041",
     "flare/default": "2591",
     # Group 10, DRIER.
