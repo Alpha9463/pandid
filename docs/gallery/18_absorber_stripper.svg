@@ -682,14 +682,14 @@
     <symbol id="sym_hex_straight_tubes_s140x44" viewBox="0 0 140 44" overflow="visible"><rect x="0" y="0" width="140" height="44" fill="white" stroke="#111" stroke-width="2"/><path d="M 21 0 L 21 44 M 119 0 L 119 44 M 119 11 L 21 11 M 119 22 L 21 22 M 119 33 L 21 33" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_valve_control" viewBox="0 0 24.5 19.75" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="white" stroke="#111" stroke-width="4"/></g></symbol>
-    <symbol id="sym_vessel_horizontal_s120x40" viewBox="0 0 120 40" overflow="visible"><path d="M 7.563906 40 L 112.436094 40 A 20 7.562858 90 0 0 119.998951 20 A 20 7.562858 90 0 0 112.436094 0 L 7.563906 0 A 20 7.562858 90 0 0 0.001049 20 A 20 7.562858 90 0 0 7.563906 40 Z M 7.563906 0 L 7.563906 40 M 112.436094 0 L 112.436094 40" fill="white" stroke="#111" stroke-width="2"/></symbol>
+    <symbol id="sym_vessel_horizontal_120x40_cf99ece5a" viewBox="0 0 120.0 40.0" overflow="visible"><path d="M 5.7692 40 L 114.231 40 A 5.7692 20 0 0 0 120 20 A 5.7692 20 0 0 0 114.231 0 L 5.7692 0 A 5.7692 20 0 0 0 0 20 A 5.7692 20 0 0 0 5.7692 40 Z M 5.7692 0 L 5.7692 40 M 114.231 0 L 114.231 40" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
     <use href="#sym_column_ce5d94ab1_s110x340" x="300" y="250" width="110" height="340" />
     <use href="#sym_column_ccf4dcb41_s110x300" x="980" y="290" width="110" height="300" />
     <use href="#sym_hex_straight_tubes_s140x44" x="620" y="800" width="140" height="44" />
     <use href="#sym_hex_condenser_s70x70_ty" x="1000" y="139.68" width="70" height="70" transform="translate(0, 349.36) scale(1, -1)" />
-    <use href="#sym_vessel_horizontal_s120x40" x="1200" y="128.36" width="120" height="40" />
+    <use href="#sym_vessel_horizontal_120x40_cf99ece5a" x="1200" y="128.36" width="120" height="40" />
     <use href="#sym_hex_kettle_s130x46" x="1400" y="640" width="130" height="46" />
     <use href="#sym_hex_straight_tubes_s130x40" x="370" y="960" width="130" height="40" />
     <use href="#sym_pump" x="530" y="870" width="70.0" height="67.0" transform="translate(1130, 0) scale(-1, 1)" />
@@ -727,8 +727,8 @@
     <path d="M 760.0,822.0 L 880.0,822.0 L 880.0,775 M 880.0,765 L 880.0,447.5 L 980.0,447.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1035.0,290.0 L 1035.0,201.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1035.0,148.36 L 1200.0,148.36" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1272.099628577671,128.36 L 1272.099628577671,60 L 1700.0,60.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1289.1413589687568,168.36 L 1289.1413589687568,240.0 L 1350.0,240.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1283.5,128.36 L 1283.5,60 L 1700.0,60.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1296.5,168.36 L 1296.5,240.0 L 1350.0,240.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1420.0,220.0 L 1480.0,220.0 L 1480.0,305 M 1480.0,315 L 1480.0,342.5 L 1090.0,342.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1035.0,590.0 L 1035.0,730.0 L 1465.0,730.0 L 1465.0,681.8181818181819" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1490.9289617486338,640.0 L 1490.9289617486338,552.5 L 1090.0,552.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -754,10 +754,10 @@
     <text x="1035.0" y="245.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1035.0, 245.5)">S-406</text>
     <rect x="1101.2" y="141.9" width="32.7" height="13.0" fill="white" />
     <text x="1117.5" y="148.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-407</text>
-    <rect x="1469.7" y="53.5" width="32.7" height="13.0" fill="white" />
-    <text x="1486.0" y="60.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-408</text>
-    <rect x="1272.1" y="187.8" width="13.0" height="32.7" fill="white" />
-    <text x="1278.6" y="204.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1278.6, 204.2)">S-409</text>
+    <rect x="1475.4" y="53.5" width="32.7" height="13.0" fill="white" />
+    <text x="1491.8" y="60.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-408</text>
+    <rect x="1279.5" y="187.8" width="13.0" height="32.7" fill="white" />
+    <text x="1286.0" y="204.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1286.0, 204.2)">S-409</text>
     <rect x="1233.7" y="723.5" width="32.7" height="13.0" fill="white" />
     <text x="1250.0" y="730.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-410</text>
     <rect x="1274.1" y="546.0" width="32.7" height="13.0" fill="white" />
