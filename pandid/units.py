@@ -161,6 +161,15 @@ _PLACEMENT_HINTS = Deprecation(
 )
 
 
+#: Deprecation of reassigning a variant that builds the unit's ports.
+_VARIANT_REASSIGNED = Deprecation(
+    what="reassigning variant on a built unit",
+    instead="a new unit built with variant=",
+    removed_in="0.4.0",
+    note="its ports and faces are built from the variant it was given",
+)
+
+
 #: Deprecation of a vessel's default_input_face() and default_output_face().
 _DEFAULT_FACES = Deprecation(
     what="default_input_face() or default_output_face()",
@@ -227,7 +236,8 @@ class Unit:
     name : str
         Tag.
     variant : str
-        Registry variant name.
+        Registry variant name. Reassigning it is deprecated on a unit
+        whose ports or faces are built from it.
     ports : dict[str, Port]
         Ports by name.
     flowsheet : Flowsheet or None
@@ -267,6 +277,9 @@ class Unit:
 
     # Attributes __setattr__ refuses to reassign after __init__.
     _FIXED_AT_CONSTRUCTION: frozenset[str] = frozenset()
+
+    # Whether __init__ builds ports or faces from the variant.
+    _VARIANT_BUILDS = False
 
     COMPOSITION: dict[str, Any] = {}
 
@@ -444,6 +457,12 @@ class Unit:
             and finite.
         AttributeError
             If an attribute fixed at construction is reassigned.
+
+        Warns
+        -----
+        DeprecationWarning
+            If ``variant`` is reassigned on a unit whose ports or faces
+            are built from it.
         """
         if name in ("width", "height") and value is not None:
             where = self.__dict__.get("name", "?")
@@ -462,7 +481,10 @@ class Unit:
                 f"leave the drawing disagreeing with the object. Build a new "
                 f"{type(self).__name__} with {name}={value!r} instead."
             )
+        built = name == "variant" and name in self.__dict__
         super().__setattr__(name, value)
+        if built and self._VARIANT_BUILDS:
+            _VARIANT_REASSIGNED.warn(self, where=self.name)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
 
@@ -1259,6 +1281,7 @@ class Valve(_NormallyPositioned):
     ]
     #: Ports by variant, defaulting to :data:`_DEFAULT_PORTS`.
     _VARIANT_PORTS = {"three_way": [*_DEFAULT_PORTS, ("branch", "outlet", "process")]}
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -1820,6 +1843,8 @@ class _MultiPortVessel(_FaceFamilies):
     inlets, outlets : tuple[Port, ...]
         Port families in declaration order.
     """
+
+    _VARIANT_BUILDS = True
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
@@ -2642,6 +2667,8 @@ class _VariantPorted(Unit):
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
     """
+
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -4079,6 +4106,7 @@ class Reactor(Unit):
             ("duty", "inlet", "energy"),
         ],
     }
+    _VARIANT_BUILDS = True
 
     # Bodies that get an agitator by default.
     _STIRRED = ("default", "jacketed")
@@ -4229,6 +4257,7 @@ class Separator(Unit):
         "permanent_magnet": _OVER_AND_UNDER,
         "electromagnetic": _OVER_AND_UNDER,
     }
+    _VARIANT_BUILDS = True
     # Variant -> {port: artwork anchor}, where the artwork renames one.
     _VARIANT_ANCHORS = {
         "cyclone": {"overflow": "vapor", "underflow": "liquid"},

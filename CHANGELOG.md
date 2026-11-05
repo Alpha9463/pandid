@@ -35,6 +35,9 @@ These are removed in 0.4.0.
 
 - `pandid.document.equipment_list()`, the drawn box, and the spec box
   `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
+- Reassigning `variant` on a built `Valve`, `Vessel`, `Tank`, `Filter`,
+  `HeatExchanger`, `Reactor` or `Separator`, whose ports or faces come from it.
+  Build a new unit with `variant=`.
 
 ### Fixed
 
