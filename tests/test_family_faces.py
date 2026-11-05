@@ -6,7 +6,7 @@ import pytest
 
 from pandid import Flowsheet, units
 from pandid.layout import layered
-from pandid.layout.quality import measure_final
+from _quality import measure_final
 from pandid.portgeom import port_anchor, resolve_port
 from pandid.render.symbols import BLOCK_PITCH
 from pandid.spec import from_dict, to_dict
