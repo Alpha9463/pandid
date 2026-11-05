@@ -9,6 +9,7 @@ from pandid.layout.mounted import mounted_runs
 from _quality import measure_final
 from pandid.portgeom import port_point
 from pandid.state import State
+from pandid.stations import ValveStation
 
 
 def test_add_on_keeps_the_line_handle_and_places_the_valve() -> None:
@@ -388,6 +389,23 @@ def test_a_refused_valve_station_leaves_the_sheet_unchanged(on_line: bool) -> No
 
     assert [u.name for u in fs.units] == units
     assert [s.name for s in fs.streams] == streams
+
+
+def test_a_valve_station_on_a_line_takes_its_colour_and_dashes() -> None:
+    """Draw a station's run, bypass and drains as the line it sits on."""
+    fs = Flowsheet("Coloured")
+    line = fs.connect(fs.add(Feed("F")).outlet, fs.add(Product("P")).inlet)
+    line.color, line.dasharray = "blue", "4,2"
+    other = fs.connect(fs.add(Feed("G")).outlet, fs.add(Product("Q")).inlet)
+    coloured = fs.add_valve_station("CV-1", on=line)
+    plain = fs.add_valve_station("CV-2", on=other)
+
+    def drawn(station: ValveStation) -> set[tuple[str | None, str | None]]:
+        """Return the colour and dashes of each line leaving a member."""
+        return {(s.color, s.dasharray) for s in fs.streams if s.source.owner in station.members}
+
+    assert drawn(coloured) == {("blue", "4,2")}
+    assert drawn(plain) == {(None, None)}
 
 
 def _recycle_loop(marked: bool) -> tuple[Flowsheet, Stream]:

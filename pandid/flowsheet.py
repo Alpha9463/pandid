@@ -1573,7 +1573,8 @@ class Flowsheet:
         sequence, spec, insulation : str or float, optional
             Bypass and drain line sequence, piping class and insulation.
         on : Stream or None, optional
-            Material line from :meth:`connect` to put the station in.
+            Material line from :meth:`connect` to put the station in;
+            the station's pipework takes its colour and dash pattern.
         at : float or None, optional
             Position on that line, as for :meth:`add`.
 
