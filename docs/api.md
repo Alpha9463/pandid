@@ -203,7 +203,9 @@ units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
 diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
 electric; two energy/utility ports make an energy stream; other process ports
 make a material stream. `add_control_loop()` infers its output line the same way
-unless `output_kind=` is given.
+unless `output_kind=` is given. On a PFD, `validate()` reports
+`energy-carrier-missing` until the label drawn on an energy line names its
+carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
 
 `connect()` also accepts `name`, `draw_as_recycle`, `ends` and line-number fields
 `size`, `schedule`, `service`, `sequence`, `spec` and `insulation`. The first

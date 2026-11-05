@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from pandid import Condenser, Flowsheet, Pin, units as U
+from pandid import Condenser, Flowsheet, Pin, Stream, units as U
 from pandid.portgeom import pin_intent, pinned_x, pinned_y, port_point, resolve_port
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
@@ -1387,6 +1387,95 @@ def test_a_soft_finding_is_a_warning_and_the_sheet_still_draws(build, code, rend
     fs = build()
     assert [i.severity for i in _found(fs, code)] == ["warning"]
     fs.to_svg(**render)
+
+
+# --- energy-carrier-missing ------------------------------------------------
+
+
+def heat_integrated(fs: Flowsheet | None = None, **connect: Any) -> tuple[Flowsheet, Stream]:
+    """Build a sheet whose cooler passes its duty to its heater."""
+    if fs is None:
+        fs = Flowsheet("heat")
+    feed = fs.add(U.Feed("F"))
+    cooler = fs.add(U.Cooler("E-2"))
+    heater = fs.add(U.Heater("E-1"))
+    product = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, cooler.inlet)
+    fs.connect(cooler.outlet, heater.inlet)
+    fs.connect(heater.outlet, product.inlet)
+    duty = fs.connect(cooler.utility_out, heater.utility_in, **connect)
+    assert duty.kind == "energy"
+    return fs, duty
+
+
+def _drawn_label(fs: Flowsheet, text: str) -> bool:
+    """Return whether a label drawn on the sheet contains *text*."""
+    return re.search(rf">[^<]*{re.escape(text)}[^<]*</text>", fs.to_svg()) is not None
+
+
+def test_an_energy_line_that_names_no_carrier_is_reported_on_a_pfd():
+    fs, duty = heat_integrated()
+    (found,) = _found(fs, "energy-carrier-missing")
+    assert found.severity == "warning"
+    assert found.message.startswith(f"{duty.name}, the energy line from E-2 to E-1,")
+    assert "4.3.2 e)" in found.message
+
+
+@pytest.mark.parametrize(
+    ("connect", "diagram"),
+    [
+        ({"service": "LP steam"}, "pfd"),
+        ({"name": "LP steam", "service": "LP steam"}, "pfd"),
+        ({}, "p&id"),
+        ({}, "bfd"),
+    ],
+)
+def test_an_energy_line_is_not_reported_once_its_carrier_is_drawn_or_off_a_pfd(connect, diagram):
+    """Check a drawn carrier, a P&ID and a BFD each leave the finding quiet."""
+    fs, _ = heat_integrated(**connect)
+    assert _found(fs, "energy-carrier-missing", diagram=diagram) == []
+
+
+# Every keyword=value a finding spells, quoted as Python writes it.
+_ADVISED = re.compile(r"""(\w+)=('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")""")
+_AUTHORED = {"sequence": "42", "spec": "CS"}
+
+
+@pytest.mark.parametrize(
+    ("scheme", "connect"),
+    [
+        (None, {}),
+        (None, _AUTHORED),
+        (None, {"name": "Q-1", **_AUTHORED}),
+        (None, {"name": "Q-1", "service": "cooling water", **_AUTHORED}),
+        ("{size}-{sequence}", {"service": "cooling water", **_AUTHORED}),
+        ("{size}-{sequence}", _AUTHORED),
+    ],
+    ids=[
+        "unset",
+        "unset-with-fields",
+        "unset-under-a-given-name",
+        "hidden-by-a-given-name",
+        "left-out-of-the-scheme",
+        "unset-and-left-out-of-the-scheme",
+    ],
+)
+def test_following_the_advice_draws_the_carrier_and_keeps_what_was_typed(scheme, connect):
+    """Check the advice, applied as written, clears the finding and discards nothing."""
+    fs = Flowsheet("heat") if scheme is None else Flowsheet("heat", line_numbering_scheme=scheme)
+    fs, _ = heat_integrated(fs, **connect)
+    if "service" in connect:
+        assert not _drawn_label(fs, connect["service"])
+    (found,) = _found(fs, "energy-carrier-missing")
+    advice = {key: ast.literal_eval(value) for key, value in _ADVISED.findall(found.message)}
+    assert advice, found.message
+    scheme = advice.pop("line_numbering_scheme", scheme)
+    fs = Flowsheet("heat") if scheme is None else Flowsheet("heat", line_numbering_scheme=scheme)
+    fs, duty = heat_integrated(fs, **{**connect, **advice})
+    assert _found(fs, "energy-carrier-missing") == []
+    assert _drawn_label(fs, str(duty.service))
+    for key, value in connect.items():
+        assert value in str(getattr(duty, key)), f"{key}={value!r} lost: {found.message}"
 
 
 # --- validate() answers about the sheet that was drawn ------------------------

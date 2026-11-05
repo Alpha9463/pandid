@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Vessel` and `Evaporator` draw manholes and sockets on their walls:
   `Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)])`. Each socket
   is a port, `socket_1`, `socket_2`, and so on.
+- On a PFD, `validate()` warns when an energy line does not name its carrier.
+  Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
 
 ### Changed
 

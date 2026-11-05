@@ -1834,7 +1834,8 @@ class Flowsheet:
             ``"pneumatic"`` for a signal line to the actuator of a valve
             drawn with a diaphragm or with no actuator, ``"electric"``
             for another signal line, ``"energy"`` between two energy or
-            utility ports, else ``"material"``.
+            utility ports, else ``"material"``. An energy line names its
+            carrier with ``service``, which its line number draws.
         name : str or None, optional
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False
