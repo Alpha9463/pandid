@@ -411,6 +411,10 @@ _APPROXIMATIONS = {
         None, "the propeller across the casing"),
     ("boiler", "default"): _Approximation(
         None, "the shell's own outline and the dome on its crown"),
+    ("furnace", "general"): _Approximation(
+        None, "the lining inside the walls and the chamfered floor"),
+    ("furnace", "combustion_chamber"): _Approximation(
+        None, "the burner plate and the flame on it"),
     ("stack", "default"): _Approximation(
         None, "the tapered shaft and the foundation flange under it"),
     ("flare", "default"): _Approximation(
