@@ -385,8 +385,8 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     """Return the distance and angle to hang a balloon at.
 
     A balloon whose requested box straddles its stream tap keeps it. No
-    candidate's box, moved to the balloon's pin, may come within
-    :data:`TOUCHING` of ``runs``.
+    candidate's box, moved to the balloon's pin, may come within an
+    arrowhead length of ``runs``.
 
     Parameters
     ----------
@@ -412,6 +412,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     tuple[float, float]
         First clear standoff and angle, else the least crowded.
     """
+    from pandid.render.symbols import ARROWHEAD
     from pandid.streams import Stream
 
     on_a_line = isinstance(inst.host, Stream)
@@ -434,7 +435,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
             y0 = box[1] if pin is None or pin.y is None else float(pin.y)
             drawn = (x0, y0, x0 + w, y0 + h)
             if not (any(_intrusion(box, o, gap) > 0.0 for o in against)
-                    or any(_intrusion(drawn, r, TOUCHING) > 0.0 for r in runs)):
+                    or any(_intrusion(drawn, r, ARROWHEAD) > 0.0 for r in runs)):
                 return distance, angle
             # Rank fallbacks by the overlap validation reports.
             crowding = sum(_intrusion(box, o, -TOUCHING) for o in obstacles)

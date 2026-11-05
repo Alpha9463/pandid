@@ -2490,6 +2490,27 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
 
 
+@pytest.mark.parametrize(("offset", "hung", "angle"), [(50, 35, 135)])
+def test_a_balloon_hung_across_the_tapped_line_settles_clear_of_it(
+    offset: float, hung: float, angle: float
+) -> None:
+    """Settle a chain whose asked spot crosses the tapped line, with the line drawn straight."""
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("hung across")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=offset, angle=90)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=hung, angle=angle)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    assert {y for _, y in stream_path(line)} == {200.0}
+    assert [i.code for i in fs.validate() if i.code.startswith("route-")] == []
+
+
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
 
