@@ -249,6 +249,43 @@ def test_a_balloon_kept_off_a_tag_does_not_cross_a_line_to_get_there():
     assert crossing_count(lines + taps) == 0
 
 
+def test_a_balloon_kept_off_a_tag_is_not_moved_under_other_text():
+    """Check that clearing a mixer's tag does not move TT-1 under HV-2's NC plate."""
+    import re
+
+    from pandid.layout.conflicts import boxes_overlap
+    from pandid.portgeom import unit_box
+
+    fs = Flowsheet("NC overlap")
+    feed, product = fs.add(U.Feed("F-1")).pin(x=100, y=400), fs.add(U.Product("P-1"))
+    lower = fs.connect(feed.outlet, product.pin(x=600, y=400).inlet)
+    valve = fs.add(
+        U.Valve("HV-2", variant="butterfly", normal_position="closed", label_pos="bottom")
+    ).pin(x=230, y=316)
+    mixer = fs.add(U.Fitting("M-101", variant="static_mixer", label_pos="bottom"))
+    mixer.pin(port="inlet", x=325, y=320)
+    upper = fs.add(U.Feed("F-2")).pin(x=100, y=323.5)
+    fs.connect(upper.outlet, valve.inlet)
+    fs.connect(valve.outlet, mixer.inlet)
+    fs.connect(mixer.outlet, fs.add(U.Product("P-2")).pin(x=600, y=250).inlet)
+    tt = fs.add_instrument("TT", 1, near=lower, at=0.4, offset=50, angle=45)
+    body = fs.to_svg(diagram="p&id").split("</defs>", 1)[1]
+    nc = re.search(r'<text x="([\d.]+)" y="([\d.]+)"[^>]*>NC</text>', body)
+    assert nc is not None
+    x, y = float(nc.group(1)), float(nc.group(2))
+    plates = [
+        (float(m[0]), float(m[1]), float(m[0]) + float(m[2]), float(m[1]) + float(m[3]))
+        for m in re.findall(
+            r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" '
+            r'fill="white" />',
+            body,
+        )
+    ]
+    under_nc = [p for p in plates if p[0] <= x <= p[2] and p[1] <= y <= p[3]]
+    assert under_nc
+    assert not any(boxes_overlap(unit_box(tt, frame_of(tt)), p) for p in under_nc)
+
+
 def test_angle_follows_a_reroute_rather_than_the_screen():
     """Check that the angle is measured from the flow on a vertical leg, not the screen."""
     fs = Flowsheet("v")

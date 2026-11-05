@@ -300,7 +300,8 @@ def _drawn(fs: "Flowsheet") -> "Counter[str]":
     -------
     Counter[str]
         :func:`_flaws`, plus ``"crossing"`` over every drawn line and
-        tap line, and ``"bend"`` over every drawn line.
+        tap line, ``"bend"`` over every drawn line, and
+        ``"balloon-on-text"`` from :func:`_balloons_on_text`.
     """
     from pandid.render.svg import tap_lines, tap_route
     from pandid.route_geometry import stream_polyline
@@ -312,7 +313,43 @@ def _drawn(fs: "Flowsheet") -> "Counter[str]":
     flaws = _flaws(fs)
     flaws["crossing"] = crossing_count(paths + taps)
     flaws["bend"] = sum(real_bends(path) for path in paths)
+    flaws["balloon-on-text"] = _balloons_on_text(fs)
     return flaws
+
+
+def _balloons_on_text(fs: "Flowsheet") -> int:
+    """Count the plates text is drawn on that cover part of a balloon.
+
+    The sheet is drawn as its last render was, and its warnings are put
+    back. Each plate counts once for a balloon's outline and once for
+    each line of its lettering it covers.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    int
+        Plates over balloon outlines plus plates over balloon lettering.
+    """
+    from pandid.layout.conflicts import _BODY_TOL, boxes_overlap
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import SvgRenderer, lettering_boxes
+
+    renderer = SvgRenderer()
+    was = fs.warnings
+    contents = list(was)
+    try:
+        renderer.render(fs, diagram=fs._drawn_as)
+    finally:
+        was[:] = contents
+        fs.warnings = was
+    parts = [box for u in fs.units if u.kind == "instrument" and u.frame is not None
+             for box in [unit_box(u, u.frame), *lettering_boxes(u)]]
+    return sum(boxes_overlap(part, plate, -_BODY_TOL)
+               for part in parts for plate in renderer.plates)
 
 
 def _taps_off(fs: "Flowsheet") -> set[int]:
