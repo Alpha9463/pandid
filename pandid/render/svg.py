@@ -272,10 +272,11 @@ def tap_routes(fs):
     Each line is its square turn (:func:`_square_tap`) unless that
     crosses a unit body or another unit's tag. Such a line is then
     routed round them (:func:`pandid.routing.route_tap`), in
-    :func:`tap_lines` order, priced against the streams, every clear
-    tap line and every tap line routed before it. The first route that
-    crosses fewer bodies and tags, and shares no more runs with those
-    lines, is kept.
+    :func:`tap_lines` order, priced against the streams and every
+    other tap line as drawn so far. The first route that crosses fewer
+    bodies and tags, and whose ink beyond its square turn's
+    (:func:`_new_ink`) meets no other line (:func:`_touches`), is
+    kept.
 
     Parameters
     ----------
@@ -290,7 +291,6 @@ def tap_routes(fs):
     """
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import segment_crosses_box
-    from pandid.layout.control import _shared
     from pandid.routing import route_tap
     from pandid.routing.visibility import _tag_halo
 
@@ -320,24 +320,6 @@ def tap_routes(fs):
         return sum(any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
                    for u, box in obstacles if u is not inst and u is not inst.host)
 
-    def shared(route, lines) -> int:
-        """Count the segments of other lines a tap line runs along.
-
-        Parameters
-        ----------
-        route : list[tuple[float, float]]
-            Tap line points.
-        lines : list[list[tuple[float, float]]]
-            Other drawn lines.
-
-        Returns
-        -------
-        int
-            Pairs of segments that share a run.
-        """
-        return sum(_shared(a, b, c, d) for line in lines for c, d in zip(line, line[1:])
-                   for a, b in zip(route, route[1:]))
-
     pipes = [stream_path(s) for s in fs.streams if s.route is not None]
     taps = tap_lines(fs)
     squares = [_square_tap(inst, tap, centre) for inst, tap, centre in taps]
@@ -346,13 +328,102 @@ def tap_routes(fs):
     for k, ((inst, tap, centre), (path, faces)) in enumerate(zip(taps, squares)):
         if not crossed[k] or not faces:
             continue
-        lines = pipes + [line for j, line in enumerate(drawn)
-                         if j < k or (j > k and not crossed[j])]
-        runs = shared(path, lines)
+        lines = pipes + drawn[:k] + drawn[k + 1:]
         drawn[k] = next((routed for routed in route_tap(inst, tap, faces, centre, lines)
                          if clashes(inst, routed) < crossed[k]
-                         and shared(routed, lines) <= runs), path)
+                         and not _touches(_new_ink(routed, path), lines)), path)
     return [(inst, path) for (inst, _, _), path in zip(taps, drawn)]
+
+
+def _new_ink(route, square):
+    """Return the part of a tap line its square turn does not draw.
+
+    Both leave the tap; the run they share from it is left out. A route
+    leaving the other way starts :data:`~pandid.routing.visibility.EDGE_TOL`
+    from the tap, the one point it must meet its host at.
+
+    Parameters
+    ----------
+    route : list[tuple[float, float]]
+        Rerouted tap line.
+    square : list[tuple[float, float]]
+        Its square turn.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Points from where the route leaves the square turn to the balloon
+        centre.
+    """
+    from pandid.routing.visibility import EDGE_TOL
+
+    (tx, ty), (rx, ry), (sx, sy) = route[0], route[1], square[1]
+    ux, uy = (rx > tx) - (rx < tx), (ry > ty) - (ry < ty)
+    run = abs(rx - tx) + abs(ry - ty)
+    shared = (ux, uy) == ((sx > tx) - (sx < tx), (sy > ty) - (sy < ty))
+    d = min(run, abs(sx - tx) + abs(sy - ty)) if shared else EDGE_TOL
+    start = (tx + ux * d, ty + uy * d)
+    return route[1:] if start == route[1] else [start, *route[1:]]
+
+
+def _touches(route, lines) -> bool:
+    """Return whether a line meets any other line but by crossing it.
+
+    Two segments meet when they come within
+    :data:`~pandid.routing.visibility.EDGE_TOL` of each other, the
+    distance a line lies on a box edge. A level and an upright segment
+    that cross cross rather than meet when every corner of either is at
+    least :data:`HOP_R`, the room a crossing mark takes, from the other,
+    and every end of another line at least :data:`ARROWHEAD`, the room
+    a crossing keeps from a nozzle. A shared run, a corner or end on
+    another line, and a near touch all meet.
+
+    Parameters
+    ----------
+    route : list[tuple[float, float]]
+        Line points.
+    lines : list[list[tuple[float, float]]]
+        Other drawn lines.
+
+    Returns
+    -------
+    bool
+        Whether any segment of ``route`` meets one of ``lines``.
+    """
+    from pandid.routing.visibility import EDGE_TOL
+
+    def box(p, q):
+        """Return the box a segment spans.
+
+        Parameters
+        ----------
+        p, q : tuple[float, float]
+            Segment ends.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``(x0, y0, x1, y1)``.
+        """
+        return min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1])
+
+    for a, b in zip(route, route[1:]):
+        ab = box(a, b)
+        for line in lines:
+            last = len(line) - 2
+            for j, (c, d) in enumerate(zip(line, line[1:])):
+                cd = box(c, d)
+                if not boxes_overlap(ab, cd, EDGE_TOL):
+                    continue
+                across = ((a[1] == b[1] and a[0] != b[0] and c[0] == d[0] and c[1] != d[1])
+                          or (a[0] == b[0] and a[1] != b[1] and c[1] == d[1] and c[0] != d[0]))
+                room = ((a, cd, HOP_R), (b, cd, HOP_R),
+                        (c, ab, ARROWHEAD if j == 0 else HOP_R),
+                        (d, ab, ARROWHEAD if j == last else HOP_R))
+                if not across or any(boxes_overlap(box(p, p), other, gap)
+                                     for p, other, gap in room):
+                    return True
+    return False
 
 
 def _square_tap(inst, tap, centre):
