@@ -368,3 +368,14 @@ def test_a_moved_inlet_and_a_moved_stencil_nozzle_both_round_trip(cls, options, 
     assert isinstance(got, units.Tank | units.Vessel)
     assert got.face("in_1") == moves["inlet"]
     assert to_dict(from_dict(to_dict(fs))) == to_dict(fs)
+
+
+def test_a_line_meeting_a_roof_nozzle_is_not_counted_through_its_tank():
+    """Count no line through a unit where a line meets its own inset nozzle."""
+    from pandid.layout.control import _flaws
+
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1", inputs=["N"])).pin(x=300, y=300)
+    _flag(fs, tank, "in_1", 340, 150, False)
+    fs.route()
+    assert _flaws(fs)["line-through-unit"] == 0
