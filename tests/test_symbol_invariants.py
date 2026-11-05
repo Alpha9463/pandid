@@ -1037,17 +1037,23 @@ def test_series_members_lie_on_drawn_geometry(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_every_port_series_sets_two_members_an_arrowhead_pitch_apart(entry):
-    """Verify every series pitch, and two members' gap, is MIN_NOZZLE_PITCH."""
+def test_every_port_series_sets_its_members_an_arrowhead_pitch_apart(entry):
+    """Verify every series pitch, and its members' gaps, is MIN_NOZZLE_PITCH.
+
+    Every series is checked at two members, and a reactor's at three.
+    """
     (kind, variant), sym = entry
     for series in sym.port_series:
         assert series.pitch >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}"
         band = sym.bands.get(series.face)
-        (x0, y0), (x1, y1) = (
-            series.placement(i, 2, sym.width, sym.height, band=band) for i in (0, 1)
-        )
-        gap = abs(y1 - y0) if series.face in ("W", "E") else abs(x1 - x0)
-        assert gap >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}: {gap}"
+        axis = 1 if series.face in ("W", "E") else 0
+        for count in (2, 3) if kind == "reactor" else (2,):
+            along = [
+                series.placement(i, count, sym.width, sym.height, band=band)[axis]
+                for i in range(count)
+            ]
+            gap = min(b - a for a, b in zip(along, along[1:]))
+            assert gap >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix} x{count}: {gap}"
 
 
 def test_a_lone_member_lands_where_the_fixed_nozzle_did():
