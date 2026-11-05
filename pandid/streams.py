@@ -142,7 +142,8 @@ class Stream:
     route : Route or None
         Resolved or manually supplied route.
     color, dasharray : str or None
-        Line colour and dash pattern, validated when set.
+        Line colour and dash pattern, validated when set; set on a split
+        line's handle, they apply to its whole run.
     ends : str, tuple[str, str], or None
         Joint style at both ends or ``(source, dest)``; ``None``
         inherits the sheet's ``connections``, unlike ``"none"``.
@@ -184,12 +185,16 @@ class Stream:
     _logical_to: Port | None = field(default=None, init=False, repr=False, compare=False)
     _logical_segments: list[Stream] = field(default_factory=list, init=False, repr=False, compare=False)
     _logical_root: Stream | None = field(default=None, init=False, repr=False, compare=False)
+    _logical_pipework: list[Stream] = field(default_factory=list, init=False, repr=False, compare=False)
 
     #: Fields validated on assignment, with their checks.
     _CHECKED = {"color": check_color, "dasharray": check_dasharray}
 
     def __setattr__(self, name: str, value) -> None:
         """Set an attribute, validating ``color`` and ``dasharray``.
+
+        Either set on a split line's handle is set on the line's every
+        segment and the pipework of its valve stations.
 
         Parameters
         ----------
@@ -214,6 +219,10 @@ class Stream:
                 )
             check(value, self)
         object.__setattr__(self, name, value)
+        if check is not None:
+            for part in (*getattr(self, "_logical_segments", ()),
+                         *getattr(self, "_logical_pipework", ())):
+                object.__setattr__(part, name, value)
 
     @property
     def is_recycle(self) -> bool:

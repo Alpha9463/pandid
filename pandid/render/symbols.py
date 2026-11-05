@@ -20,7 +20,7 @@ from typing import Callable
 from pandid._checks import suggest
 from pandid.portgeom import outward_dir
 from pandid.render.iso_parts import _DASH_LONG, _SQ2
-from pandid.render.weights import LineWeight
+from pandid.render.weights import M, LineWeight
 from pandid.streams import SIGNAL_KINDS
 
 # Placements closer than this are the same point.
@@ -2473,6 +2473,94 @@ _KNEADER = Symbol(
 )
 
 
+# Fans. ISO 10628-2 item 17.1, X8164: a 6 M circle with two chords
+# converging on the discharge and a three-bladed impeller at its centre.
+_FAN_R = 3 * M
+
+
+def _fan_chord(sign: int) -> str:
+    """Return one chord of item 17.1, clipped to the circle.
+
+    The chord runs through the grid points (-1.5 M, -2.5 M) and
+    (2.5 M, -1.5 M) from the centre, mirrored below the axis.
+
+    Parameters
+    ----------
+    sign : int
+        ``-1`` for the chord above the axis, ``1`` for the one below.
+
+    Returns
+    -------
+    str
+        Path data for the chord.
+    """
+    (x0, y0), (dx, dy) = (-1.5 * M, sign * 2.5 * M), (4 * M, -sign * M)
+    # Solve |P0 + t D| = R for the two ends.
+    a, b, c = dx * dx + dy * dy, 2 * (x0 * dx + y0 * dy), x0 * x0 + y0 * y0 - _FAN_R ** 2
+    ends = ((-b + k * math.sqrt(b * b - 4 * a * c)) / (2 * a) for k in (-1, 1))
+    (ax, ay), (bx, by) = ((_FAN_R + x0 + t * dx, _FAN_R + y0 + t * dy) for t in ends)
+    return f"M {ax:.4f} {ay:.4f} L {bx:.4f} {by:.4f} "
+
+
+# Impeller: blades 2 M long, sides of radius 2 M; the two rear blades
+# tip at (-1 M, -1.5 M) and (-1 M, 1.5 M) from the hub and share one
+# inner arc through it.
+_FAN_BLADE_R = 2 * M
+_FAN_REAR_R = 1.625 * M
+_FAN_GENERAL = Symbol(
+    svg='<g id="sym_blower_general">'
+        f'<circle cx="{_FAN_R:g}" cy="{_FAN_R:g}" r="{_FAN_R:g}" {_OUTLINE}/>'
+        f'<path d="{_fan_chord(-1)}{_fan_chord(1)}'
+        f'M {_FAN_R:g} {_FAN_R:g} '
+        f'A {_FAN_BLADE_R:g} {_FAN_BLADE_R:g} 0 0 1 {_FAN_R + 2 * M:g} {_FAN_R:g} '
+        f'A {_FAN_BLADE_R:g} {_FAN_BLADE_R:g} 0 0 1 {_FAN_R:g} {_FAN_R:g} '
+        f'A {_FAN_BLADE_R:g} {_FAN_BLADE_R:g} 0 0 1 {_FAN_R - M:g} {_FAN_R - 1.5 * M:g} '
+        f'M {_FAN_R:g} {_FAN_R:g} '
+        f'A {_FAN_BLADE_R:g} {_FAN_BLADE_R:g} 0 0 0 {_FAN_R - M:g} {_FAN_R + 1.5 * M:g} '
+        f'M {_FAN_R - M:g} {_FAN_R - 1.5 * M:g} '
+        f'A {_FAN_REAR_R:g} {_FAN_REAR_R:g} 0 0 1 {_FAN_R - M:g} {_FAN_R + 1.5 * M:g}" '
+        f'{_INK}/></g>',
+    width=2 * _FAN_R, height=2 * _FAN_R,
+    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
+    iso_reg="X8164",
+)
+
+# Centrifugal fan: a scroll round the eye, discharging east along its
+# crown.
+_SCROLL_R = 30.0
+_SCROLL_EYE_R = 10.0
+_SCROLL_OUTLET_W, _SCROLL_OUTLET_H = 40.0, 20.0
+_SCROLL_W = _SCROLL_R + _SCROLL_OUTLET_W
+_SCROLL_LIP_X = _SCROLL_R + math.sqrt(_SCROLL_R ** 2 - (_SCROLL_R - _SCROLL_OUTLET_H) ** 2)
+_FAN_CENTRIFUGAL = Symbol(
+    svg='<g id="sym_blower_centrifugal">'
+        f'<path d="M {_SCROLL_R:g} 0 L {_SCROLL_W:g} 0 L {_SCROLL_W:g} {_SCROLL_OUTLET_H:g} '
+        f'L {_SCROLL_LIP_X:.4f} {_SCROLL_OUTLET_H:g} '
+        f'A {_SCROLL_R:g} {_SCROLL_R:g} 0 1 1 {_SCROLL_R:g} 0 Z" {_OUTLINE}/>'
+        f'<circle cx="{_SCROLL_R:g}" cy="{_SCROLL_R:g}" r="{_SCROLL_EYE_R:g}" {_INK}/></g>',
+    width=_SCROLL_W, height=2 * _SCROLL_R,
+    ports={"suction": (0.0, _SCROLL_R), "discharge": (_SCROLL_W, _SCROLL_OUTLET_H / 2)},
+)
+
+# Axial fan: a two-bladed propeller across a casing on the run.
+_AXIAL_W, _AXIAL_H = 60.0, 40.0
+_AXIAL_BLADE = 15.0
+_AXIAL_BLADE_R = 12.0
+_FAN_AXIAL = Symbol(
+    svg='<g id="sym_blower_axial">'
+        f'<rect x="0" y="0" width="{_AXIAL_W:g}" height="{_AXIAL_H:g}" {_OUTLINE}/>'
+        '<path d="'
+        + "".join(
+            f"M {_AXIAL_W / 2:g} {_AXIAL_H / 2:g} "
+            f"A {_AXIAL_BLADE_R:g} {_AXIAL_BLADE_R:g} 0 0 1 {_AXIAL_W / 2:g} {tip:g} "
+            f"A {_AXIAL_BLADE_R:g} {_AXIAL_BLADE_R:g} 0 0 1 {_AXIAL_W / 2:g} {_AXIAL_H / 2:g} "
+            for tip in (_AXIAL_H / 2 - _AXIAL_BLADE, _AXIAL_H / 2 + _AXIAL_BLADE))
+        + f'" {_INK}/></g>',
+    width=_AXIAL_W, height=_AXIAL_H,
+    ports={"suction": (0.0, _AXIAL_H / 2), "discharge": (_AXIAL_W, _AXIAL_H / 2)},
+)
+
+
 # ISO 10628-2 item 24.15, registered 2181: the steam trap.
 
 #: Steam trap body diameter.
@@ -2782,6 +2870,110 @@ def _evaporator(name: str, *detail: str,
         bands={face: (_EVAP_HEAD + 10, _EVAP_HEAD + _EVAP_SHELL - 10) for face in ("W", "E")},
         gravity_fixed=True,
     )
+
+
+# Draft-tube baffle crystallizer: dished head, straight shell, cone and
+# elutriation leg.
+CRYST_W = 90.0
+_CRYST_HEAD = 12.0
+_CRYST_SHELL = 110.0
+_CRYST_CONE = 35.0
+_CRYST_LEG_W, _CRYST_LEG_H = 20.0, 15.0
+CRYST_H = _CRYST_HEAD + _CRYST_SHELL + _CRYST_CONE + _CRYST_LEG_H
+
+_CRYST_OUTLINE = (
+    f'<path d="M 0 {_CRYST_HEAD:g} '
+    f'A {CRYST_W / 2:g} {_CRYST_HEAD:g} 0 0 1 {CRYST_W:g} {_CRYST_HEAD:g} '
+    f'L {CRYST_W:g} {_CRYST_HEAD + _CRYST_SHELL:g} '
+    f'L {(CRYST_W + _CRYST_LEG_W) / 2:g} {CRYST_H - _CRYST_LEG_H:g} '
+    f'L {(CRYST_W + _CRYST_LEG_W) / 2:g} {CRYST_H:g} '
+    f'L {(CRYST_W - _CRYST_LEG_W) / 2:g} {CRYST_H:g} '
+    f'L {(CRYST_W - _CRYST_LEG_W) / 2:g} {CRYST_H - _CRYST_LEG_H:g} '
+    f'L 0 {_CRYST_HEAD + _CRYST_SHELL:g} Z" {_OUTLINE}/>'
+)
+
+# Draft tube: width, top and bottom.
+_CRYST_TUBE_W = 36.0
+_CRYST_TUBE_TOP, _CRYST_TUBE_BOT = 40.0, 120.0
+
+# Baffle skirt: inset from the shell, from its top down to the cone.
+_CRYST_BAFFLE_INSET = 10.0
+_CRYST_BAFFLE_TOP = 70.0
+
+_CRYST_INTERNALS = (
+    '<path d="'
+    + " ".join(
+        f"M {x:g} {_CRYST_TUBE_TOP:g} L {x:g} {_CRYST_TUBE_BOT:g}"
+        for x in ((CRYST_W - _CRYST_TUBE_W) / 2, (CRYST_W + _CRYST_TUBE_W) / 2))
+    + " "
+    + " ".join(
+        f"M {x:g} {_CRYST_BAFFLE_TOP:g} L {x:g} {_CRYST_HEAD + _CRYST_SHELL:g}"
+        for x in (_CRYST_BAFFLE_INSET, CRYST_W - _CRYST_BAFFLE_INSET))
+    + f'" {_DETAIL}/>'
+)
+
+#: Agitator in the draft tube: width, and the depth of its foot.
+CRYST_AGITATOR_W, CRYST_AGITATOR_FOOT = 28.0, 115.0
+
+# Vapour nozzle on the head, this far east of the shaft.
+_CRYST_VAPOR_DX = 22.5
+
+# Feed above the baffle, overflow from the settling zone behind it,
+# product from the leg.
+_CRYST_PORTS = {
+    "feed": (0.0, 50.0),
+    "vapor": (CRYST_W / 2 + _CRYST_VAPOR_DX,
+              round(_CRYST_HEAD * (1 - math.sqrt(1 - (2 * _CRYST_VAPOR_DX / CRYST_W) ** 2)), 4)),
+    "overflow": (CRYST_W, 96.0),
+    "product": (CRYST_W / 2, CRYST_H),
+}
+
+
+# Flotation cell: an open tank whose east wall is the froth lip, with
+# the launder hung outside it.
+FLOT_TANK_W = 100.0
+_FLOT_TANK_H = 80.0
+_FLOT_LAUNDER_W = 20.0
+# The launder's outer wall stands this far above the lip.
+_FLOT_LAUNDER_RISE = 10.0
+_FLOT_LAUNDER_DEPTH = 25.0
+FLOT_W = FLOT_TANK_W + _FLOT_LAUNDER_W
+FLOT_H = _FLOT_LAUNDER_RISE + _FLOT_TANK_H
+_FLOT_LIP = _FLOT_LAUNDER_RISE
+_FLOT_LAUNDER_FLOOR = _FLOT_LIP + _FLOT_LAUNDER_DEPTH
+
+_FLOT_OUTLINE = (
+    f'<path d="M 0 {_FLOT_LIP:g} L 0 {FLOT_H:g} L {FLOT_TANK_W:g} {FLOT_H:g} '
+    f'L {FLOT_TANK_W:g} {_FLOT_LIP:g} '
+    f'M {FLOT_TANK_W:g} {_FLOT_LAUNDER_FLOOR:g} L {FLOT_W:g} {_FLOT_LAUNDER_FLOOR:g} '
+    f'L {FLOT_W:g} 0" {_INK}/>'
+)
+
+# Air standpipe beside the shaft, from the top to above the impeller.
+_FLOT_AIR_X = 60.0
+_FLOT_AIR_FOOT = 50.0
+_FLOT_AIR = (
+    f'<line x1="{_FLOT_AIR_X:g}" y1="0" x2="{_FLOT_AIR_X:g}" '
+    f'y2="{_FLOT_AIR_FOOT:g}" {_DETAIL}/>'
+)
+
+# Froth: bubbles between the standpipe and the lip.
+_FLOT_BUBBLE_R = 2.5
+_FLOT_BUBBLES = "".join(
+    f'<circle cx="{x:g}" cy="{y:g}" r="{_FLOT_BUBBLE_R:g}" {_DETAIL}/>'
+    for x, y in ((70.0, 17.0), (78.0, 13.0), (80.0, 22.0), (88.0, 16.0), (94.0, 23.0)))
+
+#: Agitator on the tank's centre line: width, and the depth of its foot.
+FLOT_AGITATOR_W, FLOT_AGITATOR_FOOT = 24.0, 75.0
+
+# Feed through the west wall, froth out of the launder, tailings out of
+# the floor and air down the standpipe.
+_FLOT_PORTS = {
+    "feed": (0.0, 45.0),
+    "concentrate": (FLOT_W, 30.0),
+    "tailings": (80.0, FLOT_H),
+    "air": (_FLOT_AIR_X, 0.0),
+}
 
 
 # Rotary kiln shell: 26 units of fall over 180 of length.
@@ -3413,8 +3605,17 @@ class SymbolRegistry:
         self._register_mixers()
         self._register_screens()
         self._register_evaporators()
+        self._register_crystallizer()
+        self._register_flotation_cell()
         self._register_kilns()
         self._register_steam_trap()
+        self._register_fans()
+
+    def _register_fans(self):
+        """Register the general, centrifugal and axial fans."""
+        self.register("blower", _FAN_GENERAL, "general")
+        self.register("blower", _FAN_CENTRIFUGAL, "centrifugal")
+        self.register("blower", _FAN_AXIAL, "axial")
 
     def _register_steam_trap(self):
         """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""
@@ -3591,6 +3792,22 @@ class SymbolRegistry:
             _evap_tubes(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT, _EVAP_TUBE_XS),
             feed_y=_EVAP_FEED_LOW), "climbing_film")
         self.register("evaporator", _evaporator("plate", _EVAP_PLATES), "plate")
+
+    def _register_crystallizer(self):
+        """Register the draft-tube baffle crystallizer."""
+        self.register("crystallizer", Symbol(
+            svg=f'<g id="sym_crystallizer">{_CRYST_OUTLINE}{_CRYST_INTERNALS}</g>',
+            width=CRYST_W, height=CRYST_H, ports=dict(_CRYST_PORTS),
+            gravity_fixed=True,
+        ))
+
+    def _register_flotation_cell(self):
+        """Register the mechanical flotation cell."""
+        self.register("flotation_cell", Symbol(
+            svg=f'<g id="sym_flotation_cell">{_FLOT_OUTLINE}{_FLOT_AIR}{_FLOT_BUBBLES}</g>',
+            width=FLOT_W, height=FLOT_H, ports=dict(_FLOT_PORTS),
+            gravity_fixed=True,
+        ))
 
     def _register_kilns(self):
         """Register the rotary, fluidised-bed and shaft kilns."""

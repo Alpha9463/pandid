@@ -40,6 +40,8 @@ __all__ = [
     "Reactor",
     "Separator",
     "Thickener",
+    "FlotationCell",
+    "Crystallizer",
     "Absorber",
     "Stripper",
     "DistillationColumn",
@@ -161,6 +163,15 @@ _PLACEMENT_HINTS = Deprecation(
 )
 
 
+#: Deprecation of reassigning a variant that builds the unit's ports.
+_VARIANT_REASSIGNED = Deprecation(
+    what="reassigning variant on a built unit",
+    instead="a new unit built with variant=",
+    removed_in="0.4.0",
+    note="its ports and faces are built from the variant it was given",
+)
+
+
 #: Deprecation of a vessel's default_input_face() and default_output_face().
 _DEFAULT_FACES = Deprecation(
     what="default_input_face() or default_output_face()",
@@ -227,7 +238,8 @@ class Unit:
     name : str
         Tag.
     variant : str
-        Registry variant name.
+        Registry variant name. Reassigning it is deprecated on a unit
+        whose ports or faces are built from it.
     ports : dict[str, Port]
         Ports by name.
     flowsheet : Flowsheet or None
@@ -267,6 +279,12 @@ class Unit:
 
     # Attributes __setattr__ refuses to reassign after __init__.
     _FIXED_AT_CONSTRUCTION: frozenset[str] = frozenset()
+
+    # Composition parts, redrawn when the variant is reassigned.
+    _composition: "tuple[_Part, ...]" = ()
+
+    # Whether __init__ builds ports or faces from the variant.
+    _VARIANT_BUILDS = False
 
     COMPOSITION: dict[str, Any] = {}
 
@@ -448,9 +466,16 @@ class Unit:
             number.
         ValueError
             If ``width`` or ``height`` is a number that is not positive
-            and finite.
+            and finite, or a reassigned ``variant`` cannot carry the
+            unit's parts, manholes or sockets.
         AttributeError
             If an attribute fixed at construction is reassigned.
+
+        Warns
+        -----
+        DeprecationWarning
+            If ``variant`` is reassigned on a unit whose ports or faces
+            are built from it.
         """
         if name in ("width", "height") and value is not None:
             where = self.__dict__.get("name", "?")
@@ -469,7 +494,10 @@ class Unit:
                 f"leave the drawing disagreeing with the object. Build a new "
                 f"{type(self).__name__} with {name}={value!r} instead."
             )
+        old = self.__dict__.get(name)
         super().__setattr__(name, value)
+        if name == "variant" and old is not None:
+            _recompose(self, old)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
 
@@ -483,6 +511,12 @@ class Unit:
             Tag, or ``""``.
         """
         return "" if self.balloon is not None else self.name
+
+    def _check_parts(self) -> None:
+        """Refuse parts this unit's rules forbid on its variant.
+
+        A plain unit refuses none.
+        """
 
     def repeats(self, other: "Unit") -> bool:
         """Return whether this unit is another drawing of ``other``.
@@ -1266,6 +1300,7 @@ class Valve(_NormallyPositioned):
     ]
     #: Ports by variant, defaulting to :data:`_DEFAULT_PORTS`.
     _VARIANT_PORTS = {"three_way": [*_DEFAULT_PORTS, ("branch", "outlet", "process")]}
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -1477,6 +1512,7 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     """
     from pandid.render.symbols import default_registry
 
+    unit._composition = parts
     stated = [(keyword, value, place) for keyword, value, place in parts if value is not None]
     overlays = _placed(stated, unit.variant)
     if not overlays:
@@ -1496,6 +1532,71 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
             f"{named}; variants that can: {', '.join(able) or 'none'}"
         )
     unit.overlays = overlays
+
+
+def _recompose(unit: "Unit", old: str) -> None:
+    """Redraw a unit's parts on its new variant, or restore ``old``.
+
+    Overlays added after the parts are kept, after the redrawn parts.
+    On a unit whose ports or faces are built from its variant, the
+    reassignment is reported as deprecated. Whatever raises, the unit
+    keeps ``old`` and its overlays.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit whose variant was reassigned.
+    old : str
+        Variant it had.
+
+    Raises
+    ------
+    ValueError
+        If the overlays no longer begin with the parts the unit was
+        built with, or the new variant cannot carry the parts, the
+        added overlays, the manholes or the sockets.
+
+    Warns
+    -----
+    DeprecationWarning
+        If the unit's ports or faces are built from its variant.
+    """
+    from pandid.render.symbols import default_registry
+
+    overlays = unit.__dict__.get("overlays")
+    stated = [(keyword, value, place) for keyword, value, place in unit._composition
+              if value is not None]
+    built, current = _placed(stated, old), tuple(overlays or ())
+    walls = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
+    try:
+        if unit._composition:
+            if current[:len(built)] != built:
+                raise ValueError(
+                    f"{unit.name}: its overlays no longer begin with the parts it was "
+                    f"built with, so a new variant cannot redraw them. Build "
+                    f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
+                    f"instead"
+                )
+            _compose_onto(unit, *unit._composition)
+            unit._check_parts()
+            added = current[len(built):]
+            if added:
+                drawn = _placed(stated, unit.variant) + added
+                unit.overlays = drawn
+                default_registry.composed(unit.kind, unit.variant, drawn)
+            for keyword, placed in zip(("manholes", "sockets"), walls):
+                _on_walls(unit, keyword, placed)
+            if any(walls):
+                default_registry.for_unit(unit)
+        if unit._VARIANT_BUILDS:
+            _VARIANT_REASSIGNED.warn(unit, where=unit.name, stacklevel=4)
+    except BaseException:
+        unit.__dict__["variant"] = old
+        if overlays is None:
+            unit.__dict__.pop("overlays", None)
+        else:
+            unit.__dict__["overlays"] = overlays
+        raise
 
 
 #: Placements of a wall part, ``(face, fraction)`` each.
@@ -1896,6 +1997,8 @@ class _MultiPortVessel(_FaceFamilies):
     inlets, outlets : tuple[Port, ...]
         Port families in declaration order.
     """
+
+    _VARIANT_BUILDS = True
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
@@ -2358,7 +2461,8 @@ class Tank(_MultiPortVessel):
 class Blower(_FluidMover):
     """Fan or blower.
 
-    Parameters are those of :class:`Unit`.
+    ``"general"`` draws ISO 10628-2 item 17.1; ``"centrifugal"`` and
+    ``"axial"`` draw those fans. Parameters are those of :class:`Unit`.
     """
 
     kind = "blower"
@@ -2453,10 +2557,12 @@ class Tee(Unit):
     """Pipe tee: the junction where a line branches.
 
     The run passes straight through ``inlet`` and ``outlet``; the branch
-    leaves the south face at a right angle. ``pin(mirrored="y")`` turns
-    the branch north, ``orientation=90`` runs N to S with the branch W
-    and ``orientation=270`` runs S to N with the branch E. A tee has no
-    tag. Tees may share a name, and
+    leaves the south face at a right angle, or the north face where the
+    unit it serves is drawn above the run.
+    ``pin(mirrored=False)`` keeps the branch south,
+    ``pin(mirrored="y")`` turns it north, ``orientation=90`` runs N to S
+    with the branch W and ``orientation=270`` runs S to N with the branch
+    E. A tee has no tag. Tees may share a name, and
     :meth:`~pandid.flowsheet.Flowsheet.add` renames them ``TEE (2)``,
     ``TEE (3)``. The run keeps its line number through the tee unless
     ``new_line_number`` is set; the branch starts its own.
@@ -2766,6 +2872,8 @@ class _VariantPorted(Unit):
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
     """
+
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -4026,6 +4134,130 @@ class Thickener(Unit):
         _compose_onto(self, ("rake", rake, lambda name, _body: rake_overlays(name)))
 
 
+class Crystallizer(Unit):
+    """Draft-tube baffle crystallizer.
+
+    ``feed`` enters the west wall, ``vapor`` leaves the head,
+    ``overflow`` takes clear liquor from the settling zone behind the
+    baffle and ``product`` draws the slurry from the leg. ``validate``
+    reports a turned crystallizer as ``gravity-turned``.
+
+    Parameters
+    ----------
+    name : str
+        Tag.
+    variant : str, default="default"
+        Body drawing.
+    agitator : str or None, default="propeller"
+        Agitator in the draft tube, one of :class:`Reactor`'s
+        ``agitator`` names, or ``None``. Fixed at construction.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
+
+    Attributes
+    ----------
+    agitator : str or None
+        Agitator drawn in the draft tube.
+
+    Raises
+    ------
+    ValueError
+        If ``agitator`` is unknown or the variant cannot carry it.
+    """
+
+    feed: Port
+    vapor: Port
+    overflow: Port
+    product: Port
+
+    kind = "crystallizer"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("overflow", "outlet", "liquid"),
+        ("product", "outlet", "process"),
+    ]
+    COMPOSITION = {"agitator": "propeller"}
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator"})
+
+    def __init__(  # numpydoc ignore=GL08
+        self,
+        name: str,
+        variant: str = "default",
+        agitator: str | None = "propeller",
+        **options: Unpack[_UnitOptions],
+    ):
+        super().__init__(name, variant=variant, **options)
+        from pandid.render.iso_parts import draft_tube_overlays
+
+        self.agitator = agitator
+        _compose_onto(self, ("agitator", agitator,
+                             lambda name, _body: draft_tube_overlays(name)))
+
+
+class FlotationCell(Unit):
+    """Mechanical flotation cell.
+
+    ``feed`` enters the west wall, ``concentrate`` leaves the froth
+    launder on the east, ``tailings`` leaves the floor and ``air``
+    enters the standpipe beside the shaft. ``validate`` reports a
+    turned cell as ``gravity-turned``.
+
+    Parameters
+    ----------
+    name : str
+        Tag.
+    variant : str, default="default"
+        Body drawing.
+    agitator : str or None, default="turbine"
+        Rotor on the shaft, one of :class:`Reactor`'s ``agitator``
+        names, or ``None``. Fixed at construction.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
+
+    Attributes
+    ----------
+    agitator : str or None
+        Rotor drawn on the shaft.
+
+    Raises
+    ------
+    ValueError
+        If ``agitator`` is unknown or the variant cannot carry it.
+    """
+
+    feed: Port
+    concentrate: Port
+    tailings: Port
+    air: Port
+
+    kind = "flotation_cell"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("concentrate", "outlet", "process"),
+        ("tailings", "outlet", "process"),
+        ("air", "inlet", "utility"),
+    ]
+    COMPOSITION = {"agitator": "turbine"}
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator"})
+
+    def __init__(  # numpydoc ignore=GL08
+        self,
+        name: str,
+        variant: str = "default",
+        agitator: str | None = "turbine",
+        **options: Unpack[_UnitOptions],
+    ):
+        super().__init__(name, variant=variant, **options)
+        from pandid.render.iso_parts import flotation_overlays
+
+        self.agitator = agitator
+        _compose_onto(self, ("agitator", agitator,
+                             lambda name, _body: flotation_overlays(name)))
+
+
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
     """Return the feed port names ``feed_1`` to ``feed_n``.
 
@@ -4223,6 +4455,7 @@ class Reactor(Unit):
             ("duty", "inlet", "energy"),
         ],
     }
+    _VARIANT_BUILDS = True
 
     # Bodies that get an agitator by default.
     _STIRRED = ("default", "jacketed")
@@ -4259,6 +4492,28 @@ class Reactor(Unit):
             else None,
         }
 
+    def _check_parts(self) -> None:
+        """Refuse an agitator on a body wider than it is tall.
+
+        Raises
+        ------
+        ValueError
+            If the reactor has an agitator and its body is not upright.
+        """
+        from pandid.render.symbols import default_registry
+
+        if self.agitator is None:
+            return
+        # An agitator hangs from the head of an upright body.
+        bodies = {v: default_registry.get(self.kind, v)
+                  for v in default_registry.variants(self.kind)}
+        upright = [v for v, body in bodies.items() if body.height >= body.width]
+        if self.variant not in upright:
+            raise ValueError(
+                f"{self.name}: {type(self).__name__} variant {self.variant!r} cannot carry "
+                f"agitator={self.agitator!r}; variants that can: {', '.join(upright)}"
+            )
+
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
@@ -4279,7 +4534,6 @@ class Reactor(Unit):
             self._add_port(*spec)
         # Internals are drawn first, under the stirrer shaft.
         from pandid.render.iso_parts import agitator_overlays, internals_overlays
-        from pandid.render.symbols import default_registry
 
         _compose_onto(
             self,
@@ -4287,16 +4541,8 @@ class Reactor(Unit):
             # Placed by the body's aspect.
             ("agitator", agitator, lambda name, body: agitator_overlays(name, self.kind, body)),
         )
+        self._check_parts()
         if agitator is not None:
-            # An agitator hangs from the head of an upright body.
-            bodies = {v: default_registry.get(self.kind, v)
-                      for v in default_registry.variants(self.kind)}
-            upright = [v for v, body in bodies.items() if body.height >= body.width]
-            if self.variant not in upright:
-                raise ValueError(
-                    f"{name}: {type(self).__name__} variant {self.variant!r} cannot carry "
-                    f"agitator={agitator!r}; variants that can: {', '.join(upright)}"
-                )
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
@@ -4413,6 +4659,7 @@ class Separator(Unit):
         "permanent_magnet": _OVER_AND_UNDER,
         "electromagnetic": _OVER_AND_UNDER,
     }
+    _VARIANT_BUILDS = True
     # Variant -> {port: artwork anchor}, where the artwork renames one.
     _VARIANT_ANCHORS = {
         "cyclone": {"overflow": "vapor", "underflow": "liquid"},

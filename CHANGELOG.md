@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a port, `socket_1`, `socket_2`, and so on.
 - On a PFD, `validate()` warns when an energy line does not name its carrier.
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
+- `Crystallizer` draws a draft-tube baffle crystallizer with `feed`, `vapor`,
+  `overflow` and `product` nozzles. `agitator=` names the stirrer in its draft
+  tube, or `None`.
+- `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
+  (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
+  rotor on its shaft, or `None`.
+- `CentrifugalFan` and `AxialFan` draw those fans, and
+  `Blower(variant="general")` draws the ISO 10628-2 fan.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -27,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-field-undrawn` when a line-number field set in
+  `connect()` is not drawn: `name=` replaces the line number,
+  `line_numbering_scheme` leaves the field out, or the field is stated past a
+  valve or tee that carries another segment's number on. It names the fix.
 
 ### Changed
 
@@ -50,9 +62,20 @@ These are removed in 0.4.0.
 - `duty` on `Reactor(variant="jacketed")`, which now draws `jacket_in`. Use
   `JacketedReactor`, with `jacket_in` for the jacket's supply and `jacket_out`
   for its return.
+- Reassigning `variant` on a built `Valve`, `Vessel`, `Tank`, `Filter`,
+  `HeatExchanger`, `Reactor` or `Separator`, whose ports or faces come from it.
+  Build a new unit with `variant=`.
 
 ### Fixed
 
+- The equipment list and `fs.equipment_list()` include centrifuges and
+  crushing machines.
+- A `Tee` whose branch serves a unit drawn above the run turns its branch north,
+  so a header of tees no longer draws each branch as a box crossing back through
+  the run. `tee.pin(mirrored=False)` keeps the branch south.
+- A valve or fitting on a line from a `Splitter`, or into a `Mixer`, sits next
+  to the unit at the line's other end, so a bank of pumps draws its isolation
+  valves beside the pumps without crossings. One given `at=` keeps its place.
 - A balloon takes any number of signal lines. Lines on one side of it leave
   from separate points on its outline instead of stacking on one point.
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
@@ -86,18 +109,25 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- Reassigning `variant` on a unit built with supports, an agitator, internals,
+  manholes or sockets redraws them on the new body and keeps any overlays added
+  since, or refuses a body that cannot carry them and keeps the old one.
 - `route()` routes a line again where moving it off a shared track makes it
   cross lines its route did not count, and keeps the new drawing only if it
   has no more crossings, bends or findings.
 - A vessel whose supports, manholes or sockets widen its box draws every inlet
   or outlet on the wall it was given, so
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
+- `line.color` and `line.dasharray` set after `on=` has split the line style
+  the whole line, including the pipework of a valve station on it.
 - A line that states only a sequence draws it as its line number:
   `fs.connect(..., sequence="2740")` draws `2740` instead of `S1`.
 - A valve's actuator sits on the body's centre line, so a balloon added with
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
   `port_offset()` can differ in the second decimal.
+- A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
+  draws its run, bypass and drains in the line's `color` and `dasharray`.
 
 ## [0.2.0] - 2026-11-05
 

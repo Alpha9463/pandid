@@ -6,10 +6,21 @@ import re
 
 import pytest
 
-from pandid import ControlValve, Feed, Flowsheet, GearPump, Product, Valve, Vessel
+from pandid import (
+    Centrifuge,
+    ControlValve,
+    CrushingMachine,
+    Feed,
+    Flowsheet,
+    GearPump,
+    Product,
+    Valve,
+    Vessel,
+)
 from pandid.deprecation import CODE
-from pandid.document import equipment_list, equipment_table
+from pandid.document import _MAJOR_EQUIPMENT, equipment_list, equipment_table
 from pandid.render.furniture import stream_table_layout
+from pandid.render.symbols import default_registry
 
 
 def _sheet() -> Flowsheet:
@@ -188,6 +199,39 @@ def test_the_equipment_list_has_one_row_per_scheduled_unit():
         {"tag": "V-101", "description": "Vessel", "class": "Vessel", "variant": "default"},
     ]
     assert [(r["tag"], r["description"]) for r in rows] == equipment_table(fs).rows
+
+
+#: Registered kinds that are not equipment: flags, junctions, line items
+#: and functions.
+_NOT_EQUIPMENT = {
+    "block",
+    "feed",
+    "fitting",
+    "funnel",
+    "instrument",
+    "mixer",
+    "product",
+    "reducer",
+    "splitter",
+    "spray_nozzle",
+    "tee",
+    "valve",
+    "vent",
+}
+
+
+def test_every_equipment_kind_is_on_the_equipment_list():
+    """Check that each registered kind of equipment is scheduled by default."""
+    kinds = {kind for kind, _variant in default_registry._symbols}
+    assert kinds - _MAJOR_EQUIPMENT == _NOT_EQUIPMENT
+
+
+def test_a_centrifuge_and_a_crushing_machine_are_scheduled():
+    """Check that the equipment list names a centrifuge and a crushing machine."""
+    fs = Flowsheet("Solids")
+    fs.add(Centrifuge("CF-101", description="Decanter"))
+    fs.add(CrushingMachine("CM-101"))
+    assert [r["tag"] for r in fs.equipment_list()] == ["CF-101", "CM-101"]
 
 
 def test_the_instrument_index_has_one_row_per_balloon():

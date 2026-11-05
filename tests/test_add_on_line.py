@@ -9,6 +9,7 @@ from pandid.layout.mounted import mounted_runs
 from _quality import measure_final
 from pandid.portgeom import port_point
 from pandid.state import State
+from pandid.stations import ValveStation
 
 
 def test_add_on_keeps_the_line_handle_and_places_the_valve() -> None:
@@ -388,6 +389,50 @@ def test_a_refused_valve_station_leaves_the_sheet_unchanged(on_line: bool) -> No
 
     assert [u.name for u in fs.units] == units
     assert [s.name for s in fs.streams] == streams
+
+
+def test_a_valve_station_on_a_line_takes_its_colour_and_dashes() -> None:
+    """Draw a station's run, bypass and drains as the line it sits on."""
+    fs = Flowsheet("Coloured")
+    line = fs.connect(fs.add(Feed("F")).outlet, fs.add(Product("P")).inlet)
+    line.color, line.dasharray = "blue", "4,2"
+    other = fs.connect(fs.add(Feed("G")).outlet, fs.add(Product("Q")).inlet)
+    coloured = fs.add_valve_station("CV-1", on=line)
+    plain = fs.add_valve_station("CV-2", on=other)
+
+    def drawn(station: ValveStation) -> set[tuple[str | None, str | None]]:
+        """Return the colour and dashes of each line leaving a member."""
+        return {(s.color, s.dasharray) for s in fs.streams if s.source.owner in station.members}
+
+    assert drawn(coloured) == {("blue", "4,2")}
+    assert drawn(plain) == {(None, None)}
+
+
+@pytest.mark.parametrize("order", ["style-then-on", "on-then-style", "on-then-reload-then-style"])
+def test_a_style_set_on_a_split_line_reaches_its_whole_run(order: str) -> None:
+    """Draw every segment and station pipe of a line in the style set on it."""
+    fs = Flowsheet("Styled")
+    line = fs.connect(fs.add(Feed("F")).outlet, fs.add(Product("P")).inlet)
+    other = fs.connect(fs.add(Feed("G")).outlet, fs.add(Product("Q")).inlet)
+    if order == "style-then-on":
+        line.color, line.dasharray = "blue", "4,2"
+    fs.add(Valve("HV-1"), on=line)
+    fs.add_valve_station("CV-1", on=line)
+    station = fs.add_valve_station("CV-2", on=other)
+    plain = [
+        i
+        for i, s in enumerate(fs.streams)
+        if other is s or other is s._logical_root or s.source.owner in station.members
+    ]
+    if order == "on-then-reload-then-style":
+        fs = Flowsheet.from_dict(fs.to_dict())
+        line = fs.streams[0]
+    if order != "style-then-on":
+        line.color, line.dasharray = "blue", "4,2"
+
+    drawn = [(s.color, s.dasharray) for s in fs.streams]
+    assert {style for i, style in enumerate(drawn) if i not in plain} == {("blue", "4,2")}
+    assert {style for i, style in enumerate(drawn) if i in plain} == {(None, None)}
 
 
 def _recycle_loop(marked: bool) -> tuple[Flowsheet, Stream]:
