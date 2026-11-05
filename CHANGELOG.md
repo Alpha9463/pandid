@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
+  so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
+  and suggests an `at=` nearer the middle of the line.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:

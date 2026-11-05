@@ -2331,3 +2331,37 @@ def test_a_flag_is_measured_by_the_pennant_it_draws():
     assert air.frame is not None and unit_box(air, air.frame)[1] == 175.0
     assert _found(fs, "route-along-unit") == []
     assert len(_found(_run_over_flag(1.5), "route-along-unit")) == 1
+
+
+# --- a valve under the arrowhead into a nozzle --------------------------------
+
+
+def _valve_at(at: float) -> Flowsheet:
+    """Build a pump suction carrying a valve at a fraction of its line."""
+    fs = Flowsheet("arrowhead")
+    pump = fs.add(U.Pump("P-1"))
+    line = fs.connect(fs.add(U.Feed("F")).outlet, pump.suction)
+    fs.add(U.Valve("HV-1"), on=line, at=at)
+    fs.connect(pump.discharge, fs.add(U.Product("Out")).inlet)
+    fs.route()
+    return fs
+
+
+def test_a_valve_under_the_arrowhead_into_a_nozzle_is_reported_with_its_fix():
+    (issue,) = _found(_valve_at(0.99), "valve-under-arrowhead")
+    assert "HV-1" in issue.message and "P-1.suction" in issue.message
+    assert "fs.add(HV-1, on=S1, at=" in issue.message
+
+
+def test_a_valve_clear_of_the_arrowhead_is_not_reported():
+    assert _found(_valve_at(0.5), "valve-under-arrowhead") == []
+
+
+def test_no_gallery_sheet_draws_a_valve_under_an_arrowhead(settled_gallery):
+    found = [
+        (name, issue.message)
+        for name, (fs, kwargs) in settled_gallery.items()
+        for issue in fs.validate(**{k: v for k, v in kwargs.items() if k == "diagram"})
+        if issue.code == "valve-under-arrowhead"
+    ]
+    assert found == []

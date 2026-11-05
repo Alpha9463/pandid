@@ -954,6 +954,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.portgeom import (drawn_box, is_anchored, pin_intent, port_faces,
                                  port_point, resolve_port)
     from pandid.render.svg import crossings, stream_polyline
+    from pandid.routing.metrics import path_length
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
                                        label_span, wears_arrowhead)
@@ -1274,8 +1275,25 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
 
-        # Soft: a crossing within an arrowhead length of either line's nozzle.
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
+
+        # Soft: a valve or fitting under the arrowhead into the nozzle it feeds.
+        for s, line in zip(drawn, lines.values()):
+            u, dest = s.source.owner, s.dest
+            gap = path_length(line)
+            if (not arrows or u.kind not in _INLINE_KINDS or gap >= ARROWHEAD
+                    or not wears_arrowhead(s, default_registry)):
+                continue
+            entering = u.ports["inlet"].stream
+            name = (entering._logical_root or entering).name if entering is not None else s.name
+            warnings.append(Issue(
+                "warning", "valve-under-arrowhead",
+                f"{u.name} is drawn {gap:.1f}px from {dest.owner.name}.{dest.name}, so the "
+                f"{ARROWHEAD:.0f}px arrowhead into that nozzle reaches over it. Set "
+                f"it further from that end of {name}, with an at= nearer the middle: "
+                f"fs.add({u.name}, on={name}, at=0.5)"))
+
+        # Soft: a crossing within an arrowhead length of either line's nozzle.
         for n, _, m, x, y, _ in crossings(lines, "vertical"):
             d, k, port = min(((math.dist((x, y), lines[k][i]), k, port)
                               for k in (n, m)
