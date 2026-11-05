@@ -2,7 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Set, Tuple
+from typing import TYPE_CHECKING, Dict, Iterable, List, Set, Tuple
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -198,6 +198,33 @@ def share_escape_room(
     return shared
 
 
+def _snap_tracks(values: Iterable[float], tol: float) -> Dict[float, float]:
+    """Map each value to the first of the run of values it falls in.
+
+    Sorted, each value nearer than ``tol`` to its run's first joins
+    that run; any other value starts a run.
+
+    Parameters
+    ----------
+    values : Iterable[float]
+        Coordinates to snap.
+    tol : float
+        Distance within which a value joins a run.
+
+    Returns
+    -------
+    dict[float, float]
+        Each value's run's first value.
+    """
+    tracks: Dict[float, float] = {}
+    first = None
+    for value in sorted(set(values)):
+        if first is None or value - first >= tol:
+            first = value
+        tracks[value] = first
+    return tracks
+
+
 def _tag_halo(u: "Unit", f) -> "Rect | None":
     """Return the box the halo behind a unit's tag blocks.
 
@@ -249,7 +276,9 @@ class VisibilityGraph:
     body_obstacles : list[tuple[Unit, Rect]]
         Unit bodies with their units.
     port_anchors : dict[tuple[str, str], tuple[float, float]]
-        Port anchor by ``(unit name, port name)``.
+        Port anchor by ``(unit name, port name)``, each coordinate
+        snapped to the least anchor coordinate within
+        :data:`~pandid.route_geometry.SNAP` of it.
     port_dirs : dict[tuple[str, str], str]
         Port outward direction by ``(unit name, port name)``.
     port_projs : dict[tuple[str, str], tuple[float, float]]
@@ -272,6 +301,7 @@ class VisibilityGraph:
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
         from pandid.portgeom import COMPASS, port_anchor, unit_box
+        from pandid.route_geometry import SNAP
 
         margin = MARGIN
 
@@ -283,6 +313,12 @@ class VisibilityGraph:
         self.port_anchors: Dict[Tuple[str, str], Tuple[float, float]] = {}
         self.port_dirs: Dict[Tuple[str, str], str] = {}
         self.port_projs: Dict[Tuple[str, str], Tuple[float, float]] = {}
+
+        # Put nozzles that differ by rounding error on one track.
+        anchors = {(u.name, name): port_anchor(u, u.frame, name)
+                   for u in fs.units if u.frame is not None for name in u.ports}
+        on_x = _snap_tracks((a[0] for a in anchors.values()), SNAP)
+        on_y = _snap_tracks((a[1] for a in anchors.values()), SNAP)
 
         for u in fs.units:
             f = u.frame
@@ -327,7 +363,8 @@ class VisibilityGraph:
             y_set.add(f.y + u_height + margin)
 
             for name in u.ports:
-                ax, ay, o_dir = port_anchor(u, f, name)
+                ax, ay, o_dir = anchors[(u.name, name)]
+                ax, ay = on_x[ax], on_y[ay]
                 self.port_anchors[(u.name, name)] = (ax, ay)
                 self.port_dirs[(u.name, name)] = o_dir
 

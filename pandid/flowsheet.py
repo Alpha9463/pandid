@@ -609,6 +609,9 @@ class Flowsheet:
         self.warnings: list = []
         # Diagram type of the last render; validate() defaults to it.
         self._drawn_as: str | None = None
+        # Whether the last render drew the stream table; validate()
+        # defaults to it.
+        self._drawn_table: bool | None = None
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
@@ -660,6 +663,9 @@ class Flowsheet:
         # and whether any did since route() turned that on.
         self._keep_clear = False
         self._kept_clear = False
+        # Whether layout keeps equipment and furniture clear of each
+        # balloon pinned on both axes and moves its chain's room there.
+        self._pin_balloons = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -881,16 +887,13 @@ class Flowsheet:
         self._invalidate_layout()
         return unit
 
-    def _refuse_unaddable(self, unit: "Unit",
-                          alongside: "Sequence[Unit]" = ()) -> "Unit | None":
+    def _refuse_unaddable(self, unit: "Unit") -> "Unit | None":
         """Check that a unit may join the sheet.
 
         Parameters
         ----------
         unit : Unit
             Unit to check.
-        alongside : Sequence[Unit], optional
-            Units the same call is about to add.
 
         Returns
         -------
@@ -907,7 +910,7 @@ class Flowsheet:
             raise ValueError(
                 f"{unit!r} is already on this flowsheet"
             )
-        clash = next((u for u in [*self.units, *alongside] if u.name == unit.name), None)
+        clash = next((u for u in self.units if u.name == unit.name), None)
         if clash is not None and not unit.repeats(clash):
             raise ValueError(
                 f"A unit with the name {unit.name!r} already exists on this "
@@ -1446,7 +1449,6 @@ class Flowsheet:
         from pandid.loops import ControlLoop, Loop
         from pandid.ports import Port
 
-        # Check everything, then commit below.
         if controller_at is not None and controller_face is not None:
             raise ValueError(
                 "controller_at= and controller_face= both name the face of the "
@@ -1488,44 +1490,34 @@ class Flowsheet:
             variant=controller_variant,
             **_stated(face=controller_face if controller_at is None else controller_at,
                       offset=controller_offset))
-        self._refuse_unaddable(transmitter)
-        # Check the controller's tag against the pending transmitter.
-        self._refuse_unaddable(controller, alongside=(transmitter,))
-        if isinstance(acting_on, Port) and acting_on.role != "signal":
-            owner = acting_on.owner
-            signals = [_spell(p) for p in owner.ports.values() if p.role == "signal"]
-            choices = ([owner.name] if len(signals) == 1 else []) + signals
-            raise ValueError(
-                f"acting_on={_spell(acting_on)} is a process connection, and "
-                f"acting_on= takes the final control element or its signal "
-                f"connection: "
-                + (" or ".join(f"acting_on={c}" for c in choices) if choices
-                   else f"{owner.name} has none to drive")
-            )
-        pending = (transmitter, controller)
-        self._resolve_connection(transmitter.sig_out, controller.sig_in,
-                                 kind=measurement_kind, pending=pending)
-        self._resolve_connection(controller.sig_out, acting_on,
-                                 kind=output_kind, pending=pending)
-
-        transmitter._deprecate_at(at, transmitter.face)
-        if controller_at is not None:
-            replace(_CONTROLLER_AT, what=f"add_control_loop(controller_at={controller_at!r})",
-                    instead=f"controller_face={controller.face!r}",
-                    ).warn(controller, where=controller.name)
-        # Commit.
-        with self._unchanged_if_it_raises():
+        # Restore the final element's ports too if anything raises.
+        final = acting_on.owner if isinstance(acting_on, Port) else acting_on
+        with self._unchanged_if_it_raises(
+                (self, *self.units, *self.streams, *final.ports.values())):
             if allocates is not None:
                 self._register_loop(loop, allocated=allocates)
             self.add(transmitter)
             self.add(controller)
+            if isinstance(acting_on, Port) and acting_on.role != "signal":
+                owner = acting_on.owner
+                signals = [_spell(p) for p in owner.ports.values() if p.role == "signal"]
+                choices = ([owner.name] if len(signals) == 1 else []) + signals
+                raise ValueError(
+                    f"acting_on={_spell(acting_on)} is a process connection, and "
+                    f"acting_on= takes the final control element or its signal "
+                    f"connection: "
+                    + (" or ".join(f"acting_on={c}" for c in choices) if choices
+                       else f"{owner.name} has none to drive")
+                )
             measurement = self.connect(
                 transmitter.sig_out, controller.sig_in, kind=measurement_kind)
             output = self.connect(controller.sig_out, acting_on, kind=output_kind)
-        return ControlLoop(
-            loop, transmitter, controller,
-            acting_on.owner if isinstance(acting_on, Port) else acting_on,
-            measurement, output)
+            transmitter._deprecate_at(at, transmitter.face)
+            if controller_at is not None:
+                replace(_CONTROLLER_AT, what=f"add_control_loop(controller_at={controller_at!r})",
+                        instead=f"controller_face={controller.face!r}",
+                        ).warn(controller, where=controller.name)
+        return ControlLoop(loop, transmitter, controller, final, measurement, output)
 
     def add_valve_station(
         self, tag: str, *,
@@ -1912,7 +1904,6 @@ class Flowsheet:
     def _resolve_connection(
         self, src: "Port | Unit", dst: "Port | Unit", *, kind: str | None,
         ends: "str | tuple[str, str] | None" = None,
-        pending: "Sequence[Unit]" = (),
     ) -> "tuple[Port, Port, str]":
         """Resolve and check a connection.
 
@@ -1924,8 +1915,6 @@ class Flowsheet:
             Stream kind; ``None`` infers it from the ports.
         ends : str, tuple[str, str] or None, optional
             Joint styles to check.
-        pending : Sequence[Unit], optional
-            Units about to be added; they pass the same-sheet check.
 
         Returns
         -------
@@ -1975,7 +1964,7 @@ class Flowsheet:
                 f"got {dst.direction!r}"
             )
         for port in (src, dst):
-            if port.owner.flowsheet is not self and port.owner not in pending:
+            if port.owner.flowsheet is not self:
                 raise ValueError(
                     "both units must be added to this flowsheet before connecting"
                 )
@@ -2498,6 +2487,7 @@ class Flowsheet:
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
+        from pandid.layout.halo import pinned_balloons
         from pandid.routing.lanes import _score
         from pandid.validate import geometry_issues
 
@@ -2629,12 +2619,28 @@ class Flowsheet:
                 self._exit_clear = False
             settle_best()
 
+        def repinned() -> None:
+            """Lay out with each balloon pinned on both axes kept clear,
+            and settle."""
+            self._pin_balloons = True
+            try:
+                self.layout(self._engine)
+                settle_best()
+            finally:
+                self._pin_balloons = False
+
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False
+        if tries and pinned_balloons(self, {}):
+            flaws = _flaws(self)
+            if flaws["unit-overlap"]:
+                # Keep only a drawing with fewer overlaps.
+                flaws["unit-overlap"] -= 1
+                keep_if_better(repinned, flaws)
         if tries and self._undercharged:
             keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
         self._route_stale = False
@@ -2758,11 +2764,13 @@ class Flowsheet:
         self.renumber_streams()
         check_render_arguments(self, diagram=diagram, **arguments)
         self.warnings = []
-        # Diagram type validate() defaults to, even with check=False.
+        # Settings validate() defaults to, even with check=False.
         self._drawn_as = diagram
+        self._drawn_table = bool(arguments["show_stream_table"])
         found: list = []
         if check:
-            found = model_issues(self, tabulates=tabulates_boundary_flows(diagram))
+            found = model_issues(self, tabulates=tabulates_boundary_flows(diagram),
+                                 table=self._drawn_table)
             self._raise_on_errors(found)
         # Lay out and route where the geometry is missing or stale.
         if (self._layout_stale or any(u.frame is None for u in self.units)
@@ -3001,7 +3009,8 @@ class Flowsheet:
                     used += 1
                     self._name_group([s], used)
 
-    def validate(self, *, diagram: str | None = None) -> list:
+    def validate(self, *, diagram: str | None = None,
+                 show_stream_table: bool | Literal["sheet"] | None = None) -> list:
         """Return validation findings, errors first, then warnings.
 
         Geometric findings need frames and routes; before layout only
@@ -3012,6 +3021,9 @@ class Flowsheet:
         diagram : str or None, optional
             ``"pfd"``, ``"p&id"`` (or ``"pid"``) or ``"bfd"``; ``None``
             uses the last render's type, or ``"pfd"``.
+        show_stream_table : bool, {"sheet"} or None, optional
+            As for :meth:`to_svg`; ``None`` uses the last render's, and
+            before a render the table is not checked.
 
         Returns
         -------
@@ -3021,14 +3033,18 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If ``diagram`` is unknown.
+            If ``diagram`` or ``show_stream_table`` is unknown.
         """
-        from pandid.render.svg import draws_arrowheads, tabulates_boundary_flows
+        from pandid.render.svg import (draws_arrowheads, tabulates_boundary_flows,
+                                       wants_table_sheet)
         from pandid.validate import validate as _validate
         if diagram is None:
             diagram = self._drawn_as
+        wants_table_sheet(show_stream_table)
+        table = (self._drawn_table if show_stream_table is None
+                 else bool(show_stream_table))
         return _validate(self, arrows=draws_arrowheads(diagram),
-                         tabulates=tabulates_boundary_flows(diagram))
+                         tabulates=tabulates_boundary_flows(diagram), table=table)
 
     def to_svg(self, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,

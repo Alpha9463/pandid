@@ -405,7 +405,7 @@ class DefaultRouter:
                     f"stream {stream.name!r} is left unrouted: {unplaced.name!r} "
                     f"has no frame, so there is no geometry to route between. "
                     f"Call layout() before route().",
-                    stacklevel=2,
+                    stacklevel=3,
                 )
                 return False
 
@@ -417,7 +417,7 @@ class DefaultRouter:
                 warnings.warn(
                     f"stream {stream.name!r} is left unrouted: the visibility "
                     f"graph carries no anchor for port {missing}.",
-                    stacklevel=2,
+                    stacklevel=3,
                 )
                 return False
 

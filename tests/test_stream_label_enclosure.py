@@ -12,7 +12,6 @@ from pandid.document import StreamLabelOptions
 from pandid.layout.conflicts import boxes_overlap
 from pandid.render.drawio import _tag_pass
 from pandid.render.furniture import text_width
-from pandid.render.symbols import default_registry
 from pandid.render.svg import (
     _HALO_DEEP,
     _HALO_PAD,
@@ -64,7 +63,7 @@ def sheet(scheme: "str | Callable[[int], str]" = "S{n}") -> Flowsheet:
 def placed_numbers(fs: Flowsheet, **kwargs) -> list:
     """Return resolved stream-label placements from a rendered flowsheet."""
     joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
-    plates = list(_tag_pass(fs, default_registry, joints, "vertical").plates)
+    plates = list(_tag_pass(fs, joints, "vertical").plates)
     return list(stream_numbers(fs, plates, joints, "vertical"))
 
 
