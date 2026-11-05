@@ -629,6 +629,10 @@ class Flowsheet:
         self._order_rows = False
         self._rows_out = False
         self._stacked: tuple | None = None
+        # Whether layout turns each free tee's branch toward the unit it
+        # serves, and whether the last layout drew one facing away.
+        self._face_tees = False
+        self._tees_away = False
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -2247,6 +2251,7 @@ class Flowsheet:
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
+        self._tees_away = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2304,7 +2309,10 @@ class Flowsheet:
         Then, where a unit pinned by row alone is drawn no lower than one
         pinned to a lower row, the sheet is laid out and routed again with
         each such unit below those pinned to lower rows, kept on the same
-        terms. Where either is kept, the next route() starts from the
+        terms. Then, where a tee's branch leaves the run on the side away
+        from the unit it serves, the sheet is laid out and routed again
+        with each such branch turned toward it, kept on the same terms.
+        Where any of these is kept, the next route() starts from the
         drawing before them.
 
         Last, with the default router, each balloon hung from a balloon is
@@ -2335,13 +2343,15 @@ class Flowsheet:
                                      or any(u.frame is None for u in self.units)):
             self._put_state(held)
         self._route_faces(router)
-        if ((self._stack_spans or self._rows_out) and not self._laying_out
+        if ((self._stack_spans or self._rows_out or self._tees_away) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
             first = self._state()
-            split = self._stack_spans and self._relayout(router, True, False)
-            if (self._rows_out and self._relayout(router, split, True)) or split:
+            split = self._stack_spans and self._relayout(router, True, False, False)
+            order = self._rows_out and self._relayout(router, split, True, False)
+            tees = self._tees_away and self._relayout(router, split, order, True)
+            if split or order or tees:
                 self._stacked = first
-            self._stack_spans = self._rows_out = self._route_stale = False
+            self._stack_spans = self._rows_out = self._tees_away = self._route_stale = False
         if not self._laying_out and (router is None or type(router) is DefaultRouter):
             unkept = self._state()
             if self._keep_further_off(router or DefaultRouter()):
@@ -2519,8 +2529,9 @@ class Flowsheet:
         finally:
             self._routing = False
 
-    def _relayout(self, router, split: bool, order: bool) -> bool:
-        """Lay out and route the sheet again with stacks split or rows ordered.
+    def _relayout(self, router, split: bool, order: bool, tees: bool) -> bool:
+        """Lay out and route the sheet again with stacks split, rows ordered
+        or tees turned.
 
         The new drawing is kept only if no tap leaves its line and no
         finding, clash, crossing or fallback route grows; otherwise the
@@ -2535,6 +2546,8 @@ class Flowsheet:
             is pinned to a row between theirs.
         order : bool
             Move units pinned by row alone into row order.
+        tees : bool
+            Turn each free tee's branch toward the unit it serves.
 
         Returns
         -------
@@ -2559,7 +2572,8 @@ class Flowsheet:
             return flaws
 
         before, off, drawn = count(), _taps_off(self), self._state()
-        self._split_stacks, self._order_rows, self._routing = split, order, True
+        self._split_stacks, self._order_rows, self._face_tees = split, order, tees
+        self._routing = True
         try:
             self.layout(self._engine)
             self._route_once(router)
@@ -2568,7 +2582,7 @@ class Flowsheet:
         except Exception:
             kept = False
         finally:
-            self._split_stacks = self._order_rows = self._routing = False
+            self._split_stacks = self._order_rows = self._face_tees = self._routing = False
         if not kept:
             self._put_state(drawn)
         return kept
@@ -2583,7 +2597,7 @@ class Flowsheet:
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
                         self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out))
+                        self._rows_out, self._tees_away))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2595,7 +2609,7 @@ class Flowsheet:
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out) = _copied(state)
+         self._rows_out, self._tees_away) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
