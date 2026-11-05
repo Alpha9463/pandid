@@ -295,8 +295,9 @@ def tap_routes(fs):
     :func:`tap_lines` order, priced against the streams and every
     other tap line as drawn so far. The first route that crosses fewer
     bodies and tags, and whose ink beyond its square turn's
-    (:func:`_new_ink`) meets no other line (:func:`_touches`), is
-    kept.
+    (:func:`_new_ink`) meets no other line (:func:`_touches`) and comes
+    within :data:`~pandid.routing.visibility.EDGE_TOL` of no other mark
+    drawn (:func:`_drawn_marks`), is kept.
 
     Parameters
     ----------
@@ -345,14 +346,104 @@ def tap_routes(fs):
     squares = [_square_tap(inst, tap, centre) for inst, tap, centre in taps]
     crossed = [clashes(inst, path) for (inst, _, _), (path, _) in zip(taps, squares)]
     drawn = [path for path, _ in squares]
+    marks: list = []
+
+    def clear(inst, ink, lines) -> bool:
+        """Return whether a route's new ink meets nothing drawn.
+
+        Parameters
+        ----------
+        inst : Instrument
+            Attached balloon.
+        ink : list[tuple[float, float]]
+            The route's ink beyond its square turn.
+        lines : list[list[tuple[float, float]]]
+            Streams and other tap lines.
+
+        Returns
+        -------
+        bool
+            True if ``ink`` meets no line and comes near no other mark.
+        """
+        from pandid.routing.visibility import EDGE_TOL
+
+        if _touches(ink, lines):
+            return False
+        if not marks:
+            marks.extend(_drawn_marks(fs))
+        # The last run ends inside the balloon.
+        return not any(boxes_overlap(_span(a, b), box, EDGE_TOL)
+                       for i, (a, b) in enumerate(zip(ink, ink[1:]))
+                       for owner, box in marks if owner is not inst or i < len(ink) - 2)
+
     for k, ((inst, tap, centre), (path, faces)) in enumerate(zip(taps, squares)):
         if not crossed[k] or not faces:
             continue
         lines = pipes + drawn[:k] + drawn[k + 1:]
         drawn[k] = next((routed for routed in route_tap(inst, tap, faces, centre, lines)
                          if clashes(inst, routed) < crossed[k]
-                         and not _touches(_new_ink(routed, path), lines)), path)
+                         and clear(inst, _new_ink(routed, path), lines)), path)
     return [(inst, path) for (inst, _, _), path in zip(taps, drawn)]
+
+
+def _span(p, q) -> "tuple[float, float, float, float]":
+    """Return the box a segment spans.
+
+    Parameters
+    ----------
+    p, q : tuple[float, float]
+        Segment ends.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x0, y0, x1, y1)``.
+    """
+    return min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1])
+
+
+def _drawn_marks(fs) -> list:
+    """Return the box of every mark the renderers draw but a line.
+
+    Every unit's box and hop, and the label plates, flange marks and
+    pneumatic hatches placed for each jump direction and sheet joint
+    default, and the arrowhead room at each end of each run.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    list[tuple[Unit | None, tuple[float, float, float, float]]]
+        The unit a box is the body of, else ``None``, and the box.
+    """
+    from pandid.render.drawio import _tag_pass
+
+    marks: list = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    runs = [stream_polyline(s) for s in fs.streams if s.route is not None
+            and s.source.owner.frame is not None and s.dest.owner.frame is not None]
+    for direction in JUMP_DIRECTIONS:
+        marks += [(None, line.box) for line in _ink(fs, direction) if line.kind == "hop"]
+        for joints in (None, *CONNECTIONS):
+            plates = list(_tag_pass(fs, joints, direction).plates)
+            stream_numbers(fs, plates, joints, direction)
+            plates += [b for b in map(_unit_label_box, drawn_codes(fs, joints, direction, plates))
+                       if b is not None]
+            marks += [(None, b) for b in plates + flange_boxes(fs, joints)]
+    pad = _ink_pad(LineWeight.DETAIL)
+    marks += [(None, (min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad))
+              for s in fs.streams if s.kind == "pneumatic" and s.route is not None
+              for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+    for points in runs:
+        for (ex, ey), (nx, ny) in ((points[0], points[1]), (points[-1], points[-2])):
+            ux, uy = (nx > ex) - (nx < ex), (ny > ey) - (ny < ey)
+            x0, y0, x1, y1 = _span((ex, ey), (ex + ux * ARROWHEAD, ey + uy * ARROWHEAD))
+            half = ARROWHEAD / 2
+            marks.append((None, (x0 - half * abs(uy), y0 - half * abs(ux),
+                                 x1 + half * abs(uy), y1 + half * abs(ux))))
+    return marks
 
 
 def _new_ink(route, square):
@@ -831,7 +922,7 @@ def _ink(fs, direction: str) -> "list[_Ink]":
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe", s.name or "")
-    for _, route in tap_routes(fs):
+    for _, route in square_taps(fs):
         for a, b in zip(route, route[1:]):
             add(a, b, _ink_pad(LineWeight.DETAIL), "tap")
     # A hop belongs to the run that draws it.

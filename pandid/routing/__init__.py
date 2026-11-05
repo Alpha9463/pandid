@@ -544,9 +544,9 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
     Each path leaves the tap square along one of ``faces``, in order,
     to a stand-off :data:`~pandid.routing.visibility.MIN_ESCAPE` out or
     else half that, and reaches the balloon centre on the visibility
-    graph at the fewest bends. It may cross its own host's tag. It is
-    priced as a stream routed after ``lines``: by the lines it crosses
-    and the runs it shares.
+    graph at the fewest bends. It crosses its own host's tag only where
+    it leaves the host through it. It is priced as a stream routed after
+    ``lines``: by the lines it crosses and the runs it shares.
 
     Parameters
     ----------
@@ -580,10 +580,12 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
     x0, y0, x1, y1 = unit_box(inst, inst.frame)
     omit = [Rect(x0, x1, y0, y1)]
     owner = host if isinstance(host, Unit) else inst
-    if owner.frame is not None and (halo := _tag_halo(owner, owner.frame)) is not None:
-        omit.append(halo)
     stubs = [(face, (tap[0] + escape * COMPASS[face][0], tap[1] + escape * COMPASS[face][1]))
              for face in faces for escape in (MIN_ESCAPE, MIN_ESCAPE / 2)]
+    # A line that leaves its host through the host's tag may cross it.
+    halo = _tag_halo(owner, owner.frame) if owner.frame is not None else None
+    if halo is not None and any(halo.intersects_segment(*tap, *stub) for _, stub in stubs):
+        omit.append(halo)
     graph = VisibilityGraph(fs, lanes=(*(stub for _, stub in stubs), centre), omit=omit)
     if not graph.edges.get(centre):
         return

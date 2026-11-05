@@ -2313,20 +2313,57 @@ def _two_readings(*balloons: tuple[str, str, float, float]) -> Flowsheet:
     return fs
 
 
+def _beside_an_exchanger() -> Flowsheet:
+    """Return PT under D-101 pinned past two exchangers, E-101 just below its way."""
+    fs = Flowsheet("Beside an exchanger")
+    d = fs.add(U.Vessel("D-101")).pin(x=100, y=100)
+    e1 = fs.add(U.HeatExchanger("E-101", width=60, height=60, label_pos="left"))
+    e2 = fs.add(U.HeatExchanger("E-102", width=80, height=40, label_pos="right"))
+    e1.pin(x=300, y=226)
+    e2.pin(x=400, y=154)
+    fs.connect(d.ports["out_1"], e1.tube_in)
+    fs.connect(e1.tube_out, e2.tube_in)
+    fs.add_instrument("PT", 101, sensing=d, face="S").pin(x=500, y=80)
+    fs.route()
+    return fs
+
+
+def _under_its_own_tag() -> Flowsheet:
+    """Return PT on D-101's west face pinned where the way round runs past D-101's tag."""
+    fs = Flowsheet("Under its own tag")
+    d = fs.add(U.Vessel("D-101", label_pos="top")).pin(x=100, y=100)
+    pump = fs.add(U.Pump("P-101", width=80, height=100, label_pos="left")).pin(x=405, y=180)
+    e = fs.add(U.HeatExchanger("E-101", width=60, height=180)).pin(x=225, y=290)
+    fs.connect(d.drain, pump.suction)
+    fs.connect(pump.discharge, e.shell_in)
+    fs.add_instrument("PT", 101, sensing=d, face="W").pin(x=500, y=310)
+    fs.route()
+    return fs
+
+
 @pytest.mark.parametrize(
-    "balloons",
+    "build",
     [
-        [("PT", "E", 500, 128), ("TT", "E", 550, 268)],
-        [("PT", "S", 500, 100), ("TT", "N", 500, 200)],
-        [("TT", "N", 600, 250)],
+        lambda: _two_readings(("PT", "E", 500, 128), ("TT", "E", 550, 268)),
+        lambda: _two_readings(("PT", "S", 500, 100), ("TT", "N", 500, 200)),
+        lambda: _two_readings(("TT", "N", 600, 250)),
+        _beside_an_exchanger,
+        _under_its_own_tag,
     ],
 )
-def test_a_rerouted_tap_line_meets_no_other_line(
-    balloons: list[tuple[str, str, float, float]],
-) -> None:
-    """Check that a leader routed round a column only ever crosses another line."""
+def test_a_rerouted_tap_line_meets_nothing_drawn(build: Callable[[], Flowsheet]) -> None:
+    """Check that a rerouted leader only crosses lines and keeps off every other mark."""
+    from pandid.layout.conflicts import boxes_overlap
     from pandid.layout.control import _shared
-    from pandid.render.svg import _square_tap, stream_polyline, tap_lines, tap_routes
+    from pandid.portgeom import unit_box
+    from pandid.render.drawio import _tag_pass
+    from pandid.render.svg import (
+        _square_tap,
+        stream_numbers,
+        stream_polyline,
+        tap_lines,
+        tap_routes,
+    )
     from pandid.routing.visibility import EDGE_TOL
 
     def gap(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -2334,15 +2371,21 @@ def test_a_rerouted_tap_line_meets_no_other_line(
         y = min(max(p[1], min(a[1], b[1])), max(a[1], b[1]))
         return max(abs(p[0] - x), abs(p[1] - y))
 
-    fs = _two_readings(*balloons)
+    def span(a: tuple[float, float], b: tuple[float, float]) -> tuple[float, ...]:
+        return min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])
 
-    drawn = [route for _, route in tap_routes(fs)]
+    fs = build()
+
+    taps = tap_routes(fs)
+    drawn = [route for _, route in taps]
     squares = [_square_tap(inst, tap, centre)[0] for inst, tap, centre in tap_lines(fs)]
     routed = [k for k, route in enumerate(drawn) if route != squares[k]]
     assert routed, "no leader was routed"
     pipes = [stream_polyline(s) for s in fs.streams]
+    plates = list(_tag_pass(fs, None, "vertical").plates)
+    stream_numbers(fs, plates, None, "vertical")
     for k in routed:
-        route = drawn[k]
+        inst, route = taps[k]
         for line in pipes + drawn[:k] + drawn[k + 1 :]:
             for c, d in zip(line, line[1:]):
                 near = [p for p in route[1:] if gap(p, c, d) < EDGE_TOL]
@@ -2350,6 +2393,12 @@ def test_a_rerouted_tap_line_meets_no_other_line(
                 assert not any(_shared(a, b, c, d) for a, b in zip(route, route[1:])), (
                     f"{route} runs along {line}"
                 )
+        # Past leaving its host, and short of entering its balloon.
+        inner = list(zip(route[1:], route[2:]))
+        bodies = [unit_box(u, frame_of(u)) for u in fs.units if u is not inst]
+        for a, b in inner:
+            for box in bodies + plates:
+                assert not boxes_overlap(span(a, b), box, EDGE_TOL), f"{route} meets {box}"
     assert len(drawn) - len(routed) == sum(
         i.code == "tap-crosses-unit" and "finds no way round T-101" in i.message
         for i in fs.validate()
