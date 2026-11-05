@@ -392,3 +392,74 @@ def test_a_line_leaving_a_roof_nozzle_across_the_roof_is_counted_through_its_tan
     fs.connect(tank.vent, product.inlet).via([(550, 307.9)])
     fs.route()
     assert _flaws(fs)["line-through-unit"] == 1
+
+
+# --- Tank outlets and upright vessels -----------------------------------------
+
+
+# A default tank at (300, 300) is 100 x 95.5: its walls take a fill and a draw
+# 85 down. A default vessel there is 62 x 100: its walls take a nozzle 50 down
+# and its top head one at (346.5, 301).
+@pytest.mark.parametrize(
+    ("x", "y", "mirrored", "face"),
+    [(650, 385, False, "E"), (100, 385, True, "W"), (450, 600, False, "S")],
+    ids=["right", "left", "below"],
+)
+def test_a_tank_outlet_takes_the_wall_toward_its_peer(x, y, mirrored, face):
+    """Draw a tank's draw-off low on the wall toward its peer."""
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1", inputs=0)).pin(x=300, y=300)
+    _flag(fs, tank, "out_1", x, y, mirrored)
+    fs.route()
+    assert _face(tank, "out_1") == face
+
+
+@pytest.mark.parametrize(
+    ("port", "x", "y", "mirrored", "face"),
+    [
+        ("in_1", 336, 150, False, "N"),
+        ("in_1", 650, 350, True, "E"),
+        ("in_1", 100, 350, False, "W"),
+        ("out_1", 100, 350, True, "W"),
+        ("out_1", 650, 350, False, "E"),
+    ],
+    ids=["in-above", "in-right", "in-left", "out-left", "out-right"],
+)
+def test_an_upright_vessel_connection_takes_the_face_toward_its_peer(port, x, y, mirrored, face):
+    """Choose among the walls and head an upright vessel offers."""
+    fs = Flowsheet("vessel")
+    inputs = 1 if port == "in_1" else 0
+    vessel = fs.add(units.Vessel("V-1", inputs=inputs, outputs=1 - inputs)).pin(x=300, y=300)
+    _flag(fs, vessel, port, x, y, mirrored)
+    fs.route()
+    assert _face(vessel, port) == face
+
+
+def test_nozzle_moves_a_tank_outlet_onto_a_wall():
+    """Take ``nozzle("outlet", "E")`` on a tank."""
+    tank = units.Tank("TK-1").nozzle("outlet", "E")
+    assert tank.face("out_1") == "E"
+
+
+def test_an_inlet_and_an_outlet_on_one_wall_are_spread_inlet_above():
+    """Spread a vessel's inlet and outlet apart on the wall they share."""
+    fs = Flowsheet("vessel")
+    vessel = fs.add(units.Vessel("V-1")).pin(x=300, y=300).nozzle("out_1", "W")
+    fs.layout()
+    assert vessel.frame is not None
+    inlet = resolve_port(vessel, vessel.frame, "in_1")
+    outlet = resolve_port(vessel, vessel.frame, "out_1")
+    assert (inlet.face, outlet.face) == ("W", "W")
+    assert outlet.point[1] - inlet.point[1] >= BLOCK_PITCH - 10
+
+
+def test_an_outlet_never_takes_the_wall_a_lone_inlet_was_moved_to():
+    """Leave a lone inlet the wall it was moved to, and lay the sheet out."""
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1")).pin(x=300, y=300)
+    _flag(fs, tank, "in_1", 650, 385, True)
+    # The outlet's peer is above the floor to the east, so E would suit it too.
+    _flag(fs, tank, "out_1", 650, 330, False)
+    fs.route()
+    assert _face(tank, "in_1") == "E"
+    assert _face(tank, "out_1") != "E"

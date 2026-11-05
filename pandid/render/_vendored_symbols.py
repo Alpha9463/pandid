@@ -283,7 +283,8 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 50.0), 'outlet': (62.0, 50.0), 'vent': (31.0, 0.0), 'relief': (15.5, 1.0), 'drain': (31.0, 100.0)},
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         gravity_fixed=True,
-        bands={'W': (17.5, 82.5), 'E': (17.5, 82.5)},
+        bands={'W': (17.5, 82.5), 'E': (17.5, 82.5), 'N': (46.5, 46.5)},
+        family_faces={'inlet': {'E': (62.0, 50.0), 'N': (46.5, 1.0)}, 'outlet': {'W': (0.0, 50.0)}},
     ), 'default')
 
     registry.register('column', Symbol(
@@ -349,6 +350,7 @@ def register_vendored(registry):
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 85.0), 'E': (100.0, 85.0), 'N': (50.0, 6.4)}},
         bands={'W': (36.0, 85.0), 'E': (36.0, 85.0), 'S': (10.0, 90.0), 'N': (50.0, 50.0)},
+        family_faces={'outlet': {'W': (0.0, 85.0), 'E': (100.0, 85.0)}},
     ), 'default')
 
     registry.register('tank', Symbol(
@@ -359,6 +361,7 @@ def register_vendored(registry):
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 80.0), 'E': (100.0, 80.0), 'N': (50.0, 0.0)}},
         bands={'W': (30.0, 80.0), 'E': (30.0, 80.0), 'S': (10.0, 90.0), 'N': (50.0, 50.0)},
+        family_faces={'outlet': {'W': (0.0, 80.0), 'E': (100.0, 80.0)}},
     ), 'conical')
 
     registry.register('reducer', Symbol(
@@ -811,7 +814,8 @@ def register_vendored(registry):
         ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0), 'vent': (30.0, 0.0), 'relief': (18.0, 1.5), 'drain': (30.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_brackets)',
         gravity_fixed=True,
-        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
+        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7), 'N': (42.0, 42.0)},
+        family_faces={'inlet': {'E': (50.0, 47.0), 'N': (42.0, 1.5)}, 'outlet': {'W': (10.0, 47.0)}},
     ), 'dished')
 
     registry.register('vessel', Symbol(
@@ -821,6 +825,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dome)',
         gravity_fixed=True,
         bands={'W': (27.0, 27.0), 'E': (27.0, 27.0)},
+        family_faces={'inlet': {'E': (95.4, 27.0)}, 'outlet': {'W': (0.0, 27.0)}},
     ), 'dome')
 
     registry.register('vessel', Symbol(
@@ -829,7 +834,8 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 47.69), 'outlet': (52.0, 47.69), 'vent': (26.0, 0.0), 'relief': (14.0, 1.5), 'drain': (26.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         gravity_fixed=True,
-        bands={'W': (22.7, 72.7), 'E': (22.7, 72.7)},
+        bands={'W': (22.7, 72.7), 'E': (22.7, 72.7), 'N': (38.0, 38.0)},
+        family_faces={'inlet': {'E': (52.0, 47.7), 'N': (38.0, 1.5)}, 'outlet': {'W': (0.0, 47.7)}},
     ), 'jacketed')
 
     registry.register('vessel', Symbol(
@@ -838,7 +844,8 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 47.69), 'outlet': (52.0, 47.69), 'vent': (26.0, 0.0), 'relief': (14.0, 1.5), 'drain': (26.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_thermal_insulation)',
         gravity_fixed=True,
-        bands={'W': (22.7, 72.7), 'E': (22.7, 72.7)},
+        bands={'W': (22.7, 72.7), 'E': (22.7, 72.7), 'N': (38.0, 38.0)},
+        family_faces={'inlet': {'E': (52.0, 47.7), 'N': (38.0, 1.5)}, 'outlet': {'W': (0.0, 47.7)}},
     ), 'insulated')
 
     registry.register('vessel', Symbol(
@@ -847,7 +854,8 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 47.69), 'outlet': (40.0, 77.7), 'vent': (20.0, 0.0), 'relief': (8.0, 1.5), 'drain': (20.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_electrical_heating)',
         gravity_fixed=True,
-        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
+        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7), 'N': (32.0, 32.0)},
+        family_faces={'inlet': {'N': (32.0, 1.5)}, 'outlet': {'W': (0.0, 77.7)}},
     ), 'electrical_heating')
 
     registry.register('vessel', Symbol(
@@ -856,7 +864,8 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 67.0), 'outlet': (50.0, 67.0), 'vent': (25.0, 0.0), 'relief': (16.0, 3.0), 'drain': (25.0, 97.5)},
         drawio_shape='mxgraph.pid.vessels.vessel_(different_diameters)',
         gravity_fixed=True,
-        bands={'W': (60.3, 75.0), 'E': (60.0, 75.0)},
+        bands={'W': (60.3, 75.0), 'E': (60.0, 75.0), 'N': (34.0, 34.0)},
+        family_faces={'inlet': {'E': (50.0, 67.0), 'N': (34.0, 3.0)}, 'outlet': {'W': (0.0, 67.0)}},
     ), 'swaged')
 
     registry.register('tank', Symbol(
@@ -867,6 +876,7 @@ def register_vendored(registry):
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
         bands={'W': (10.0, 60.0), 'E': (10.0, 60.0), 'S': (10.0, 90.0)},
+        family_faces={'outlet': {'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
     ), 'floating_roof')
 
     registry.register('tank', Symbol(
@@ -916,6 +926,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.gas_holder',
         gravity_fixed=True,
         bands={'W': (45.0, 80.0), 'E': (45.0, 80.0)},
+        family_faces={'inlet': {'E': (70.0, 45.0)}, 'outlet': {'W': (0.0, 45.0)}},
     ), 'gas_holder')
 
     registry.register('thickener', Symbol(

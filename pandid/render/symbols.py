@@ -172,9 +172,10 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
     # Each member's faces whose band has length.
-    menus = [[f for f in sym.port_faces.get("inlet" if m.startswith("in_") else "outlet", {})
+    roles = ["inlet" if m.startswith("in_") else "outlet" for m in members]
+    menus = [[f for f in {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
               if (band := sym.bands.get(f)) is None or band[0] < band[1]]
-             for m in members]
+             for role in roles]
     offered = [f for f in menus[0] if all(f in menu for menu in menus)]
     cure = (
         "Put them on "
@@ -449,6 +450,9 @@ class Symbol:
         Port families, each on N, S, E or W and apart from ``ports``.
     bands : dict[str, tuple[float, float]]
         Stretch ``(lo, hi)`` a family may use, from each face's start.
+    family_faces : dict[str, dict[str, tuple[float, float]]]
+        Further placements by face of the ``inlet`` and ``outlet``
+        families, left out of a lone port's menu.
     rim : tuple[tuple[float, float], ...]
         Outline of the artwork as a convex polygon, which lines sharing
         a face are drawn to; the box when empty.
@@ -494,6 +498,7 @@ class Symbol:
     faceless_ports: frozenset[str] = frozenset()
     port_series: tuple[PortSeries, ...] = ()
     bands: dict[str, tuple[float, float]] = field(default_factory=dict)
+    family_faces: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     rim: tuple[tuple[float, float], ...] = ()
     label_pos: str | None = None
     id_suffix: str = ""
@@ -559,6 +564,16 @@ class Symbol:
                     f"stretch of a {along:g}-long face measured from its start; a "
                     f"family confined to it would be drawn off the box"
                 )
+        for name, faces in self.family_faces.items():
+            for face, coord in faces.items():
+                lands = outward_dir(coord[0], coord[1], self.width, self.height)
+                if lands != face:
+                    raise ValueError(
+                        f"{self.symbol_id()}: family_faces[{name!r}][{face!r}] at "
+                        f"{coord} is nearest the {lands} edge of the "
+                        f"{self.width}x{self.height} box, so that is the face it "
+                        f"would come out of"
+                    )
         menu: dict[str, dict[str, tuple[float, float]]] = {}
         for name, xy in self.ports.items():
             home = outward_dir(xy[0], xy[1], self.width, self.height)
@@ -1278,9 +1293,11 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   ) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
-    Each family is spread about the stencil's anchor within the part of
-    :attr:`Symbol.bands` nearer its face than either end of the box; a
-    role with one member keeps its full menu. If a member lands nearer
+    The family ports on a face are spread about the stencil's anchor,
+    or the mean of the inlet's and outlet's where both share it, within
+    the part of :attr:`Symbol.bands` nearer its face than either end of
+    the box. A family may take :attr:`Symbol.family_faces` too; a role
+    with one member keeps its full menu. If a member lands nearer
     a stencil nozzle on its band than the family's pitch, the band's
     stencil nozzles are spread with the family, in order along the
     wall.
@@ -1322,23 +1339,28 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     }
     fixed = [name for name in placed if name not in dict(ports)]
     menus = {"inlet": base.port_faces.get("inlet", {}), "outlet": base.port_faces.get("outlet", {})}
+    # A family may also take its family faces.
+    reach = {role: {**menu, **base.family_faces.get(role, {})} for role, menu in menus.items()}
     members_by_role: dict[str, list[str]] = {"inlet": [], "outlet": []}
-    groups: dict[tuple[str, str], list[str]] = {}
     by_face: dict[str, list[str]] = {}
     for port_name, face in faces:
         role = "inlet" if port_name.startswith("in_") else "outlet"
         members_by_role[role].append(port_name)
-        groups.setdefault((role, face), []).append(port_name)
         by_face.setdefault(face, []).append(port_name)
-    for (role, face), members in groups.items():
-        menu = menus[role]
-        if face not in menu:
-            raise ValueError(
-                f"{kind}/{variant}: {role} has no {face!r} placement to draw "
-                f"{', '.join(members)} on; offered: "
-                f"{', '.join(menu) if menu else 'nothing'}"
-            )
-        t0, inset = _face_local(face, *menu[face], base.width, base.height)
+    for face, members in by_face.items():
+        roles = ["inlet" if name.startswith("in_") else "outlet" for name in members]
+        for role in roles:
+            if face not in reach[role]:
+                raise ValueError(
+                    f"{kind}/{variant}: {role} has no {face!r} placement to draw "
+                    f"{', '.join(members)} on; offered: "
+                    f"{', '.join(reach[role]) if reach[role] else 'nothing'}"
+                )
+        # Inlets and outlets on one face spread about their anchors' mean.
+        local = {_face_local(face, *reach[role][face], base.width, base.height)
+                 for role in roles}
+        t0, inset = (next(iter(local)) if len(local) == 1 else
+                     tuple(sum(v) / len(local) for v in zip(*local)))
         along = base.height if face in ("W", "E") else base.width
         band = base.bands.get(face)
         lo, hi = band or (0.0, along)
@@ -1377,10 +1399,17 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         band = base.bands.get(face)
         if len(on_face) > 1 and band is not None and band[0] >= band[1]:
             raise bandless_face(f"{kind}/{variant}", face, band[0], on_face, base)
-    # A lone member keeps its whole face menu.
+    # A lone member keeps its own placement and the faces of its menu no
+    # other family member is on.
+    on = dict(faces)
     for role, members in members_by_role.items():
         if len(members) == 1 and menus[role]:
-            port_faces[members[0]] = dict(menus[role])
+            name = members[0]
+            port_faces[name] = {
+                **{face: xy for face, xy in menus[role].items()
+                   if not any(face == on[other] for other in on if other != name)},
+                on[name]: placed[name],
+            }
     return replace(base, ports=placed, port_faces=port_faces)
 
 
@@ -1961,6 +1990,8 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         # The body's face menu, moved with the ink.
         port_faces={name: {face: shift(xy) for face, xy in menu.items()}
                     for name, menu in body.port_faces.items()},
+        family_faces={name: {face: shift(xy) for face, xy in menu.items()}
+                      for name, menu in body.family_faces.items()},
         faceless_ports=body.faceless_ports,
         port_series=tuple(_shifted_series(s, body, ox, oy, width, height)
                           for s in body.port_series),

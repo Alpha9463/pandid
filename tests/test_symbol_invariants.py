@@ -415,9 +415,9 @@ def test_baked_redraw_preserves_supported_geometry():
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_port_faces_within_bounding_box(entry):
-    """Verify alternate port faces remain inside their boxes."""
+    """Verify alternate and family port faces remain inside their boxes."""
     (kind, variant), sym = entry
-    for name, faces in sym.port_faces.items():
+    for name, faces in [*sym.port_faces.items(), *sym.family_faces.items()]:
         for face, (x, y) in faces.items():
             assert -BOX_EPS <= x <= sym.width + BOX_EPS, (
                 f"{kind}/{variant} port_faces[{name!r}][{face!r}] x={x} outside [0, {sym.width}]"
@@ -433,7 +433,7 @@ def test_every_port_placement_lies_on_the_drawing(entry):
     (kind, variant), sym = entry
     drawn = kind not in _DYNAMIC_KINDS
     segments = _collect_segments(sym.svg) if drawn else []
-    for name, faces in sym.port_faces.items():
+    for name, faces in [*sym.port_faces.items(), *sym.family_faces.items()]:
         for face, (x, y) in faces.items():
             where = f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y})"
             if (kind, name) in _SIGNAL_PORTS:
@@ -1379,7 +1379,7 @@ def test_every_declared_wall_lies_on_the_drawing(kind, variant):
     for face, (lo, hi) in sym.bands.items():
         insets = set()
         for role in ("inlet", "outlet"):
-            drawn = sym.port_faces.get(role, {}).get(face)
+            drawn = {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}.get(face)
             if drawn is not None:
                 insets.add(_face_local(face, drawn[0], drawn[1], sym.width, sym.height)[1])
         # A wall with no connection drawn on it is the box's edge.
@@ -1466,9 +1466,10 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
         except ValueError as exc:
             assert "cannot carry supports=" in str(exc), f"vessel/{variant} + {supports}: {exc}"
             continue
-        assert drawn.bands == sym.bands, (
-            f"vessel/{variant} on {supports}s lost the wall its body declares"
-        )
+        # A part beside the body moves a wall along the box, never shortens it.
+        assert {f: hi - lo for f, (lo, hi) in drawn.bands.items()} == {
+            f: hi - lo for f, (lo, hi) in sym.bands.items()
+        }, f"vessel/{variant} on {supports}s lost the wall its body declares"
 
 
 @pytest.mark.parametrize(("kind", "variant"), _COMPOSABLE, ids=_COMPOSABLE_IDS)

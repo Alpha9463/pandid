@@ -1969,7 +1969,7 @@ class _MultiPortVessel(_FaceFamilies):
         if sym is None:
             # Unknown variant: leave the error to render time.
             return
-        options = dict(sym.port_faces.get(role, {}))
+        options = {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
         if face not in options:
             from pandid.portgeom import unreachable_face
 
@@ -2073,7 +2073,8 @@ class _MultiPortVessel(_FaceFamilies):
         """
         role = "inlet" if port_name.startswith("in_") else "outlet"
         sym = self._registry_symbol()
-        menu = sym.port_faces.get(role, {}) if sym is not None else {}
+        menu = ({**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
+                if sym is not None else {})
         home = self._faces[port_name]
         return [home, *(face for face in menu if face != home)]
 

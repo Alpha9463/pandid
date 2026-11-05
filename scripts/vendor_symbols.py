@@ -778,25 +778,58 @@ BANDS = {
     ("tank", "gas_holder"): {"W": (45.0, 80.0), "E": (45.0, 80.0)},
     # The sphere meets W and E at y = 75 only; S is the draw-off boss.
     ("tank", "sphere"): {"W": (75.0, 75.0), "E": (75.0, 75.0), "S": (40.0, 40.0)},
-    # The barrel, y 7.5..92.5 as drawn, held 10 off each end.
-    ("vessel", "default"): {"W": (17.5, 82.5), "E": (17.5, 82.5)},
-    ("vessel", "dished"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
+    # The barrel, y 7.5..92.5 as drawn, held 10 off each end. An upright
+    # vessel's top head takes one fill, opposite the relief.
+    ("vessel", "default"): {"W": (17.5, 82.5), "E": (17.5, 82.5), "N": (46.5, 46.5)},
+    ("vessel", "dished"): {"W": (17.7, 77.7), "E": (17.7, 77.7), "N": (42.0, 42.0)},
     # Drawn on its side: the W and E faces are the two dished heads, and a head
     # meets the box at its apex alone.
     ("vessel", "dome"): {"W": (27.0, 27.0), "E": (27.0, 27.0)},
     # The same 7,7..87,7 barrel. The outlet is drawn at 77,7, which is where the
     # 10 clearance already puts the band's lower end, so it does not move.
-    ("vessel", "electrical_heating"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
+    ("vessel", "electrical_heating"): {"W": (17.7, 77.7), "E": (17.7, 77.7),
+                                       "N": (32.0, 32.0)},
     # The lagging lines, y 12.69..82.69, are the W and E faces.
-    ("vessel", "insulated"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
+    ("vessel", "insulated"): {"W": (22.7, 72.7), "E": (22.7, 72.7), "N": (38.0, 38.0)},
     # The jacket, for insulated's reason: the outer faces are the jacket boxes,
     # y 12,69..82,69.
-    ("vessel", "jacketed"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
+    ("vessel", "jacketed"): {"W": (22.7, 72.7), "E": (22.7, 72.7), "N": (38.0, 38.0)},
     # Only the lower, larger barrel meets the W and E faces.
-    ("vessel", "swaged"): {"W": (60.3, 75.0), "E": (60.0, 75.0)},
+    ("vessel", "swaged"): {"W": (60.3, 75.0), "E": (60.0, 75.0), "N": (34.0, 34.0)},
     # Roof and floor between the heads; W and E are the heads' apexes at y = 15.
     ("vessel", "horizontal"): {"N": (15.8, 75.8), "S": (15.8, 75.8),
                                "W": (15.0, 15.0), "E": (15.0, 15.0)},
+}
+
+
+# Further faces a tank's or vessel's inlet or outlet family may take, as
+# ``{role: {face: (x, y)}}`` in finished coordinates; emitted as
+# ``Symbol.family_faces``. A lone port's menu leaves them out. A flat-floored
+# tank draws off low on either wall, beside the fill; a hopper bottom keeps
+# its apex. An upright vessel takes its fill on either wall or on the top head
+# opposite the relief, and its draw on either wall; the bottom head is the
+# drain's.
+FAMILY_FACES = {
+    ("tank", "default"): {"outlet": {"W": (0.0, 85.0), "E": (100.0, 85.0)}},
+    ("tank", "conical"): {"outlet": {"W": (0.0, 80.0), "E": (100.0, 80.0)}},
+    ("tank", "floating_roof"): {"outlet": {"W": (0.0, 60.0), "E": (100.0, 60.0)}},
+    ("tank", "gas_holder"): {"inlet": {"E": (70.0, 45.0)}, "outlet": {"W": (0.0, 45.0)}},
+    ("vessel", "default"): {"inlet": {"E": (62.0, 50.0), "N": (46.5, 1.0)},
+                            "outlet": {"W": (0.0, 50.0)}},
+    # The shell walls inside the brackets.
+    ("vessel", "dished"): {"inlet": {"E": (50.0, 47.0), "N": (42.0, 1.5)},
+                           "outlet": {"W": (10.0, 47.0)}},
+    # Drawn on its side, so its walls are the heads and the top is the body's.
+    ("vessel", "dome"): {"inlet": {"E": (95.4, 27.0)}, "outlet": {"W": (0.0, 27.0)}},
+    # The element takes the east wall.
+    ("vessel", "electrical_heating"): {"inlet": {"N": (32.0, 1.5)},
+                                       "outlet": {"W": (0.0, 77.7)}},
+    ("vessel", "insulated"): {"inlet": {"E": (52.0, 47.7), "N": (38.0, 1.5)},
+                              "outlet": {"W": (0.0, 47.7)}},
+    ("vessel", "jacketed"): {"inlet": {"E": (52.0, 47.7), "N": (38.0, 1.5)},
+                             "outlet": {"W": (0.0, 47.7)}},
+    ("vessel", "swaged"): {"inlet": {"E": (50.0, 67.0), "N": (34.0, 3.0)},
+                           "outlet": {"W": (0.0, 67.0)}},
 }
 
 
@@ -1071,7 +1104,7 @@ def render() -> str:
         )
     # Refuse a table entry for a symbol KIND_MAP does not draw.
     tables = {"CLOSED_SHAPES": CLOSED_SHAPES, "GRAVITY_FIXED": GRAVITY_FIXED,
-              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS}
+              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES}
     for table_name, table in tables.items():
         orphans = sorted(key for key in table if key not in KIND_MAP)
         if orphans:
@@ -1177,6 +1210,8 @@ def render() -> str:
             # See BANDS; the closed drawing shares the open one's body.
             if (kind, variant) in BANDS:
                 lines.append(f"        bands={BANDS[(kind, variant)]!r},")
+            if (kind, variant) in FAMILY_FACES:
+                lines.append(f"        family_faces={FAMILY_FACES[(kind, variant)]!r},")
             # A family is named after the port it replaces: one member keeps
             # that name, and only a second one numbers them.
             if series:
