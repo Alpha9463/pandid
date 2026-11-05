@@ -1301,8 +1301,8 @@ def test_every_declared_wall_lies_on_the_drawing(kind, variant):
             drawn = sym.port_faces.get(role, {}).get(face)
             if drawn is not None:
                 insets.add(_face_local(face, drawn[0], drawn[1], sym.width, sym.height)[1])
-        assert insets, f"{kind}/{variant} bands {face!r}, which no connection is drawn on"
-        for inset in insets:
+        # A wall with no connection drawn on it is the box's edge.
+        for inset in insets or {0.0}:
             for t in (lo, (lo + hi) / 2, hi):
                 point = _face_point(face, t, inset, sym.width, sym.height)
                 d = _nearest_distance(point, segments)

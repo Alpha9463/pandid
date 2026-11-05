@@ -9,6 +9,7 @@ from dataclasses import replace
 import pytest
 
 from pandid import Flowsheet, units
+from pandid.render.iso_parts import SUPPORTS
 from pandid.render.svg import SvgRenderer
 from pandid.render.symbols import (
     COMPOSED_APPARATUS,
@@ -1178,7 +1179,10 @@ _COMPOSING = [
 )
 def test_a_body_and_part_either_draw_or_are_refused_when_built(cls, keyword, variant):
     """Check that every body and part pairing either renders or is refused when built."""
-    for part in [None, *default_registry.part_names(_PART_KEYWORDS[keyword])]:
+    names = (
+        SUPPORTS if keyword == "supports" else default_registry.part_names(_PART_KEYWORDS[keyword])
+    )
+    for part in [None, *names]:
         try:
             unit = cls("X-1", variant=variant, **{keyword: part})
         except ValueError as refused:

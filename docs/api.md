@@ -119,6 +119,24 @@ Use `variant=` on a base class for a drawing without its own equipment class:
 current registry, or `pandid symbols --kind valve` to narrow it. The installed
 registry is the source of available variant names.
 
+### Manholes and sockets
+
+`Vessel` and `Evaporator` take `manholes=` and `sockets=`, each a list of
+`(face, fraction)` pairs: the wall, and how far along it from its top or left
+end, 0 to 1. A manhole (ISO 10628-2 26.5) is drawn on the wall and has no port.
+A socket (26.6) is an outlet, `socket_1`, `socket_2`, and so on in the order
+given. A face with no straight wall, or a fraction off the wall, is refused.
+
+```python
+from pandid import Flowsheet, Product, Vessel
+
+fs = Flowsheet("Drum")
+d101 = fs.add(Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)]))
+sample = fs.add(Product("Sample"))
+fs.connect(d101.socket_1, sample.inlet)
+fs.render("drum.svg")
+```
+
 ### `Block`: the block flow diagram
 
 `Block(name, inputs=1, outputs=1)` draws a plant section. Counts create
@@ -264,6 +282,40 @@ routes through unrelated units, large detours, crowded nozzles and undrawn
 labels. `fs.render(..., check=True)` raises on errors; warnings from the last
 render are in `fs.warnings`. The `diagram` argument selects the drawing
 conventions used by validation.
+
+### A set of sheets
+
+```python
+from pandid import Document, Feed, Flowsheet, Product, Pump, TitleBlock
+
+crude = Flowsheet("Crude unit")
+crude.title_block = TitleBlock(drawing_number="PFD-001")
+feed = crude.add(Feed("Crude Oil"))
+pump = crude.add(Pump("P-101"))
+to_residue = crude.add(Product("Crude", reference="PFD-002"))
+crude.connect(feed.outlet, pump.suction)
+crude.connect(pump.discharge, to_residue.inlet)
+
+residue = Flowsheet("Residue unit")
+residue.title_block = TitleBlock(drawing_number="PFD-002")
+from_crude = residue.add(Feed("Crude", reference="PFD-001"))
+product = residue.add(Product("Residue"))
+residue.connect(from_crude.outlet, product.inlet)
+
+print(Document([crude, residue]).validate())  # []
+```
+
+`Document(sheets).validate()` checks sheets against each other and returns
+`Issue` objects, errors first. A sheet's drawing number is its
+`title_block.drawing_number`. A `Feed` or `Product` with `reference=` is an
+off-page connector. Its partner is the flag of the other direction on the
+referenced sheet whose `reference=` names this sheet and that has the same tag,
+or else the same line number. Errors are a connector without a partner,
+partners whose lines differ in line number, service or size, one tag on
+different kinds of equipment, a drawing number on two sheets, and a sheet
+without a number that another sheet has to point back at. A reference to a
+drawing outside the set is a warning. Each sheet's own findings still come
+from `fs.validate()`.
 
 ## Declaring a flowsheet as data
 
