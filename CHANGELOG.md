@@ -50,12 +50,18 @@ These are removed in 0.4.0.
   touch, so `Reactor("R-1", n_feeds=2)` no longer raises `nozzles-crowded`.
 - Lines drawn side by side no longer push a pipe into a unit body: a run moved
   off a shared track, and the segments either side of it, keep clear of every unit.
+  A run with no clear track nearby stays on the track the router laid it on.
 - `validate()` reports a `route-crosses-unit` warning for a slanted `via()` leg
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
   connected with `draw_as_recycle=True`, before or after the sheet is rendered.
 - A controller is not hung off its valve's actuator where its `via()` line would
   pass through it more often than where it stands unhung.
+- A tank or vessel with several inlets or outlets on one wall, such as
+  `Tank("TK-1", outputs=["S"] * 4)`, gives each its own nozzle clear of the
+  vent, relief and drain on that wall.
+- Equipment or a line valve that would be drawn on a balloon pinned with
+  `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
 
 ## [0.2.0] - 2026-11-05
 
