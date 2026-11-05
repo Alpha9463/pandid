@@ -334,7 +334,7 @@ def test_the_settled_gallery_has_no_unmarked_crossings(
 
 
 def test_every_crossing_style_default_is_the_package_default():
-    """Check public parameters use the package crossing-style default."""
+    """Check functions and methods use the package crossing-style default."""
     import inspect
     import pkgutil
     import importlib
@@ -344,17 +344,20 @@ def test_every_crossing_style_default_is_the_package_default():
 
     assert CROSSING_STYLE_DEFAULT in CROSSING_STYLES
 
-    seen = 0
+    seen: set[str] = set()
     for info in pkgutil.walk_packages(pandid.__path__, "pandid."):
         module = importlib.import_module(info.name)
-        for _, obj in inspect.getmembers(module, inspect.isfunction):
+        functions = [obj for _, obj in inspect.getmembers(module, inspect.isfunction)]
+        for _, cls in inspect.getmembers(module, inspect.isclass):
+            functions += [obj for obj in vars(cls).values() if inspect.isfunction(obj)]
+        for obj in functions:
             if obj.__module__ != info.name:
                 continue
             parameter = inspect.signature(obj).parameters.get("crossing_style")
             if parameter is None or parameter.default is inspect.Parameter.empty:
                 continue
-            seen += 1
+            seen.add(obj.__qualname__)
             assert parameter.default == CROSSING_STYLE_DEFAULT, (
                 f"{info.name}.{obj.__qualname__} defaults to {parameter.default!r}"
             )
-    assert seen, "no crossing_style parameter was found, so nothing was checked"
+    assert {"DrawioRenderer.render", "SvgRenderer.render", "Flowsheet.render"} <= seen, seen
