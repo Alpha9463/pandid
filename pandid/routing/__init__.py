@@ -468,3 +468,77 @@ class DefaultRouter:
         # Keep the routes layout sets pipe furniture on.
         if fs._lanes and not fs._laying_out and relane(fs, escapes, graph):
             fs._relaned = True
+
+
+
+def route_tap(inst, tap: tuple[float, float], faces: list[str],
+              centre: tuple[float, float]) -> list[tuple[float, float]]:
+    """Return a tap line's path round unit bodies and tags.
+
+    The line leaves the tap square along the first of ``faces`` that
+    has a path, and reaches the balloon centre on the visibility graph
+    at the fewest bends. It may cross its own host's tag. It is priced
+    as a stream routed after every drawn line: by the lines it crosses
+    and the runs it shares.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Placed attached balloon.
+    tap : tuple[float, float]
+        Tap point.
+    faces : list[str]
+        Compass directions the line may leave the tap in, in order.
+    centre : tuple[float, float]
+        Balloon centre.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Points from ``tap`` to ``centre``, or ``[]`` if no path is clear.
+    """
+    from bisect import bisect_left, bisect_right
+
+    from pandid.layout.attach import stream_path
+    from pandid.portgeom import COMPASS, unit_box
+    from pandid.routing.astar import CrossingIndex, find_path
+    from pandid.routing.visibility import MIN_ESCAPE, Rect, VisibilityGraph, _tag_halo
+    from pandid.units import Unit
+
+    host, fs = inst.host, inst.flowsheet
+    if fs is None or inst.frame is None:
+        return []
+    x0, y0, x1, y1 = unit_box(inst, inst.frame)
+    omit = [Rect(x0, x1, y0, y1)]
+    owner = host if isinstance(host, Unit) else inst
+    if owner.frame is not None and (halo := _tag_halo(owner, owner.frame)) is not None:
+        omit.append(halo)
+    stubs = {face: (tap[0] + MIN_ESCAPE * COMPASS[face][0], tap[1] + MIN_ESCAPE * COMPASS[face][1])
+             for face in faces}
+    graph = VisibilityGraph(fs, lanes=(*stubs.values(), centre), omit=omit)
+    index = CrossingIndex()
+    used: dict[tuple[tuple[float, float], tuple[float, float]], float] = defaultdict(float)
+    for line in (stream_path(s) for s in fs.streams if s.route is not None):
+        _record_route(index, line, True)
+        # Charge each graph edge on the line's square runs.
+        for (ax, ay), (bx, by) in zip(line, line[1:]):
+            if (ax == bx) == (ay == by):
+                continue
+            lanes, fixed = (graph.xs, ay) if ay == by else (graph.ys, ax)
+            lo, hi = sorted((ax, bx) if ay == by else (ay, by))
+            run = [(c, fixed) if ay == by else (fixed, c)
+                   for c in lanes[bisect_left(lanes, lo):bisect_right(lanes, hi)]]
+            for p, q in zip(run, run[1:]):
+                if q in graph.edges.get(p, ()):
+                    used[(p, q)] += 2000.0
+                    used[(q, p)] += 2000.0
+    for face, stub in stubs.items():
+        start = graph.reachable_projection(tap, stub, face, owner)
+        path = find_path(graph, start, centre, face, None, used, False, index) if start else []
+        if path:
+            break
+    else:
+        return []
+    points = [tap, *path]
+    return [points[0], *(b for a, b, c in zip(points, points[1:], points[2:])
+                         if not (a[0] == b[0] == c[0] or a[1] == b[1] == c[1])), points[-1]]

@@ -2,7 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Set, Tuple
+from typing import TYPE_CHECKING, Collection, Dict, Iterable, List, Set, Tuple
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -241,6 +241,10 @@ class VisibilityGraph:
     ----------
     fs : Flowsheet
         Sheet with unit frames and port faces.
+    lanes : Iterable[tuple[float, float]], optional
+        Points a lane runs through on each axis.
+    omit : Collection[Rect], optional
+        Unit bodies and tag halos left out of the obstacles.
 
     Attributes
     ----------
@@ -269,7 +273,8 @@ class VisibilityGraph:
         If a port's face cannot be reached under its placement.
     """
 
-    def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
+    def __init__(self, fs: "Flowsheet", *, lanes: Iterable[Tuple[float, float]] = (),
+                 omit: Collection[Rect] = ()):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
         from pandid.portgeom import COMPASS, port_anchor, unit_box
 
@@ -277,8 +282,8 @@ class VisibilityGraph:
 
         self.obstacles: List[Rect] = []
         self.body_obstacles: List[Tuple["Unit", Rect]] = []
-        x_set: Set[float] = set()
-        y_set: Set[float] = set()
+        x_set: Set[float] = {x for x, _ in lanes}
+        y_set: Set[float] = {y for _, y in lanes}
 
         self.port_anchors: Dict[Tuple[str, str], Tuple[float, float]] = {}
         self.port_dirs: Dict[Tuple[str, str], str] = {}
@@ -298,15 +303,15 @@ class VisibilityGraph:
                 and f.y <= tap[1] <= f.y + u_height
             )
 
-            if not inline:
-                x0, y0, x1, y1 = unit_box(u, f)
-                body = Rect(x0, x1, y0, y1)
+            x0, y0, x1, y1 = unit_box(u, f)
+            body = Rect(x0, x1, y0, y1)
+            if not inline and body not in omit:
                 self.obstacles.append(body)
                 self.body_obstacles.append((u, body))
 
             lpos = f.label_pos or "top"
             halo = _tag_halo(u, f)
-            if halo is not None:
+            if halo is not None and halo not in omit:
                 self.obstacles.append(halo)
                 if lpos == "top":
                     y_set.add(f.y - 20.0 - margin)

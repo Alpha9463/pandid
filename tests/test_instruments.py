@@ -2229,6 +2229,54 @@ def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) 
     assert edge.split('<Array as="points">', 1)[1].count("<mxPoint ") == corners
 
 
+def _drawn_tap(fs: Flowsheet) -> list[tuple[float, float]]:
+    """Return the points of the one tap line the SVG draws."""
+    import xml.etree.ElementTree as ET
+
+    group = fs.to_svg().split('<g id="instrument_taps">', 1)[1].split("</g>", 1)[0]
+    drawn = ET.fromstring(group.strip())
+    d = drawn.get("d") or "M {x1},{y1} L {x2},{y2}".format(**drawn.attrib)
+    return [(float(x), float(y)) for x, y in (p.split(",") for p in d[2:].split(" L "))]
+
+
+def test_a_tap_line_is_routed_round_a_unit_in_its_way() -> None:
+    """Check that a balloon pinned past a pump is reached round it, square at both ends."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+
+    fs = Flowsheet("leader")
+    drum = fs.add(U.Vessel("D-101"))
+    pump = fs.add(U.Pump("P-101"))
+    second = fs.add(U.Vessel("D-102"))
+    fs.connect(drum.out_1, pump.suction)
+    fs.connect(pump.discharge, second.in_1)
+    lt = fs.add_instrument("LT", 101, sensing=drum, face="E").pin(x=700, y=180)
+    fs.add_instrument("LIC", 101, near=lt, face="N")
+    fs.route()
+
+    points = _drawn_tap(fs)
+    for u in (pump, second):
+        box = unit_box(u, frame_of(u))
+        assert not any(segment_crosses_box(a, b, box) for a, b in zip(points, points[1:])), (
+            f"{u.name}: drawn {points}"
+        )
+    (x0, y0), (x1, y1) = points[:2]
+    assert y0 == y1 and x1 > x0, f"leaves the east face square: {points}"
+    assert all(a[0] == b[0] or a[1] == b[1] for a, b in zip(points, points[1:])), points
+    edge = fs.to_drawio().split('id="t0"', 1)[1].split("</mxCell>", 1)[0]
+    assert edge.count("<mxPoint ") == len(points) - 2
+
+
+def test_a_clear_tap_line_keeps_its_one_turn() -> None:
+    """Check that a tap line with nothing in its way is the square turn it always was."""
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs, _ = _drum("sensing", angle=45)
+    ((inst, tap, centre),) = tap_lines(fs)
+
+    assert tap_route(inst, tap, centre) == [tap, (centre[0], tap[1]), centre]
+
+
 def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
     """A balloon on a manually slanted run is reached with one square turn."""
     from pandid.render.svg import tap_lines, tap_route

@@ -274,7 +274,10 @@ def tap_route(inst, tap, centre):
     the tap square to its host and turns once onto the balloon centre
     (ISO 15519-1 12.4). A balloon behind a unit's face is reached one
     module out from the face, and around the unit's box when level
-    with it.
+    with it. Where that path crosses a unit body or another unit's
+    tag, the line leaves the tap the same way, or a pipe from either
+    side, and is routed round them at the fewest bends, if that
+    crosses fewer.
 
     Parameters
     ----------
@@ -289,6 +292,8 @@ def tap_route(inst, tap, centre):
         Points from the tap to the balloon centre.
     """
     from pandid.layout.attach import _anchor
+    from pandid.portgeom import COMPASS
+    from pandid.routing import route_tap
     from pandid.streams import Stream
 
     (tx, ty), (cx, cy) = tap, centre
@@ -299,20 +304,67 @@ def tap_route(inst, tap, centre):
     rx, ry = anchor[1]
     nx, ny = ry, -rx
     across = abs(nx) > abs(ny)
+    ahead = (cx - tx) * nx + (cy - ty) * ny
     # A pipe has no outside, so its balloon is always ahead.
-    if isinstance(inst.host, Stream) or (cx - tx) * nx + (cy - ty) * ny > 0:
+    if isinstance(inst.host, Stream) or ahead > 0:
         if abs(cx - tx) < 0.01 or abs(cy - ty) < 0.01:
-            return [tap, centre]
-        return [tap, (cx, ty) if across else (tx, cy), centre]
-    sx, sy = tx + nx * M, ty + ny * M
-    x0, y0, x1, y1 = unit_box(inst.host, inst.host.frame)
-    if across:
-        y = cy if not y0 < cy < y1 else (y0 - M if cy - y0 < y1 - cy else y1 + M)
-        bends = [(sx, sy), (sx, y), (cx, y)]
+            square = [tap, centre]
+        else:
+            square = [tap, (cx, ty) if across else (tx, cy), centre]
+        if ahead < 0:
+            nx, ny = -nx, -ny
     else:
-        x = cx if not x0 < cx < x1 else (x0 - M if cx - x0 < x1 - cx else x1 + M)
-        bends = [(sx, sy), (x, sy), (x, cy)]
-    return [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
+        sx, sy = tx + nx * M, ty + ny * M
+        x0, y0, x1, y1 = unit_box(inst.host, inst.host.frame)
+        if across:
+            y = cy if not y0 < cy < y1 else (y0 - M if cy - y0 < y1 - cy else y1 + M)
+            bends = [(sx, sy), (sx, y), (cx, y)]
+        else:
+            x = cx if not x0 < cx < x1 else (x0 - M if cx - x0 < x1 - cx else x1 + M)
+            bends = [(sx, sy), (x, sy), (x, cy)]
+        square = [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
+    clashes = _tap_clashes(inst, square)
+    faces = {v: k for k, v in COMPASS.items()}
+    face = faces.get((nx, ny))
+    if not clashes or face is None:
+        return square
+    # A pipe may be left on either side.
+    sides = [face, faces[-nx, -ny]] if isinstance(inst.host, Stream) else [face]
+    routed = route_tap(inst, tap, sides, centre)
+    return routed if routed and _tap_clashes(inst, routed) < clashes else square
+
+
+def _tap_clashes(inst, route) -> int:
+    """Count the unit bodies and tags a tap line crosses.
+
+    Leave out the balloon, its host and its host's tag.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+    route : list[tuple[float, float]]
+        Tap line points.
+
+    Returns
+    -------
+    int
+        Bodies and tag halos crossed.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.routing.visibility import _tag_halo
+
+    fs = inst.flowsheet
+    boxes = []
+    for u in fs.units if fs is not None else ():
+        if u.frame is None or u is inst or u is inst.host:
+            continue
+        boxes.append(unit_box(u, u.frame))
+        halo = _tag_halo(u, u.frame)
+        if halo is not None:
+            boxes.append((halo.x_min, halo.y_min, halo.x_max, halo.y_max))
+    return sum(any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+               for box in boxes)
 
 
 def impulse_tap(inst) -> bool:

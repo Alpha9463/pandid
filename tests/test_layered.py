@@ -364,10 +364,10 @@ def test_a_second_route_redraws_a_sheet_that_tried_unstacking(unstacked: bool) -
     top = fs.add(Product("Distillate")).pin(col=1, row=1)
     bottoms = fs.add(Product("Bottoms")).pin(row=3)
     fs.connect(a.ports["bottoms"], b.ports["in_1"])
-    line = fs.connect(a.ports["overhead"], c.ports["tube_in"])
+    fs.connect(a.ports["overhead"], c.ports["tube_in"])
     fs.connect(feed.ports["outlet"], a.ports["feed_1"])
     fs.connect(c.ports["tube_out"], top.ports["inlet"])
-    fs.connect(b.ports["out_1"], bottoms.ports["inlet"])
+    line = fs.connect(b.ports["out_1"], bottoms.ports["inlet"])
     valve = fs.add(D.ControlValve("FV-101"), on=line)
     fs.add_control_loop("F", 101, measuring=line, acting_on=valve)
     if unstacked:
