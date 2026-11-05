@@ -664,9 +664,9 @@ class Flowsheet:
         self._relaned = False
         # Whether layout may move a counted block, tank or vessel
         # connection off its declared face, and onto a symbol's family
-        # faces.
+        # faces, which route() tries.
         self._family_faces = True
-        self._added_faces = True
+        self._added_faces = False
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
