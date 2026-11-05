@@ -2490,7 +2490,7 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
 
 
-@pytest.mark.parametrize(("offset", "hung", "angle"), [(50, 35, 135)])
+@pytest.mark.parametrize(("offset", "hung", "angle"), [(50, 35, 135), (60, 35, 90)])
 def test_a_balloon_hung_across_the_tapped_line_settles_clear_of_it(
     offset: float, hung: float, angle: float
 ) -> None:

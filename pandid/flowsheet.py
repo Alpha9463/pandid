@@ -2503,7 +2503,9 @@ class Flowsheet:
         def attempt(may_hang: bool, keep_clear: bool) -> None:
             """Place balloons again, and keep that only if a balloon moved as
             asked and no finding or clash grew, nor, keeping balloons clear,
-            any tap left its line.
+            any tap left its line. Keeping balloons clear, a placement that
+            does not settle is made again from the sheet with its automatic
+            routes cleared.
 
             Parameters
             ----------
@@ -2520,6 +2522,14 @@ class Flowsheet:
             self._keep_clear, self._kept_clear = keep_clear, False
             try:
                 place()
+                if keep_clear and not self.route_converged:
+                    self._put_geometry(prior, keep_manual=False)
+                    for st in self.streams:
+                        if st.route is not None and not st.route.manual:
+                            st.route = None
+                    place_control(self)
+                    router.route(self)
+                    place()
                 done = (self._kept_clear and _taps_off(self) <= off) if keep_clear else self._hung
                 kept = done and not any(
                     n > before[k] for k, n in _flaws(self, full=keep_clear).items())
