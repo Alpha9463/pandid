@@ -361,9 +361,10 @@ def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]
     """Step units off fixed boxes, fully pinned units and units before.
 
     If any unit has an x or y pin or ``fixed`` is not empty, each unit
-    not pinned on both axes, in x-then-y order, steps below (right of,
-    if its y is pinned) a box it comes within ``LANE`` of, up to one
-    step more than there are boxes. The boxes are ``fixed``, the fully
+    not pinned on both axes, in x-then-y order, steps below a box it
+    comes within ``LANE`` of, up to one step more than there are boxes.
+    It steps right instead if its y is pinned, or if the box is in
+    ``fixed`` and its x is free. The boxes are ``fixed``, the fully
     pinned units and the units before.
 
     Parameters
@@ -419,7 +420,7 @@ def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]
             if hit is None:
                 break
             s = slot(u)
-            if axis == "y":
+            if axis == "y" and not (hit in fixed and free(u, "x")):
                 s.y = (s.y or 0.0) + hit[3] + LANE - a[1]
             else:
                 s.x = (s.x or 0.0) + hit[2] + LANE - a[0]

@@ -1092,7 +1092,7 @@ def _equipment_boxes(fs: Flowsheet) -> dict[str, Box]:
 
 @pytest.mark.parametrize(("x", "y"), [(460.0, 180.0), (640.0, 180.0)])
 def test_equipment_keeps_clear_of_a_balloon_pinned_on_both_axes(x: float, y: float) -> None:
-    """Check that equipment drawn on a fully pinned chain steps off it, closer to its host."""
+    """Check that equipment drawn on a fully pinned chain steps off it along the row."""
     fs, _, lt = _drum_pump_drum()
     fs.route()
     before = _equipment_boxes(fs)
@@ -1102,6 +1102,8 @@ def test_equipment_keeps_clear_of_a_balloon_pinned_on_both_axes(x: float, y: flo
 
     assert _unit_overlaps(fs) == []
     assert after["P-101"][0] - after["V-101"][2] < before["P-101"][0] - before["V-101"][2]
+    rise = after["V-101"][1] - before["V-101"][1]
+    assert all(after[name][1] - before[name][1] == rise for name in before), "the row broke"
 
 
 def test_a_balloon_pinned_where_it_is_drawn_moves_no_equipment() -> None:
