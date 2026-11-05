@@ -89,6 +89,9 @@ These are removed in 0.4.0.
 - A balloon's tap line is drawn round equipment and tags in its way instead of
   through them, and `validate()` reports `tap-crosses-unit` where there is no
   way round.
+- Reassigning `variant` on a unit built with supports, an agitator, internals,
+  manholes or sockets redraws them on the new body and keeps any overlays added
+  since, or refuses a body that cannot carry them and keeps the old one.
 - `route()` routes a line again where moving it off a shared track makes it
   cross lines its route did not count, and keeps the new drawing only if it
   has no more crossings, bends or findings.
