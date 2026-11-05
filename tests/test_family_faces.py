@@ -308,3 +308,16 @@ def test_a_listed_tank_inlet_round_trips_as_a_list():
     fs.add(units.Tank("TK-1", inputs=["W"]))
     entry = next(u for u in to_dict(fs)["units"] if u["kind"] == "Tank")
     assert entry["inputs"] == ["W"]
+
+
+def test_a_compact_block_with_moved_connections_round_trips():
+    """Read back a block sized for the faces its connections were moved to."""
+    fs = Flowsheet("bfd")
+    b = fs.add(units.Block("Reaction", inputs=4))
+    for n in (2, 3, 4):
+        b.nozzle(f"in_{n}", "N")
+    b.height = 80
+    got = next(u for u in from_dict(to_dict(fs)).units if isinstance(u, units.Block))
+    assert got.height == 80
+    assert got.input_faces == ("W", "N", "N", "N")
+

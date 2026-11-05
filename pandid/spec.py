@@ -926,8 +926,18 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key, default in cls.COMPOSITION.items():
         if key in data:
             kwargs[key] = _composed(data[key], default, f"{where}.{key}")
+    # A block's box is checked against its faces, so size it after
+    # nozzle() has moved them.
+    size = ({axis: kwargs.pop(axis) for axis in ("width", "height") if axis in kwargs}
+            if issubclass(cls, unit_types.Block) else {})
     with _blame(where):
         unit = cls(name, **kwargs)
+    if size:
+        if "port_faces" in data:
+            _read_port_faces(unit, data["port_faces"], f"{where}.port_faces")
+        for axis, value in size.items():
+            with _blame(f"{where}.{axis}"):
+                setattr(unit, axis, value)
 
     _read_common(fs, unit, data, where)
     # Order faces after _read_common has moved ports onto them.
