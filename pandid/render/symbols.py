@@ -424,6 +424,9 @@ class Symbol:
         Port families, each on N, S, E or W and apart from ``ports``.
     bands : dict[str, tuple[float, float]]
         Stretch ``(lo, hi)`` a family may use, from each face's start.
+    rim : tuple[tuple[float, float], ...]
+        Outline of the artwork as a convex polygon, which lines sharing
+        a face are drawn to; the box when empty.
     label_pos : str or None
         Fixed tag side, such as ``"center"``.
     id_suffix : str
@@ -466,6 +469,7 @@ class Symbol:
     faceless_ports: frozenset[str] = frozenset()
     port_series: tuple[PortSeries, ...] = ()
     bands: dict[str, tuple[float, float]] = field(default_factory=dict)
+    rim: tuple[tuple[float, float], ...] = ()
     label_pos: str | None = None
     id_suffix: str = ""
     stretchable: bool = True
@@ -3143,21 +3147,24 @@ class SymbolRegistry:
         # The face menus overlap (faceless_ports).
         _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
         _inst_faceless = frozenset(_inst_ports)
+        # A 64-gon traces the circle.
+        _inst_rim = tuple((22.0 + 21.0 * math.cos(math.pi * k / 32),
+                           22.0 + 21.0 * math.sin(math.pi * k / 32)) for k in range(64))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True))
+            faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
+            stretchable=False, trim=True))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True), "panel")
+            faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
+            stretchable=False, trim=True), "panel")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="2"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True), "aux")
+            faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
+            stretchable=False, trim=True), "aux")
         # Shared display: a circle in a square with one bar
         # (ISO 15519-2 Table 1).
         self.register("instrument", Symbol(
@@ -3174,6 +3181,8 @@ class SymbolRegistry:
             # N and S stubs on the flat top and bottom.
             port_faces={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
                         for n in _inst_ports},
+            rim=((11.0, 3.0), (33.0, 3.0), (43.0, 22.0), (33.0, 41.0), (11.0, 41.0),
+                 (1.0, 22.0)),
             trim=True), "computer")
         # ISA-5.1 trip and logic symbols. Ports sit on the diamond's
         # vertices.
@@ -3193,7 +3202,8 @@ class SymbolRegistry:
                 '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
                 '</g>',
             width=40.0, height=40.0, label_pos="center", stretchable=False,
-            ports=_logic_ports, trim=True),
+            ports=_logic_ports, rim=((20.0, 1.0), (39.0, 20.0), (20.0, 39.0), (1.0, 20.0)),
+            trim=True),
             "interlock")
 
         # Tubular reactor: a rectangular shell with a serpentine tube.
