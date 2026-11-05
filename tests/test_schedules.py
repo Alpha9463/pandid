@@ -162,6 +162,18 @@ def test_a_property_named_like_a_column_is_refused_with_advice_that_keeps_it():
     assert (row["size"], row["Size"], row["Temperature"]) == ('2"', "DN50", "25 C")
 
 
+def test_the_clash_advice_renames_to_a_key_the_stream_does_not_use():
+    """Check that the advice keeps both values when ``Size`` is already taken."""
+    fs = Flowsheet("Clash")
+    line = fs.connect(fs.add(Feed("Feed")).outlet, fs.add(Product("Product")).inlet)
+    line.properties = {"size": "DN50", "Size": "60.3 mm OD"}
+    with pytest.raises(ValueError) as refused:
+        fs.line_list()
+    exec(str(refused.value).rsplit(": ", 1)[1], {"stream": line})
+    assert sorted(line.properties.values()) == ["60.3 mm OD", "DN50"]
+    assert "size" not in line.properties
+
+
 def test_the_equipment_list_has_one_row_per_scheduled_unit():
     """Check the equipment list's rows match the drawn table's default units."""
     fs = _sheet()

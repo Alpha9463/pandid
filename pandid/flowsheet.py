@@ -2135,10 +2135,12 @@ class Flowsheet:
         clash = next((k for k in keys if k in _LINE_LIST_COLUMNS), None)
         if clash is not None:
             carrier = next(s for run in runs for s in run if clash in s.properties)
+            free = next(k for k in (clash.title(), *(f"{clash.title()} {n}" for n in range(2, 99)))
+                        if k not in carrier.properties)
             raise ValueError(
                 f"{carrier.name}: the stream property {clash!r} has the name of a "
                 f"line_list() column, so a row cannot hold both. Rename it on that "
-                f"stream, keeping its value: stream.properties[{clash.title()!r}] = "
+                f"stream, keeping its value: stream.properties[{free!r}] = "
                 f"stream.properties.pop({clash!r})"
             )
         rows = []
