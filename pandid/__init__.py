@@ -94,7 +94,7 @@ Traps:
 - .svg and .drawio need nothing; .pdf and .png need pip install "pandid[pdf]".
 """
 
-__version__ = "0.1.5"
+__version__ = "0.2.0"
 
 from pandid.components import Component
 from pandid.flowsheet import Flowsheet
