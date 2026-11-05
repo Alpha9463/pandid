@@ -14,7 +14,6 @@ from pandid import (
     Port,
     Product,
     Pump,
-    Splitter,
     Stream,
     Tee,
     Valve,
@@ -42,17 +41,6 @@ def _into_the_station_valve() -> None:
 def _out_of_the_station_valve() -> None:
     fs, _, product = _line()
     fs.connect(fs.add_valve_station("FV-101").control.outlet, product.inlet)
-
-
-def _on_a_recycle_line() -> None:
-    fs, feed, product = _line()
-    drum = fs.add(Vessel("V-1", inputs=2))
-    split = fs.add(Splitter("SP-1"))
-    fs.connect(feed.outlet, drum.port("in_1"))
-    fs.connect(drum.port("out_1"), split.inlet)
-    fs.connect(split.out_1, product.inlet)
-    back = fs.connect(split.out_2, drum.port("in_2"), draw_as_recycle=True)
-    fs.add(Valve("HV-1"), on=back)
 
 
 def _tee_on_a_line() -> None:
@@ -93,12 +81,6 @@ def _acting_on_the_inlet() -> None:
         (_unit_to_unit, ValueError, "Its nozzles are ['discharge', 'suction']"),
         (_into_the_station_valve, ValueError, "station's own inlet, station.inlet"),
         (_out_of_the_station_valve, ValueError, "station's own outlet, station.outlet"),
-        (
-            _on_a_recycle_line,
-            ValueError,
-            "fs.connect(SP-1.out_2, <device>.inlet, draw_as_recycle=True) and "
-            "fs.connect(<device>.outlet, V-1.in_2)",
-        ),
         (_tee_on_a_line, ValueError, "fs.connect(TEE.branch, ...)"),
         (lambda: getattr(units, "Condenser"), AttributeError, "from pandid import Condenser"),
         (lambda: getattr(units, "LevelTransmitter"), AttributeError, 'add_instrument("LT"'),
@@ -110,7 +92,6 @@ def _acting_on_the_inlet() -> None:
         "connect unit to unit",
         "into a station's valve",
         "out of a station's valve",
-        "on= a recycle line",
         "on= a tee",
         "units.Condenser",
         "units.LevelTransmitter",
@@ -180,22 +161,4 @@ def test_the_tee_advice_lists_everything_the_line_carries() -> None:
         "fs.connect(F.outlet, T.inlet), fs.connect(T.outlet, P.inlet) and "
         "fs.connect(T.branch, ...). Then put back what S1 carries, each where it sits now: "
         + _CARRIED
-    ) in str(refused.value)
-
-
-def test_the_recycle_advice_lists_everything_the_line_carries() -> None:
-    """Check that a recycle line refused to on= names its connect() calls and every item."""
-    fs, feed, product = _line()
-    drum, split = fs.add(Vessel("R", inputs=2)), fs.add(Splitter("SP"))
-    fs.connect(feed.outlet, drum.port("in_1"))
-    fs.connect(drum.port("out_1"), split.inlet)
-    fs.connect(split.out_1, product.inlet)
-    back = fs.connect(split.out_2, drum.port("in_2"))
-    _carry(fs, back)
-    fs.route()
-    with pytest.raises(ValueError, match="recycle") as refused:
-        fs.add(Valve("V"), on=back, at=0.5)
-    assert (
-        "fs.connect(SP.out_2, <device>.inlet) and fs.connect(<device>.outlet, R.in_2). "
-        f"Then put back what {back.name} carries, each where it sits now: " + _CARRIED
     ) in str(refused.value)

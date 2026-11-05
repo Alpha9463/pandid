@@ -57,21 +57,6 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
     if not line._logical_segments and line._inline_at is not None:
         raise ValueError("on= cannot replace an existing inline position")
     segments = line._logical_segments or [line]
-    if any(s.draw_as_recycle or s.is_recycle for s in segments):
-        flagged = any(s.draw_as_recycle for s in segments)
-        source, dest = _ends(segments)
-        raise ValueError(
-            f"on= cannot split {line.name}: it "
-            + ("is marked draw_as_recycle=True, and a split line would leave one "
-               "part without that mark" if flagged else
-               "is the recycle line the last render drew to close a cycle")
-            + f". Pipe the device in with two connect() calls in place of the one "
-            f"that drew {line.name}, keeping its other arguments: "
-            f"fs.connect({source}, <device>.inlet"
-            + (", draw_as_recycle=True" if flagged else "")
-            + f") and fs.connect(<device>.outlet, {dest})"
-            + _carried(fs, line, segments)
-        )
     if any(s.route is not None and s.route.manual for s in segments):
         raise ValueError("on= cannot split a manual route")
     if any(s.ends is not None for s in segments):
@@ -189,6 +174,7 @@ def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
     selected = segments[index]
     old_dest = selected.dest
     successor = Stream(name="", source=outlet, dest=old_dest, kind="material",
+                       draw_as_recycle=selected.draw_as_recycle,
                        color=selected.color, dasharray=selected.dasharray)
     successor._inline_at = selected._inline_at
     successor._logical_root = line
