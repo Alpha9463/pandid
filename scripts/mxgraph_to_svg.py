@@ -248,7 +248,7 @@ def convert_shape(shape_el, stroke_width=2.0):
     if conns is not None:
         for c in conns.findall("constraint"):
             name = c.get("name") or f"c{len(constraints)}"
-            constraints[name] = (round(_num(c, "x") * w, 2), round(_num(c, "y") * h, 2))
+            constraints[name] = (_num(c, "x") * w, _num(c, "y") * h)
 
     out = []
     pending = []   # geometry accumulated since the last paint op
