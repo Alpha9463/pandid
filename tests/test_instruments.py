@@ -985,7 +985,7 @@ def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
     fs, lic, valve = _hung_controller()
     line = lic.sig_out.stream
     assert line is not None
-    line.via([(100, 200), (500, 200)])
+    line.via([(280, 200), (500, 200)])
     fs.route()
 
     assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []

@@ -1248,16 +1248,14 @@ class Flowsheet:
             stream._inline_at = float(at)
             self._invalidate_layout()
             return
-        if (stream.kind != "material" or stream.draw_as_recycle
-                or stream.is_recycle or unit.kind not in _INLINE_KINDS):
+        if stream.kind != "material" or unit.kind not in _INLINE_KINDS:
             raise ValueError("inline position requires a material stream entering an inline device")
         if stream.dest.name != "inlet" or stream.dest.stream is not stream:
             raise ValueError("inline position requires the device inlet stream")
         process_ports = {port.name for port in unit.ports.values() if port.role == "process"}
         outgoing = unit.ports.get("outlet")
         if (process_ports != {"inlet", "outlet"} or outgoing is None or outgoing.stream is None
-                or outgoing.stream.source is not outgoing or outgoing.stream.kind != "material"
-                or outgoing.stream.draw_as_recycle or outgoing.stream.is_recycle):
+                or outgoing.stream.source is not outgoing or outgoing.stream.kind != "material"):
             raise ValueError("inline position requires one material inlet and outlet")
         stream._inline_at = float(at)
         self._invalidate_layout()

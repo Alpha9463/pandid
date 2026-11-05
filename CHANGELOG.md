@@ -44,8 +44,14 @@ These are removed in 0.4.0.
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 - Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
-- Equipment and line valves keep clear of a balloon pinned with `pin(x=, y=)`
-  and the balloons hung on it, and its host no longer leaves room beside it.
+- Lines drawn side by side no longer push a pipe into a unit body: a run moved
+  off a shared track, and the segments either side of it, keep clear of every unit.
+- `validate()` reports a `route-crosses-unit` warning for a slanted `via()` leg
+  drawn through a unit, including the unit the line connects to.
+- `on=` puts a valve, fitting or valve station on a recycle line, including one
+  connected with `draw_as_recycle=True`, before or after the sheet is rendered.
+- Equipment or a line valve that would be drawn on a balloon pinned with
+  `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
 
 ## [0.2.0] - 2026-11-05
 
