@@ -187,6 +187,63 @@ def parts() -> tuple:
                f'<path d="M {4 * M:g} 0 L 0 0 L 0 {M:g} L {4 * M:g} {M:g}" {_INK}/>'),
         width=4 * M, height=M)
 
+    def on_wall(name, item, reg, descriptor, depth, span, *runs):
+        """Return a wall part drawn on a west, a north and a south wall.
+
+        Parameters
+        ----------
+        name : str
+            Part name; the north and south drawings add ``_up`` and
+            ``_down``, the way the part points.
+        item : str
+            ISO item number.
+        reg : str
+            ISO registration number.
+        descriptor : str
+            ISO descriptor.
+        depth : float
+            Reach out from the wall.
+        span : float
+            Length along the wall.
+        *runs : tuple[tuple[float, float], ...]
+            Strokes as ``(out, along)`` points, ``out`` 0 at the far
+            end and ``depth`` at the wall.
+
+        Returns
+        -------
+        tuple[OverlayPart, OverlayPart, OverlayPart]
+            The west, north and south drawings.
+        """
+        iso = IsoPart(26, item, reg, descriptor)
+        # Each drawing's (x, y) for an (out, along) point.
+        turns = {
+            "": lambda out, along: (out, along),
+            "_up": lambda out, along: (along, out),
+            "_down": lambda out, along: (along, depth - out),
+        }
+        drawn = []
+        for suffix, turn in turns.items():
+            d = " ".join("M " + " L ".join("{:g} {:g}".format(*turn(*point)) for point in run)
+                         for run in runs)
+            w, h = (depth, span) if suffix == "" else (span, depth)
+            drawn.append(OverlayPart(
+                name=name + suffix, iso=iso,
+                svg=_g(f"26_{name}{suffix}", f'<path d="{d}" {_INK}/>'), width=w, height=h))
+        return tuple(drawn)
+
+    # A 4 M neck flanged 1 M each side, and the cover 1 M beyond.
+    manhole, manhole_up, manhole_down = on_wall(
+        "manhole", "26.5", "X8159", "Manhole", 5 * M, 6 * M,
+        ((5 * M, M), (M, M), (M, 0)),
+        ((5 * M, 5 * M), (M, 5 * M), (M, 6 * M)),
+        ((0, 0), (0, 6 * M)))
+
+    # A 2 M stub ending in a 2 M flange face.
+    socket, socket_up, socket_down = on_wall(
+        "socket", "26.6", "X8160", "Socket, connection nozzle", 2 * M, 2 * M,
+        ((2 * M, M), (0, M)),
+        ((0, 0), (0, 2 * M)))
+
     # Group 27: internals. The six decks share DECK_W x DECK_H.
 
     tray = deck("tray", "27.1", "C2044", "Tray (general)", _run(0, DECK_W))
@@ -481,6 +538,7 @@ def parts() -> tuple:
 
     return (
         leg, bracket, skirt, ring,
+        manhole, manhole_up, manhole_down, socket, socket_up, socket_down,
         tray, baffle_tray, bubble_cap_tray, valve_tray, sieve_tray, filter_insert,
         fluidised_bed, packing,
         agitator_general, flat_blade, gate_paddle, cross_beam, anchor, helical,
@@ -657,6 +715,180 @@ def stage_fraction(name: str, stage: int, count: int) -> float:
 # Support top and depth as fractions of body height.
 _SUPPORT_TOP, _SUPPORT_DROP = 0.97, 0.28
 
+#: The group-26 parts ``supports=`` takes.
+SUPPORTS = ("leg", "bracket", "skirt", "ring")
+
+#: The group-26 parts placed on a wall, and the drawn reach out from it
+#: and length along it of each.
+WALL_PARTS = ("manhole", "socket")
+MANHOLE_DEPTH, MANHOLE_SPAN = 1.5 * M, 1.8 * M
+SOCKET_DEPTH, SOCKET_SPAN = M, M
+
+
+#: Walls of a body drawn with detail standing off them, which a manhole
+#: or socket would be drawn over.
+_CLUTTERED = {
+    # The stencil's own brackets.
+    ("vessel", "dished"): ("W", "E"),
+    # The heater.
+    ("vessel", "electrical_heating"): ("E",),
+}
+
+
+def wall_point(kind: str, variant: str, face: str, fraction: float, what: str) -> float:
+    """Return where a fraction of the way along a wall falls on a body.
+
+    Parameters
+    ----------
+    kind : str
+        Body kind.
+    variant : str
+        Body variant.
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+    fraction : float
+        Fraction of the face, 0 at its top or left end.
+    what : str
+        The unit and the part, for messages, such as
+        ``"D-101: the manhole at ('E', 0.3)"``.
+
+    Returns
+    -------
+    float
+        Coordinate along the face.
+
+    Raises
+    ------
+    ValueError
+        If the face has no clear straight wall, or the fraction is off
+        it.
+    """
+    from pandid.render.symbols import default_registry, pinned
+    body = default_registry.get(kind, variant)
+    walls = [f for f, (lo, hi) in body.bands.items()
+             if lo < hi and f not in _CLUTTERED.get((kind, variant), ())]
+    if face not in walls:
+        raise ValueError(
+            f"{what} is on the {face} face, where a {variant!r} {kind} has no clear "
+            f"straight wall; "
+            + (f"put it on {' or '.join(map(repr, walls))}" if walls else
+               "no face of that drawing has one, so draw it with variant='default'")
+        )
+    along = body.height if face in ("W", "E") else body.width
+    lo, hi = body.bands[face]
+    if not lo - 1e-9 <= fraction * along <= hi + 1e-9:
+        raise ValueError(
+            f"{what} is off the {face} wall, which runs from "
+            f"{math.ceil(lo / along * 100) / 100:g} to {math.floor(hi / along * 100) / 100:g} "
+            f"of the way {'down' if face in ('W', 'E') else 'across'} the face; "
+            f"give a fraction in that range"
+        )
+    return pinned(fraction, along, body.bands[face])
+
+
+def _fit(stated: "float | None", ends: list) -> float:
+    """Return the scale that draws ``ends`` across ``stated`` units.
+
+    Each end is ``(a, b)``, drawn at ``scale * a + b``: ``a`` in body
+    units and ``b`` a fixed reach.
+
+    Parameters
+    ----------
+    stated : float or None
+        Drawn extent; ``None`` draws the body at its own size.
+    ends : list[tuple[float, float]]
+        Extreme points of the body, its parts and its wall parts.
+
+    Returns
+    -------
+    float
+        Scale; ``1`` when nothing is stated.
+    """
+    if stated is None:
+        return 1.0
+    return min((stated - (b1 - b0)) / (a1 - a0)
+               for a1, b1 in ends for a0, b0 in ends if a1 > a0)
+
+
+def wall_overlays(kind: str, variant: str, overlays: tuple, manholes: tuple,
+                  sockets: tuple, size: tuple, who: str) -> tuple:
+    """Return manholes and sockets placed on a body at their drawn size.
+
+    A stated size is the drawn box, parts included; the body and its
+    other parts stretch to fill what the wall parts leave of it.
+
+    Parameters
+    ----------
+    kind : str
+        Body kind.
+    variant : str
+        Body variant.
+    overlays : tuple[Overlay, ...]
+        The body's other parts.
+    manholes, sockets : tuple[tuple[str, float], ...]
+        ``(face, fraction)`` of each.
+    size : tuple[float or None, float or None]
+        Stated width and height of the drawn box, unturned.
+    who : str
+        Unit name, for messages.
+
+    Returns
+    -------
+    tuple
+        The wall parts; ``(socket_n, point)`` for each socket's flange
+        face in body coordinates; and the ``(x, y)`` scale the stated
+        size draws the composed body at.
+
+    Raises
+    ------
+    ValueError
+        If a placement is off the body's walls, or the stated size
+        leaves no room for the body.
+    """
+    from pandid.render.symbols import Overlay, default_registry
+    body = default_registry.get(kind, variant)
+    bw, bh = body.width, body.height
+    placed = [(name, face, wall_point(kind, variant, face, fraction,
+                                      f"{who}: the {name} at {(face, fraction)!r}"))
+              for name, entries in (("manhole", manholes), ("socket", sockets))
+              for face, fraction in entries]
+    sizes = {"manhole": (MANHOLE_DEPTH, MANHOLE_SPAN), "socket": (SOCKET_DEPTH, SOCKET_SPAN)}
+    # Ends along x and y: the body and its parts, then each wall part's.
+    xs = [(0.0, 0.0), (bw, 0.0)] + [(o.x * bw, 0.0) for o in overlays] + [
+        ((o.x + o.w) * bw, 0.0) for o in overlays]
+    ys = [(0.0, 0.0), (bh, 0.0)] + [(o.y * bh, 0.0) for o in overlays] + [
+        ((o.y + o.h) * bh, 0.0) for o in overlays]
+    for name, face, t in placed:
+        depth, span = sizes[name]
+        across, along = (xs, ys) if face in ("W", "E") else (ys, xs)
+        wall = 0.0 if face in ("W", "N") else (bw if face == "E" else bh)
+        across += [(wall, 0.0), (wall, -depth if face in ("W", "N") else depth)]
+        along += [(t, -span / 2), (t, span / 2)]
+    sx, sy = _fit(size[0], xs), _fit(size[1], ys)
+    if sx <= 0 or sy <= 0:
+        raise ValueError(
+            f"{who}: a box of {size[0] if sx <= 0 else size[1]:g} leaves no room for "
+            f"the body beside its manholes and sockets; give a larger "
+            f"{'width' if sx <= 0 else 'height'}"
+        )
+    parts: list[Overlay] = []
+    ports: list[tuple[str, tuple[float, float]]] = []
+    for name, face, t in placed:
+        depth, span = sizes[name]
+        if face in ("W", "E"):
+            w, h = depth / sx, span / sy
+            x, y = (-w if face == "W" else bw), t - h / 2
+            point = (x if face == "W" else x + w, t)
+        else:
+            w, h = span / sx, depth / sy
+            x, y = t - w / 2, (-h if face == "N" else bh)
+            point = (t, y if face == "N" else y + h)
+        drawing = name + {"N": "_up", "S": "_down"}.get(face, "")
+        parts.append(Overlay(26, drawing, x / bw, y / bh, w / bw, h / bh, mirror=face == "E"))
+        if name == "socket":
+            ports.append((f"socket_{len(ports) + 1}", point))
+    return tuple(parts), tuple(ports), (sx, sy)
+
 
 def support_overlays(name: str) -> tuple:
     """Return a support placed under or beside a vertical body.
@@ -674,9 +906,17 @@ def support_overlays(name: str) -> tuple:
     Raises
     ------
     ValueError
-        If ``name`` is not a registered group-26 part.
+        If ``name`` is not one of :data:`SUPPORTS`.
     """
+    from pandid._checks import suggest
     from pandid.render.symbols import Overlay
+    if name not in SUPPORTS:
+        wall = name.split("_")[0] if name.startswith(WALL_PARTS) else ""
+        raise ValueError(
+            f"supports={name!r} is not a support{suggest(name, SUPPORTS)}; supports= "
+            f"takes {', '.join(map(repr, SUPPORTS))}"
+            + (f". A {wall} sits on a wall: {wall}s=[('E', 0.3)]" if wall else "")
+        )
     _part(26, name)
     if name == "skirt":
         return (Overlay(26, name, 0.20, _SUPPORT_TOP, 0.60, _SUPPORT_DROP),)

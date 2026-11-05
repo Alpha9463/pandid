@@ -120,6 +120,24 @@ Use `variant=` on a base class for a drawing without its own equipment class:
 current registry, or `pandid symbols --kind valve` to narrow it. The installed
 registry is the source of available variant names.
 
+### Manholes and sockets
+
+`Vessel` and `Evaporator` take `manholes=` and `sockets=`, each a list of
+`(face, fraction)` pairs: the wall, and how far along it from its top or left
+end, 0 to 1. A manhole (ISO 10628-2 26.5) is drawn on the wall and has no port.
+A socket (26.6) is an outlet, `socket_1`, `socket_2`, and so on in the order
+given. A face with no straight wall, or a fraction off the wall, is refused.
+
+```python
+from pandid import Flowsheet, Product, Vessel
+
+fs = Flowsheet("Drum")
+d101 = fs.add(Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)]))
+sample = fs.add(Product("Sample"))
+fs.connect(d101.socket_1, sample.inlet)
+fs.render("drum.svg")
+```
+
 ### `Block`: the block flow diagram
 
 `Block(name, inputs=1, outputs=1)` draws a plant section. Counts create

@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
+- `Vessel` and `Evaporator` draw manholes and sockets on their walls:
+  `Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)])`. Each socket
+  is a port, `socket_1`, `socket_2`, and so on.
 
 ### Deprecated
 
@@ -18,6 +21,11 @@ These are removed in 0.4.0.
 
 - `pandid.document.equipment_list()`, the drawn box, and the spec box
   `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
+
+### Fixed
+
+- The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
+  drawn with `diagram="p&id"` or `diagram="bfd"`.
 
 ## [0.2.0] - 2026-11-05
 
@@ -305,6 +313,7 @@ First public release.
 - Licensed under the PolyForm Small Business License 1.0.0; the vendored
   symbols are Apache-2.0.
 
+[Unreleased]: https://github.com/Alpha9463/pandid/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Alpha9463/pandid/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/Alpha9463/pandid/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/Alpha9463/pandid/compare/v0.1.3...v0.1.4
