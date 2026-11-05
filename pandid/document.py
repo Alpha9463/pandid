@@ -8,6 +8,7 @@ from dataclasses import dataclass, field, fields, replace
 from typing import Any, Literal
 
 from pandid._checks import check_real, suggest
+from pandid.deprecation import Deprecation
 
 
 @dataclass
@@ -396,7 +397,7 @@ class StreamLabelOptions:
 
 # Convenience constructors for the common boxes
 
-# Kinds an equipment list schedules by default.
+# Kinds an equipment table schedules by default.
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "column", "compressor", "conveyor", "cooler",
     "cooling_tower", "crusher", "dryer", "ejector", "elevator", "evaporator",
@@ -405,7 +406,7 @@ _MAJOR_EQUIPMENT = frozenset({
     "thickener", "turbine", "vessel",
 })
 
-# Equipment-list description of a kind whose name is not its title.
+# Equipment-table description of a kind whose name is not its title.
 _KIND_LABELS = {
     "block": "Process Block",
     "crushing_machine": "Crushing/Grinding Machine",
@@ -419,8 +420,49 @@ _KIND_LABELS = {
 }
 
 
-def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
-                   position=None, margin=0.0, include=None, width=None):
+#: Deprecation of the drawn box's old name.
+_EQUIPMENT_LIST = Deprecation(
+    what="pandid.document.equipment_list(fs)",
+    instead="pandid.document.equipment_table(fs)",
+    removed_in="0.3.0",
+)
+
+
+def _scheduled_units(fs):
+    """Return the units an equipment table lists by default.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to schedule.
+
+    Returns
+    -------
+    list[Unit]
+        Units of a major equipment kind, in sheet order.
+    """
+    return [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
+
+
+def _described(unit):
+    """Return a unit's equipment-table description.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to describe.
+
+    Returns
+    -------
+    str
+        The stated description, else the kind's name.
+    """
+    return (getattr(unit, "description", "")
+            or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
+
+
+def equipment_table(fs, *, title="EQUIPMENT LIST", align="top-right",
+                    position=None, margin=0.0, include=None, width=None):
     """Build an :class:`Annotation` scheduling the major equipment.
 
     Each row is ``(name, description)``.
@@ -445,7 +487,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
     Returns
     -------
     Annotation
-        Equipment list.
+        Equipment table.
 
     Raises
     ------
@@ -457,24 +499,54 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
         or not a real number, or a given ``position`` is not iterable.
     """
     if include is None:
-        chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
+        chosen = _scheduled_units(fs)
     else:
         by_name = {u.name: u for u in fs.units}
         missing = [tag for tag in include if tag not in by_name]
         if missing:
             hints = [f"{tag!r}{suggest(tag, by_name)}" for tag in missing]
             raise ValueError(
-                f"equipment_list(include=...) names {', '.join(hints)}, which "
+                f"equipment_table(include=...) names {', '.join(hints)}, which "
                 f"{'is' if len(missing) == 1 else 'are'} not on this flowsheet. "
                 f"A named row is one the schedule asserts exists; add the unit, or "
                 f"drop the tag from include=."
             )
         chosen = [by_name[tag] for tag in include]
-    # A stated description, else the kind's name.
-    rows = [(u.name, getattr(u, "description", "")
-             or _KIND_LABELS.get(u.kind, u.kind.replace("_", " ").title())) for u in chosen]
+    rows = [(u.name, _described(u)) for u in chosen]
     return Annotation(title=title, rows=rows, align=align,
                       position=position, margin=margin, width=width)
+
+
+def equipment_list(fs, **options):
+    """Build the box :func:`equipment_table` builds; deprecated.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to schedule.
+    **options
+        Keyword arguments of :func:`equipment_table`.
+
+    Returns
+    -------
+    Annotation
+        Equipment table.
+
+    Raises
+    ------
+    ValueError
+        As for :func:`equipment_table`.
+    TypeError
+        As for :func:`equipment_table`.
+
+    Warns
+    -----
+    DeprecationWarning
+        Always.
+    """
+    box = equipment_table(fs, **options)
+    _EQUIPMENT_LIST.warn(fs)
+    return box
 
 
 def notes(items, *, title="NOTES", align="top-right", position=None,

@@ -5,7 +5,7 @@ import warnings
 import pytest
 
 from pandid import ControlValve, Flowsheet, Instrument, units as U
-from pandid.document import equipment_list
+from pandid.document import equipment_table
 from pandid.spec import from_dict, to_dict
 from pandid.validate import validate
 
@@ -261,7 +261,7 @@ def test_a_loop_never_reaches_the_units_list_or_an_equipment_list():
     fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
 
     assert loop not in fs.units
-    rows = equipment_list(fs).rows
+    rows = equipment_table(fs).rows
     assert "303" not in repr(rows) and "F-303" not in repr(rows)
     assert [tag for tag, _ in rows] == ["V-101"]
 
@@ -737,7 +737,7 @@ def test_the_loop_it_builds_still_reaches_no_equipment_list():
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
 
     assert loop not in fs.units and loop.loop not in fs.units
-    assert [tag for tag, _ in equipment_list(fs).rows] == ["V-101"]
+    assert [tag for tag, _ in equipment_table(fs).rows] == ["V-101"]
     assert loop.transmitter in fs.units and loop.controller in fs.units
 
 

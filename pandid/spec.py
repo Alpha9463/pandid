@@ -54,7 +54,7 @@ The format::
     stream_table: {font_size: 8}
     stream_labels: {enclosure: diamond}
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
-    annotations: [{type: equipment_list, align: top-right}]
+    annotations: [{type: equipment_table, align: top-right}]
 
 Units are addressed by name. Each drawing of a repeated symbol is an
 entry with the tag, addressed in list order as ``I-1``, ``I-1 (2)``.
@@ -78,6 +78,7 @@ from pandid import devices as device_types
 from pandid._checks import is_real as _is_real, is_whole as _is_integral, suggest
 from pandid import units as unit_types
 from pandid.components import Component
+from pandid.deprecation import Deprecation
 from pandid.document import (
     Annotation,
     Revision,
@@ -85,7 +86,7 @@ from pandid.document import (
     StreamTableOptions,
     TableBox,
     TitleBlock,
-    equipment_list,
+    equipment_table,
     legend,
     notes,
     _drawn_text,
@@ -1734,10 +1735,18 @@ def _read_title_block(entry: Any, where: str) -> TitleBlock:
     return TitleBlock(revisions=revisions, **kwargs)
 
 
+#: Deprecation of the equipment table's old box type.
+_EQUIPMENT_LIST_TYPE = Deprecation(
+    what="type: equipment_list",
+    instead="type: equipment_table",
+    removed_in="0.3.0",
+)
+
 _ANNOTATION_KEYS = {
     "annotation": {"type", "title", "rows", "align", "position", "margin", "width", "font_size"},
     "table": {"type", "title", "headers", "rows", "align", "position", "margin", "font_size",
               "col_align"},
+    "equipment_table": {"type", "title", "align", "position", "margin", "width", "include"},
     "equipment_list": {"type", "title", "align", "position", "margin", "width", "include"},
     "notes": {"type", "title", "items", "align", "position", "margin", "width", "numbered"},
     "legend": {"type", "title", "entries", "align", "position", "margin", "width"},
@@ -1787,7 +1796,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
     Parameters
     ----------
     fs : Flowsheet
-        Sheet an equipment list reads.
+        Sheet an equipment table reads.
     entry : Any
         The ``annotations:`` entry.
     where : str
@@ -1818,12 +1827,15 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         kwargs["title"] = _text(data["title"], f"{where}.title")
 
     try:
-        if kind == "equipment_list":
+        if kind in ("equipment_table", "equipment_list"):
             include = data.get("include")
             if include is not None:
                 include = [_text(t, f"{where}.include") for t in _sequence(include,
                                                                           f"{where}.include")]
-            return equipment_list(fs, include=include, **kwargs)
+            box = equipment_table(fs, include=include, **kwargs)
+            if kind == "equipment_list":
+                _EQUIPMENT_LIST_TYPE.warn(fs, where=where)
+            return box
         if kind == "notes":
             if "items" not in data:
                 raise SpecError(f"{where}: a notes box needs 'items' (the list of note texts)")

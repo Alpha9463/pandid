@@ -33,7 +33,7 @@ from pandid import (
     Tee,
     Thickener,
 )
-from pandid.document import Revision, TableBox, TitleBlock, equipment_list, notes
+from pandid.document import Revision, TableBox, TitleBlock, equipment_table, notes
 from pandid.portgeom import pinned_x, pinned_y
 
 # --- Stream property table --------------------------------------------
@@ -622,7 +622,7 @@ def _furnish(fs, number, sheet, area, equipment, utilities, general_notes):
     )
 
     # --- Sheet furniture ----------------------------------------------
-    fs.add_annotation(equipment_list(fs, align="top-right", include=equipment))
+    fs.add_annotation(equipment_table(fs, align="top-right", include=equipment))
     fs.add_annotation(TableBox(
         title="UTILITIES SUMMARY",
         headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in",

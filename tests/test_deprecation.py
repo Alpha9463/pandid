@@ -252,15 +252,19 @@ def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
 
 def test_the_package_declares_only_the_announced_deprecations():
     """Check that the package declares only the deprecations announced for removal in 0.3.0."""
+    from pandid.document import _EQUIPMENT_LIST
     from pandid.flowsheet import _CONTROLLER_AT
     from pandid.routing import _RECOVER_EXITS, _ROUTER
+    from pandid.spec import _EQUIPMENT_LIST_TYPE
     from pandid.streams import _LINE_COMPONENTS
     from pandid.units import _AT_FACE, _DEFAULT_FACES, _PLACEMENT_HINTS
 
     assert declarations() == {
+        "pandid.document._EQUIPMENT_LIST": _EQUIPMENT_LIST,
         "pandid.flowsheet._CONTROLLER_AT": _CONTROLLER_AT,
         "pandid.routing._RECOVER_EXITS": _RECOVER_EXITS,
         "pandid.routing._ROUTER": _ROUTER,
+        "pandid.spec._EQUIPMENT_LIST_TYPE": _EQUIPMENT_LIST_TYPE,
         "pandid.streams._LINE_COMPONENTS": _LINE_COMPONENTS,
         "pandid.units._AT_FACE": _AT_FACE,
         "pandid.units._DEFAULT_FACES": _DEFAULT_FACES,

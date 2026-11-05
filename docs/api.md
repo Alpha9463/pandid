@@ -240,7 +240,7 @@ station.
 
 Assign a `TitleBlock` to `fs.title_block`; `Revision` entries carry its issue
 history. `Annotation` and `TableBox` add notes and tables with
-`fs.add_annotation()`. The `pandid.document` helpers `equipment_list()`,
+`fs.add_annotation()`. The `pandid.document` helpers `equipment_table()`,
 `notes()` and `legend()` create common boxes. A date left blank in a title block
 is filled at render time; set it for reproducible output.
 

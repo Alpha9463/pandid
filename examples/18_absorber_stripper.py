@@ -28,7 +28,7 @@ from pandid import (
     ShellAndTubeExchanger,
     Vessel,
 )
-from pandid.document import Revision, TableBox, TitleBlock, equipment_list
+from pandid.document import Revision, TableBox, TitleBlock, equipment_table
 from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 # --- Stream property table --------------------------------------------
@@ -256,7 +256,7 @@ def main():
 
     # --- Sheet furniture ----------------------------------------------
     # List every item but LV-401, in process order.
-    fs.add_annotation(equipment_list(fs, align="top", include=[
+    fs.add_annotation(equipment_table(fs, align="top", include=[
         "T-401", "E-401", "T-402", "E-402", "V-401", "P-402A/B", "E-403",
         "P-401A/B", "E-404",
     ]))

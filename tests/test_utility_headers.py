@@ -3,7 +3,7 @@
 import pytest
 
 from pandid import units as U
-from pandid.document import equipment_list
+from pandid.document import equipment_table
 from pandid.flowsheet import Flowsheet
 
 
@@ -106,7 +106,7 @@ def test_header_is_refused_on_equipment():
 def test_a_tapped_header_is_scheduled_nowhere():
     """Check that a tapped header is left off the equipment list."""
     fs, _ = _two_taps()
-    rows = equipment_list(fs).rows
+    rows = equipment_table(fs).rows
     assert rows == [("E-301", "Condenser"), ("E-302", "Product Cooler")]
 
 
