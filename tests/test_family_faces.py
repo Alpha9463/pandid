@@ -463,3 +463,17 @@ def test_an_outlet_never_takes_the_wall_a_lone_inlet_was_moved_to():
     fs.route()
     assert _face(tank, "in_1") == "E"
     assert _face(tank, "out_1") != "E"
+
+
+def test_a_rejected_wall_outlet_leaves_the_inlet_moves_main_draws():
+    """Keep the inlet moves on the stencil's faces when the added faces lose."""
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1", inputs=2, outputs=2)).pin(x=400, y=400)
+    _flag(fs, tank, "in_1", 100, 380, False)
+    _flag(fs, tank, "in_2", 100, 180, False)
+    _flag(fs, tank, "out_1", 780, 100, False)
+    _flag(fs, tank, "out_2", 100, 780, True)
+    fs.route()
+    quality = measure_final(fs)
+    assert _face(tank, "in_2") == "N"
+    assert (quality.crossings, quality.bends) == (1, 7)

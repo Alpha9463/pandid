@@ -654,8 +654,10 @@ class Flowsheet:
         self._widened = False
         self._relaned = False
         # Whether layout may move a counted block, tank or vessel
-        # connection off its declared face.
+        # connection off its declared face, and onto a symbol's family
+        # faces.
         self._family_faces = True
+        self._added_faces = True
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -2294,7 +2296,9 @@ class Flowsheet:
         its declared face, the sheet is also laid out and drawn with every
         such connection on its declared face. The moves are kept only if no
         crossing, bend, fallback, finding, clash or tap off its line grows
-        by them and one of them falls.
+        by them and one of them falls. Where a move is onto a symbol's
+        family faces, the sheet is first drawn so with the stencil's own
+        faces alone, and the family faces are kept only if they beat that.
 
         Last, where the drawing stacks two units in a column with another
         unit pinned to a row between theirs, the sheet is laid out and
@@ -2438,22 +2442,76 @@ class Flowsheet:
         from pandid.routing.lanes import _score
         from pandid.units import _FaceFamilies
 
-        if not self._family_faces:
-            self._family_faces = self._layout_stale = True
+        def beats(new: tuple, old: tuple) -> bool:
+            """Return whether one drawing's score beats another's.
+
+            Parameters
+            ----------
+            new, old : tuple
+                What :func:`~pandid.routing.lanes._score` returned.
+
+            Returns
+            -------
+            bool
+                True if no flaw or tap off its line grows and a flaw
+                falls.
+            """
+            return (new[1] <= old[1]
+                    and not any(n > old[0][k] for k, n in new[0].items())
+                    and any(n > new[0][k] for k, n in old[0].items()))
+
+        def moved(added: bool) -> bool:
+            """Return whether layout moved a family port.
+
+            Parameters
+            ----------
+            added : bool
+                Count only moves onto a symbol's family faces.
+
+            Returns
+            -------
+            bool
+                True if such a move is drawn.
+            """
+            for u in self.units:
+                faces = family_faces(u, u.frame) if isinstance(u, _FaceFamilies) else None
+                if faces and (not added or any(face not in u._offered(name, added=False)
+                                               for name, face in faces.items())):
+                    return True
+            return False
+
+        def against_plain() -> None:
+            """Draw the sheet with no family moves, unless the moves beat it."""
+            if not moved(False):
+                return
+            kept, judged = self._state(), _score(self)
+            plain_state = self._plain_state, self._plain_stale
+            self._family_faces, self._layout_stale = False, True
+            self._route_lanes(router)
+            if beats(judged, _score(self)):
+                self._family_faces = True
+                self._put_state(kept)
+                self._plain_state, self._plain_stale = plain_state
+
+        if not (self._family_faces and self._added_faces):
+            self._family_faces = self._added_faces = self._layout_stale = True
         self._route_lanes(router)
-        if (self._laying_out or not (router is None or type(router) is DefaultRouter)
-                or not any(isinstance(u, _FaceFamilies) and family_faces(u, u.frame)
-                           for u in self.units)):
+        if self._laying_out or not (router is None or type(router) is DefaultRouter):
             return
+        if not moved(True):
+            # With no move onto a family face, layout moved what it moves
+            # on the stencil's faces alone.
+            against_plain()
+            return
+        # Draw the sheet on the stencil's faces alone, judged as that is,
+        # and keep the family faces only where they beat it.
         kept, judged = self._state(), _score(self)
         plain_state = self._plain_state, self._plain_stale
-        self._family_faces, self._layout_stale = False, True
+        self._added_faces, self._layout_stale = False, True
         self._route_lanes(router)
-        plain = _score(self)
-        if (judged[1] <= plain[1]
-                and not any(n > plain[0][k] for k, n in judged[0].items())
-                and any(n > judged[0][k] for k, n in plain[0].items())):
-            self._family_faces = True
+        against_plain()
+        if beats(judged, _score(self)):
+            self._family_faces = self._added_faces = True
             self._put_state(kept)
             self._plain_state, self._plain_stale = plain_state
 

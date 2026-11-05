@@ -1684,13 +1684,15 @@ class _FaceFamilies(Unit):
         )
         self._stated = set(self._listed)
 
-    def _offered(self, port_name: str) -> list[str]:
+    def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return the faces a family port may take, its own face first.
 
         Parameters
         ----------
         port_name : str
             Family port name.
+        added : bool, default=True
+            Include the symbol's family faces.
 
         Returns
         -------
@@ -2058,13 +2060,15 @@ class _MultiPortVessel(_FaceFamilies):
             self.outlet = self.outlets[0]
         self._record_lists(inputs, outputs)
 
-    def _offered(self, port_name: str) -> list[str]:
+    def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return the faces the artwork offers a family port's role.
 
         Parameters
         ----------
         port_name : str
             Family port name.
+        added : bool, default=True
+            Include :attr:`Symbol.family_faces`, after the role's menu.
 
         Returns
         -------
@@ -2073,7 +2077,8 @@ class _MultiPortVessel(_FaceFamilies):
         """
         role = "inlet" if port_name.startswith("in_") else "outlet"
         sym = self._registry_symbol()
-        menu = ({**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
+        menu = ({**sym.port_faces.get(role, {}),
+                 **(sym.family_faces.get(role, {}) if added else {})}
                 if sym is not None else {})
         home = self._faces[port_name]
         return [home, *(face for face in menu if face != home)]
@@ -5167,13 +5172,15 @@ class Block(_FaceFamilies):
         # Pass the name only when it sizes the box.
         return block_symbol(tuple(on.items()), "" if self.width is not None else self.tag)
 
-    def _offered(self, port_name: str) -> list[str]:
+    def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return every face of the box, the connection's own first.
 
         Parameters
         ----------
         port_name : str
             Connection name.
+        added : bool, default=True
+            Unused; a block's faces are all its own.
 
         Returns
         -------
