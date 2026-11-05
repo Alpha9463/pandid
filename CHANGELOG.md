@@ -44,6 +44,8 @@ These are removed in 0.4.0.
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 - Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
+- Lines drawn side by side no longer push a pipe into a unit body: a run moved
+  off a shared track, and the segments either side of it, keep clear of every unit.
 
 ## [0.2.0] - 2026-11-05
 
