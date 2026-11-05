@@ -44,6 +44,8 @@ These are removed in 0.4.0.
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 - Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
+- Equipment and line valves keep clear of a balloon pinned with `pin(x=, y=)`
+  and the balloons hung on it, and its host no longer leaves room beside it.
 
 ## [0.2.0] - 2026-11-05
 
