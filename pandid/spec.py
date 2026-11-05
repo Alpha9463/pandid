@@ -1739,7 +1739,7 @@ def _read_title_block(entry: Any, where: str) -> TitleBlock:
 _EQUIPMENT_LIST_TYPE = Deprecation(
     what="type: equipment_list",
     instead="type: equipment_table",
-    removed_in="0.3.0",
+    removed_in="0.4.0",
 )
 
 _ANNOTATION_KEYS = {

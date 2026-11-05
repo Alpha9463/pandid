@@ -424,7 +424,7 @@ _KIND_LABELS = {
 _EQUIPMENT_LIST = Deprecation(
     what="pandid.document.equipment_list(fs)",
     instead="pandid.document.equipment_table(fs)",
-    removed_in="0.3.0",
+    removed_in="0.4.0",
 )
 
 

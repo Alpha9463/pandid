@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
-These are removed in 0.3.0.
+These are removed in 0.4.0.
 
 - `pandid.document.equipment_list()`, the drawn box, and the spec box
   `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
