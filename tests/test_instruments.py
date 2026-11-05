@@ -2596,7 +2596,7 @@ def test_keeping_hung_balloons_further_off_leaves_the_priced_fallback_to_run() -
 
 def test_keeping_hung_balloons_further_off_leaves_the_priced_remedy_judged_as_before() -> None:
     """Keep the line off the vessel's wall, as the priced remedy does before any wider gap."""
-    fs = _chains_by_a_vessel((400, 100), [(0.7, 60, 135, "N", 70, 0), (0.7, 35, 0, "S", 45, 90)])
+    fs = _chains_by_a_vessel((400, 100), [(0.7, 70, 135, "N", 80, 0), (0.7, 30, 0, "S", 45, 90)])
 
     assert "route-along-unit" not in [i.code for i in fs.validate()]
 
