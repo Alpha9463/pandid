@@ -30,7 +30,7 @@ from pandid import (
     Tee,
     Vent,
 )
-from pandid.document import Revision, TableBox, TitleBlock, equipment_list
+from pandid.document import Revision, TableBox, TitleBlock, equipment_table
 from pandid.portgeom import pinned_x
 
 # --- Stream property table --------------------------------------------
@@ -291,7 +291,7 @@ def main():
 
     # --- Sheet furniture ----------------------------------------------
     # Leave the tees, funnel, reducers and exhaust head off the list.
-    fs.add_annotation(equipment_list(fs, align="top", include=[
+    fs.add_annotation(equipment_table(fs, align="top", include=[
         "TK-401", "P-402", "TH-401", "P-401", "FL-401", "CV-401", "FH-401",
         "DR-401", "CY-401", "MS-401", "SC-401", "BL-401",
     ]))

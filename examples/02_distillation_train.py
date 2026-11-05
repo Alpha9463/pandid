@@ -164,7 +164,7 @@ def main():
     fs.stream_table_sections = [("Benzene", "Mass Fraction")]
 
     # --- Title block + revision history -------------------------------
-    from pandid.document import (TitleBlock, Revision, equipment_list, notes)
+    from pandid.document import (TitleBlock, Revision, equipment_table, notes)
     fs.title_block = TitleBlock(
         title="Aromatics Recovery A100",
         subtitle="Process Flow Diagram 1",
@@ -188,7 +188,7 @@ def main():
     )
 
     # --- Sheet furniture: titled boxes docked to the frame ------------
-    fs.add_annotation(equipment_list(fs, align="top-right"))
+    fs.add_annotation(equipment_table(fs, align="top-right"))
     fs.add_annotation(notes([
         "Sampling point on every product line.",
         "All instruments field-mounted unless noted.",

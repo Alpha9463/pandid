@@ -1066,7 +1066,7 @@ def test_annotation_boxes():
             units=[{"kind": "Pump", "name": "P-101", "description": "Feed Pump"}],
             streams=[],
             annotations=[
-                {"type": "equipment_list", "align": "top-right", "margin": 6},
+                {"type": "equipment_table", "align": "top-right", "margin": 6},
                 {"type": "notes", "items": ["Sample every product line."], "align": "top"},
                 {"type": "legend", "entries": {"SS": "316L"}, "align": "top-left"},
                 {
