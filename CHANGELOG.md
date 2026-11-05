@@ -57,6 +57,8 @@ These are removed in 0.4.0.
 - A tank or vessel with several inlets or outlets on one wall, such as
   `Tank("TK-1", outputs=["S"] * 4)`, gives each its own nozzle clear of the
   vent, relief and drain on that wall.
+- Equipment or a line valve that would be drawn on a balloon pinned with
+  `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
 
 ## [0.2.0] - 2026-11-05
 
