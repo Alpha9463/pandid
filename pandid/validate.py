@@ -937,41 +937,50 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
     scheme = fs.line_numbering_scheme
     for name, segments in runs.items():
         given = not all(s.auto_named for s in segments)
-        numbered = any(s.has_line_number for s in segments)
-        if not given and (callable(scheme) or not numbered):
+        # The segment a line number is formed from.
+        origin = next((s for s in segments if s.has_line_number), None)
+        if not given and (callable(scheme) or origin is None):
             continue
-        typed: dict[str, str | float] = {}
-        omitted: dict[str, str | float] = {}
-        for s in segments:
-            typed |= _unused_fields("", s)  # every field the author set
-            if not callable(scheme):
-                omitted |= _unused_fields(scheme, s)
+        # Every field the author set, by field and value.
+        typed = {(f, str(v)): v for s in segments for f, v in _unused_fields("", s).items()}
         if tabulates and segments[0].kind == "energy":
             # Leave the service to energy-carrier-missing.
-            typed.pop("service", None)
-            omitted.pop("service", None)
-        undrawn = ({f: v for f, v in typed.items() if str(v) not in name}
-                   if given else omitted)
+            typed = {key: v for key, v in typed.items() if key[0] != "service"}
+        carried = ({(f, str(v)) for f, v in _unused_fields("", origin).items()}
+                   if origin is not None else set())
+        omitted = ([] if origin is None or callable(scheme) else
+                   [f for f, v in _unused_fields(scheme, origin).items() if (f, str(v)) in typed])
+        undrawn = [(f, v) for (f, text), v in typed.items()
+                   if (text not in name if given else (f, text) not in carried or f in omitted)]
         if not undrawn:
             continue
         it = "it" if len(undrawn) == 1 else "them"
+        written = " ".join([name, *(str(v) for _, v in undrawn)])
+        # A line number draws only the fields of the segment it is formed from.
+        numbered = origin is not None and set(typed) <= carried
         fields = _and([f"{{{f}}}" for f in omitted])
         wider = ("" if callable(scheme) or not omitted else
                  f": Flowsheet(..., line_numbering_scheme="
                  f"{scheme + ''.join(f'-{{{f}}}' for f in omitted)!r})")
         if given:
-            written = " ".join([name, *map(str, undrawn.values())])
             fix = f"Write {it} into the name: name={written!r}"
             if numbered:
                 add = f" and add {fields} to line_numbering_scheme" if wider else ""
                 fix += f", or drop name={name!r}{add} so its line number draws {it}{wider}"
             source = "the name given to connect()"
-        else:
+        elif numbered:
             fix = f"Add {fields} to the scheme, keeping its other arguments{wider}"
             source = f"line_numbering_scheme {scheme!r}"
+        else:
+            assert origin is not None
+            fix = (f"Set new_line_number = True on the valve, fitting or tee where a "
+                   f"new line number starts, or name the line with {it} in one of its "
+                   f"connect() calls: name={written!r}")
+            source = (f"its line number, formed from the segment from "
+                      f"{origin.source.owner.name} to {origin.dest.owner.name},")
         warnings.append(Issue(
             "warning", "line-field-undrawn",
-            f"{name} states {_and([f'{f}={v!r}' for f, v in undrawn.items()])}, "
+            f"{name} states {_and([f'{f}={v!r}' for f, v in undrawn])}, "
             f"which {source} does not draw. {fix}"))
 
     return errors + warnings

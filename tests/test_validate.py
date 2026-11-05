@@ -1575,10 +1575,13 @@ def test_following_the_advice_draws_the_carrier_and_keeps_what_was_typed(scheme,
 # --- line-field-undrawn -----------------------------------------------------
 
 
-def _line(scheme: str | None, **connect: Any) -> Flowsheet:
-    """Build a sheet with one line from a feed to a product."""
+def _line(scheme: str | None, *legs: dict[str, Any]) -> Flowsheet:
+    """Build a line from a feed to a product, one connect() per leg, through valves."""
     fs = Flowsheet("line") if scheme is None else Flowsheet("line", line_numbering_scheme=scheme)
-    fs.connect(fs.add(U.Feed("F")).outlet, fs.add(U.Product("P")).inlet, **connect)
+    valves = [fs.add(U.Valve(f"HV-{i}")) for i in range(1, len(legs))]
+    units = [fs.add(U.Feed("F")), *valves, fs.add(U.Product("P"))]
+    for (up, down), leg in zip(zip(units, units[1:]), legs):
+        fs.connect(up.port("outlet"), down.port("inlet"), **leg)
     return fs
 
 
@@ -1587,78 +1590,121 @@ def _labels(fs: Flowsheet) -> str:
     return " ".join(re.findall(r">([^<]*)</text>", fs.to_svg()))
 
 
-# Scheme, connect() arguments and the fields the sheet leaves out.
-_UNDRAWN: dict[str, tuple[str | None, dict[str, Any], list[str]]] = {
-    "hidden-by-a-given-name": (None, {"name": "X-1", "service": "LPSTEAM"}, ["service"]),
+# Scheme, connect() arguments per leg, the fields the sheet leaves out, and
+# how many fixes the finding offers.
+_UNDRAWN: dict[str, tuple[str | None, list[dict[str, Any]], list[str], int]] = {
+    "hidden-by-a-given-name": (None, [{"name": "X-1", "service": "LPSTEAM"}], ["service"], 2),
     "hidden-by-a-name-and-left-out-of-the-scheme": (
         None,
-        {"name": "X-1", "size": 6, "insulation": "IH"},
+        [{"name": "X-1", "size": 6, "insulation": "IH"}],
         ["size", "insulation"],
+        2,
     ),
     "left-out-of-the-scheme": (
         "{size}-{sequence}",
-        {"size": 6, "service": "P", "spec": "A1A"},
+        [{"size": 6, "service": "P", "spec": "A1A"}],
         ["service", "spec"],
+        1,
     ),
     "left-out-of-the-default-scheme": (
         None,
-        {"size": 6, "schedule": 40, "sequence": 2001},
+        [{"size": 6, "schedule": 40, "sequence": 2001}],
         ["schedule"],
+        1,
     ),
+    "hidden-by-a-name-on-a-line-through-a-valve": (
+        None,
+        [{"name": "X-1", "size": 6, "insulation": "IH"}, {}],
+        ["size", "insulation"],
+        2,
+    ),
+    "hidden-by-a-name-and-stated-past-a-valve": (
+        None,
+        [{"name": "X-1", "size": 6}, {"spec": "A1A"}],
+        ["size", "spec"],
+        1,
+    ),
+    "stated-past-a-valve": (None, [{"size": 6}, {"spec": "A1A"}], ["spec"], 1),
+    "changed-past-a-valve": (None, [{"size": 6, "service": "P"}, {"size": 4}], ["size"], 1),
 }
 
 
+def _keys(legs: list[dict[str, Any]]) -> set[str]:
+    """Return every connect() keyword the legs use."""
+    return {key for leg in legs for key in leg}
+
+
 @pytest.mark.parametrize("diagram", ["pfd", "p&id", "bfd"])
-@pytest.mark.parametrize(("scheme", "connect", "undrawn"), _UNDRAWN.values(), ids=list(_UNDRAWN))
+@pytest.mark.parametrize(
+    ("scheme", "legs", "undrawn", "fixes"), _UNDRAWN.values(), ids=list(_UNDRAWN)
+)
 def test_a_line_number_field_the_sheet_does_not_draw_is_reported(
-    scheme: str | None, connect: dict[str, Any], undrawn: list[str], diagram: str
+    scheme: str | None, legs: list[dict[str, Any]], undrawn: list[str], fixes: int, diagram: str
 ) -> None:
     """Check every field typed into connect() and drawn nowhere is named."""
-    fs = _line(scheme, **connect)
+    fs = _line(scheme, *legs)
     (found,) = _found(fs, "line-field-undrawn", diagram=diagram)
     assert found.severity == "warning"
-    named = [key for key in re.findall(r"(\w+)=", found.message) if key in connect]
-    assert [key for key in named if key != "name"] == undrawn
-
-
-@pytest.mark.parametrize(("scheme", "connect", "undrawn"), _UNDRAWN.values(), ids=list(_UNDRAWN))
-def test_following_the_line_field_advice_draws_every_field(
-    scheme: str | None, connect: dict[str, Any], undrawn: list[str]
-) -> None:
-    """Check each fix the finding names, applied as written, draws every field."""
-    (found,) = _found(_line(scheme, **connect), "line-field-undrawn")
-    advice = [(key, ast.literal_eval(value)) for key, value in _ADVISED.findall(found.message)]
-    scheme = next((value for key, value in advice if key == "line_numbering_scheme"), scheme)
-    names = [value for key, value in advice if key == "name"]
-    if "name" in connect:
-        # Write the fields into the given name, or drop it.
-        assert names[0] != connect["name"] == names[1], found.message
-        fixes = [{**connect, "name": names[0]}, {k: v for k, v in connect.items() if k != "name"}]
-    else:
-        fixes = [connect]
-    for fix in fixes:
-        fs = _line(scheme, **fix)
-        assert _found(fs, "line-field-undrawn") == [], found.message
-        labels = _labels(fs)
-        for key, value in fix.items():
-            assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+    stated = found.message.partition(" which ")[0]
+    assert [key for key in re.findall(r"(\w+)=", stated) if key in _keys(legs)] == undrawn
 
 
 @pytest.mark.parametrize(
-    ("scheme", "connect"),
+    ("scheme", "legs", "undrawn", "fixes"), _UNDRAWN.values(), ids=list(_UNDRAWN)
+)
+def test_following_the_line_field_advice_draws_every_field(
+    scheme: str | None, legs: list[dict[str, Any]], undrawn: list[str], fixes: int
+) -> None:
+    """Check each fix the finding names, applied as written, draws every typed value."""
+    (found,) = _found(_line(scheme, *legs), "line-field-undrawn")
+    advice = [(key, ast.literal_eval(value)) for key, value in _ADVISED.findall(found.message)]
+    scheme = next((value for key, value in advice if key == "line_numbering_scheme"), scheme)
+    names = [value for key, value in advice if key == "name"]
+    given = next((leg["name"] for leg in legs if "name" in leg), None)
+    # Write the fields into the given name, or into a name on the first leg.
+    target = next((i for i, leg in enumerate(legs) if "name" in leg), 0)
+    applied = (
+        [[{**leg, "name": names[0]} if i == target else leg for i, leg in enumerate(legs)]]
+        if names
+        else []
+    )
+    if given in names:
+        # Drop the given name.
+        applied.append([{k: v for k, v in leg.items() if k != "name"} for leg in legs])
+    if not names:
+        applied.append(legs)
+    assert len(applied) == fixes, found.message
+    for fix in applied:
+        fs = _line(scheme, *fix)
+        assert _found(fs, "line-field-undrawn") == [], found.message
+        labels = _labels(fs)
+        for leg in fix:
+            for key, value in leg.items():
+                assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+@pytest.mark.parametrize(
+    ("scheme", "legs"),
     [
-        (None, {}),
-        (None, {"size": 6, "service": "P", "spec": "A1A"}),
-        ("{size}", {"size": 6}),
-        (None, {"name": "6-P-2001", "size": 6, "service": "P", "sequence": 2001}),
+        (None, [{}]),
+        (None, [{"size": 6, "service": "P", "spec": "A1A"}]),
+        ("{size}", [{"size": 6}]),
+        (None, [{"name": "6-P-2001", "size": 6, "service": "P", "sequence": 2001}]),
+        (None, [{"size": 6, "service": "P"}, {"size": 6}]),
     ],
-    ids=["no-fields", "every-field-drawn", "automatic-sequence-left-out", "fields-in-a-given-name"],
+    ids=[
+        "no-fields",
+        "every-field-drawn",
+        "automatic-sequence-left-out",
+        "fields-in-a-given-name",
+        "repeated-past-a-valve",
+    ],
 )
 def test_a_line_that_draws_every_field_it_states_is_not_reported(
-    scheme: str | None, connect: dict[str, Any]
+    scheme: str | None, legs: list[dict[str, Any]]
 ) -> None:
     """Check a line whose label shows every typed field leaves the finding quiet."""
-    assert _found(_line(scheme, **connect), "line-field-undrawn") == []
+    assert _found(_line(scheme, *legs), "line-field-undrawn") == []
 
 
 @pytest.mark.parametrize("diagram", ["pfd", "p&id"])
