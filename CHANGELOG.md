@@ -102,6 +102,8 @@ These are removed in 0.4.0.
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
   `port_offset()` can differ in the second decimal.
+- A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
+  draws its run, bypass and drains in the line's `color` and `dasharray`.
 
 ## [0.2.0] - 2026-11-05
 
