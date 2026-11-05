@@ -30,6 +30,9 @@ from pandid.render.symbols import CENTRED, FROM_START  # noqa: E402
 #: How each alignment is spelled in the generated file.
 _ALIGN_NAMES = {CENTRED: "CENTRED", FROM_START: "FROM_START"}
 
+#: Decimal places kept on every emitted size, port and series spacing.
+PLACES = 4
+
 STENCILS = HERE / "vendor_data" / "drawio"
 OUT = HERE.parent / "pandid" / "render" / "_vendored_symbols.py"
 
@@ -118,7 +121,7 @@ KIND_MAP = {
     # Kettle reboiler: the left stub is the channel head (tube side), and the process
     # boils in the shell. ``tube_out`` takes the far head; ``bottoms`` is the weir-end draw.
     ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
-                         {"shell_in": ("AT", 45.8, 30.0), "shell_out": ("N", 64.0),
+                         {"shell_in": ("AT", 45.75, 30.0), "shell_out": ("N", 64.0),
                           "tube_in": ("W", 22.5), "tube_out": ("E", 15.0),
                           "bottoms": ("AT", 85.0, 30.0)}),
     # Heater and cooler are one stencil pair, the arrow in or out; draw.io files the
@@ -169,12 +172,14 @@ KIND_MAP = {
                               "outlet": [("S", 50.0), ("E", 165.0), ("W", 165.0)],
                               "duty": ("E", 100.0),
                               "vent": ("AT", 100.0, 20.0)}),
-    # Jacketed stirred tank: ``vessel/jacketed``'s stencil. The duty takes the jacket
-    # and the vent the shell wall above it. Three feeds 16 apart fit in 0.34 of the
-    # 95.4 body, on the jacket.
+    # Jacketed stirred tank: ``vessel/jacketed``'s stencil. The jacket, y 12.69..82.69,
+    # takes its supply low and its return high, each 10 off its end on the east face;
+    # the vent takes the shell wall above it. Three feeds 16 apart fit in 0.34 of the
+    # 95.38 body, on the jacket.
     ("reactor", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
-                              {"feed": ("SERIES", "W", 47.7, 16, 0.34),
-                               "outlet": ("S", 26.0), "duty": ("E", 47.7),
+                              {"feed": ("SERIES", "W", 47.69, 16, 0.34),
+                               "outlet": ("S", 26.0),
+                               "jacket_in": ("E", 72.7), "jacket_out": ("E", 22.7),
                                "vent": ("AT", 46.0, 10.0)}),
     # The flash drum: the vessel's stencil, nozzle places and box, with the phases
     # named. The feed family is centred on y = 100 at a 40 pitch, so two feeds sit
@@ -359,7 +364,7 @@ KIND_MAP = {
                              "jacket_in": ("W", 30), "jacket_out": ("E", 30)}),
     # Pump / compressor styles.
     ("pump", "vacuum"):           ("pumps", "Vacuum Pump",
-                                   {"suction": ("W", 25.0), "discharge": ("E", 25.0)}),
+                                   {"suction": ("W", 24.97), "discharge": ("E", 24.97)}),
     # Peristaltic: the only drawn connections are the two stubs on top.
     ("pump", "peristaltic"):      ("pumps", "Peristaltic",
                                    {"suction": ("N", 20.0), "discharge": ("N", 40.0)}),
@@ -381,24 +386,24 @@ KIND_MAP = {
     # the body's top and bottom walls, inboard of the box.
     ("vessel", "dome"):   ("vessels", "Vessel (Dome)",
                            {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7),
-                            "relief": ("AT", 30.0, 15.0), "drain": ("S", 47.7)}),
+                            "relief": ("AT", 30.0, 15.0), "drain": ("S", 47.69)}),
     # Jacketed: the process nozzles on the jacket's outer wall at mid-height; the vent
     # on the crown.
     ("vessel", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
-                             {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
+                             {"inlet": ("W", 47.69), "outlet": ("E", 47.69),
                               "vent": ("N", 26.0),
                               # Relief and drain on the shell's heads (cx = 26), not on the jacket.
                               "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
     # Insulated: the same box, shell and heads as ``jacketed``, so the same port map.
     ("vessel", "insulated"): ("vessels", "Vessel (Dished Ends, Thermal Insulation)",
-                              {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
+                              {"inlet": ("W", 47.69), "outlet": ("E", 47.69),
                                "vent": ("N", 26.0),
                                "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
     # Electrically heated: the element on the east wall widens the box, so the
     # outlet drops to y = 77.7 below it, on the shell at x = 40.
     ("vessel", "electrical_heating"): (
         "vessels", "Vessel (Dished Ends, Electrical Heating)",
-        {"inlet": ("W", 47.7), "outlet": ("AT", 40.0, 77.7), "vent": ("N", 20.0),
+        {"inlet": ("W", 47.69), "outlet": ("AT", 40.0, 77.7), "vent": ("N", 20.0),
          # Shell at x 0..40, so cx = 20 and the heads give 8 and 95.38.
          "relief": ("AT", 8.0, 1.5), "drain": ("S", 20.0)}),
     # Swaged: the process nozzles on the wide section at mid-height, y = 67. The top
@@ -1020,9 +1025,9 @@ def drawing(el, kind, variant, port_map, sx, sy):
         series = {p: (e, at * (sy if e in ("W", "E") else sx),
                       pitch * (sy if e in ("W", "E") else sx), ext, align)
                   for p, (e, at, pitch, ext, align) in series.items()}
-    w, h = round(w, 1), round(h, 1)
-    ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
-    alts = {p: [(f, tuple(round(v, 1) for v in xy)) for f, xy in v]
+    w, h = round(w, PLACES), round(h, PLACES)
+    ports = {p: tuple(round(v, PLACES) for v in xy) for p, xy in ports.items()}
+    alts = {p: [(f, tuple(round(v, PLACES) for v in xy)) for f, xy in v]
             for p, v in alts.items()}
     # Emit the whole menu, home first.
     menu = {}
@@ -1176,8 +1181,8 @@ def render() -> str:
             # that name, and only a second one numbers them.
             if series:
                 declared = ", ".join(
-                    f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, 1)}, "
-                    f"extent={extent}, at={round(at, 1)}, singular={p!r}"
+                    f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, PLACES)}, "
+                    f"extent={extent}, at={round(at, PLACES)}, singular={p!r}"
                     + (f", align={_ALIGN_NAMES[align]})" if align != CENTRED else ")")
                     for p, (edge, at, pitch, extent, align) in series.items()
                 )

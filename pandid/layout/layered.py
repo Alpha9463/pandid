@@ -159,7 +159,8 @@ def _face(port: Port | None) -> str | None:
     if port.name in named:
         return str(named[port.name]).upper()
     menu = port_faces(unit, port.name, slot(unit))
-    return menu[0] if len(menu) == 1 else None
+    # A family face a list or nozzle() states comes first.
+    return menu[0] if len(menu) == 1 or port.name in getattr(unit, "_stated", ()) else None
 
 
 def _shift(unit: Unit) -> float:
