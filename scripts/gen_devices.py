@@ -303,6 +303,11 @@ DEVICES = {
 
     ``n_feeds`` adds feed ports as on :class:`pandid.units.Reactor`.
 """),
+    ("reactor", "jacketed"): ("JacketedReactor", """Jacketed reactor: a stirred tank inside a heating or cooling jacket.
+
+    ``jacket_in`` is low on the jacket and ``jacket_out`` high on it.
+    ``n_feeds`` adds feed ports as on :class:`pandid.units.Reactor`.
+"""),
 
     # --- Storage ------------------------------------------------------
     ("tank", "gas_holder"): ("GasHolder", """Gas holder: a bell floating in a water seal.
@@ -416,7 +421,6 @@ STAYS_ON_BASE = {
     ("vent", "default"): "Vent's own drawing",
     ("vessel", "default"): "Vessel's own drawing",
     ("column", "default"): "Column's own drawing",
-    ("reactor", "jacketed"): "cladding: a heating/cooling jacket",
     ("reactor", "tubular"): "body style: a horizontal shell with a tube pass",
     ("feed", "default"): "a boundary flag, not equipment",
     ("product", "default"): "a boundary flag, not equipment",
