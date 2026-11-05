@@ -658,6 +658,10 @@ class Flowsheet:
         # for none, and whether any kept one since route() set it.
         self._keep_clear = 0.0
         self._kept_clear = False
+        # The state route() left before it placed balloons hung from
+        # balloons further off, which the next route() or layout() starts
+        # from.
+        self._unkept: tuple | None = None
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes and moves its chain's room there.
         self._pin_balloons = False
@@ -2230,6 +2234,7 @@ class Flowsheet:
         """
         from pandid.layout import default_layout_engine
 
+        self._put_unkept()
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
@@ -2263,8 +2268,6 @@ class Flowsheet:
         kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
-        Then each balloon hung from a balloon is placed again an arrowhead
-        clear of the line its chain taps, kept on the same terms.
 
         Where a mixer's or splitter's face grows to hold its nozzles, or
         laterals are laid on lanes, the sheet is also drawn as route() would
@@ -2285,6 +2288,13 @@ class Flowsheet:
         terms. Where either is kept, the next route() starts from the
         drawing before them.
 
+        Last, with the default router, each balloon hung from a balloon is
+        placed again an arrowhead clear of the line its chain taps, and,
+        where that does not settle, again from the sheet with its automatic
+        routes cleared, each kept only if no tap leaves its line and no
+        finding or clash grows. Where one is kept, the next route() or
+        layout() starts from the drawing before them.
+
         Parameters
         ----------
         router : object or None, optional
@@ -2299,6 +2309,7 @@ class Flowsheet:
         """
         from pandid.routing import DefaultRouter
 
+        self._put_unkept()
         # Start a repeated call from the stacked drawing held last time.
         held, self._stacked = self._stacked, None
         if held is not None and not (self._layout_stale
@@ -2312,6 +2323,81 @@ class Flowsheet:
             if (self._rows_out and self._relayout(router, split, True)) or split:
                 self._stacked = first
             self._stack_spans = self._rows_out = self._route_stale = False
+        if not self._laying_out and (router is None or type(router) is DefaultRouter):
+            unkept = self._state()
+            if self._keep_further_off(router or DefaultRouter()):
+                self._unkept = unkept
+
+    def _put_unkept(self) -> None:
+        """Put back the state held from before balloons were kept further off.
+
+        Whether the layout is stale is kept as it stands.
+        """
+        held, self._unkept = self._unkept, None
+        if held is not None:
+            stale = self._layout_stale
+            self._put_state(held)
+            self._layout_stale = stale
+
+    def _keep_further_off(self, router) -> bool:
+        """Place each balloon hung from a balloon an arrowhead clear of its
+        tapped line, kept only if no tap leaves its line and no finding or
+        clash grows, and, where the sheet has not settled, again from the
+        sheet with its automatic routes cleared, on the same terms. Both
+        route without lanes.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+
+        Returns
+        -------
+        bool
+            Whether either placement was kept.
+        """
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
+        from pandid.layout.control import _flaws, _taps_off, place_control
+        from pandid.render.symbols import ARROWHEAD
+
+        if not any(_chained(u) for u in self.units):
+            return False
+        changed = False
+        lanes, relaned = self._lanes, self._relaned
+        self._lanes = False
+        for unrouted in (False, True):
+            if unrouted and self.route_converged:
+                break
+            prior, unplaced = self._geometry(), list(self.unplaced_instruments)
+            before, off = _flaws(self, full=True), _taps_off(self)
+            self._may_hang, self._hung = self._unhung is not None, set()
+            self._keep_clear, self._kept_clear = ARROWHEAD, False
+            try:
+                if unrouted:
+                    for st in self.streams:
+                        if st.route is not None and not st.route.manual:
+                            st.route = None
+                    place_control(self)
+                    router.route(self)
+                self.route_converged = False
+                for _ in range(MAX_PLACEMENT_PASSES):
+                    if not place_control(self):
+                        self.route_converged = True
+                        break
+                    router.route(self)
+                kept = self._kept_clear and _taps_off(self) <= off and not any(
+                    n > before[k] for k, n in _flaws(self, full=True).items())
+            except Exception:
+                kept = False
+            finally:
+                self._may_hang, self._keep_clear = False, 0.0
+            if kept:
+                changed = True
+            else:
+                self._put_geometry(prior, keep_manual=False)
+                self.unplaced_instruments = unplaced
+        self._lanes, self._relaned = lanes, relaned
+        return changed
 
     def _route_lanes(self, router=None) -> None:
         """Route the sheet, with lanes and grown faces where they draw no
@@ -2478,7 +2564,6 @@ class Flowsheet:
         if router is None:
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, TOUCHING, _chained, free_face
-        from pandid.render.symbols import ARROWHEAD
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
         from pandid.layout.halo import pinned_balloons
@@ -2493,7 +2578,7 @@ class Flowsheet:
                     break
                 router.route(self)
 
-        def attempt(may_hang: bool, keep_clear: float, unrouted: bool = False) -> None:
+        def attempt(may_hang: bool, keep_clear: bool) -> None:
             """Place balloons again, and keep that only if a balloon moved as
             asked and no finding or clash grew, nor, keeping balloons clear,
             any tap left its line.
@@ -2502,30 +2587,20 @@ class Flowsheet:
             ----------
             may_hang : bool
                 Hang each controller it can off its actuator.
-            keep_clear : float
-                Gap to keep each balloon hung from a balloon from the line
-                its chain taps, 0 for none. Keeping one, count shared runs
-                per straight run, and ask for one kept clear rather than one
-                hung.
-            unrouted : bool, default=False
-                Place from the sheet with its automatic routes cleared.
+            keep_clear : bool
+                Keep each balloon hung from a balloon off the line its chain
+                taps, count shared runs per straight run, and ask for one
+                kept clear rather than one hung.
             """
             prior = self._geometry()
-            full = bool(keep_clear)
-            before, off = _flaws(self, full=full), _taps_off(self)
+            before, off = _flaws(self, full=keep_clear), _taps_off(self)
             self._may_hang, self._hung = may_hang, set()
-            self._keep_clear, self._kept_clear = keep_clear, False
+            self._keep_clear, self._kept_clear = TOUCHING if keep_clear else 0.0, False
             try:
-                if unrouted:
-                    for st in self.streams:
-                        if st.route is not None and not st.route.manual:
-                            st.route = None
-                    place_control(self)
-                    router.route(self)
                 place()
-                done = (self._kept_clear and _taps_off(self) <= off) if full else self._hung
+                done = (self._kept_clear and _taps_off(self) <= off) if keep_clear else self._hung
                 kept = done and not any(
-                    n > before[k] for k, n in _flaws(self, full=full).items())
+                    n > before[k] for k, n in _flaws(self, full=keep_clear).items())
             except Exception:
                 kept = False
             finally:
@@ -2548,15 +2623,15 @@ class Flowsheet:
             chained = tries and any(_chained(u) for u in self.units)
             off = _taps_off(self) if hang else set()
             if hang:
-                attempt(may_hang=True, keep_clear=0.0)
+                attempt(may_hang=True, keep_clear=False)
             if chained:
-                attempt(may_hang=self._unhung is not None, keep_clear=TOUCHING)
+                attempt(may_hang=self._unhung is not None, keep_clear=True)
             # Where hanging left a tap off its line, place as if nothing
             # could hang.
             if hang and not _taps_off(self) <= off:
                 self._unhang()
                 if chained:
-                    attempt(may_hang=False, keep_clear=TOUCHING)
+                    attempt(may_hang=False, keep_clear=True)
 
         def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
             """Redo the sheet, and undo that if a finding or clash grew or a
@@ -2631,14 +2706,6 @@ class Flowsheet:
                 # Keep only a drawing with fewer overlaps.
                 flaws["unit-overlap"] -= 1
                 keep_if_better(repinned, flaws)
-        # Keep each balloon hung from a balloon an arrowhead off its tapped
-        # line, from the drawing above and then, where that has not
-        # settled, from its unrouted lines.
-        if tries and any(_chained(u) for u in self.units):
-            may_hang = self._unhung is not None
-            attempt(may_hang, ARROWHEAD)
-            if not self.route_converged:
-                attempt(may_hang, ARROWHEAD, unrouted=True)
         self._route_stale = False
 
     def _geometry(self) -> tuple:
