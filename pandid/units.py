@@ -278,6 +278,13 @@ class Unit:
     # Backing store for pin_.
     _pin: "Pin | None" = None
 
+    # What a unit with no composed parts, large end or normal position
+    # reads as. Hidden from type checkers.
+    if not TYPE_CHECKING:
+        overlays = ()
+        large_end = "inlet"
+        normal_position = "open"
+
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
         """Return PORTS from the nearest class that declares it.
