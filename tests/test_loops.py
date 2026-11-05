@@ -1144,8 +1144,11 @@ def test_a_loop_refused_at_its_second_line_leaves_the_sheet_whole():
     drum = fs.add(U.Vessel("V-101"))
     lv = fs.add(U.Valve("LV-101", variant="control"))
     before = _snapshot(fs)
-    with pytest.warns(DeprecationWarning), pytest.raises(KeyError):
-        fs.add_control_loop("L", measuring=drum, acting_on=lv, at="S")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(KeyError):
+            fs.add_control_loop("L", measuring=drum, acting_on=lv, at="S")
+    assert caught == []
     assert _snapshot(fs) == before
     assert [i for i in fs.validate() if i.code == "deprecated"] == []
 
