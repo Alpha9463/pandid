@@ -39,14 +39,6 @@ def test_the_signal_still_lands_on_the_crown():
     assert sym.ports["actuator"] == (sym.width / 2, 0.0)
 
 
-@pytest.mark.parametrize("variant", default_registry.variants("valve"))
-def test_an_actuator_beside_the_axis_sits_exactly_on_it(variant: str):
-    """Put an actuator a fraction of a pixel off the axis onto the axis."""
-    sym = default_registry.get("valve", variant)
-    x = sym.ports.get("actuator", (sym.width / 2, 0.0))[0]
-    assert not 0 < abs(x - sym.width / 2) < 0.1, (x, sym.width)
-
-
 def test_a_balloon_over_a_valve_drops_its_signal_straight_onto_the_actuator(settled_gallery):
     """Draw FIC-604's and FIC-605's signals into their actuators with no jog."""
     fs = settled_gallery["13_tank_farm"][0]

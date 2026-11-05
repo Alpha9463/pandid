@@ -344,6 +344,29 @@ def test_svg_is_well_formed_and_declares_stroke_width(entry):
     assert "stroke-width" in sym.svg, f"{kind}/{variant} declares no stroke-width"
 
 
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_a_nozzle_beside_an_axis_or_edge_sits_exactly_on_it(entry):
+    """Keep every nozzle a fraction of a pixel off its axis or edge on it."""
+    (kind, variant), sym = entry
+    points = [*sym.ports.items()]
+    points += [(f"{p}@{f}", xy) for p, faces in sym.port_faces.items() for f, xy in faces.items()]
+    off = [
+        (name, value, line)
+        for name, (x, y) in points
+        for value, size in ((x, sym.width), (y, sym.height))
+        for line in (0.0, size / 2, size)
+        if 0 < abs(value - line) < 0.1
+    ]
+    off += [
+        (series.prefix, series.at, middle)
+        for series in sym.port_series
+        if series.at is not None
+        for middle in [(sym.height if series.face in "WE" else sym.width) / 2]
+        if 0 < abs(series.at - middle) < 0.1
+    ]
+    assert not off, f"{kind}/{variant}: {off}"
+
+
 _BAKED_SPECIMEN = """\
 <g id="specimen" transform="translate(7 11) scale(2 3)">
   <path d="M 1 2 L 9 2 A 4 2 30 0 1 12 8 Z" fill="none" stroke="black" stroke-width="2"/>
