@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Crystallizer` draws a draft-tube baffle crystallizer with `feed`, `vapor`,
   `overflow` and `product` nozzles. `agitator=` names the stirrer in its draft
   tube, or `None`.
+- `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
+  (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
+  rotor on its shaft, or `None`.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -61,6 +64,9 @@ These are removed in 0.4.0.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,
   so a header of tees no longer draws each branch as a box crossing back through
   the run. `tee.pin(mirrored=False)` keeps the branch south.
+- A valve or fitting on a line from a `Splitter`, or into a `Mixer`, sits next
+  to the unit at the line's other end, so a bank of pumps draws its isolation
+  valves beside the pumps without crossings. One given `at=` keeps its place.
 - A balloon takes any number of signal lines. Lines on one side of it leave
   from separate points on its outline instead of stacking on one point.
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
