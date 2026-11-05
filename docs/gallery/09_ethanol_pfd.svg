@@ -501,7 +501,7 @@
     <symbol id="sym_reactor_cace69d09_s72x153" viewBox="0 0 72 153" overflow="visible"><path d="M 0 45.603306 A 36 8.70784 0 0 1 36 36.895466 A 36 8.70784 0 0 1 72 45.603306 L 72 144.29216 A 36 8.70784 0 0 1 36 153 A 36 8.70784 0 0 1 0 144.29216 Z" fill="white" stroke="#111" stroke-width="1.999941"/><line x1="36" y1="23.994976" x2="36" y2="112.492522" fill="none" stroke="black" stroke-width="1.000001"/><path d="M 18.72 99.850015 L 18.72 125.135028 M 18.72 99.850015 L 53.28 125.135028 M 53.28 99.850015 L 53.28 125.135028" fill="none" stroke="black" stroke-width="1.000001"/><ellipse cx="36.000046" cy="11.997476" rx="12.000008" ry="11.997476" fill="none" stroke="black" stroke-width="0.999999"/><path d="M 31.500044 17.996214 L 31.500044 5.998738 L 36.000046 11.997476 L 40.500049 5.998738 L 40.500049 17.996214" fill="none" stroke="black" stroke-width="0.999999"/></symbol>
     <symbol id="sym_tank" viewBox="0 0 100.0 95.46" overflow="visible"><rect x="0.0" y="25.46" width="100.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 Z" fill="white" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_tee" viewBox="0 0 12.0 12.0" overflow="visible"><path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" stroke-width="2"/></symbol>
-    <symbol id="sym_vessel_horizontal_s110x36" viewBox="0 0 110 36" overflow="visible"><path d="M 6.933581 36 L 103.066419 36 A 18 6.93262 90 0 0 109.999039 18 A 18 6.93262 90 0 0 103.066419 0 L 6.933581 0 A 18 6.93262 90 0 0 0.000961 18 A 18 6.93262 90 0 0 6.933581 36 Z M 6.933581 0 L 6.933581 36 M 103.066419 0 L 103.066419 36" fill="white" stroke="#111" stroke-width="2"/></symbol>
+    <symbol id="sym_vessel_horizontal_110x36_cf99ece5a" viewBox="0 0 110.0 36.0" overflow="visible"><path d="M 5.7692 36 L 104.231 36 A 5.7692 18 0 0 0 110 18 A 5.7692 18 0 0 0 104.231 0 L 5.7692 0 A 5.7692 18 0 0 0 0 18 A 5.7692 18 0 0 0 5.7692 36 Z M 5.7692 0 L 5.7692 36 M 104.231 0 L 104.231 36" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
   <g id="drawing" transform="translate(180.99, 220.04) scale(0.740593)">
   <g id="units">
@@ -516,8 +516,8 @@
     <text x="140.82999999999998" y="732.2360701119612" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-301</text>
     <use href="#sym_column_c94688fb2_s110x250" x="430" y="180" width="110" height="250" />
     <use href="#sym_hex_condenser_s64x64_ty" x="453" y="56" width="64" height="64" transform="translate(0, 176) scale(1, -1)" />
-    <use href="#sym_vessel_horizontal_s110x36" x="700" y="100" width="110" height="36" />
-    <use href="#sym_tee" x="775.71" y="217.75" width="12.0" height="12.0" transform="rotate(90, 781.71, 223.75)" />
+    <use href="#sym_vessel_horizontal_110x36_cf99ece5a" x="700" y="100" width="110" height="36" />
+    <use href="#sym_tee" x="775.75" y="217.75" width="12.0" height="12.0" transform="rotate(90, 781.75, 223.75)" />
     <use href="#sym_hex_kettle_s120x44" x="640" y="420" width="120" height="44" />
     <use href="#sym_hex_straight_tubes_s150x45" x="900" y="510" width="150" height="45" />
     <use href="#sym_reactor_cace69d09_s72x153" x="560" y="620" width="72" height="153" />
@@ -538,11 +538,11 @@
     <path d="M 190.0,311.25 L 430.0,311.25" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 190.0,645.659344745473 L 535.0,645.659344745473 L 535.0,705.659344745473 L 560.0,705.659344745473" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 190.0,724.2360701119612 L 560.0,724.2360701119612" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 781.7129123880271,229.75 L 781.7129123880271,275.0 L 1330.0,275.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 781.7486,229.75 L 781.7486,275.0 L 1330.0,275.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,180.0 L 485.0,112.064" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,63.936 L 485.0,31.0 L 675.0,31.0 L 675.0,118.0 L 700.0,118.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 781.7129123880271,136.0 L 781.7129123880271,217.75" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 775.7129123880271,223.75 L 540.0,223.75" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 781.7486,136.0 L 781.7486,217.75" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 775.7486,223.75 L 540.0,223.75" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,430.0 L 485.0,489.0 L 700.0,489.0 L 700.0,460.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 723.9344262295082,420.0 L 723.9344262295082,398.75 L 540.0,398.75" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 751.4754098360656,460.0 L 751.4754098360656,532.5 L 900.0,532.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />

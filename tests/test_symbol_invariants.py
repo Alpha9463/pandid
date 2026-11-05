@@ -684,6 +684,12 @@ def odd_box_sheets():
             if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
                 continue
             unit = _unit(kind, variant, i, width=box[0], height=box[1])
+            try:
+                default_registry.for_unit(unit)
+            except ValueError as exc:
+                # A shell built to size has no room for its heads.
+                assert "is too small to draw" in str(exc), exc
+                continue
             fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8))
             placed[(kind, variant)] = unit
         matrices = _placements(fs.to_svg(), _natives(fs))
@@ -702,12 +708,14 @@ def test_ports_stay_on_the_drawing_at_any_box_shape(entry, odd_box_sheets):
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
     if kind in _UNBOXABLE_KINDS:
         pytest.skip("a conveyor is sized by length=, so its box is its artwork's")
-    first = next(iter(odd_box_sheets.values()))[(kind, variant)][0]
-    segments = _collect_segments(default_registry.for_unit(first).svg)
-    corners = [(0.0, 0.0), (sym.width, 0.0), (sym.width, sym.height), (0.0, sym.height)]
-    outline = list(zip(corners, corners[1:] + corners[:1]))
     for (w, h), sheet in odd_box_sheets.items():
+        if (kind, variant) not in sheet:
+            continue
         unit, matrix = sheet[(kind, variant)]
+        drawn = default_registry.for_unit(unit)
+        segments = _collect_segments(drawn.svg)
+        corners = [(0.0, 0.0), (drawn.width, 0.0), (drawn.width, drawn.height), (0.0, drawn.height)]
+        outline = list(zip(corners, corners[1:] + corners[:1]))
         for name in unit.ports:
             where = f"{kind}/{variant} port {name!r} in a {w:g}x{h:g} box"
             point = _apply(_invert(matrix), *port_point(unit, unit.frame, name))
@@ -1312,13 +1320,15 @@ def test_three_inlets_stack_up_a_dished_roof_tanks_shell():
 def test_a_holdup_family_stays_on_its_wall_and_its_ink_at_every_count(kind, variant):
     """Verify a holdup family stays on its box, its declared wall and its drawn ink."""
     sym = default_registry.get(kind, variant)
-    segments = _collect_segments(sym.svg)
     for role, prefix, menu in _role_menus(kind, variant):
         for face, drawn in menu.items():
             assert face in sym.bands, f"{kind}/{variant}: {role} on {face} has no band"
-            lo, hi = sym.bands[face]
             for count in range(1, 9 if _has_wall(sym, face) else 2):
                 unit = _holdup(kind, variant, role, [face] * count)
+                # A vessel's shell grows to hold its family.
+                built = default_registry.for_unit(unit)
+                lo, hi = built.bands[face]
+                segments = _collect_segments(built.svg)
                 w, h = resolve_size(unit)
                 for i in range(1, count + 1):
                     x, y = port_offset(unit, f"{prefix}{i}")
@@ -1460,14 +1470,14 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
     assert sym.bands, f"{kind}/{variant} is a holdup body and declares no wall"
     for supports in ("leg", "skirt", "bracket", "ring"):
         try:
-            drawn = default_registry.for_unit(
-                units.Vessel("X-1", variant=variant, supports=supports)
-            )
+            vessel = units.Vessel("X-1", variant=variant, supports=supports)
         except ValueError as exc:
             assert "cannot carry supports=" in str(exc), f"vessel/{variant} + {supports}: {exc}"
             continue
-        assert drawn.bands == sym.bands, (
-            f"vessel/{variant} on {supports}s lost the wall its body declares"
+        drawn = default_registry.for_unit(vessel)
+        shell = units._drawn_parts(vessel, vessel.__dict__["overlays"])[0]
+        assert drawn.bands == shell.bands, (
+            f"vessel/{variant} on {supports}s lost the wall its shell declares"
         )
 
 

@@ -437,8 +437,7 @@ def test_each_branch_leaves_the_header_on_the_side_of_its_pump(n):
     fs.route()
     tees = [u for u in fs.units if u.kind == "tee"]
     assert [t.name for t in tees if _branch_crosses_its_run(t)] == []
-    if n == 3:
-        assert measure_final(fs).crossings == 0
+    assert measure_final(fs).crossings == 0
 
 
 def test_a_stated_branch_side_is_kept():

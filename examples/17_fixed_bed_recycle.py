@@ -63,6 +63,9 @@ def main():
     # One tee joins the make-up to the recycle, the other takes the purge.
     mix = fs.add(Tee(branch="inlet"))
     purge_tee = fs.add(Tee())
+    # Each tee starts the line number stated past it.
+    mix.new_line_number = True
+    purge_tee.new_line_number = True
 
     fe301 = fs.add(Fitting(flow301.element("FE"), variant="orifice",
                            description="Make-up Gas Flow Element"))
