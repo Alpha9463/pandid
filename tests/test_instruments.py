@@ -2082,6 +2082,39 @@ def test_lines_sharing_a_face_of_a_balloon_meet_its_circle():
             assert math.hypot(x - frame.cx, y - frame.cy) == pytest.approx(21.5, abs=0.6)
 
 
+def test_lines_sharing_a_face_of_a_wide_balloon_meet_its_circle():
+    """Check that lines sharing a face of a balloon in a wide box end on its circle."""
+    fs = Flowsheet("wide")
+    pic = fs.add(U.Instrument("PIC-1", width=200, height=44)).pin(x=400, y=400)
+    for i in range(6):
+        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100 + 180 * i, y=700)
+        pic.nozzle(fs.connect(pic, cv.actuator, kind="pneumatic").source.name, "S")
+    fs.route()
+    frame = frame_of(pic)
+    for name, port in pic.ports.items():
+        if port.stream is not None:
+            x, y = port_point(pic, frame, name)
+            assert math.hypot(x - frame.cx, y - frame.cy) == pytest.approx(21.5, abs=0.6)
+
+
+@pytest.mark.parametrize("outputs", [2, 6])
+def test_a_balloon_pinned_by_its_output_draws_that_output_on_the_pin(outputs: int):
+    """Check that the output a balloon is pinned by stays on the pin."""
+    fs = Flowsheet("pinned")
+    pic = fs.add(U.Instrument("PIC-1")).pin(port="sig_out", x=600, y=400)
+    for i in range(outputs):
+        feed = fs.add(U.Feed(f"F-{i}"))
+        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=1000, y=200 + 80 * i)
+        fs.connect(feed.outlet, cv.inlet)
+        fs.connect(cv.outlet, fs.add(U.Product(f"P-{i}")).inlet)
+        fs.connect(pic, cv.actuator, kind="pneumatic")
+    fs.route()
+    assert port_point(pic, frame_of(pic), "sig_out") == (600, 400)
+    points = [port_point(pic, frame_of(pic), n) for n, p in pic.ports.items() if p.stream]
+    assert len(set(points)) == outputs
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
 def test_outputs_past_four_share_the_face_toward_their_valves_in_their_order():
     """Check that extra outputs join the face toward their valves, top to bottom."""
     from pandid.portgeom import resolve_port

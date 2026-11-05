@@ -587,8 +587,10 @@ def _shared_point(unit: "Unit", frame, port_name: str, face: str,
                   point: tuple[float, float]) -> tuple[float, float]:
     """Return a connected port's point among the lines sharing it.
 
-    The lines on one point are spread along the face in the order of
-    their peers' bearings, each moved in onto the symbol's rim.
+    The lines on one point are spread along the artwork's side of the
+    face in the order of their peers' bearings, each moved in onto the
+    symbol's rim. A port the unit is pinned by keeps its own point, and
+    the others take places on either side of it.
 
     Parameters
     ----------
@@ -612,7 +614,8 @@ def _shared_point(unit: "Unit", frame, port_name: str, face: str,
 
     name = unit._canonical_port_name(port_name)
     port = unit.ports.get(name)
-    if port is None or port.stream is None:
+    pinned = {unit._canonical_port_name(p) for p, _ in pin_intent(unit).values() if p}
+    if port is None or port.stream is None or name in pinned:
         return point
     sharing = [other for other, p in unit.ports.items() if p.stream is not None
                and _face_and_point(unit, frame, other) == (face, point)]
@@ -623,10 +626,16 @@ def _shared_point(unit: "Unit", frame, port_name: str, face: str,
     rot, mirrored, mirror_y = _xform(frame)
     rim = [_to_box(sym, x, y, frame.w, frame.h, rot, mirrored, mirror_y)[0]
            for x, y in getattr(sym, "rim", ())]
+    _, (ox, oy, iw, ih) = _to_box(sym, 0.0, 0.0, frame.w, frame.h, rot, mirrored, mirror_y)
     upright = face in ("E", "W")
-    at = point[1] if upright else point[0]
-    t = spread(sharing.index(name), len(sharing), frame.h if upright else frame.w,
-               SHARED_PITCH, SHARED_EXTENT, at)
+    at, lo, along = (point[1], oy, ih) if upright else (point[0], ox, iw)
+    index, count = sharing.index(name), len(sharing)
+    fixed = next((i for i, other in enumerate(sharing) if other in pinned), None)
+    if fixed is not None:
+        # Odd places centred on the pinned port, which takes the middle one.
+        reach = max(fixed, count - 1 - fixed)
+        index, count = reach + index - fixed, 2 * reach + 1
+    t = spread(index, count, along, SHARED_PITCH, SHARED_EXTENT, at, band=(lo, lo + along))
     inward = (_rim_depth(rim, face, t, frame.w, frame.h)
               - _rim_depth(rim, face, at, frame.w, frame.h))
     sign = -1.0 if face in ("E", "S") else 1.0
