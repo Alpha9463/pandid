@@ -53,6 +53,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A `Tee` whose branch serves a unit drawn above the run turns its branch north,
+  so a header of tees no longer draws each branch as a box crossing back through
+  the run. `tee.pin(mirrored=False)` keeps the branch south.
 - A balloon takes any number of signal lines. Lines on one side of it leave
   from separate points on its outline instead of stacking on one point.
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
@@ -86,6 +89,9 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- Reassigning `variant` on a unit built with supports, an agitator, internals,
+  manholes or sockets redraws them on the new body and keeps any overlays added
+  since, or refuses a body that cannot carry them and keeps the old one.
 - `route()` routes a line again where moving it off a shared track makes it
   cross lines its route did not count, and keeps the new drawing only if it
   has no more crossings, bends or findings.
@@ -96,6 +102,8 @@ These are removed in 0.4.0.
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
   `port_offset()` can differ in the second decimal.
+- A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
+  draws its run, bypass and drains in the line's `color` and `dasharray`.
 - A `Feed` or `Product` given a small `height`, such as
   `Feed("Air", height=20)`, draws instead of raising `nozzle-off-body`.
 - Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
