@@ -117,6 +117,7 @@ _LAYOUT_INPUTS = frozenset(
         "_diameter",
         "_large_end",
         "_normal_position",
+        "reference",
     }
 )
 

@@ -1079,3 +1079,29 @@ def test_a_flag_height_or_reference_set_later_too_short_to_letter_is_refused_unc
     with pytest.raises(ValueError, match="with a reference; give height=48 or more"):
         flag.reference = "P&ID-201"
     assert (flag.height, flag.reference) == (45, "")
+
+
+def test_setting_a_reference_after_a_render_reroutes_clear_of_the_taller_pennant() -> None:
+    """Check that a reference set after a render lays out and routes the sheet again."""
+    from pandid import Flowsheet
+    from pandid.portgeom import unit_box
+
+    fs = Flowsheet("two services")
+    air = fs.add(U.Feed("Air")).pin(x=300, y=200)
+    vessel = fs.add(U.Vessel("V-101")).pin(x=700, y=300)
+    feed = fs.add(U.Feed("Feed")).pin(x=100, y=188)
+    product = fs.add(U.Product("Product")).pin(x=500, y=188)
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.connect(air.outlet, vessel.inlet)
+    fs.to_svg()
+    air.reference = "PFD-302"
+    fs.to_svg()
+    frame, route = air.frame, line.route
+    assert frame is not None and route is not None
+    left, top, right, bottom = unit_box(air, frame)
+    points = route.waypoints
+    assert not any(
+        top < a[1] < bottom and min(a[0], b[0]) < right and max(a[0], b[0]) > left
+        for a, b in zip(points, points[1:])
+        if a[1] == b[1]
+    )
