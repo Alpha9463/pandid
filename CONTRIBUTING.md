@@ -189,7 +189,7 @@ splitter, tee and block, and the ISO 10628-2 equipment the stencil set lacks.
 
 `_BUILT_TO_SIZE` in `pandid/render/symbols.py` lists the symbols built for each
 unit rather than registered once: the belt and screw conveyors, the block, the
-mixer and splitter, the tank and the vessel. A builder adapted from a stencil names the stencil file and
+mixer and splitter, the tank, the vessel and the evaporator. A builder adapted from a stencil names the stencil file and
 shape in a comment and in `NOTICE` section 2. A symbol with a fixed size goes
 through `KIND_MAP`.
 
@@ -225,7 +225,7 @@ the result. So it composes on the standard's own authority. The admission lists
 *items*, not groups, precisely so it cannot become a licence for the rest of
 group 20 — and a second entry needs a tabulated row of its own, named there.
 
-**The artwork lives in `pandid/render/iso_parts.py`** — thirty-seven parts, all
+**The artwork lives in `pandid/render/iso_parts.py`** — forty-three parts, all
 original, all built to the construction Table 2 states rather than traced from
 its figures. Review a change to it with
 

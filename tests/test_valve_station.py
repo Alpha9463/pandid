@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from pandid import Flowsheet, spec, units
-from pandid.document import equipment_list
+from pandid.document import equipment_table
 from pandid.portgeom import port_offset, port_point, resolve_size
 from pandid.stations import DEFAULT_GAP, ValveStation
 
@@ -200,7 +200,7 @@ def test_a_station_is_not_a_unit_and_is_not_on_the_flowsheet():
 def test_a_station_reaches_no_equipment_list():
     """Check that station members, being pipe and valves, are not scheduled equipment."""
     fs, _st = _sheet()
-    assert equipment_list(fs).rows == []
+    assert equipment_table(fs).rows == []
 
 
 def test_the_handle_does_not_let_a_member_be_rebound():

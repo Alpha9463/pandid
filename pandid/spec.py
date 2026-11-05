@@ -28,7 +28,8 @@ The format::
       - {kind: Vessel, name: V-101, variant: horizontal,
          width: 130, height: 42, port_faces: {inlet: N},
          pin: {x: 680, y: 210, mirrored: y}}
-      - {kind: Vessel, name: D-301, supports: skirt}
+      - {kind: Vessel, name: D-301, supports: skirt,
+         manholes: [[E, 0.3]], sockets: [[W, 0.6]]}
       - {kind: Reactor, name: R-201, internals: packing, agitator: null}
       - {kind: Column, name: T-101, internals: valve_tray, trays: 30}
 
@@ -54,7 +55,7 @@ The format::
     stream_table: {font_size: 8}
     stream_labels: {enclosure: diamond}
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
-    annotations: [{type: equipment_list, align: top-right}]
+    annotations: [{type: equipment_table, align: top-right}]
 
 Units are addressed by name. Each drawing of a repeated symbol is an
 entry with the tag, addressed in list order as ``I-1``, ``I-1 (2)``.
@@ -78,6 +79,7 @@ from pandid import devices as device_types
 from pandid._checks import is_real as _is_real, is_whole as _is_integral, suggest
 from pandid import units as unit_types
 from pandid.components import Component
+from pandid.deprecation import Deprecation
 from pandid.document import (
     Annotation,
     Revision,
@@ -85,7 +87,7 @@ from pandid.document import (
     StreamTableOptions,
     TableBox,
     TitleBlock,
-    equipment_list,
+    equipment_table,
     legend,
     notes,
     _drawn_text,
@@ -394,6 +396,30 @@ def _faces(value: Any, where: str) -> int | list[str]:
     return [_text(face, f"{where}[{i}]") for i, face in enumerate(_sequence(value, where))]
 
 
+def _walls(value: Any, where: str) -> list[tuple[Any, ...]]:
+    """Check a ``manholes`` or ``sockets`` list of placements.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    list[tuple]
+        One ``(face, fraction)`` per item, for the class to check.
+
+    Raises
+    ------
+    SpecError
+        If it is not a list of lists.
+    """
+    return [tuple(_sequence(item, f"{where}[{i}]"))
+            for i, item in enumerate(_sequence(value, where))]
+
+
 def _composed(value: Any, default: Any, where: str) -> Any:
     """Check a composition value: a count, a part name or ``None``.
 
@@ -661,6 +687,7 @@ _KIND_READERS: dict[str, Callable[[Any, str], Any]] = {
     "normal_position": _text, "fail": _text, "branch": _text, "large_end": _text,
     "header": _flag, "inputs": _faces, "outputs": _faces,
     "feed_stages": _stages, "draw_stages": _stages,
+    "manholes": _walls, "sockets": _walls,
 }
 # Each class's constructor keywords.
 _TAKES = {cls: inspect.signature(cls).parameters.keys() for cls in _CLASSES.values()}
@@ -1734,10 +1761,18 @@ def _read_title_block(entry: Any, where: str) -> TitleBlock:
     return TitleBlock(revisions=revisions, **kwargs)
 
 
+#: Deprecation of the equipment table's old box type.
+_EQUIPMENT_LIST_TYPE = Deprecation(
+    what="type: equipment_list",
+    instead="type: equipment_table",
+    removed_in="0.4.0",
+)
+
 _ANNOTATION_KEYS = {
     "annotation": {"type", "title", "rows", "align", "position", "margin", "width", "font_size"},
     "table": {"type", "title", "headers", "rows", "align", "position", "margin", "font_size",
               "col_align"},
+    "equipment_table": {"type", "title", "align", "position", "margin", "width", "include"},
     "equipment_list": {"type", "title", "align", "position", "margin", "width", "include"},
     "notes": {"type", "title", "items", "align", "position", "margin", "width", "numbered"},
     "legend": {"type", "title", "entries", "align", "position", "margin", "width"},
@@ -1787,7 +1822,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
     Parameters
     ----------
     fs : Flowsheet
-        Sheet an equipment list reads.
+        Sheet an equipment table reads.
     entry : Any
         The ``annotations:`` entry.
     where : str
@@ -1818,12 +1853,15 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         kwargs["title"] = _text(data["title"], f"{where}.title")
 
     try:
-        if kind == "equipment_list":
+        if kind in ("equipment_table", "equipment_list"):
             include = data.get("include")
             if include is not None:
                 include = [_text(t, f"{where}.include") for t in _sequence(include,
                                                                           f"{where}.include")]
-            return equipment_list(fs, include=include, **kwargs)
+            box = equipment_table(fs, include=include, **kwargs)
+            if kind == "equipment_list":
+                _EQUIPMENT_LIST_TYPE.warn(fs, where=where)
+            return box
         if kind == "notes":
             if "items" not in data:
                 raise SpecError(f"{where}: a notes box needs 'items' (the list of note texts)")
@@ -2124,6 +2162,10 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
     _write_composition(unit, entry)
+    if isinstance(unit, (unit_types.Vessel, unit_types.Evaporator)):
+        for key, places in (("manholes", unit.manholes), ("sockets", unit.sockets)):
+            if places:
+                entry[key] = [list(place) for place in places]
     # One feed is the default.
     if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _KIND_OWNERS["n_feeds"])
             and len(getattr(unit, "feeds")) > 1):

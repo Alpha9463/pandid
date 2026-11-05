@@ -1,13 +1,21 @@
-"""Define the title block and the sheet furniture.
+"""Define the title block, the sheet furniture and the drawing set.
 
 Sheet furniture is titled boxes of text (:class:`Annotation`) or of a
-bordered grid (:class:`TableBox`).
+bordered grid (:class:`TableBox`). A :class:`Document` checks a set of
+sheets against each other.
 """
 
+from contextlib import ExitStack
 from dataclasses import dataclass, field, fields, replace
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pandid._checks import check_real, suggest
+from pandid.deprecation import Deprecation
+
+if TYPE_CHECKING:
+    from pandid.flowsheet import Flowsheet
+    from pandid.units import Unit
+    from pandid.validate import Issue
 
 
 @dataclass
@@ -396,7 +404,7 @@ class StreamLabelOptions:
 
 # Convenience constructors for the common boxes
 
-# Kinds an equipment list schedules by default.
+# Kinds an equipment table schedules by default.
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "column", "compressor", "conveyor", "cooler",
     "cooling_tower", "crusher", "dryer", "ejector", "elevator", "evaporator",
@@ -405,7 +413,7 @@ _MAJOR_EQUIPMENT = frozenset({
     "thickener", "turbine", "vessel",
 })
 
-# Equipment-list description of a kind whose name is not its title.
+# Equipment-table description of a kind whose name is not its title.
 _KIND_LABELS = {
     "block": "Process Block",
     "crushing_machine": "Crushing/Grinding Machine",
@@ -419,8 +427,49 @@ _KIND_LABELS = {
 }
 
 
-def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
-                   position=None, margin=0.0, include=None, width=None):
+#: Deprecation of the drawn box's old name.
+_EQUIPMENT_LIST = Deprecation(
+    what="pandid.document.equipment_list(fs)",
+    instead="pandid.document.equipment_table(fs)",
+    removed_in="0.4.0",
+)
+
+
+def _scheduled_units(fs):
+    """Return the units an equipment table lists by default.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to schedule.
+
+    Returns
+    -------
+    list[Unit]
+        Units of a major equipment kind, in sheet order.
+    """
+    return [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
+
+
+def _described(unit):
+    """Return a unit's equipment-table description.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to describe.
+
+    Returns
+    -------
+    str
+        The stated description, else the kind's name.
+    """
+    return (getattr(unit, "description", "")
+            or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
+
+
+def equipment_table(fs, *, title="EQUIPMENT LIST", align="top-right",
+                    position=None, margin=0.0, include=None, width=None):
     """Build an :class:`Annotation` scheduling the major equipment.
 
     Each row is ``(name, description)``.
@@ -445,7 +494,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
     Returns
     -------
     Annotation
-        Equipment list.
+        Equipment table.
 
     Raises
     ------
@@ -457,24 +506,54 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
         or not a real number, or a given ``position`` is not iterable.
     """
     if include is None:
-        chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
+        chosen = _scheduled_units(fs)
     else:
         by_name = {u.name: u for u in fs.units}
         missing = [tag for tag in include if tag not in by_name]
         if missing:
             hints = [f"{tag!r}{suggest(tag, by_name)}" for tag in missing]
             raise ValueError(
-                f"equipment_list(include=...) names {', '.join(hints)}, which "
+                f"equipment_table(include=...) names {', '.join(hints)}, which "
                 f"{'is' if len(missing) == 1 else 'are'} not on this flowsheet. "
                 f"A named row is one the schedule asserts exists; add the unit, or "
                 f"drop the tag from include=."
             )
         chosen = [by_name[tag] for tag in include]
-    # A stated description, else the kind's name.
-    rows = [(u.name, getattr(u, "description", "")
-             or _KIND_LABELS.get(u.kind, u.kind.replace("_", " ").title())) for u in chosen]
+    rows = [(u.name, _described(u)) for u in chosen]
     return Annotation(title=title, rows=rows, align=align,
                       position=position, margin=margin, width=width)
+
+
+def equipment_list(fs, **options):
+    """Build the box :func:`equipment_table` builds; deprecated.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to schedule.
+    **options
+        Keyword arguments of :func:`equipment_table`.
+
+    Returns
+    -------
+    Annotation
+        Equipment table.
+
+    Raises
+    ------
+    ValueError
+        As for :func:`equipment_table`.
+    TypeError
+        As for :func:`equipment_table`.
+
+    Warns
+    -----
+    DeprecationWarning
+        Always.
+    """
+    box = equipment_table(fs, **options)
+    _EQUIPMENT_LIST.warn(fs)
+    return box
 
 
 def notes(items, *, title="NOTES", align="top-right", position=None,
@@ -555,3 +634,296 @@ def legend(entries, *, title="LEGEND", align="top-left",
     return Annotation(title=title, rows=[tuple(e) for e in entries],
                       align=align, position=position,
                       margin=margin, width=width)
+
+
+# Line fields compared across a connector pair, with the keyword to set.
+_LINE_FIELDS = (("line number", "name= or sequence="), ("service", "service="),
+                ("size", "size="))
+
+# Line number, service and size at a connector, each None if unstated.
+_Line = tuple[str | None, str | None, str | None]
+
+
+def _key(number: str) -> str:
+    """Return a drawing number in the form two numbers compare in.
+
+    Parameters
+    ----------
+    number : str
+        Drawing number or reference.
+
+    Returns
+    -------
+    str
+        ``number`` stripped and casefolded.
+    """
+    return number.strip().casefold()
+
+
+def _number(fs: "Flowsheet") -> str:
+    """Return a sheet's drawing number, blank if it has none.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    str
+        ``fs.title_block.drawing_number`` stripped, or ``""``.
+    """
+    block = fs.title_block
+    return "" if block is None else _drawn_text(block.drawing_number).strip()
+
+
+def _label(fs: "Flowsheet") -> str:
+    """Return how a finding names a sheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    str
+        The drawing number, or ``sheet 'name'`` without one.
+    """
+    return _number(fs) or f"sheet {fs.name!r}"
+
+
+def _number_call(fs: "Flowsheet") -> str:
+    """Return the call that sets a sheet's drawing number.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    str
+        An assignment that keeps the sheet's other title-block fields.
+    """
+    if fs.title_block is None:
+        return 'fs.title_block = TitleBlock(drawing_number="<number>")'
+    return 'fs.title_block.drawing_number = "<number>"'
+
+
+def _line(fs: "Flowsheet", flags: "list[Unit]") -> _Line:
+    """Return the stated fields of the one line at a connector's flags.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet the flags are on.
+    flags : list[Unit]
+        Flags drawn for one connector.
+
+    Returns
+    -------
+    tuple
+        Line number, service and size, each ``None`` when unstated,
+        and all ``None`` unless exactly one stream ends at the flags. A
+        stream number the sheet assigned is not a line number.
+    """
+    runs = [s for s in fs.streams if s.source.owner in flags or s.dest.owner in flags]
+    if len(runs) != 1:
+        return (None, None, None)
+    (s,) = runs
+    return (s.name if s.has_line_number or not s.auto_named else None,
+            _drawn_text(s.service) or None, _drawn_text(s.size) or None)
+
+
+def _connectors(fs: "Flowsheet") -> "dict[tuple[str, str, str], tuple[list[Unit], _Line]]":
+    """Return a sheet's off-page connectors and the line at each.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    dict
+        ``(kind, tag, reference)`` to the flags drawn for that
+        connector and their line, the reference as :func:`_key` gives.
+    """
+    from pandid.units import _Boundary
+
+    groups: dict[tuple[str, str, str], list[Unit]] = {}
+    for u in fs.units:
+        reference = _drawn_text(u.reference)
+        if isinstance(u, _Boundary) and reference.strip():
+            groups.setdefault((u.kind, u.tag, _key(reference)), []).append(u)
+    return {k: (flags, _line(fs, flags)) for k, flags in groups.items()}
+
+
+@dataclass
+class Document:
+    """A set of drawing sheets, checked against each other.
+
+    A sheet's drawing number is its ``title_block.drawing_number``. A
+    Feed or Product with ``reference=`` is an off-page connector to the
+    sheet of that number. Its partner is the flag of the other
+    direction on that sheet whose ``reference=`` names this sheet and
+    that has the same tag, or else the same stated line number.
+    Drawing numbers compare without case or surrounding spaces.
+
+    Attributes
+    ----------
+    sheets : list[Flowsheet]
+        Sheets in the set.
+
+    Raises
+    ------
+    TypeError
+        If a sheet is not a :class:`~pandid.flowsheet.Flowsheet`.
+    """
+
+    sheets: "list[Flowsheet]"
+
+    def __post_init__(self) -> None:
+        """Check that every sheet is a Flowsheet.
+
+        Raises
+        ------
+        TypeError
+            If a sheet is not a Flowsheet.
+        """
+        from pandid.flowsheet import Flowsheet
+
+        self.sheets = list(self.sheets)
+        for i, fs in enumerate(self.sheets):
+            if not isinstance(fs, Flowsheet):
+                raise TypeError(
+                    f"Document(sheets) takes Flowsheets; sheets[{i}] is {fs!r}"
+                )
+
+    def validate(self) -> "list[Issue]":
+        """Return the findings across sheets, errors first, then warnings.
+
+        Number each sheet's streams first, as a render does, and keep
+        those numbers; a call that raises leaves every sheet unchanged.
+        A sheet's own findings come from its ``validate()``.
+
+        Returns
+        -------
+        list[Issue]
+            Findings, each naming the sheets it involves.
+
+        Raises
+        ------
+        ValueError
+            If a sheet's naming scheme cannot name a stream.
+        """
+        with ExitStack() as unchanged:
+            for fs in self.sheets:
+                unchanged.enter_context(fs._unchanged_if_it_raises())
+            return self._findings()
+
+    def _findings(self) -> "list[Issue]":
+        """Number each sheet's streams and return the findings across sheets.
+
+        Returns
+        -------
+        list[Issue]
+            Findings, errors first, then warnings.
+
+        Raises
+        ------
+        ValueError
+            If a sheet's naming scheme cannot name a stream.
+        """
+        from pandid.units import _Boundary
+        from pandid.validate import Issue
+
+        found: list[Issue] = []
+        by_number: dict[str, list[Flowsheet]] = {}
+        for fs in self.sheets:
+            fs.renumber_streams()
+            if _number(fs):
+                by_number.setdefault(_key(_number(fs)), []).append(fs)
+        for same in by_number.values():
+            if len(same) > 1:
+                names = ", ".join(repr(fs.name) for fs in same)
+                found.append(Issue("error", "drawing-number-duplicate", (
+                    f"Sheets {names} share drawing number {_number(same[0])!r}, so "
+                    f"a reference to it cannot say which. Give each sheet its "
+                    f"own number: {_number_call(same[-1])} on {same[-1].name!r}."
+                )))
+
+        connectors = {id(fs): _connectors(fs) for fs in self.sheets}
+        for fs in self.sheets:
+            here, cut_off = _number(fs), []
+            for (kind, tag, reference), (flags, line) in connectors[id(fs)].items():
+                where = f"{type(flags[0]).__name__}({tag!r}) on {_label(fs)}"
+                far = by_number.get(reference)
+                if far is None:
+                    found.append(Issue("warning", "reference-not-in-set", (
+                        f"{where} names drawing {_drawn_text(flags[0].reference)!r}, "
+                        f"which is not in this Document. Add that sheet to "
+                        f"Document([...]), or correct the flag's reference=."
+                    )))
+                    continue
+                there = _number(far[0])
+                if not here:
+                    cut_off.append(there)
+                    continue
+                partner_kind = "feed" if kind == "product" else "product"
+                candidates = {k: v for k, v in connectors[id(far[0])].items()
+                              if k[0] == partner_kind and k[2] == _key(here)}
+                partner = next((k for k in candidates if k[1] == tag), None)
+                if partner is None and line[0] is not None:
+                    partner = next((k for k, (_, far_line) in candidates.items()
+                                    if far_line[0] == line[0]), None)
+                if partner is None:
+                    partner_cls = partner_kind.title()
+                    found.append(Issue("error", "connector-unmatched", (
+                        f"{where} continues onto {there}, which has no "
+                        f"{partner_cls} pointing back at {here} with the same tag "
+                        f"or line number. Add {partner_cls}({tag!r}, "
+                        f"reference={here!r}) to {there}, or correct reference= on "
+                        f"{where}."
+                    )))
+                    continue
+                far_flags, far_line = candidates[partner]
+                differ = [(field, keyword, mine, theirs)
+                          for (field, keyword), mine, theirs in zip(_LINE_FIELDS, line, far_line)
+                          if mine is not None and theirs is not None and mine != theirs]
+                # Report a pair once, from the sheet the line leaves.
+                if kind == "product" and differ:
+                    disagree = "; ".join(f"{field} {mine!r} on {here} and {theirs!r} on {there}"
+                                         for field, _, mine, theirs in differ)
+                    fields = " and ".join(f"{field} ({keyword})"
+                                          for field, keyword, _, _ in differ)
+                    found.append(Issue("error", "connector-line-mismatch", (
+                        f"{where} and {type(far_flags[0]).__name__}({partner[1]!r}) "
+                        f"on {there} are one line but disagree on {disagree}. Give "
+                        f"connect() the same {fields} on both sheets."
+                    )))
+            if cut_off:
+                found.append(Issue("error", "drawing-number-missing", (
+                    f"Sheet {fs.name!r} has no drawing number, so "
+                    f"{', '.join(dict.fromkeys(cut_off))} cannot point its connectors "
+                    f"back at it. Number it: {_number_call(fs)}."
+                )))
+
+        tagged: dict[str, dict[str, list[tuple[str, str]]]] = {}
+        for fs in self.sheets:
+            for u in fs.units:
+                if not isinstance(u, _Boundary):
+                    tagged.setdefault(u.name, {}).setdefault(u.kind, []).append(
+                        (type(u).__name__, _label(fs)))
+        for tag, kinds in tagged.items():
+            if len(kinds) > 1:
+                shown = " and ".join(f"{cls}({tag!r}) on {sheet}"
+                                     for drawn in kinds.values() for cls, sheet in drawn)
+                last = next(reversed(kinds.values()))[0][0]
+                found.append(Issue("error", "tag-reused", (
+                    f"{shown} share one tag but are different kinds of equipment. "
+                    f"A tag names one piece of equipment: build one of them under "
+                    f'another tag, such as {last}("<new tag>").'
+                )))
+        return sorted(found, key=lambda issue: issue.severity != "error")

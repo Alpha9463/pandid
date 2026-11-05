@@ -1301,7 +1301,7 @@ class Valve(_NormallyPositioned):
             If the actuator is unknown or contradicts the variant, or
             the pairing is not drawn.
         """
-        from pandid.render.symbols import ACTUATED, ACTUATORS, actuated_variant
+        from pandid.render.symbols import ACTUATORS, actuated_variant, variant_actuator
 
         if not actuator:
             return variant
@@ -1313,13 +1313,13 @@ class Valve(_NormallyPositioned):
                 f"variant."
             )
         # A variant with a built-in actuator accepts only that one.
-        fitted = {a for (_, a), drawn in ACTUATED.items() if drawn == variant}
+        fitted = variant_actuator(variant)
         if fitted:
-            if actuator in fitted:
+            if actuator == fitted:
                 return variant
             raise ValueError(
                 f"{name}: variant {variant!r} already draws a valve with a "
-                f"{', '.join(repr(a) for a in sorted(fitted))} operator on it, so it "
+                f"{fitted!r} operator on it, so it "
                 f"cannot also take actuator={actuator!r} -- one drawing, two "
                 f"operators. Name the body and the actuator (variant='gate', "
                 f"actuator={actuator!r}), or the pairing on its own "
@@ -1489,6 +1489,154 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
             f"{named}; variants that can: {', '.join(able) or 'none'}"
         )
     unit.overlays = overlays
+
+
+#: Placements of a wall part, ``(face, fraction)`` each.
+_Walls = tuple[tuple[str, float], ...]
+
+
+def _on_walls(unit: "Unit", keyword: str, entries: "Sequence[tuple[str, float]]") -> _Walls:
+    """Return checked ``(face, fraction)`` placements for ``keyword``.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit whose walls carry the parts.
+    keyword : str
+        ``"manholes"`` or ``"sockets"``.
+    entries : Sequence[tuple[str, float]]
+        Placements as given.
+
+    Returns
+    -------
+    tuple[tuple[str, float], ...]
+        Placements, each face as ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+
+    Raises
+    ------
+    ValueError
+        If an entry is not a pair, the face is not a face, the fraction
+        is not a number from 0 to 1, or the place is off the walls.
+    """
+    from pandid._checks import is_real
+    from pandid.render.iso_parts import wall_point
+
+    part = keyword[:-1]
+    malformed = (
+        f"{unit.name}: {keyword}= takes a list of (face, fraction) pairs, such as "
+        f"{keyword}=[('E', 0.3)]; got {entries!r}"
+    )
+    if isinstance(entries, str) or not isinstance(entries, Sequence):
+        raise ValueError(malformed)
+    checked = []
+    for entry in entries:
+        if isinstance(entry, str) or not isinstance(entry, Sequence) or len(entry) != 2:
+            raise ValueError(malformed)
+        face, fraction = _block_face(entry[0], unit.name), entry[1]
+        if not (is_real(fraction) and 0 <= fraction <= 1):
+            raise ValueError(
+                f"{unit.name}: the {part} at {tuple(entry)!r} needs a fraction from 0 to "
+                f"1 of the way along the {face} face, 0 at its top or left end; got "
+                f"{fraction!r}"
+            )
+        wall_point(unit.kind, unit.variant, face, fraction,
+                   f"{unit.name}: the {part} at {(face, fraction)!r}")
+        checked.append((face, fraction))
+    return tuple(checked)
+
+
+def _hold_walls(unit: "Vessel | Evaporator") -> None:
+    """Add a port per socket and refuse walls the drawing cannot hold.
+
+    Parameters
+    ----------
+    unit : Vessel or Evaporator
+        Unit with its manholes and sockets set.
+
+    Raises
+    ------
+    ValueError
+        If the drawing cannot hold the manholes and sockets.
+    """
+    for i in range(1, len(unit.sockets) + 1):
+        unit._add_port(f"socket_{i}", "outlet", "process")
+    if unit.manholes or unit.sockets:
+        unit.symbol()
+
+
+def _kept_on_walls(unit: "Unit", sym: "Symbol", scale: tuple[float, float]) -> "Symbol":
+    """Return ``sym``, refusing a nozzle its placement moves onto a face.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit drawn.
+    sym : Symbol
+        Its drawing.
+    scale : tuple[float, float]
+        ``(x, y)`` scale the drawing is placed at.
+
+    Returns
+    -------
+    Symbol
+        ``sym``.
+
+    Raises
+    ------
+    ValueError
+        If a nozzle is nearer another edge of the placed box than of
+        the drawing.
+    """
+    from pandid.portgeom import outward_dir
+
+    sx, sy = scale
+    w, h = sym.width * sx, sym.height * sy
+    for name, (x, y) in sym.ports.items():
+        home, drawn = outward_dir(x, y, sym.width, sym.height), outward_dir(x * sx, y * sy, w, h)
+        if drawn != home:
+            raise ValueError(
+                f"{unit.name}: {name} is drawn on the {home} wall, which its manholes and "
+                f"sockets leave nearer the {drawn} edge of its {w:g}x{h:g} box, so its line "
+                f"would leave {drawn}. Give it a larger "
+                f"{'height' if drawn in ('N', 'S') else 'width'}, or move the manholes and "
+                f"sockets along the wall"
+            )
+    return sym
+
+
+def _drawn_walls(unit: "Unit", overlays: tuple) -> tuple[tuple, tuple, tuple[float, float]]:
+    """Return a unit's manholes and sockets placed at their drawn size.
+
+    Parameters
+    ----------
+    unit : Unit
+        Vessel or evaporator.
+    overlays : tuple[Overlay, ...]
+        The unit's other parts.
+
+    Returns
+    -------
+    tuple
+        The parts; each socket's port in body coordinates; and the
+        ``(x, y)`` scale the drawing is placed at.
+
+    Raises
+    ------
+    ValueError
+        If a placement is off the body's walls, or the box leaves no
+        room for the body.
+    """
+    from pandid.render.iso_parts import wall_overlays
+
+    manholes, sockets = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
+    if not manholes and not sockets:
+        return (), (), (1.0, 1.0)
+    # A quarter turn swaps the stated sizes onto the drawing's axes.
+    turn = getattr(unit, "_pin", None)
+    quarter = int(getattr(turn, "orientation", 0) or 0) in (90, 270)
+    size = (unit.height, unit.width) if quarter else (unit.width, unit.height)
+    return wall_overlays(unit.kind, unit.variant, overlays, manholes, sockets, size,
+                         unit.name)
 
 
 _FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
@@ -1905,11 +2053,19 @@ class _MultiPortVessel(_FaceFamilies):
         -------
         Symbol
             Vendored artwork with the families placed.
+
+        Raises
+        ------
+        ValueError
+            If the parts, manholes or sockets leave a nozzle nearer
+            another edge than its face, or the box no room for the body.
         """
         from pandid.render.symbols import vessel_symbol
 
         overlays = tuple(getattr(self, "overlays", ()) or ())
-        return vessel_symbol(self.kind, self.variant, tuple(self._faces.items()), overlays)
+        walls, ports, scale = _drawn_walls(self, overlays)
+        return _kept_on_walls(self, vessel_symbol(
+            self.kind, self.variant, tuple(self._faces.items()), overlays + walls, ports), scale)
 
 
 class Vessel(_MultiPortVessel):
@@ -1934,6 +2090,14 @@ class Vessel(_MultiPortVessel):
         ``"leg"`` (26.1), ``"bracket"`` (26.2) or ``"ring"`` (26.4).
         Set at construction only; assigning it later raises
         ``AttributeError``.
+    manholes : Sequence[tuple[str, float]], default=()
+        ISO 10628-2 26.5 manholes, one ``(face, fraction)`` each: the
+        wall, and how far along it from its top or left end, 0 to 1.
+        A manhole has no port. Set at construction only.
+    sockets : Sequence[tuple[str, float]], default=()
+        ISO 10628-2 26.6 sockets, placed as ``manholes`` are. Each is
+        an outlet port, ``socket_1``, ``socket_2``, ... in the order
+        given. Set at construction only.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
@@ -1942,7 +2106,9 @@ class Vessel(_MultiPortVessel):
     ------
     ValueError
         If a count or face is invalid, a face is absent or full on the
-        artwork, the support is unknown, or the variant cannot carry it.
+        artwork, the support is unknown, the variant cannot carry it,
+        or a manhole or socket is not a ``(face, fraction)`` pair on a
+        straight wall of the variant.
     """
 
     # Numbered nozzles a count can build.
@@ -1972,7 +2138,7 @@ class Vessel(_MultiPortVessel):
     ]
 
     COMPOSITION = {"supports": None}
-    _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
+    _FIXED_AT_CONSTRUCTION = frozenset({"supports", "manholes", "sockets"})
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -1981,14 +2147,19 @@ class Vessel(_MultiPortVessel):
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
         supports: str | None = None,
+        manholes: "Sequence[tuple[str, float]]" = (),
+        sockets: "Sequence[tuple[str, float]]" = (),
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
+        self.manholes = _on_walls(self, "manholes", manholes)
+        self.sockets = _on_walls(self, "sockets", sockets)
         self._init_connections(inputs, outputs)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
 
         _compose_onto(self, ("supports", supports, lambda name, _body: support_overlays(name)))
+        _hold_walls(self)
 
 
 class Tank(_MultiPortVessel):
@@ -3594,6 +3765,8 @@ class Evaporator(Unit):
     supports : str, optional
         ``"leg"``, ``"bracket"``, ``"skirt"`` or ``"ring"``; fixed at
         construction.
+    manholes, sockets : Sequence[tuple[str, float]], default=()
+        As for :class:`Vessel`, on the W and E shell.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
@@ -3606,7 +3779,9 @@ class Evaporator(Unit):
     Raises
     ------
     ValueError
-        If ``supports`` is unknown or the variant cannot carry it.
+        If ``supports`` is unknown or the variant cannot carry it, or a
+        manhole or socket is not a ``(face, fraction)`` pair on the
+        shell.
     """
 
     feed: Port
@@ -3624,20 +3799,46 @@ class Evaporator(Unit):
         ("condensate", "outlet", "utility"),
     ]
     COMPOSITION = {"supports": None}
-    _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
+    _FIXED_AT_CONSTRUCTION = frozenset({"supports", "manholes", "sockets"})
 
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
         supports: str | None = None,
+        manholes: "Sequence[tuple[str, float]]" = (),
+        sockets: "Sequence[tuple[str, float]]" = (),
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
         from pandid.render.iso_parts import support_overlays
 
+        self.manholes = _on_walls(self, "manholes", manholes)
+        self.sockets = _on_walls(self, "sockets", sockets)
         self.supports = supports
         _compose_onto(self, ("supports", supports, lambda name, _body: support_overlays(name)))
+        _hold_walls(self)
+
+    def symbol(self) -> "Symbol":
+        """Return the symbol with its parts, manholes and sockets.
+
+        Returns
+        -------
+        Symbol
+            Evaporator drawing.
+
+        Raises
+        ------
+        ValueError
+            If a manhole or socket is off the shell, or the box leaves
+            no room for the body.
+        """
+        from pandid.render.symbols import default_registry
+
+        overlays = tuple(getattr(self, "overlays", ()) or ())
+        walls, ports, scale = _drawn_walls(self, overlays)
+        return _kept_on_walls(
+            self, default_registry.composed(self.kind, self.variant, overlays + walls, ports), scale)
 
 
 #: Default thickener rake: the cross-beam stirrer (ISO 10628-2 28.4).
