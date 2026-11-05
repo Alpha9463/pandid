@@ -54,6 +54,45 @@ INLINE_KINDS = _INLINE_KINDS | {"tee"}
 #: Attribute types :func:`_restore` refills in place.
 _CONTAINERS = (list, dict, set)
 
+#: Line fields a line-list row reports.
+_LINE_FIELDS = ("size", "schedule", "service", "spec", "insulation")
+
+#: Keys every line-list row has before its properties.
+_LINE_LIST_COLUMNS = ("line", "kind", *_LINE_FIELDS,
+                      "from_unit", "from_nozzle", "to_unit", "to_nozzle")
+
+
+def _line_ends(run: "list[Stream]") -> "tuple[list[Port], list[Port]]":
+    """Return the nozzles a line starts and ends at.
+
+    The line passes through a unit it both enters and leaves; where
+    that leaves it no start or no end, it passes through only its
+    valves, reducers, fittings and tees. A valve, reducer, fitting or
+    tee at an end is dropped when the line has another end that side.
+
+    Parameters
+    ----------
+    run : list[Stream]
+        Segments of one line.
+
+    Returns
+    -------
+    tuple[list[Port], list[Port]]
+        Start nozzles and end nozzles, in segment order.
+    """
+    left = {id(s.source.owner) for s in run}
+    starts: list[Port] = []
+    ends: list[Port] = []
+    for entered in ({id(s.dest.owner) for s in run},
+                    {id(s.dest.owner) for s in run if s.dest.owner.kind in INLINE_KINDS}):
+        through = entered & left
+        starts = [s.source for s in run if id(s.source.owner) not in through]
+        ends = [s.dest for s in run if id(s.dest.owner) not in through]
+        if starts and ends:
+            break
+    return ([p for p in starts if p.owner.kind not in INLINE_KINDS] or starts,
+            [p for p in ends if p.owner.kind not in INLINE_KINDS] or ends)
+
 
 def _snapshot(obj) -> dict:
     """Save every attribute of an object for :func:`_restore`.
@@ -2062,6 +2101,112 @@ class Flowsheet:
         """
         from pandid.spec import to_dict as _to_dict
         return _to_dict(self)
+
+    def line_list(self) -> list[dict]:
+        """Return the line list: one row per line on the sheet.
+
+        A line is a run as the stream table groups it: the material or
+        energy segments that share a number. Every row has the keys
+        ``line``, ``kind``, ``size``, ``schedule``, ``service``,
+        ``spec``, ``insulation``, ``from_unit``, ``from_nozzle``,
+        ``to_unit`` and ``to_nozzle``, then one key per stream property
+        on the sheet, in stream-table order. A line with more than one
+        start or end lists each, comma-separated. A property takes the
+        stream table's value; a field or property the line does not
+        state is ``None``.
+
+        Returns
+        -------
+        list[dict]
+            Rows in order of each line's first segment.
+
+        Raises
+        ------
+        ValueError
+            If a stream property is named like a column, more than one
+            segment of a line is marked ``tabulate``, or a naming
+            scheme cannot name a line.
+        """
+        from pandid.render.furniture import _run_values
+
+        self.renumber_streams()
+        runs = list(self._named_runs().values())
+        keys = dict.fromkeys(k for run in runs for s in run for k in s.properties)
+        clash = [k for k in keys if k in _LINE_LIST_COLUMNS]
+        if clash:
+            raise ValueError(
+                f"the stream property {clash[0]!r} has the name of a line_list() "
+                f"column, so a row cannot hold both. Rename it in the stream's "
+                f"properties, e.g. stream.properties = {{{clash[0].title()!r}: ...}}"
+            )
+        rows = []
+        for run in runs:
+            starts, ends = _line_ends(run)
+            values = _run_values(run)
+            rows.append({
+                "line": run[0].name,
+                "kind": run[0].kind,
+                **{f: next((getattr(s, f) for s in run if getattr(s, f) is not None), None)
+                   for f in _LINE_FIELDS},
+                "from_unit": ", ".join(p.owner.name for p in starts),
+                "from_nozzle": ", ".join(p.name for p in starts),
+                "to_unit": ", ".join(p.owner.name for p in ends),
+                "to_nozzle": ", ".join(p.name for p in ends),
+                **{k: values.get(k) for k in keys},
+            })
+        return rows
+
+    def equipment_list(self) -> list[dict]:
+        """Return the equipment list: one row per tagged equipment item.
+
+        The rows are the units
+        :func:`pandid.document.equipment_table` lists by default. Every
+        row has the keys ``tag``, ``description`` (the table's text),
+        ``class`` (the unit's class name) and ``variant``.
+
+        Returns
+        -------
+        list[dict]
+            Rows in sheet order.
+        """
+        from pandid.document import _described, _scheduled_units
+
+        return [{"tag": u.name, "description": _described(u),
+                 "class": type(u).__name__, "variant": u.variant}
+                for u in _scheduled_units(self)]
+
+    def instrument_index(self) -> list[dict]:
+        """Return the instrument index: one row per instrument balloon.
+
+        Every row has the keys ``tag``, ``loop`` (the measured
+        variable and loop number, such as ``"F-101"``),
+        ``measured_variable`` (the first letter), ``function_letters``,
+        ``location`` (``"field"``, ``"central"`` or ``"subsidiary"``),
+        ``on`` (the line or unit the balloon is attached to) and
+        ``relation`` (``"sensing"``, ``"acting_on"`` or ``"near"``).
+        ``on`` and ``relation`` are ``None`` on an unattached balloon.
+
+        Returns
+        -------
+        list[dict]
+            Rows in sheet order.
+
+        Raises
+        ------
+        ValueError
+            If a naming scheme cannot name a line.
+        """
+        from pandid.units import Instrument
+
+        self.renumber_streams()
+        return [{"tag": u.tag,
+                 "loop": f"{u.type[:1]}-{u.number}" if u.number else "",
+                 "measured_variable": u.type[:1],
+                 "function_letters": u.type,
+                 "location": u.display,
+                 "on": None if u.host is None else u.host.name,
+                 "relation": None if u.host is None else u.relation}
+                for u in self.units if isinstance(u, Instrument)]
 
     def layout(self, engine=None) -> None:
         """Lay out every unit, replacing any previous frames.

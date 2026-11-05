@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
+  the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
+
 ### Deprecated
 
 These are removed in 0.3.0.
