@@ -1,6 +1,7 @@
 """Check obstacle geometry, path search, crossing pricing, and the default router."""
 
 import heapq
+import itertools
 import re
 import warnings
 from collections.abc import Callable
@@ -553,7 +554,7 @@ def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
 
 
 def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
-    """Price the bend a side arrival makes with the goal stub."""
+    """Cross a line at the goal rather than turn into the stub to dodge it."""
     graph = _graph(
         [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],  # Arrive in line with the stub.
         [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],  # Arrive from the side.
@@ -566,12 +567,53 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
     assert (0.0, 0.0) in routed, f"bought a bend to dodge a 10px crossing: {routed}"
     assert (20.0, -20.0) not in routed, f"bought a bend to dodge a 10px crossing: {routed}"
 
-    # Confirm the graph is unbiased: either route may win without the index.
-    tied = find_path(graph, (0.0, -20.0), (20.0, 0.0), None, "W")
-    assert tied in (
-        [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],
-        [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],
+
+@pytest.mark.parametrize("index", [None, CrossingIndex()], ids=["no-index", "empty-index"])
+def test_a_side_arrival_pays_the_bend_it_draws_into_the_goal_stub(
+    index: CrossingIndex | None,
+) -> None:
+    """Prefer the arrival in line with the goal stub, one bend fewer."""
+    inline = [(0.0, 0.0), (40.0, 0.0), (40.0, 20.0)]
+    side = [(0.0, 0.0), (0.0, 20.0), (40.0, 20.0)]
+    dearer = {((0.0, 0.0), (40.0, 0.0)): 5.0}  # Make the inline arrival 5 px dearer.
+    routed = find_path(
+        _graph(inline, side), (0.0, 0.0), (40.0, 20.0), None, "N", dearer, crossing_index=index
     )
+    assert routed == inline, f"turned into the stub from the side: {routed}"
+
+
+@pytest.mark.parametrize("side_first", [False, True], ids=["inline-first", "side-first"])
+def test_a_side_arrival_wins_a_tie_with_an_inline_arrival(side_first: bool) -> None:
+    """Keep the side arrival when both draw two bends over the same length."""
+    inline = [(0.0, 0.0), (0.0, 10.0), (40.0, 10.0), (40.0, 20.0)]
+    side = [(0.0, 0.0), (0.0, 20.0), (40.0, 20.0)]
+    inline_cost = _final_g(_graph(inline), (0.0, 0.0), (40.0, 20.0), None, "N")
+    side_cost = _final_g(_graph(side), (0.0, 0.0), (40.0, 20.0), None, "N")
+    assert side_cost < inline_cost
+    assert side_cost == pytest.approx(inline_cost)
+
+    graph = _graph(side, inline) if side_first else _graph(inline, side)
+    routed = find_path(graph, (0.0, 0.0), (40.0, 20.0), None, "N")
+    assert routed == side, f"broke the tie towards the inline arrival: {routed}"
+
+
+def test_the_estimate_keeps_every_search_on_a_grid_cheapest(monkeypatch: pytest.MonkeyPatch):
+    """Find the cost a blind search finds, for every end and direction."""
+    ticks = [0.0, 10.0, 20.0, 30.0]
+    graph = _graph(
+        *[[(x, y) for x in ticks] for y in ticks],
+        *[[(x, y) for y in ticks] for x in ticks],
+    )
+    points = [(x, y) for x in ticks for y in ticks]
+    dirs = [None, "N", "S", "E", "W"]
+    for start, goal, start_dir, goal_dir in itertools.product(points, points, dirs, dirs[1:]):
+        if start == goal or not find_path(graph, start, goal, start_dir, goal_dir):
+            continue
+        guided = _final_g(graph, start, goal, start_dir, goal_dir)
+        with monkeypatch.context() as patch:
+            patch.setattr(astar, "heuristic", lambda *_: 0.0)
+            blind = _final_g(graph, start, goal, start_dir, goal_dir)
+        assert guided == pytest.approx(blind, abs=1e-9), (start, goal, start_dir, goal_dir)
 
 
 def test_a_recycle_search_returns_the_cheapest_path():
@@ -800,6 +842,106 @@ def test_separation_keeps_a_run_out_of_the_unit_its_stream_joins() -> None:
     ]
 
 
+@pytest.mark.parametrize("start", [1033.0, 1027.0], ids=["nozzle-on-face", "nozzle-inside"])
+def test_separation_keeps_a_stretched_segment_out_of_its_streams_end_unit(start: float) -> None:
+    """Refuse a track whose stretched first segment runs back through the source."""
+    from pandid.geometry import Frame
+    from pandid.routing.separation import separate_streams
+    from pandid.units import Tee
+
+    fs = Flowsheet("stretched leg")
+    source = fs.add(Tee("T1"))
+    dest = fs.add(Tee("T2"))
+    other_feed = fs.add(Feed("F2"))
+    other_product = fs.add(Product("P2"))
+    for unit in (other_feed, other_product):
+        unit.frame = Frame(x=2000.0, y=2000.0, w=10.0, h=10.0)
+    source.frame = Frame(x=706.0, y=1021.0, w=12.0, h=12.0)
+    dest.frame = Frame(x=480.0, y=1039.0, w=12.0, h=12.0)
+    run = fs.connect(source.branch, dest.inlet)
+    original = [(712.0, start), (712.0, 1037.0), (454.0, 1037.0), (454.0, 1045.0), (480.0, 1045.0)]
+    run.route = Route(list(original))
+    nearby = fs.connect(other_feed.outlet, other_product.inlet)
+    nearby.route = Route([(500.0, 1033.0), (700.0, 1033.0), (700.0, 900.0)])
+
+    separate_streams(fs)
+    assert run.route is not None
+    points = run.route.waypoints
+    # The first segment still leaves the source downwards.
+    assert points[1][1] > start
+    boxes = [Rect(706.0, 718.0, 1021.0, 1033.0), Rect(480.0, 492.0, 1039.0, 1051.0)]
+    assert not any(
+        box.intersects_segment(*a, *b) for box in boxes for a, b in zip(points[1:], points[2:])
+    )
+    assert points != original
+
+
+# The first moves a run whose leg also reaches into the pump; the
+# second moves a run past the pump's middle with both legs clear of it.
+_BESIDE_A_PUMP = {
+    "leg-into-pump": (
+        [
+            (402.0, 234.5),
+            (427.0, 234.5),
+            (485.75, 234.5),
+            (485.75, 289.0),
+            (621.32, 289.0),
+            (621.32, 234.5),
+            (599.0, 234.5),
+            (599.0, 259.5),
+        ],
+        [(648.42, 294.2), (623.42, 294.2), (623.42, 162.1), (561.7, 162.1), (561.7, 187.1)],
+        4,
+        1,
+    ),
+    "run-through-pump": (
+        [
+            (400.0, 150.0),
+            (425.0, 150.0),
+            (621.0, 150.0),
+            (621.0, 300.0),
+            (425.0, 300.0),
+            (400.0, 300.0),
+        ],
+        [(623.0, 330.0), (623.0, 120.0)],
+        2,
+        0,
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("route", "other", "turn", "other_turn"), _BESIDE_A_PUMP.values(), ids=_BESIDE_A_PUMP.keys()
+)
+def test_separation_keeps_a_run_out_of_a_unit_its_stream_does_not_join(
+    route: list[tuple[float, float]],
+    other: list[tuple[float, float]],
+    turn: int,
+    other_turn: int,
+) -> None:
+    """Move a run off a shared track without moving it into a pump beside it."""
+    from pandid.geometry import Frame
+    from pandid.routing.separation import separate_streams
+
+    fs = Flowsheet("unrelated unit")
+    pump = fs.add(Pump("P-1"))
+    pump.frame = Frame(x=624.0, y=187.0, w=70.0, h=67.0)
+    ends = [fs.add(Feed("F1")), fs.add(Product("P1")), fs.add(Feed("F2")), fs.add(Product("P2"))]
+    for unit in ends:
+        unit.frame = Frame(x=2000.0, y=2000.0, w=10.0, h=10.0)
+    run = fs.connect(ends[0].outlet, ends[1].inlet)
+    run.route = Route(list(route))
+    nearby = fs.connect(ends[2].outlet, ends[3].inlet)
+    nearby.route = Route(list(other))
+
+    separate_streams(fs)
+    assert run.route is not None and nearby.route is not None
+    points = run.route.waypoints
+    box = Rect(624.0, 694.0, 187.0, 254.0)
+    assert not any(box.intersects_segment(*a, *b) for a, b in zip(points, points[1:]))
+    assert abs(points[turn][0] - nearby.route.waypoints[other_turn][0]) >= 6.0 - 1e-9
+
+
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
     """Preview separation without changing routes, and match the real pass."""
     from pandid.routing.separation import preview_separated_waypoints, separate_streams
@@ -815,7 +957,7 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
     s2.route = Route([(100.0, 50.0), (100.0, 100.0), (400.0, 100.0), (400.0, 150.0)])
 
     raw_s1, raw_s2 = list(s1.route.waypoints), list(s2.route.waypoints)
-    preview = preview_separated_waypoints(fs.streams)
+    preview = preview_separated_waypoints(fs.streams, fs.units)
 
     # Leave the stored waypoints unchanged.
     assert s1.route.waypoints == raw_s1
@@ -834,7 +976,7 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     """Record the separated route so later streams price its drawn path."""
     from pandid.routing import separation
 
-    def lowered(streams: list[Stream]) -> dict[int, list[tuple[float, float]]]:
+    def lowered(streams: list[Stream], units: object) -> dict[int, list[tuple[float, float]]]:
         """Return every route 6 px lower, as a separation preview."""
         return {
             id(s): [(x, y + 6.0) for x, y in s.route.waypoints]
