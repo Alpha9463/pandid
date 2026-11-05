@@ -9,6 +9,7 @@ variants by default, so ``Cyclone("S-1")`` draws
 
 from pandid.ports import Port
 from pandid.units import (
+    Blower,
     Compressor,
     Conveyor,
     Crusher,
@@ -39,6 +40,8 @@ __all__ = [
     "ReciprocatingCompressor",
     "RotaryCompressor",
     "LiquidRingCompressor",
+    "CentrifugalFan",
+    "AxialFan",
     "ShellAndTubeExchanger",
     "DoublePipeExchanger",
     "KettleReboiler",
@@ -238,6 +241,35 @@ class LiquidRingCompressor(Compressor):
 
     VARIANTS = ("default", "liquid_ring")
     VARIANT_ALIASES = {"default": "liquid_ring"}
+
+    suction: Port
+    discharge: Port
+
+
+class CentrifugalFan(Blower):
+    """Centrifugal fan: an impeller in a scroll casing.
+
+    ``suction`` enters the eye from the west and ``discharge`` leaves
+    the scroll's outlet on the east.
+
+    Parameters are those of :class:`~pandid.units.Blower`.
+    """
+
+    VARIANTS = ("default", "centrifugal")
+    VARIANT_ALIASES = {"default": "centrifugal"}
+
+    suction: Port
+    discharge: Port
+
+
+class AxialFan(Blower):
+    """Axial fan: a propeller across the duct, gas straight through.
+
+    Parameters are those of :class:`~pandid.units.Blower`.
+    """
+
+    VARIANTS = ("default", "axial")
+    VARIANT_ALIASES = {"default": "axial"}
 
     suction: Port
     discharge: Port
