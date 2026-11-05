@@ -1278,8 +1278,9 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   ) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
-    Each family is spread about the stencil's anchor within
-    :attr:`Symbol.bands`; a role with one member keeps its full menu.
+    Each family is spread about the stencil's anchor within the part of
+    :attr:`Symbol.bands` nearer its face than either end of the box; a
+    role with one member keeps its full menu.
 
     Parameters
     ----------

@@ -52,6 +52,9 @@ These are removed in 0.4.0.
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
   connected with `draw_as_recycle=True`, before or after the sheet is rendered.
+- A vessel whose supports, manholes or sockets widen its box draws every inlet
+  or outlet on the wall it was given, so
+  `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
 
 ## [0.2.0] - 2026-11-05
 
