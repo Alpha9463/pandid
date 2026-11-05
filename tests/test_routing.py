@@ -9,10 +9,12 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from _layout_cases import build_unpinned
 
 from pandid import ControlValve, ShellAndTubeExchanger
 from pandid.flowsheet import Flowsheet
 from pandid.geometry import Route
+from pandid.route_geometry import SNAP
 from pandid.streams import Stream
 from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.portgeom import outward_dir
@@ -114,6 +116,36 @@ def test_a_lane_beside_a_tag_or_its_own_unit_stays_a_way_through(valve_at):
     fs.add_control_loop("T", 101, measuring=cooler, acting_on=valve)
     fs.to_svg(diagram="p&id")
     assert fs.validate(diagram="p&id") == []
+
+
+def _hairline_runs(points: list[tuple[float, float]]) -> list[tuple[tuple[float, float], ...]]:
+    """Return each run of a route shorter than ``SNAP``."""
+    return [
+        (p, q) for p, q in zip(points, points[1:]) if 0 < abs(p[0] - q[0]) + abs(p[1] - q[1]) < SNAP
+    ]
+
+
+def test_nozzles_out_of_line_by_rounding_error_are_joined_straight():
+    """Route one straight run between nozzles 1e-14 px out of line."""
+    fs = Flowsheet("rounding error")
+    feed = fs.add(Feed("F")).pin(port="outlet", x=100, y=200.3)
+    product = fs.add(Product("P")).pin(port="inlet", x=400, y=200.1 + 0.2)
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.route()
+    assert line.route is not None
+    assert not _hairline_runs(line.route.waypoints), line.route.waypoints
+
+
+def test_no_line_on_the_stripped_dryer_jogs_by_rounding_error():
+    """Route 400-WG-501-CS straight to XV-501B, 1e-14 px out of line."""
+    fs = build_unpinned("19_molecular_sieve_dryer")[0]
+    fs.route()
+    jogs = [
+        (s.name, _hairline_runs(s.route.waypoints))
+        for s in fs.streams
+        if s.route is not None and not s.route.manual
+    ]
+    assert not [(name, runs) for name, runs in jogs if runs]
 
 
 def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():
