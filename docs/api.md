@@ -199,8 +199,11 @@ Validation reports `gravity-turned` when one is rotated away from it.
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
-`software` or `capillary`. When omitted, two energy/utility ports make an energy
-stream; other process ports make a material stream.
+`software` or `capillary`. When omitted, a signal line to a valve with a
+diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
+electric; two energy/utility ports make an energy stream; other process ports
+make a material stream. `add_control_loop()` infers its output line the same way
+unless `output_kind=` is given.
 
 `connect()` also accepts `name`, `draw_as_recycle`, `ends` and line-number fields
 `size`, `schedule`, `service`, `sequence`, `spec` and `insulation`. The first
@@ -315,6 +318,40 @@ routes through unrelated units, large detours, crowded nozzles and undrawn
 labels. `fs.render(..., check=True)` raises on errors; warnings from the last
 render are in `fs.warnings`. The `diagram` argument selects the drawing
 conventions used by validation.
+
+### A set of sheets
+
+```python
+from pandid import Document, Feed, Flowsheet, Product, Pump, TitleBlock
+
+crude = Flowsheet("Crude unit")
+crude.title_block = TitleBlock(drawing_number="PFD-001")
+feed = crude.add(Feed("Crude Oil"))
+pump = crude.add(Pump("P-101"))
+to_residue = crude.add(Product("Crude", reference="PFD-002"))
+crude.connect(feed.outlet, pump.suction)
+crude.connect(pump.discharge, to_residue.inlet)
+
+residue = Flowsheet("Residue unit")
+residue.title_block = TitleBlock(drawing_number="PFD-002")
+from_crude = residue.add(Feed("Crude", reference="PFD-001"))
+product = residue.add(Product("Residue"))
+residue.connect(from_crude.outlet, product.inlet)
+
+print(Document([crude, residue]).validate())  # []
+```
+
+`Document(sheets).validate()` checks sheets against each other and returns
+`Issue` objects, errors first. A sheet's drawing number is its
+`title_block.drawing_number`. A `Feed` or `Product` with `reference=` is an
+off-page connector. Its partner is the flag of the other direction on the
+referenced sheet whose `reference=` names this sheet and that has the same tag,
+or else the same line number. Errors are a connector without a partner,
+partners whose lines differ in line number, service or size, one tag on
+different kinds of equipment, a drawing number on two sheets, and a sheet
+without a number that another sheet has to point back at. A reference to a
+drawing outside the set is a warning. Each sheet's own findings still come
+from `fs.validate()`.
 
 ## Declaring a flowsheet as data
 

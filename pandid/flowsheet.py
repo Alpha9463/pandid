@@ -141,7 +141,9 @@ _OUTPUT_FORMATS = frozenset({"", ".svg", ".pdf", ".png", ".drawio"})
 def _inferred_kind(src: "Port", dst: "Port") -> str:
     """Return the stream kind two ports imply.
 
-    Two energy or utility ports imply ``"energy"``.
+    Two signal ports imply ``"pneumatic"`` when one is the actuator of
+    a valve drawn with a diaphragm or with no actuator, else
+    ``"electric"``; two energy or utility ports imply ``"energy"``.
 
     Parameters
     ----------
@@ -151,8 +153,15 @@ def _inferred_kind(src: "Port", dst: "Port") -> str:
     Returns
     -------
     str
-        ``"energy"`` or ``"material"``.
+        ``"pneumatic"``, ``"electric"``, ``"energy"`` or ``"material"``.
     """
+    if src.role == "signal":
+        from pandid.render.symbols import variant_actuator
+
+        air = any(p.name == "actuator"
+                  and variant_actuator(p.owner.variant) in ("", "diaphragm")
+                  for p in (src, dst))
+        return "pneumatic" if air else "electric"
     return ("energy" if src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES
             else "material")
 
@@ -1367,7 +1376,7 @@ class Flowsheet:
         controller_offset: float | None = None,
         transmitter_letters: str | None = None, controller_letters: str | None = None,
         controller_variant: str = "shared",
-        measurement_kind: str = "electric", output_kind: str = "pneumatic",
+        measurement_kind: str = "electric", output_kind: str | None = None,
     ) -> "ControlLoop":
         """Add a control loop around a final control element.
 
@@ -1405,8 +1414,9 @@ class Flowsheet:
             Controller balloon symbol.
         measurement_kind : str, default="electric"
             Kind of the transmitter-to-controller signal.
-        output_kind : str, default="pneumatic"
-            Kind of the controller-to-element signal.
+        output_kind : str or None, optional
+            Kind of the controller-to-element signal; ``None`` infers
+            it as :meth:`connect` does.
 
         Returns
         -------
@@ -1820,9 +1830,11 @@ class Flowsheet:
         dst : Port or Unit
             Destination port, or a unit for a signal line.
         kind : str or None, optional
-            One of :data:`~pandid.streams.STREAM_KINDS`, required for a
-            signal line; ``None`` infers ``"energy"`` between two energy
-            or utility ports, else ``"material"``.
+            One of :data:`~pandid.streams.STREAM_KINDS`. ``None`` infers
+            ``"pneumatic"`` for a signal line to the actuator of a valve
+            drawn with a diaphragm or with no actuator, ``"electric"``
+            for another signal line, ``"energy"`` between two energy or
+            utility ports, else ``"material"``.
         name : str or None, optional
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False
@@ -1925,8 +1937,12 @@ class Flowsheet:
             check_connections(ends)
         stated = kind is not None
         if kind is None:
-            # Check as material; the inferred kind is applied last.
-            kind = "material"
+            # Check as signal or process; apply the inferred kind last.
+            from pandid.ports import Port
+            from pandid.units import Instrument
+            signal = any(end.role == "signal" if isinstance(end, Port)
+                         else isinstance(end, Instrument) for end in (src, dst))
+            kind = "electric" if signal else "material"
         elif kind not in STREAM_KINDS:
             raise ValueError(
                 f"Stream kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}"

@@ -1381,6 +1381,22 @@ ACTUATORS: tuple[str, ...] = ("diaphragm", "motor", "solenoid", "hydraulic",
                               "handwheel")
 
 
+def variant_actuator(variant: str) -> str:
+    """Return the actuator a valve variant draws, from :data:`ACTUATED`.
+
+    Parameters
+    ----------
+    variant : str
+        Resolved valve variant.
+
+    Returns
+    -------
+    str
+        One of :data:`ACTUATORS`, or ``""`` if the variant draws none.
+    """
+    return next((a for (_, a), drawn in ACTUATED.items() if drawn == variant), "")
+
+
 def actuated_variant(body: str, actuator: str) -> str:
     """Return the variant drawing ``body`` with ``actuator`` on it.
 
