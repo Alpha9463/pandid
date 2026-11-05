@@ -2511,6 +2511,45 @@ def test_a_balloon_hung_across_the_tapped_line_settles_clear_of_it(
     assert [i.code for i in fs.validate() if i.code.startswith("route-")] == []
 
 
+def test_keeping_a_hung_balloon_further_off_keeps_a_settled_drawing() -> None:
+    """Keep the settled drawing the touch-clear step finds when a wider gap does worse."""
+    from pandid.layout.control import _flaws, _taps_off
+
+    fs = Flowsheet("wider gap")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=200)
+    fs.add(U.Vessel("V")).pin(x=300, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.7, offset=60, angle=270)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="N", offset=45, angle=90)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+    assert _flaws(fs)["tap-through-unit"] == 0
+
+
+def test_a_refused_retry_keeps_the_hung_balloons_it_started_from() -> None:
+    """Put back the drawing before a refused retry, not the one before every step."""
+    from pandid.layout.control import _flaws, _taps_off
+
+    fs = Flowsheet("refused retry")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=100)
+    fs.add(U.Vessel("V")).pin(x=300, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=70, angle=180)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="E", offset=100, angle=45)
+    pt = fs.add_instrument("PT", 1, sensing=line, at=0.3, offset=70)
+    fs.add_instrument("PIC", 1, near=pt, face="S", offset=50)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert id(pt) not in _taps_off(fs)
+    assert _flaws(fs)["tap-through-unit"] == 0
+
+
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
 

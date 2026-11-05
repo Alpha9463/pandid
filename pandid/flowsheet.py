@@ -651,9 +651,9 @@ class Flowsheet:
         self._plain_state: tuple | None = None
         self._plain_stale = False
         self._routing = False
-        # Whether a balloon hung from a balloon keeps off the tapped line,
-        # and whether any did since route() turned that on.
-        self._keep_clear = False
+        # Gap a balloon hung from a balloon keeps from the tapped line, 0
+        # for none, and whether any kept one since route() set it.
+        self._keep_clear = 0.0
         self._kept_clear = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
@@ -2486,7 +2486,8 @@ class Flowsheet:
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, TOUCHING, _chained, free_face
+        from pandid.render.symbols import ARROWHEAD
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
         from pandid.validate import geometry_issues
@@ -2500,47 +2501,65 @@ class Flowsheet:
                     break
                 router.route(self)
 
-        def attempt(may_hang: bool, keep_clear: bool) -> None:
+        def attempt(may_hang: bool, keep_clear: float, unrouted: bool = False) -> None:
             """Place balloons again, and keep that only if a balloon moved as
             asked and no finding or clash grew, nor, keeping balloons clear,
-            any tap left its line. Keeping balloons clear, a placement that
-            does not settle is made again from the sheet with its automatic
-            routes cleared.
+            any tap left its line.
 
             Parameters
             ----------
             may_hang : bool
                 Hang each controller it can off its actuator.
-            keep_clear : bool
-                Keep each balloon hung from a balloon off the line its chain
-                taps, count shared runs per straight run, and ask for one
-                kept clear rather than one hung.
+            keep_clear : float
+                Gap to keep each balloon hung from a balloon from the line
+                its chain taps, 0 for none. Keeping one, count shared runs
+                per straight run, and ask for one kept clear rather than one
+                hung.
+            unrouted : bool, default=False
+                Place from the sheet with its automatic routes cleared.
             """
             prior = self._geometry()
-            before, off = _flaws(self, full=keep_clear), _taps_off(self)
+            full = bool(keep_clear)
+            before, off = _flaws(self, full=full), _taps_off(self)
             self._may_hang, self._hung = may_hang, set()
             self._keep_clear, self._kept_clear = keep_clear, False
             try:
-                place()
-                if keep_clear and not self.route_converged:
-                    self._put_geometry(prior, keep_manual=False)
+                if unrouted:
                     for st in self.streams:
                         if st.route is not None and not st.route.manual:
                             st.route = None
                     place_control(self)
                     router.route(self)
-                    place()
-                done = (self._kept_clear and _taps_off(self) <= off) if keep_clear else self._hung
+                place()
+                done = (self._kept_clear and _taps_off(self) <= off) if full else self._hung
                 kept = done and not any(
-                    n > before[k] for k, n in _flaws(self, full=keep_clear).items())
+                    n > before[k] for k, n in _flaws(self, full=full).items())
             except Exception:
                 kept = False
             finally:
-                self._may_hang = self._keep_clear = False
+                self._may_hang, self._keep_clear = False, 0.0
             if not kept:
                 self._put_geometry(prior, keep_manual=False)
             elif self._unhung is None:
                 self._unhung = prior
+
+        def keep_off(may_hang: bool) -> None:
+            """Keep each balloon hung from a balloon off its tapped line.
+
+            Each step is an :func:`attempt` on the drawing the last one
+            left: a touch clear, then an arrowhead clear, then, where the
+            sheet has not settled, an arrowhead clear placed from the sheet
+            with its automatic routes cleared.
+
+            Parameters
+            ----------
+            may_hang : bool
+                Hang each controller it can off its actuator.
+            """
+            attempt(may_hang, TOUCHING)
+            attempt(may_hang, ARROWHEAD)
+            if not self.route_converged:
+                attempt(may_hang, ARROWHEAD, unrouted=True)
 
         def settle() -> None:
             """Route the laid-out sheet and place its balloons."""
@@ -2555,15 +2574,15 @@ class Flowsheet:
             chained = tries and any(_chained(u) for u in self.units)
             off = _taps_off(self) if hang else set()
             if hang:
-                attempt(may_hang=True, keep_clear=False)
+                attempt(may_hang=True, keep_clear=0.0)
             if chained:
-                attempt(may_hang=self._unhung is not None, keep_clear=True)
+                keep_off(may_hang=self._unhung is not None)
             # Where hanging left a tap off its line, place as if nothing
             # could hang.
             if hang and not _taps_off(self) <= off:
                 self._unhang()
                 if chained:
-                    attempt(may_hang=False, keep_clear=True)
+                    keep_off(may_hang=False)
 
         def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
             """Redo the sheet, and undo that if a finding or clash grew or a
