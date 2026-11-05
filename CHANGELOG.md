@@ -44,6 +44,8 @@ These are removed in 0.4.0.
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 - Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
   sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
+- `route()` no longer turns a line into a nozzle from the side when it could
+  run straight in with one bend fewer.
 - A `Reactor` sets its feeds far enough apart that their arrowheads do not
   touch, so `Reactor("R-1", n_feeds=2)` no longer raises `nozzles-crowded`.
 - Lines drawn side by side no longer push a pipe into a unit body: a run moved
@@ -53,6 +55,11 @@ These are removed in 0.4.0.
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
   connected with `draw_as_recycle=True`, before or after the sheet is rendered.
+- A tank or vessel with several inlets or outlets on one wall, such as
+  `Tank("TK-1", outputs=["S"] * 4)`, gives each its own nozzle clear of the
+  vent, relief and drain on that wall.
+- Equipment or a line valve that would be drawn on a balloon pinned with
+  `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
 
 ## [0.2.0] - 2026-11-05
 
