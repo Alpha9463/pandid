@@ -323,6 +323,8 @@
     <path d="M 187.2,650.0 L 180.9,647.6 L 185.3,643.6 Z" fill="black" />
     <rect x="401.5" y="623.5" width="77.7" height="13.0" fill="white" />
     <text x="440.4" y="630.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">200-SG-302-CS</text>
+    <rect x="521.6" y="613.0" width="76.6" height="13.0" fill="white" />
+    <text x="559.9" y="619.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-303-CS</text>
     <rect x="954.6" y="529.2" width="13.0" height="76.6" fill="white" />
     <text x="961.1" y="567.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 961.1, 567.5)">350-LG-314-CS</text>
     <rect x="1166.3" y="397.5" width="76.0" height="13.0" fill="white" />
@@ -337,6 +339,8 @@
     <text x="1591.4" y="1135.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-CM-307-SS</text>
     <rect x="1710.2" y="968.5" width="76.6" height="13.0" fill="white" />
     <text x="1748.5" y="975.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-308-CS</text>
+    <rect x="2080.3" y="999.5" width="72.1" height="13.0" fill="white" />
+    <text x="2116.3" y="1006.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-PG-309-CS</text>
     <rect x="2107.6" y="867.5" width="76.6" height="13.0" fill="white" />
     <text x="2145.9" y="874.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-316-CS</text>
     <rect x="1426.3" y="654.5" width="76.6" height="13.0" fill="white" />
