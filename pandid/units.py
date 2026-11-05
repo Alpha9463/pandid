@@ -12,7 +12,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypedDict, TypeVar, Unpack
 
-from pandid._checks import check_real, check_whole, is_whole, suggest
+from pandid._checks import check_real, check_whole, is_real, is_whole, suggest
 from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
@@ -1014,7 +1014,9 @@ class _Boundary(Unit):
     """Base for the off-page flags :class:`Feed` and :class:`Product`.
 
     The flag's port takes any number of streams, all drawn from its tip.
-    ``pin(x=..., y=...)`` places the port unless ``port=None``.
+    ``pin(x=..., y=...)`` places the port unless ``port=None``. A
+    ``height`` leaves room to letter the flag: 42 or more, or 48 or more
+    with a ``reference``.
 
     Parameters
     ----------
@@ -1041,6 +1043,46 @@ class _Boundary(Unit):
         self.header = bool(header)
         # Drawn label, kept when a repeated header is renamed.
         self._tag = name
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set an attribute, refusing a height too short to letter the flag.
+
+        The pennant is inset from the top and bottom of the flag's
+        height and holds a line of type for the tag, and another for a
+        ``reference``.
+
+        Parameters
+        ----------
+        name : str
+            Attribute name.
+        value : Any
+            New value.
+
+        Raises
+        ------
+        ValueError
+            If ``height``, or ``reference`` with ``height`` set, leaves
+            the pennant too short for its lettering; the flag is left
+            unchanged.
+        """
+        # A height set in __init__ is checked when the reference is set.
+        if name == "reference" or (name == "height" and "reference" in self.__dict__):
+            from pandid.document import _drawn_text
+            from pandid.portgeom import FLAG_INSET, FLAG_INSET_REF
+            from pandid.render.symbols import _TAG_TYPE
+
+            height = value if name == "height" else self.__dict__.get("height", 0)
+            lettered = _drawn_text(value if name == "reference"
+                                   else self.__dict__.get("reference"))
+            least = (2 * (FLAG_INSET_REF if lettered else FLAG_INSET)
+                     + (2 if lettered else 1) * _TAG_TYPE)
+            if is_real(height) and 0 < height < least:
+                raise ValueError(
+                    f"{self.__dict__.get('name', '?')}: a height of {height:g} is too small "
+                    f"to letter a {type(self).__name__} flag"
+                    f"{' with a reference' if lettered else ''}; give height={least:g} or more"
+                )
+        super().__setattr__(name, value)
 
     @property
     def tag(self) -> str:

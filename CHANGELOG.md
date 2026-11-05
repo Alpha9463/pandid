@@ -104,8 +104,9 @@ These are removed in 0.4.0.
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
-- A `Feed` or `Product` given a small `height`, such as
-  `Feed("Air", height=20)`, draws instead of raising `nozzle-off-body`.
+- A `Feed` or `Product` too short to letter, such as `Feed("Air", height=20)`,
+  is refused with the height that fits, `height=42`, or `height=48` with a
+  `reference`, instead of failing `nozzle-off-body` when drawn.
 - Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
   as its pennant is drawn, not of the blank paper above and below it, so a
   sheet with a flag at its top or bottom is framed tighter.
