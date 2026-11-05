@@ -1072,7 +1072,7 @@ class DrawioRenderer:
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
                           "align=center",
                           _drawn_type(_TAG_TYPE, fit, lines=len(parts),
-                                      box=self._cell_box(u))], (0.0, 0.0)
+                                      box=unit_box(u, u.frame))], (0.0, 0.0)
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
@@ -1082,7 +1082,7 @@ class DrawioRenderer:
             # Centred inside the flag, capped to fit it.
             return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE["center"] + [
                 _drawn_type(_TAG_TYPE, fit, lines=len(lines),
-                            box=self._cell_box(u))], (0.0, 0.0)
+                            box=unit_box(u, u.frame))], (0.0, 0.0)
         if closed_marking(u, default_registry) == "NC":
             lines.append("NC")
         letters = fail_marking(u)
@@ -1091,7 +1091,7 @@ class DrawioRenderer:
         side, dx, dy, near = tags.at.get(id(u), (
             (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0, None))
         offset = (fit.length(dx), fit.length(dy))
-        x0, _y0, x1, _y1 = fit.box(self._cell_box(u))
+        x0, _y0, x1, _y1 = fit.box(unit_box(u, u.frame))
         one_line = len(lines) == 1 and not (
             wraps and F.text_width(lines[0], fit.length(_TAG_TYPE)) > x1 - x0 - 2 * _TEXT_INSET)
         if near is not None and one_line:
@@ -1104,24 +1104,6 @@ class DrawioRenderer:
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
         ) + [_drawn_type(_TAG_TYPE, fit)], offset
-
-    @staticmethod
-    def _cell_box(u) -> "tuple[float, float, float, float]":
-        """Return the cell box for a unit.
-
-        Parameters
-        ----------
-        u : Unit
-            Placed unit; an off-page flag uses its pennant box.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            ``(x0, y0, x1, y1)``.
-        """
-        if u.kind in ("feed", "product"):
-            return boundary_flag(u, u.frame).box
-        return unit_box(u, u.frame)
 
     def _vertex(self, u, index: int, fit: "_Fit", tags: "_Tags") -> list[str]:
         """Return one unit as a draw.io vertex and its child cells.
@@ -1150,7 +1132,7 @@ class DrawioRenderer:
                 f"{u.name} has no draw.io stencil and is exported as a stand-in, "
                 f"which loses {approx.lost}"))
         self._report_reshape(u, sym, approx)
-        x0, y0, x1, y1 = fit.box(self._cell_box(u))
+        x0, y0, x1, y1 = fit.box(unit_box(u, u.frame))
         placement, _, _ = self._placement(u, sym)
         shape = self._shape(u, sym, fit)
         text, label_keys, (dx, dy) = self._label(u, fit, tags, "whiteSpace=wrap" in shape)
@@ -1193,7 +1175,7 @@ class DrawioRenderer:
         """
         if approx is None or sym.stretchable:
             return
-        x0, y0, x1, y1 = self._cell_box(u)
+        x0, y0, x1, y1 = unit_box(u, u.frame)
         w, h = x1 - x0, y1 - y0
         # The symbol's box as placed, turn included.
         _px, _py, bw, bh = symbol_to_box(0.0, 0.0, sym.width, sym.height, *_xform(u.frame))
@@ -1330,7 +1312,7 @@ class DrawioRenderer:
             Fractions of the cell box.
         """
         px, py = point
-        x0, y0, x1, y1 = self._cell_box(u)
+        x0, y0, x1, y1 = unit_box(u, u.frame)
         w, h = x1 - x0, y1 - y0
         fx = (px - x0) / w if w else 0.5
         fy = (py - y0) / h if h else 0.5
@@ -1356,7 +1338,7 @@ class DrawioRenderer:
         """
         if u.kind == "tee":
             # Every leg of a tee runs to its centre.
-            x0, y0, x1, y1 = self._cell_box(u)
+            x0, y0, x1, y1 = unit_box(u, u.frame)
             return self._fraction(u, sym, ((x0 + x1) / 2, (y0 + y1) / 2))
         return self._fraction(u, sym, port_point(u, u.frame, port_name))
 

@@ -290,7 +290,8 @@ def _codes_between_a_flange_and_a_line() -> "tuple[Flowsheet, dict]":
     prod.pin(port="inlet", x=580, y=240)
     riser = fs.connect(feed.outlet, valve.inlet)
     fs.connect(valve.outlet, prod.inlet)
-    fs.add_instrument("PI", 1, sensing=riser, at=0.6).annotate(high="PAH", low="PAL")
+    pi = fs.add_instrument("PI", 1, sensing=riser, at=0.6)
+    pi.annotate(high="PAH", low="PAL").pin(x=301.18, y=217.18)
     other, out = fs.add(U.Feed("F2")), fs.add(U.Product("P2"))
     other.pin(port="outlet", x=100, y=229)
     out.pin(port="inlet", x=600, y=100)
@@ -308,10 +309,11 @@ def _codes_beside_a_fixed_tag() -> "tuple[Flowsheet, dict]":
 def _codes_beside_another_balloon() -> "tuple[Flowsheet, dict]":
     """Build a flanged sheet whose moved codes could crowd a later balloon's onto a line."""
     fs, kwargs = CORPUS["codes_beside_a_flange"]()
-    feed, valve, prod = fs.units[:3]
+    feed, valve, prod, pi = fs.units[:4]
     feed.pin(port="outlet", x=400, y=500)
     valve.pin(port="inlet", x=480, y=440)
     prod.pin(port="inlet", x=680, y=440)
+    pi.pin(x=401.18, y=417.18)
     fs.add_instrument("TI", 2).annotate(high="TAH", low="TAL").pin(x=300, y=417)
     other, out = fs.add(U.Feed("F2")), fs.add(U.Product("P2"))
     other.pin(port="outlet", x=100, y=429)
@@ -347,10 +349,11 @@ def _codes_beside_a_pneumatic_line() -> "tuple[Flowsheet, dict]":
 def _codes_beside_a_stacked_tag() -> "tuple[Flowsheet, dict]":
     """Build a flanged sheet whose codes could leave a flange only for a tag stacked with NC."""
     fs, kwargs = CORPUS["codes_beside_a_flange"]()
-    feed, valve, prod = fs.units[:3]
+    feed, valve, prod, pi = fs.units[:4]
     feed.pin(port="outlet", x=300, y=200)
     valve.pin(port="inlet", x=380, y=140)
     prod.pin(port="inlet", x=580, y=140)
+    pi.pin(x=301.18, y=117.18)
     closed = fs.add(
         U.Valve("HV-2", variant="butterfly", normal_position="closed", label_pos="bottom")
     ).pin(x=260, y=80)

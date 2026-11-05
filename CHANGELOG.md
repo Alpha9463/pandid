@@ -91,6 +91,9 @@ These are removed in 0.4.0.
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
 - A `Feed` or `Product` given a small `height`, such as
   `Feed("Air", height=20)`, draws instead of raising `nozzle-off-body`.
+- Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
+  as its pennant is drawn, not of the blank paper above and below it, so a
+  sheet with a flag at its top or bottom is framed tighter.
 
 ## [0.2.0] - 2026-11-05
 

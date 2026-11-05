@@ -363,37 +363,17 @@ def is_anchored(unit: "Unit", port_name: str) -> bool:
             or _series_point(unit, sym, port_name) is not None)
 
 
-def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
-    """Return a unit's drawn box.
-
-    An unmirrored feed extends left from its port at ``frame.x + 50``.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit to measure.
-    frame : Frame or _Slot
-        Its placement.
-
-    Returns
-    -------
-    tuple[float, float, float, float]
-        ``(x_min, y_min, x_max, y_max)``.
-    """
-    if unit.kind == "feed" and not frame.mirrored:
-        return (frame.x + 50.0 - frame.w, frame.y, frame.x + 50.0, frame.y + frame.h)
-    return (frame.x, frame.y, frame.x + frame.w, frame.y + frame.h)
-
-
-#: Inset of a flag's pennant from its box's top and bottom, without and
-#: with a reference under the tag.
+#: Inset of a flag's pennant from its frame's top and bottom, without
+#: and with a reference under the tag.
 FLAG_INSET, FLAG_INSET_REF = 15, 12
 
 
-def drawn_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
+def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     """Return the box a unit's symbol is drawn in.
 
-    A Feed or Product is its pennant, inset from its unit box.
+    A Feed or Product is its pennant, inset from the top and bottom of
+    its frame. An unmirrored feed extends left from its port at
+    ``frame.x + 50``.
 
     Parameters
     ----------
@@ -407,7 +387,9 @@ def drawn_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     tuple[float, float, float, float]
         ``(x_min, y_min, x_max, y_max)``.
     """
-    x0, y0, x1, y1 = unit_box(unit, frame)
+    x0, y0, x1, y1 = frame.x, frame.y, frame.x + frame.w, frame.y + frame.h
+    if unit.kind == "feed" and not frame.mirrored:
+        x0, x1 = frame.x + 50.0 - frame.w, frame.x + 50.0
     if unit.kind not in ("feed", "product"):
         return x0, y0, x1, y1
     inset = FLAG_INSET_REF if _flag_reference(unit) else FLAG_INSET
@@ -457,7 +439,7 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     KeyError
         If ``face.upper()`` is not ``N``, ``S``, ``E`` or ``W``.
     """
-    x0, y0, x1, y1 = drawn_box(unit, frame)
+    x0, y0, x1, y1 = unit_box(unit, frame)
     return {
         "N": (((x0 + x1) / 2, y0), (0.0, -1.0)),
         "S": (((x0 + x1) / 2, y1), (0.0, 1.0)),

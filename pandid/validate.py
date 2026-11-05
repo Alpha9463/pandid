@@ -951,8 +951,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     """
     from pandid.inline import _INLINE_KINDS
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import (drawn_box, is_anchored, pin_intent, port_faces,
-                                 port_point, resolve_port)
+    from pandid.portgeom import (is_anchored, pin_intent, port_faces, port_point,
+                                 resolve_port, unit_box)
     from pandid.render.svg import crossings, stream_polyline
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
@@ -1072,7 +1072,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         for u in placed:
             errors += _wall_clashes(u)
 
-        boxes = [(u, drawn_box(u, u.frame)) for u in placed]
+        boxes = [(u, unit_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
@@ -1222,7 +1222,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
-            ends = [(u, name, drawn_box(u, u.frame), end.face) if is_anchored(u, name) else None
+            ends = [(u, name, unit_box(u, u.frame), end.face) if is_anchored(u, name) else None
                     for u, name, end in ((src_u, s.source.name, src), (dst_u, s.dest.name, dst))]
             pierced = _pierced_end(path, ends) if len(path) > 1 else None
             if pierced is not None:

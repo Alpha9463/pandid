@@ -1701,7 +1701,7 @@ class Pennant(NamedTuple):
 def boundary_flag(u, frame) -> Pennant:
     """Return the pennant an off-page flag is drawn as.
 
-    The pennant fills :func:`~pandid.portgeom.drawn_box` and points
+    The pennant fills :func:`~pandid.portgeom.unit_box` and points
     east, or west when mirrored.
 
     Parameters
@@ -1716,9 +1716,9 @@ def boundary_flag(u, frame) -> Pennant:
     Pennant
         Flag geometry.
     """
-    from pandid.portgeom import drawn_box
+    from pandid.portgeom import unit_box
 
-    return Pennant(drawn_box(u, frame), FLAG_POINT, not frame.mirrored)
+    return Pennant(unit_box(u, frame), FLAG_POINT, not frame.mirrored)
 
 
 #: Positions of the two strokes of a pneumatic double cross-hatch along
