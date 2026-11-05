@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   electric. `add_control_loop()` infers its output line the same way, so a
   loop acting on a motor or solenoid valve, or on another controller, now
   draws an electric signal.
+- `render()` lays out and checks a sheet faster, most of all when units are
+  pinned by a nozzle.
 
 ### Deprecated
 
