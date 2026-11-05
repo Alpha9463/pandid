@@ -77,6 +77,8 @@ def test_a_stream_with_no_components_is_numbered_as_before():
         ),
         ({}, {"size": 150, "service": "P", "spec": "A1A"}, "150-P-1001-A1A"),
         ({"line_number_start": 100}, {"size": '4"', "service": "P", "spec": "A1A"}, '4"-P-100-A1A'),
+        ({}, {"sequence": 2740}, "2740"),
+        ({"line_numbering_scheme": "{service}-{sequence}"}, {"sequence": "2740"}, "2740"),
     ],
     ids=[
         "unset-leading-components",
@@ -89,6 +91,8 @@ def test_a_stream_with_no_components_is_numbered_as_before():
         "format-spec",
         "numeric-components",
         "line-number-start",
+        "sequence-alone",
+        "sequence-alone-in-a-custom-scheme",
     ],
 )
 def test_a_scheme_writes_the_components_it_names(
@@ -243,12 +247,13 @@ def test_a_scheme_naming_something_that_is_not_a_component_says_so():
     assert "'schedule'" in str(raised.value)
 
 
-def test_components_the_scheme_never_uses_are_not_silently_dropped():
+@pytest.mark.parametrize("components", [{"spec": "A1A"}, {"sequence": "2740"}])
+def test_components_the_scheme_never_uses_are_not_silently_dropped(components: dict[str, Any]):
     fs = Flowsheet("t", line_numbering_scheme="{size}-{service}")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
     with pytest.raises(ValueError, match="line number would be empty"):
-        fs.connect(feed.outlet, prod.inlet, spec="A1A")
+        fs.connect(feed.outlet, prod.inlet, **components)
 
 
 def test_line_components_is_deprecated(same_file: Callable[[str], str]) -> None:
