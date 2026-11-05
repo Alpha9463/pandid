@@ -1445,11 +1445,11 @@ class DrawioRenderer:
                 "edgeStyle=none", "rounded=0", "orthogonalLoop=1", "jettySize=auto",
                 *self._ends((ex, ey), (tx, ty)),
                 f"strokeColor={s.color or _LINE_INK}",
-                f"strokeWidth={fit.length(_stream_rung(signal).width):g}",
+                f"strokeWidth={fit.length(_stream_rung(s).width):g}",
             ]
             if n in hops:
                 # draw.io's jumpSize for a hop of HOP_R on this line, at least 1.
-                weight = fit.length(_stream_rung(signal).width)
+                weight = fit.length(_stream_rung(s).width)
                 size = max(1, round(2.0 * (fit.length(HOP_R) - weight) + 2.0))
                 # draw.io's jumpStyle takes the crossing style's name.
                 keys += [f"jumpStyle={crossing_style}", f"jumpSize={size}"]

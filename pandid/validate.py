@@ -1207,7 +1207,6 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
     """
     from pandid.render.svg import stream_polyline, _stream_rung
     from pandid.render.weights import M
-    from pandid.streams import SIGNAL_KINDS
 
     unit_mm = 2.5 / M           # one drawing unit as a physical width
     floor_mm = 1.0              # the clause's absolute minimum
@@ -1217,7 +1216,7 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
     for s in fs.streams:
         if s.source.owner.frame is None or s.dest.owner.frame is None:
             continue
-        w = _stream_rung(s.kind in SIGNAL_KINDS).width
+        w = _stream_rung(s).width
         points = stream_polyline(s)
         for (x1, y1), (x2, y2) in zip(points, points[1:]):
             if y1 == y2 and x1 != x2:

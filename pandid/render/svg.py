@@ -92,20 +92,20 @@ def _class_weight(sym) -> LineWeight:
     return LineWeight.DETAIL if sym.trim else LineWeight.EQUIPMENT
 
 
-def _stream_rung(signal: bool) -> LineWeight:
+def _stream_rung(stream) -> LineWeight:
     """Return the line weight of a stream (ISO 10628-1 5.3.1).
 
     Parameters
     ----------
-    signal : bool
-        Whether the stream is a signal line.
+    stream : Stream
+        Stream to draw.
 
     Returns
     -------
     LineWeight
         Detail rung for a signal line, else main flow.
     """
-    return LineWeight.DETAIL if signal else LineWeight.MAIN_FLOW
+    return LineWeight.DETAIL if stream.kind in _SIGNAL_KINDS else LineWeight.MAIN_FLOW
 
 
 def _ink_pad(rung: LineWeight) -> float:
@@ -632,7 +632,7 @@ def _ink(fs, direction: str) -> "list[_Ink]":
                         max(ax, bx) + pad, max(ay, by) + pad, axis, at, kind, line))
 
     for s in fs.streams:
-        pad = _ink_pad(_stream_rung(s.kind in _SIGNAL_KINDS))
+        pad = _ink_pad(_stream_rung(s))
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe", s.name or "")
@@ -643,7 +643,7 @@ def _ink(fs, direction: str) -> "list[_Ink]":
     # A hop belongs to the run that draws it.
     for hop in stream_hops(fs, direction):
         run = fs.streams[hop.stream]
-        pad = _ink_pad(_stream_rung(run.kind in _SIGNAL_KINDS))
+        pad = _ink_pad(_stream_rung(run))
         x0, y0, x1, y1 = hop_box(hop, pad)
         out.append(_Ink(x0, y0, x1, y1, "v" if hop.vertical else "h",
                         hop.x if hop.vertical else hop.y, "hop", hop.line))
@@ -4218,7 +4218,6 @@ class SvgRenderer:
             paint = s.color or "black"
             marker_id = arrow_marker_id(paint)
             color = escaped(paint)
-            is_signal = s.kind in _SIGNAL_KINDS
             pattern = s.dasharray or _SIGNAL_DASH.get(s.kind, "")
             dash = f' stroke-dasharray="{escaped(pattern)}"' if pattern else ""
 
@@ -4243,7 +4242,7 @@ class SvgRenderer:
 
             marker = (f' marker-end="url(#{marker_id})"'
                       if arrows and wears_arrowhead(s, self.registry) else "")
-            width = _stream_rung(is_signal).width
+            width = _stream_rung(s).width
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
                 f'stroke="{color}" stroke-width="{width:g}"{dash}{marker} />'
