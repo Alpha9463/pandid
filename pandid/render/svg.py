@@ -3198,8 +3198,8 @@ def table_sheet_plan(fs, sheet: "_Sheet | None",
         raise ValueError(
             "show_stream_table='sheet' draws a sheet whose body is the stream "
             "table, and this flowsheet has nothing to tabulate: no stream "
-            "states a property and none crosses the sheet edge. Put properties "
-            "on the streams (stream.properties = {...}), or drop the table sheet")
+            "states a property. Put properties on the streams "
+            "(stream.properties = {...}), or drop the table sheet")
     block = table_sheet_block(fs.title_block, F._options(fs))
     ts_w, ts_h = F.measure_title_strip(block)
     items = [(TITLE, "bottom-right", ts_w, ts_h)]
