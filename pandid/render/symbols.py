@@ -1258,6 +1258,9 @@ _BAND_GAP = 10.0
 #: Offset of the relief from the crown of a dished head.
 _RELIEF_OFF_CROWN = 12.0
 
+#: Largest share of a head's half-width a relief sits off its crown.
+_RELIEF_SHARE = 0.6
+
 #: Side and drop of a dished vessel's own brackets, and the height of
 #: their foot above the bottom tangent line.
 _BRACKET, _BRACKET_FOOT = 10.0, 15.0
@@ -1281,11 +1284,10 @@ _SWAGE_STEP, _SWAGE_TOP, _SWAGE_NECK, _SWAGE_CONE, _SWAGE_HEAD = 10.0, 15.0, 25.
 #: Swaged vessel: offset of the relief from the crown.
 _SWAGE_RELIEF = 9.0
 
-#: Horizontal drum: the top inlet's, the relief's and the drain's
-#: offsets from the west end, and the vent's and the outlet's from the
-#: east end.
-_DRUM_INLET_N, _DRUM_RELIEF, _DRUM_DRAIN = 20.0, 30.0, 25.0
-_DRUM_VENT, _DRUM_OUTLET = 36.5, 23.5
+#: Horizontal drum: where along its length the top inlet, the relief,
+#: the drain, the vent and the outlet sit, as fractions of it.
+_DRUM_INLET_N, _DRUM_RELIEF, _DRUM_DRAIN = 20.0 / 91.5, 30.0 / 91.5, 25.0 / 91.5
+_DRUM_VENT, _DRUM_OUTLET = 55.0 / 91.5, 68.0 / 91.5
 
 #: Domed vessel: the manway's width, straight height and cap depth, its
 #: east side's offset from the east tangent line, and the height of the
@@ -1431,9 +1433,9 @@ def _dished_ports(x0: float, x1: float, height: float) -> dict[str, tuple[float,
     dict[str, tuple[float, float]]
         Port anchors.
     """
-    cx = (x0 + x1) / 2
-    drop = _on_head((x1 - x0) / 2, _DISHED, _RELIEF_OFF_CROWN)
-    return {"vent": (cx, 0.0), "relief": (cx - _RELIEF_OFF_CROWN, drop),
+    cx, rx = (x0 + x1) / 2, (x1 - x0) / 2
+    off = min(_RELIEF_OFF_CROWN, _RELIEF_SHARE * rx)
+    return {"vent": (cx, 0.0), "relief": (cx - off, _on_head(rx, _DISHED, off)),
             "drain": (cx, height)}
 
 
@@ -1565,6 +1567,7 @@ def _swaged(w: float, h: float) -> tuple:
     """
     x0, x1, cx = _SWAGE_STEP, w - _SWAGE_STEP, w / 2
     r = (x1 - x0) / 2
+    off = min(_SWAGE_RELIEF, _RELIEF_SHARE * r)
     neck = _SWAGE_TOP + _SWAGE_NECK
     wide = neck + _SWAGE_CONE
     knuckle = h - _SWAGE_HEAD
@@ -1577,7 +1580,7 @@ def _swaged(w: float, h: float) -> tuple:
            f'L {_n(x0)} {_n(neck)} Z" {_OUTLINE}/>')
     mid = (wide + knuckle) / 2
     ports = {"inlet": (0.0, mid), "outlet": (w, mid), "vent": (cx, 0.0),
-             "relief": (cx - _SWAGE_RELIEF, _on_head(r, _SWAGE_TOP, _SWAGE_RELIEF)),
+             "relief": (cx - off, _on_head(r, _SWAGE_TOP, off)),
              "drain": (cx, h)}
     band = _band(wide, knuckle)
     return art, ports, {"W": band, "E": band}
@@ -1601,11 +1604,11 @@ def _horizontal(w: float, h: float) -> tuple:
     art = (f'<path d="M {_n(x0)} {_n(h)} L {_n(x1)} {_n(h)} {arc} {_n(w)} {_n(mid)} '
            f'{arc} {_n(x1)} 0 L {_n(x0)} 0 {arc} 0 {_n(mid)} {arc} {_n(x0)} {_n(h)} Z '
            f'M {_n(x0)} 0 L {_n(x0)} {_n(h)} M {_n(x1)} 0 L {_n(x1)} {_n(h)}" {_OUTLINE}/>')
-    ports = {"inlet": (0.0, mid), "outlet": (w - _DRUM_OUTLET, h),
-             "vent": (w - _DRUM_VENT, 0.0), "relief": (_DRUM_RELIEF, 0.0),
-             "drain": (_DRUM_DRAIN, h)}
+    ports = {"inlet": (0.0, mid), "outlet": (_DRUM_OUTLET * w, h),
+             "vent": (_DRUM_VENT * w, 0.0), "relief": (_DRUM_RELIEF * w, 0.0),
+             "drain": (_DRUM_DRAIN * w, h)}
     band = _band(x0, x1)
-    faces = {"inlet": {"W": (0.0, mid), "N": (_DRUM_INLET_N, 0.0), "E": (w, mid)}}
+    faces = {"inlet": {"W": (0.0, mid), "N": (_DRUM_INLET_N * w, 0.0), "E": (w, mid)}}
     return art, ports, {"N": band, "S": band, "W": (mid, mid), "E": (mid, mid)}, faces
 
 
@@ -1633,8 +1636,9 @@ def _dome(w: float, h: float) -> tuple:
            f'L {_n(x0)} {_n(h)} {head} 0 {_n(mid)} {head} {_n(x0)} {_n(top)} '
            f'L {_n(left)} {_n(top)} L {_n(left)} {_n(_DOME_CAP)} {cap} {_n(apex)} 0 '
            f'{cap} {_n(right)} {_n(_DOME_CAP)} L {_n(right)} {_n(top)} Z" {_OUTLINE}/>')
-    nozzle = mid - _DOME_NOZZLE
-    ports = {"inlet": (0.0, nozzle), "outlet": (w, nozzle), "vent": (apex, 0.0),
+    # The head nozzles sit on the heads' outline, above the axis.
+    nozzle, inset = mid - _DOME_NOZZLE, _on_head(ry, _DISHED, _DOME_NOZZLE)
+    ports = {"inlet": (inset, nozzle), "outlet": (w - inset, nozzle), "vent": (apex, 0.0),
              "relief": ((x0 + left) / 2, top), "drain": (w / 2, h)}
     return art, ports, {"W": (nozzle, nozzle), "E": (nozzle, nozzle)}
 
@@ -1722,9 +1726,10 @@ def vessel_shell_fits(variant: str, width: float) -> tuple[float, float]:
     least = {
         "default": (1.0, 2 * _HEAD),
         "dished": (2 * _BRACKET + 1, 2 * _DISHED + _BRACKET_FOOT + _BRACKET),
-        "dome": (2 * _DISHED + _DOME_OFF + _DOME_W, _DOME_NECK + _DOME_CAP + 1),
-        "electrical_heating": (_HEATER_REACH + 1, _HEATER_H + 2 * _HEATER_LEAD),
-        "horizontal": (2 * _DRUM_HEAD, 1.0),
+        "dome": (2 * _DISHED + _DOME_OFF + _DOME_W + _BAND_GAP,
+                 _DOME_NECK + _DOME_CAP + 2 * _DOME_NOZZLE),
+        "electrical_heating": (2 * _HEATER_REACH + 1, _HEATER_H + 2 * _HEATER_LEAD),
+        "horizontal": (_DRUM_HEAD / min(_DRUM_INLET_N, 1 - _DRUM_OUTLET), 1.0),
         "insulated": (2 * _CLAD + 1, 2 * (_DISHED + _CLAD_END)),
         "jacketed": (2 * _CLAD + 1, 2 * (_DISHED + _CLAD_END)),
         "swaged": (2 * _SWAGE_STEP + 1, _SWAGE_TOP + _SWAGE_NECK + _SWAGE_CONE + _SWAGE_HEAD),

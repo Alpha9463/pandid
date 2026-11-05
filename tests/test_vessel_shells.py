@@ -1,8 +1,14 @@
 """Check that a vessel's shell is built to its size, not scaled to it."""
 
+import base64
+import re
+import urllib.parse
+import xml.etree.ElementTree as ET
+import zlib
+
 import pytest
 
-from pandid import Feed, Flowsheet, Product, Vessel
+from pandid import Feed, Flare, Flowsheet, Product, Vessel
 from pandid.portgeom import outward_dir, resolve_size
 from pandid.render.iso_parts import SUPPORTS
 from pandid.render.symbols import (
@@ -12,8 +18,10 @@ from pandid.render.symbols import (
     VESSEL_SIZES,
     default_registry,
     overlay_boxes,
+    vessel_shell_fits,
 )
 from pandid.units import _drawn_parts
+from test_symbol_invariants import _collect_segments, _nearest_distance
 
 UPRIGHT = [v for v in VESSEL_SIZES if v not in ("horizontal", "dome")]
 LYING = ["horizontal", "dome"]
@@ -182,3 +190,75 @@ def test_a_box_too_small_for_the_heads_is_refused_with_the_size_that_fits():
     """Check that a height the heads cannot fit in names the least that can."""
     with pytest.raises(ValueError, match=r"D-1: a height of 60 is too small .* give height=62\.5"):
         Vessel("D-1", variant="swaged", height=60).symbol()
+
+
+#: Distance a nozzle may sit from the drawn outline.
+ON_OUTLINE = 0.1
+
+
+def _sizes():
+    """Yield each variant at its own size and over a grid down to its least."""
+    for variant, (nw, nh) in VESSEL_SIZES.items():
+        widths = (None, vessel_shell_fits(variant, nw)[0], 1.5 * nw, 3 * nw)
+        for width in widths:
+            least = vessel_shell_fits(variant, width or nw)[1]
+            for height in (None, least, 1.5 * nh, 3 * nh):
+                yield variant, width, height
+
+
+def _stencil_segments(style: str) -> list:
+    """Return the outline a draw.io inline stencil draws, in its own units."""
+    packed = re.search(r"shape=stencil\(([^)]*)\)", style)
+    assert packed, f"no inline stencil in {style!r}"
+    xml = urllib.parse.unquote(zlib.decompress(base64.b64decode(packed.group(1)), -15).decode())
+    shape = ET.fromstring(xml)
+    art = []
+    for element in shape.iter():
+        if element.tag == "path":
+            d = []
+            for step in element:
+                a = step.attrib
+                if step.tag in ("move", "line"):
+                    d.append(f"{'M' if step.tag == 'move' else 'L'} {a['x']} {a['y']}")
+                elif step.tag == "arc":
+                    d.append(
+                        f"A {a['rx']} {a['ry']} {a['x-axis-rotation']} {a['large-arc-flag']} "
+                        f"{a['sweep-flag']} {a['x']} {a['y']}"
+                    )
+                elif step.tag == "close":
+                    d.append("Z")
+            art.append(f'<path d="{" ".join(d)}"/>')
+        elif element.tag == "rect":
+            a = element.attrib
+            art.append(f'<rect x="{a["x"]}" y="{a["y"]}" width="{a["w"]}" height="{a["h"]}"/>')
+    return _collect_segments(f"<g>{''.join(art)}</g>")
+
+
+@pytest.mark.parametrize(("variant", "width", "height"), list(_sizes()))
+def test_every_nozzle_is_on_the_outline_in_svg_and_drawio(variant, width, height):
+    """Check every nozzle sits on the shell's outline as drawn and as exported."""
+    vessel = Vessel("D-1", variant=variant, width=width, height=height)
+    fs = Flowsheet("outline")
+    fs.add(vessel)
+    fs.connect(fs.add(Feed("Feed")).outlet, vessel.inlet)
+    fs.connect(vessel.outlet, fs.add(Product("Product")).inlet)
+    for port in (vessel.vent, vessel.relief):
+        fs.connect(port, fs.add(Flare(f"FL-{port.name}")).inlet)
+    fs.connect(vessel.drain, fs.add(Product("Drain")).inlet)
+    fs.to_svg(diagram="p&id")
+    sym = vessel.symbol()
+    segments = _collect_segments(sym.svg)
+    for name, point in sym.ports.items():
+        assert _nearest_distance(point, segments) <= ON_OUTLINE, f"svg {name}"
+    cells = {c.get("id"): c for c in ET.fromstring(fs.to_drawio(diagram="p&id")).iter("mxCell")}
+    shell = next(c for c in cells.values() if c.get("value") == "D-1")
+    stencil = _stencil_segments(shell.get("style", ""))
+    for cell in cells.values():
+        style = cell.get("style", "")
+        for end, key in (("source", "exit"), ("target", "entry")):
+            if cell.get(end) != shell.get("id"):
+                continue
+            at = re.search(rf"{key}X=([\d.]+);{key}Y=([\d.]+)", style)
+            assert at, f"{cell.get('value')} names no {key} point"
+            point = (float(at.group(1)) * sym.width, float(at.group(2)) * sym.height)
+            assert _nearest_distance(point, stencil) <= ON_OUTLINE, f"drawio {cell.get('value')}"
