@@ -193,14 +193,14 @@
     <symbol id="sym_valve_relief" viewBox="0 0 15.0 22.125" overflow="visible"><g transform="scale(0.375)"><path d="M 0.0 20.0 A 20.0 20.0 0.0 0 1 20.0 0.0 A 20.0 20.0 0.0 0 1 40.0 20.0 Z M 20.0 20.0 L 20.0 59.0" fill="white" stroke="#111" stroke-width="2.6665"/><rect x="20.0" y="20.0" width="20.0" height="8.0" fill="none" stroke="#111" stroke-width="2.6665"/></g></symbol>
     <symbol id="sym_valve_solenoid" viewBox="0 0 24.5 22.25" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="4"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="4"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="4"/><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="2.25" stroke-linejoin="round">S</text><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">S</text></g></symbol>
     <symbol id="sym_vent_breather" viewBox="0 0 25.0 15.0" overflow="visible"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="20.0" fill="white" stroke="#111" stroke-width="2"/><path d="M 25.0 20.0 L 25.0 30.0 M 0.0 0.0 L 25.0 20.0 L 50.0 0.0 M 0.0 20.0 L 25.0 0.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2"/></g></symbol>
-    <symbol id="sym_vessel_60x95_c94142918" viewBox="0 0 60.0 120.0" overflow="visible"><path d="M 0 7.5 A 30 7.5 0 0 1 30 0 A 30 7.5 0 0 1 60 7.5 L 60 87.5 A 30 7.5 0 0 1 30 95 A 30 7.5 0 0 1 0 87.5 Z" fill="white" stroke="#111" stroke-width="2"/><path d="M 8.68 92 L 8.68 120 L 14.88 120 L 14.88 92" fill="none" stroke="black" stroke-width="1"/><path d="M 45.12 92 L 45.12 120 L 51.32 120 L 51.32 92" fill="none" stroke="black" stroke-width="1"/></symbol>
+    <symbol id="sym_vessel_60x95_c09c61cc0" viewBox="0 0 60.0 120.0" overflow="visible"><path d="M 0 7.5 A 30 7.5 0 0 1 30 0 A 30 7.5 0 0 1 60 7.5 L 60 87.5 A 30 7.5 0 0 1 30 95 A 30 7.5 0 0 1 0 87.5 Z" fill="white" stroke="#111" stroke-width="2"/><path d="M 8.68 92.7765 L 8.68 120.00005 L 14.88 120.00005 L 14.88 92.7765" fill="none" stroke="black" stroke-width="0.999999"/><path d="M 45.12 92.7765 L 45.12 120.00005 L 51.32 120.00005 L 51.32 92.7765" fill="none" stroke="black" stroke-width="0.999999"/></symbol>
   </defs>
   <g id="drawing" transform="translate(65.67, 186.3) scale(0.827943)">
   <g id="units">
     <use href="#sym_tank_floating_roof_s190x140" x="360" y="215" width="190" height="140" />
     <use href="#sym_tank_s180x150" x="680" y="205" width="180" height="150" />
     <use href="#sym_tank_sphere_s140x185" x="1090" y="180" width="140" height="185" />
-    <use href="#sym_vessel_60x95_c94142918" x="1255" y="782.5" width="60" height="120" />
+    <use href="#sym_vessel_60x95_c09c61cc0" x="1255" y="782.5" width="60" height="120" />
     <use href="#sym_pump" x="705" y="632.5" width="70.0" height="67.0" />
     <use href="#sym_pump_gear_s48x76" x="940" y="515.34" width="48" height="76" />
     <polygon points="108.656,157.0 185.0,157.0 200.0,170.0 185.0,183.0 108.656,183.0" fill="transparent" stroke="black" stroke-width="2" />
