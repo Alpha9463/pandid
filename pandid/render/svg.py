@@ -311,6 +311,7 @@ def tap_route(inst, tap, centre):
             square = [tap, centre]
         else:
             square = [tap, (cx, ty) if across else (tx, cy), centre]
+        # Leave a pipe on its balloon's side.
         if ahead < 0:
             nx, ny = -nx, -ny
     else:
@@ -324,7 +325,7 @@ def tap_route(inst, tap, centre):
             bends = [(sx, sy), (x, sy), (x, cy)]
         square = [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
     clashes = _tap_clashes(inst, square)
-    faces = {v: k for k, v in COMPASS.items()}
+    faces: dict[tuple[float, float], str] = {v: k for k, v in COMPASS.items()}
     face = faces.get((nx, ny))
     if not clashes or face is None:
         return square

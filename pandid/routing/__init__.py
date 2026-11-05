@@ -470,7 +470,6 @@ class DefaultRouter:
             fs._relaned = True
 
 
-
 def route_tap(inst, tap: tuple[float, float], faces: list[str],
               centre: tuple[float, float]) -> list[tuple[float, float]]:
     """Return a tap line's path round unit bodies and tags.
@@ -513,9 +512,13 @@ def route_tap(inst, tap: tuple[float, float], faces: list[str],
     owner = host if isinstance(host, Unit) else inst
     if owner.frame is not None and (halo := _tag_halo(owner, owner.frame)) is not None:
         omit.append(halo)
-    stubs = {face: (tap[0] + MIN_ESCAPE * COMPASS[face][0], tap[1] + MIN_ESCAPE * COMPASS[face][1])
-             for face in faces}
+    stubs: dict[str, tuple[float, float]] = {}
+    for face in faces:
+        dx, dy = COMPASS[face]
+        stubs[face] = (tap[0] + MIN_ESCAPE * dx, tap[1] + MIN_ESCAPE * dy)
     graph = VisibilityGraph(fs, lanes=(*stubs.values(), centre), omit=omit)
+    if not graph.edges.get(centre):
+        return []
     index = CrossingIndex()
     used: dict[tuple[tuple[float, float], tuple[float, float]], float] = defaultdict(float)
     for line in (stream_path(s) for s in fs.streams if s.route is not None):
