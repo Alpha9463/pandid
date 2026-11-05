@@ -538,6 +538,23 @@ def test_the_helper_draws_what_the_long_hand_draws(placement):
     assert one_liner.to_svg() == long_hand.to_svg()
 
 
+@pytest.mark.parametrize("by_unit", [False, True], ids=["ports", "units"])
+def test_a_long_hand_loop_with_no_kind_draws_what_the_helper_draws(by_unit):
+    """Check that signal lines connected with no kind take the helper's kinds."""
+    long_hand, drum, lv = _feedback_sheet()
+    loop = long_hand.add_loop("L", 101)
+    lt = long_hand.add_instrument("LT", loop, sensing=drum)
+    lic = long_hand.add_instrument("LIC", loop, near=lt, variant="shared")
+    long_hand.connect(lt if by_unit else lt.sig_out, lic if by_unit else lic.sig_in)
+    long_hand.connect(lic if by_unit else lic.sig_out, lv if by_unit else lv.actuator)
+
+    one_liner, drum, lv = _feedback_sheet()
+    one_liner.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+
+    assert [s.kind for s in long_hand.streams] == [s.kind for s in one_liner.streams]
+    assert one_liner.to_svg() == long_hand.to_svg()
+
+
 def test_the_balloons_it_places_land_clear_of_the_sheet():
     """Check that the loop's balloons are placed, sized and clear of each other and the sheet."""
     fs, drum, lv = _feedback_sheet()
