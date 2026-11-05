@@ -533,8 +533,8 @@ def test_a_probe_for_an_absent_attribute_does_not_list_the_ports():
     pump = U.Pump("P-101")
     ports = _CountingPorts(pump.ports)
     pump.__dict__["ports"] = ports
-    assert getattr(pump, "large_end", "inlet") == "inlet"
-    assert not hasattr(pump, "normal_position")
+    assert getattr(pump, "host", None) is None
+    assert not hasattr(pump, "tap")
     assert _CountingPorts.listed == 0
     misspelt = "dischrage"
     with pytest.raises(AttributeError) as typo:
@@ -543,6 +543,37 @@ def test_a_probe_for_an_absent_attribute_does_not_list_the_ports():
         "Pump 'P-101' has no attribute or port 'dischrage'; "
         "available ports: ['discharge', 'suction']"
     )
+
+
+def test_drawing_a_unit_never_misses_the_attributes_only_some_units_set(monkeypatch):
+    """Check that a symbol lookup reads overlays, large_end and normal_position without a miss."""
+    from pandid.render.symbols import default_registry
+
+    drawn = [U.Pump("P-1"), U.Vessel("V-1"), U.Tank("T-1"), U.Valve("HV-1"), U.Reducer("R-1")]
+    missed: list[str] = []
+    lookup = getattr(U.Unit, "__getattr__")
+
+    def spy(unit: U.Unit, name: str) -> object:
+        missed.append(name)
+        return lookup(unit, name)
+
+    monkeypatch.setattr(U.Unit, "__getattr__", spy)
+    for unit in drawn:
+        default_registry.for_unit(unit)
+    assert {"overlays", "large_end", "normal_position"}.isdisjoint(missed), missed
+
+
+def test_an_optional_attribute_set_on_a_unit_without_it_is_still_read():
+    """Check that a normal position set on a pump is still drawn, and unset ones read as defaults."""
+    from pandid.render.symbols import default_registry
+
+    pump = U.Pump("P-1")
+    pump.normal_position = "closed"
+    with pytest.raises(ValueError, match="drawn one way"):
+        default_registry.for_unit(pump)
+    unset = U.Pump("P-2")
+    read = [getattr(unset, name) for name in ("overlays", "large_end", "normal_position")]
+    assert read == [(), "inlet", "open"]
 
 
 # The flash drum's nozzles in declaration order, written out rather than read off the class.

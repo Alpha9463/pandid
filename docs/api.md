@@ -43,7 +43,7 @@ text.
 | `layout()` / `route()` | Resolve equipment coordinates and stream paths. `render()` calls both. |
 | `render(path, **options)` | Write SVG, draw.io, PDF or PNG according to the extension. |
 | `to_svg(**options)` / `show(**options)` | Return SVG text or open a browser preview. |
-| `validate(*, diagram=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
+| `validate(*, diagram=None, show_stream_table=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
 | `to_dict()` / `from_dict(spec)` | Serialize intent or build an equivalent sheet. |
 | `from_json(path)` / `from_yaml(path)` | Read a spec file; YAML needs `pandid[yaml]`. |
 | `line_list()` / `equipment_list()` / `instrument_index()` | Return a schedule as rows; see [Schedules](#schedules). |
@@ -406,7 +406,7 @@ built-in spec format.
 ```text
 pandid draw SPEC [-o OUT] [--diagram {pfd,p&id,bfd}] [--page-size SIZE]
                    [--border {none,zone}] [--stream-table [sheet]]
-pandid validate SPEC [--diagram {pfd,p&id,bfd}]
+pandid validate SPEC [--diagram {pfd,p&id,bfd}] [--stream-table [sheet]]
 pandid symbols [--kind KIND]
 ```
 
