@@ -1435,35 +1435,46 @@ def test_an_energy_line_is_not_reported_once_its_carrier_is_drawn_or_off_a_pfd(c
     assert _found(fs, "energy-carrier-missing", diagram=diagram) == []
 
 
-def test_following_the_advice_draws_the_carrier_and_clears_the_finding():
-    """Check the call the finding names puts the carrier on the sheet."""
-    fs, _ = heat_integrated()
-    (found,) = _found(fs, "energy-carrier-missing")
-    call = re.search(
-        r'fs\.connect\(E-2\.utility_out, E-1\.utility_in, (\w+)="([^"]+)"\)', found.message
-    )
-    assert call is not None, found.message
-    keyword, carrier = call.groups()
-    advice: dict[str, Any] = {keyword: carrier}
-    fs, _ = heat_integrated(**advice)
-    assert _drawn_label(fs, carrier)
-    assert _found(fs, "energy-carrier-missing") == []
+# Every keyword=value a finding spells, quoted as Python writes it.
+_ADVISED = re.compile(r"""(\w+)=('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")""")
+_AUTHORED = {"sequence": "42", "spec": "CS"}
 
 
 @pytest.mark.parametrize(
-    ("scheme", "connect", "remedy"),
+    ("scheme", "connect"),
     [
-        (None, {"name": "Q-1", "service": "LP steam"}, "without name="),
-        ("{size}-{sequence}", {"service": "LP steam"}, "{service} in line_numbering_scheme"),
+        (None, {}),
+        (None, _AUTHORED),
+        (None, {"name": "Q-1", **_AUTHORED}),
+        (None, {"name": "Q-1", "service": "cooling water", **_AUTHORED}),
+        ("{size}-{sequence}", {"service": "cooling water", **_AUTHORED}),
+        ("{size}-{sequence}", _AUTHORED),
+    ],
+    ids=[
+        "unset",
+        "unset-with-fields",
+        "unset-under-a-given-name",
+        "hidden-by-a-given-name",
+        "left-out-of-the-scheme",
+        "unset-and-left-out-of-the-scheme",
     ],
 )
-def test_a_carrier_set_but_not_drawn_is_reported_with_what_keeps_it_off(scheme, connect, remedy):
-    """Check a given name or a scheme without the service still leaves the carrier off."""
+def test_following_the_advice_draws_the_carrier_and_keeps_what_was_typed(scheme, connect):
+    """Check the advice, applied as written, clears the finding and discards nothing."""
     fs = Flowsheet("heat") if scheme is None else Flowsheet("heat", line_numbering_scheme=scheme)
     fs, _ = heat_integrated(fs, **connect)
-    assert not _drawn_label(fs, "LP steam")
+    if "service" in connect:
+        assert not _drawn_label(fs, connect["service"])
     (found,) = _found(fs, "energy-carrier-missing")
-    assert remedy in found.message
+    advice = {key: ast.literal_eval(value) for key, value in _ADVISED.findall(found.message)}
+    assert advice, found.message
+    scheme = advice.pop("line_numbering_scheme", scheme)
+    fs = Flowsheet("heat") if scheme is None else Flowsheet("heat", line_numbering_scheme=scheme)
+    fs, duty = heat_integrated(fs, **{**connect, **advice})
+    assert _found(fs, "energy-carrier-missing") == []
+    assert _drawn_label(fs, str(duty.service))
+    for key, value in connect.items():
+        assert value in str(getattr(duty, key)), f"{key}={value!r} lost: {found.message}"
 
 
 # --- validate() answers about the sheet that was drawn ------------------------

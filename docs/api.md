@@ -200,8 +200,8 @@ outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
 `software` or `capillary`. When omitted, two energy/utility ports make an energy
 stream; other process ports make a material stream. On a PFD, `validate()`
-reports `energy-carrier-missing` until an energy line's line number names its
-carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
+reports `energy-carrier-missing` until the label drawn on an energy line names
+its carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
 
 `connect()` also accepts `name`, `draw_as_recycle`, `ends` and line-number fields
 `size`, `schedule`, `service`, `sequence`, `spec` and `insulation`. The first

@@ -892,19 +892,25 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             given = not s.auto_named
             if s.service and (str(s.service) in s.name if given else numbered):
                 continue
+            # Keep every value the author gave; suggest one only for service.
+            carrier = str(s.service) if s.service else "LP steam"
+            keys = [] if s.service else [f"service={carrier!r}"]
+            if given:
+                # A given name is drawn in place of the line number.
+                keys.append(f"name={f'{s.name} {carrier}'!r}")
             a, b = s.source, s.dest
+            fixes = [f"fs.connect({a.owner.name}.{a.name}, {b.owner.name}.{b.name}, "
+                     f"..., {', '.join(keys)})"] if keys else []
+            if not (given or numbered):
+                wider = f"{scheme}-{{service}}"
+                fixes.append(f"Flowsheet(..., line_numbering_scheme={wider!r})")
             warnings.append(Issue(
                 "warning", "energy-carrier-missing",
                 f"{s.name}, the energy line from {a.owner.name} to "
                 f"{b.owner.name}, does not name its energy carrier on the "
                 f"sheet (ISO 10628-1:2014 4.3.2 e)). Write what it carries "
-                f"into the line number drawn on it, "
-                f"fs.connect({a.owner.name}.{a.name}, {b.owner.name}.{b.name}, "
-                f"service=\"LP steam\")"
-                + (" without name=, since a given name is drawn in place of "
-                   "the line number" if given else "")
-                + (", with {service} in line_numbering_scheme"
-                   if not numbered else "")))
+                f"into the label drawn on it, keeping the other arguments: "
+                f"{' and '.join(fixes)}"))
 
     return errors + warnings
 
