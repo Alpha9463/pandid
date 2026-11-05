@@ -359,7 +359,7 @@ class DefaultRouter:
             for host, points in taps:
                 if host is not stream:
                     _record_route(index, points, True)
-            preview = preview_separated_waypoints(routed)
+            preview = preview_separated_waypoints(routed, fs.units)
             for s in routed:
                 assert s.route is not None
                 wp = preview.get(id(s), s.route.waypoints)
