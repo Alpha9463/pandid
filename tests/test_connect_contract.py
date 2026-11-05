@@ -1,6 +1,8 @@
 """Check that ``connect()`` draws the kind the author states and a refused call changes nothing."""
 
+import ast
 import pickle
+import re
 
 import pytest
 
@@ -100,6 +102,23 @@ def test_a_rejected_line_number_leaves_the_sheet_alone():
     # The corrected call runs between the same two nozzles.
     corrected = fs.connect(feed.outlet, product.inlet, size='6"')
     assert corrected.name == '6"'
+
+
+def test_a_rejected_line_number_names_the_line_and_a_scheme_that_draws_it():
+    """Check that the refusal names the line and its fields, and its scheme draws them."""
+    fs = Flowsheet("a", line_numbering_scheme="{size}")
+    feed = fs.add(U.Feed("Feed"))
+    product = fs.add(U.Product("Product"))
+
+    with pytest.raises(ValueError, match="never uses") as refused:
+        fs.connect(feed.outlet, product.inlet, service="P", spec="A1A")
+
+    message = str(refused.value)
+    assert message.startswith("the line from Feed to Product states service='P', spec='A1A',")
+    scheme = re.search(r"line_numbering_scheme=('[^']*')", message)
+    assert scheme is not None, message
+    fs.line_numbering_scheme = ast.literal_eval(scheme[1])
+    assert fs.connect(feed.outlet, product.inlet, service="P", spec="A1A").name == "P-A1A"
 
 
 def test_a_scheme_naming_something_that_is_not_a_component_lands_the_same_way():

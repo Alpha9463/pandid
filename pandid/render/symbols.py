@@ -3552,7 +3552,8 @@ class SymbolRegistry:
                                     extent=0.5, at=32.0, singular="feed"),),
         ), "tubular")
 
-        # ISO 10628-2 group 4: boiler, stack and flare.
+        # ISO 10628-2 group 4: boiler, furnace, combustion chamber,
+        # stack and flare.
 
         # Item 4.1, 2532, boiler with dome.
         self.register("boiler", Symbol(
@@ -3563,6 +3564,30 @@ class SymbolRegistry:
             gravity_fixed=True,
             iso_reg="2532",
         ), "default")
+
+        # Item 4.3, 2533, furnace: a closed top over a U-shaped lining,
+        # chamfered at the floor.
+        self.register("furnace", Symbol(
+            svg='<g id="sym_furnace_general">'
+                f'<path d="M 0 0 L 80 0 L 80 60 L 60 80 L 20 80 L 0 60 Z" {_OUTLINE}/>'
+                f'<path d="M 15 0 L 15 55 L 25 65 L 55 65 L 65 55 L 65 0" {_INK}/></g>',
+            width=80.0, height=80.0,
+            ports={"inlet": (0.0, 40.0), "outlet": (80.0, 40.0), "fuel": (40.0, 80.0)},
+            iso_reg="2533",
+        ), "general")
+
+        # Item 4.5, X8106, combustion chamber: a burner's flame on its
+        # plate inside the chamber. Air from the west, fuel from below,
+        # hot gas out of the top.
+        self.register("furnace", Symbol(
+            svg='<g id="sym_furnace_combustion_chamber">'
+                f'<rect x="0" y="0" width="100" height="80" {_OUTLINE}/>'
+                '<path d="M 0 70 L 100 70 M 20 70 L 50 20 L 80 70 '
+                f'M 35 70 L 50 45 L 65 70" {_INK}/></g>',
+            width=100.0, height=80.0,
+            ports={"inlet": (0.0, 40.0), "outlet": (50.0, 0.0), "fuel": (50.0, 80.0)},
+            iso_reg="X8106",
+        ), "combustion_chamber")
 
         # Item 4.7, 2041, stack: a tapering shaft on a flange.
         self.register("stack", Symbol(

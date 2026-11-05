@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
   (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
   rotor on its shaft, or `None`.
+- `CombustionChamber` draws a chamber burning fuel to hot gas: air at `inlet`,
+  `fuel` from below and the gas out of `outlet`. `Furnace(variant="general")`
+  draws the ISO 10628-2 furnace.
 - `CentrifugalFan` and `AxialFan` draw those fans, and
   `Blower(variant="general")` draws the ISO 10628-2 fan.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
@@ -35,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-field-undrawn` when a line-number field set in
+  `connect()` is not drawn: `name=` replaces the line number,
+  `line_numbering_scheme` leaves the field out, or the field is stated past a
+  valve or tee that carries another segment's number on. It names the fix.
 
 ### Changed
 
@@ -67,6 +74,9 @@ These are removed in 0.4.0.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.
+- Lines that cross on their way into a mixer are laid on lanes even where they
+  share their stretch of the gap with only some of the lines beside them, so the
+  last two pumps of a header of tees no longer cross into the mixer.
 - The equipment list and `fs.equipment_list()` include centrifuges and
   crushing machines.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,

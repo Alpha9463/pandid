@@ -213,12 +213,40 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
         pending = ""
     line_number = "".join(out) + pending
     if not line_number:
+        unused = _unused_fields(scheme, stream)
+        wider = scheme + "".join(f"-{{{f}}}" for f in unused)
         raise ValueError(
-            f"stream {stream.name!r} carries line-number components that "
+            f"the line from {stream.source.owner.name} to {stream.dest.owner.name} "
+            f"states {', '.join(f'{f}={v!r}' for f, v in unused.items())}, which "
             f"line_numbering_scheme {scheme!r} never uses, so its line number would be "
-            f"empty; name the components you set, or set the ones the scheme names"
+            f"empty. Add {'it' if len(unused) == 1 else 'them'} to the scheme, keeping "
+            f"its other arguments: Flowsheet(..., line_numbering_scheme={wider!r})"
         )
     return line_number
+
+
+def _unused_fields(scheme: str, stream: Stream) -> "dict[str, str | float]":
+    """Return the line-number fields the author set that a scheme omits.
+
+    An automatic sequence is not one the author set. An empty scheme
+    omits every field.
+
+    Parameters
+    ----------
+    scheme : str
+        Format string over the line-number components.
+    stream : Stream
+        Stream to check.
+
+    Returns
+    -------
+    dict[str, str | float]
+        Value per omitted field, in :data:`LINE_NUMBER_FIELDS` order.
+    """
+    named = {name for _, name, _, _ in Formatter().parse(scheme)}
+    return {f: v for f in LINE_NUMBER_FIELDS
+            if f not in named and (v := getattr(stream, f)) not in (None, "")
+            and not (f == "sequence" and v == stream._auto_sequence)}
 
 
 def _format_stream_name(scheme: "str | Callable[[int], str]", number: int) -> str:

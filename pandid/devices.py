@@ -18,6 +18,7 @@ from pandid.units import (
     Feeder,
     Filter,
     Fitting,
+    Furnace,
     HeatExchanger,
     Kiln,
     Mill,
@@ -54,6 +55,7 @@ __all__ = [
     "FallingFilmEvaporator",
     "ClimbingFilmEvaporator",
     "PlateEvaporator",
+    "CombustionChamber",
     "RotaryKiln",
     "FluidizedBedCalciner",
     "ShaftKiln",
@@ -519,6 +521,24 @@ class PlateEvaporator(Evaporator):
     concentrate: Port
     heating_in: Port
     condensate: Port
+
+
+class CombustionChamber(Furnace):
+    """Combustion chamber: fuel burned to make hot gas for another unit.
+
+    ``inlet`` takes the combustion air on the west wall, ``fuel`` enters
+    the burner from below and ``outlet`` sends the hot gas out of the
+    top. ISO 10628-2 item 4.5 X8106.
+
+    Parameters are those of :class:`~pandid.units.Furnace`.
+    """
+
+    VARIANTS = ("default", "combustion_chamber")
+    VARIANT_ALIASES = {"default": "combustion_chamber"}
+
+    inlet: Port
+    outlet: Port
+    fuel: Port
 
 
 class RotaryKiln(Kiln):
