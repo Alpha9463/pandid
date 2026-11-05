@@ -1033,6 +1033,8 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "silo/bunker": "2064",
     "silo/default": "X2062",
     "boiler/default": "2532",
+    # Group 17, BLOWERS, FANS.
+    "blower/general": "X8164",
     "stack/default": "2041",
     "flare/default": "2591",
     # Group 10, DRIER.

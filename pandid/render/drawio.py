@@ -407,6 +407,12 @@ _APPROXIMATIONS = {
         None, "the belt, its two pulleys and the loading and discharge chutes"),
     ("elevator", "z_form"): _Approximation(
         None, "the Z-shaped casing, the belt's three runs and its four pulleys"),
+    ("blower", "general"): _Approximation(
+        None, "the two chords converging on the discharge and the impeller"),
+    ("blower", "centrifugal"): _Approximation(
+        None, "the scroll casing, its outlet and the eye"),
+    ("blower", "axial"): _Approximation(
+        None, "the propeller across the casing"),
     ("boiler", "default"): _Approximation(
         None, "the shell's own outline and the dome on its crown"),
     ("stack", "default"): _Approximation(
