@@ -10,7 +10,7 @@ sheet is sized to the drawing; ``page_size="A2"`` puts it on paper.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
-    Blower,
+    CentrifugalFan,
     Conveyor,
     Cyclone,
     Dryer,
@@ -148,7 +148,7 @@ def main():
         "SC-401", description="Dryer Exhaust Scrubber"))
     effluent = fs.add(Product("Scrubber Effluent", reference="PCD-402"))
     # Induced draught: the fan is last.
-    fan = fs.add(Blower("BL-401", description="Dryer Exhaust Fan"))
+    fan = fs.add(CentrifugalFan("BL-401", description="Dryer Exhaust Fan"))
     stack = fs.add(Vent("VE-401", variant="exhaust_head", width=45,
                         height=36,
                         description="Dryer Exhaust Head"))
@@ -210,8 +210,7 @@ def main():
     scrubber.pin(port="feed", x=1300, y=132)
     effluent.pin(port="inlet", x=1400, y=280)
     fan.pin(port="suction", x=1440, y=132)
-    stack.pin(port="inlet", x=pinned_x(fan, "discharge"),
-              y=60)
+    stack.pin(port="inlet", x=pinned_x(fan, "discharge") + 40, y=60)
 
     magnet.pin(port="feed", x=1300, y=532)
     fines.pin(mirrored="y").pin(port="branch", x=pinned_x(cyclone, "underflow"),

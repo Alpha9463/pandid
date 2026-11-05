@@ -5,7 +5,19 @@ from typing import Any
 import pytest
 
 from _render_cases import SCENARIOS
-from pandid import Document, Feed, Flowsheet, Product, Stream, Tank, TitleBlock, Unit, Vessel
+from pandid import (
+    Document,
+    Feed,
+    Flowsheet,
+    Product,
+    Reducer,
+    Stream,
+    Tank,
+    TitleBlock,
+    Unit,
+    Valve,
+    Vessel,
+)
 
 
 def _sheet(name: str, number: str, *units: Unit) -> Flowsheet:
@@ -95,6 +107,144 @@ def test_matched_connectors_that_disagree_on_the_line_are_an_error():
     assert "size '6' on PFD-001 and '4' on PFD-002" in issue.message
     assert "service" not in issue.message
     assert "connect() the same line number (name= or sequence=) and size (size=)" in issue.message
+
+
+@pytest.mark.parametrize("size", ["4", "6"])
+def test_a_connector_compares_the_line_through_a_valve_by_its_whole_run(size: str):
+    """Check that fields stated before a valve reach the flag's line."""
+    out, into = Product("Crude", reference="PFD-002"), Feed("Crude", reference="PFD-001")
+    a = _sheet("Crude Unit", "PFD-001", Feed("Crude Oil"), Valve("HV-1"), out)
+    b = _sheet("Residue Unit", "PFD-002", into, Product("Residue"))
+    first = a.streams[0]
+    first.size, first.service, first.sequence = "6", "P", "1001"
+    _line(into, size, "P", "1001")
+
+    issues = Document([a, b]).validate()
+
+    assert [s.name for s in a.streams] == ["6-P-1001", "6-P-1001"]
+    if size == "6":
+        assert issues == []
+    else:
+        (issue,) = issues
+        assert issue.code == "connector-line-mismatch"
+        assert "line number '6-P-1001' on PFD-001 and '4-P-1001' on PFD-002" in issue.message
+        assert "size '6' on PFD-001 and '4' on PFD-002" in issue.message
+
+
+def test_a_connector_compares_the_size_stated_at_its_own_segment():
+    """Check that a size changed past a reducer is the one compared at the flag."""
+    a = _sheet("Crude Unit", "PFD-001")
+    feed, reducer = a.add(Feed("Crude Oil")), a.add(Reducer("R-1"))
+    out = a.add(Product("Crude", reference="PFD-002"))
+    a.connect(feed.outlet, reducer.inlet, name="P-1001", size="6", service="P")
+    a.connect(reducer.outlet, out.inlet, size="4")
+    b = _sheet("Residue Unit", "PFD-002")
+    into, residue = b.add(Feed("Crude", reference="PFD-001")), b.add(Product("Residue"))
+    b.connect(into.outlet, residue.inlet, name="P-1001", size="6", service="P")
+
+    (issue,) = Document([a, b]).validate()
+
+    assert issue.code == "connector-line-mismatch"
+    assert "size '4' on PFD-001 and '6' on PFD-002" in issue.message
+
+
+def _run(name: str, number: str, units: list[Unit], legs: list[dict[str, Any]]) -> Flowsheet:
+    """Build a sheet that joins its units in a row, one connect() per leg."""
+    fs = _sheet(name, number, *units[:1])
+    for unit in units[1:]:
+        fs.add(unit)
+    for (up, down), leg in zip(zip(units, units[1:]), legs):
+        fs.connect(up.port("outlet"), down.port("inlet"), **leg)
+    return fs
+
+
+_P1001 = {"name": "P-1001", "service": "P"}
+
+
+@pytest.mark.parametrize("far", ["4", "6"])
+@pytest.mark.parametrize("leaving", [True, False], ids=["at-a-product-flag", "at-a-feed-flag"])
+def test_a_connector_takes_the_size_stated_nearest_it(leaving: bool, far: str):
+    """Check that a flag's unstated size is the one past its valve, short of the reducer."""
+    if leaving:
+        units: list[Unit] = [Feed("Crude Oil"), Reducer("R-1"), Valve("HV-1")]
+        near = _run(
+            "Crude Unit",
+            "PFD-001",
+            [*units, Product("Crude", reference="PFD-002")],
+            [{**_P1001, "size": "6"}, {"size": "4"}, {}],
+        )
+        other = _run(
+            "Residue Unit",
+            "PFD-002",
+            [Feed("Crude", reference="PFD-001"), Product("Residue")],
+            [{**_P1001, "size": far}],
+        )
+        sheets = [near, other]
+    else:
+        units = [
+            Feed("Crude", reference="PFD-001"),
+            Valve("HV-1"),
+            Reducer("R-1", large_end="outlet"),
+        ]
+        near = _run(
+            "Residue Unit",
+            "PFD-002",
+            [*units, Product("Residue")],
+            [_P1001, {"size": "4"}, {"size": "6"}],
+        )
+        other = _run(
+            "Crude Unit",
+            "PFD-001",
+            [Feed("Crude Oil"), Product("Crude", reference="PFD-002")],
+            [{**_P1001, "size": far}],
+        )
+        sheets = [other, near]
+
+    issues = Document(sheets).validate()
+
+    if far == "4":
+        assert issues == []
+    else:
+        (issue,) = issues
+        assert issue.code == "connector-line-mismatch"
+        mine, theirs = ("4", "6") if leaving else ("6", "4")
+        assert f"size {mine!r} on PFD-001 and {theirs!r} on PFD-002" in issue.message
+
+
+@pytest.mark.parametrize("leaving", [True, False], ids=["at-a-product-flag", "at-a-feed-flag"])
+def test_a_connector_takes_no_size_from_across_a_reducer(leaving: bool):
+    """Check that a size stated only past a reducer is not compared at the flag."""
+    if leaving:
+        near = _run(
+            "Crude Unit",
+            "PFD-001",
+            [Feed("Crude Oil"), Reducer("R-1"), Product("Crude", reference="PFD-002")],
+            [{**_P1001, "size": "6"}, {}],
+        )
+        other = _run(
+            "Residue Unit",
+            "PFD-002",
+            [Feed("Crude", reference="PFD-001"), Product("Residue")],
+            [{**_P1001, "size": "4"}],
+        )
+    else:
+        near = _run(
+            "Residue Unit",
+            "PFD-002",
+            [
+                Feed("Crude", reference="PFD-001"),
+                Reducer("R-1", large_end="outlet"),
+                Product("Residue"),
+            ],
+            [_P1001, {"size": "6"}],
+        )
+        other = _run(
+            "Crude Unit",
+            "PFD-001",
+            [Feed("Crude Oil"), Product("Crude", reference="PFD-002")],
+            [{**_P1001, "size": "4"}],
+        )
+    assert Document([near, other]).validate() == []
 
 
 def test_one_tag_on_two_kinds_of_equipment_is_an_error():
