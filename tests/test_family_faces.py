@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from pandid import Flowsheet, units
+from pandid.layout import layered
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_anchor, resolve_port
 from pandid.render.symbols import BLOCK_PITCH
@@ -321,3 +322,29 @@ def test_a_compact_block_with_moved_connections_round_trips():
     assert got.height == 80
     assert got.input_faces == ("W", "N", "N", "N")
 
+
+# --- A stated tank or vessel face is on the unit's own side -------------------
+
+
+@pytest.mark.parametrize(("pin", "face"), [({"mirrored": True}, "W"), ({"orientation": 90}, "S")])
+def test_a_moved_tank_inlet_turns_and_mirrors_with_the_tank(pin, face):
+    """Draw a ``nozzle()`` face on the tank's own side after a mirror or turn."""
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1", inputs=2)).nozzle("in_2", "E")
+    tank.pin(x=300, y=300, **pin)
+    fs.layout()
+    assert _face(tank, "in_2") == face
+
+
+def test_layout_reads_a_stated_lone_inlet_on_its_stated_face():
+    """Place peers against a listed or moved lone inlet's own face."""
+    listed = units.Tank("TK-1", inputs=["N"])
+    moved = units.Tank("TK-2").nozzle("inlet", "E")
+    fs = Flowsheet("tank")
+    for tank in (listed, moved):
+        fs.add(tank)
+        feed = fs.add(units.Feed(f"F-{tank.name}"))
+        fs.connect(feed.outlet, tank.inlet)
+    fs.layout()
+    assert (_face(listed, "in_1"), _face(moved, "in_1")) == ("N", "E")
+    assert (layered._face(listed.inlet), layered._face(moved.inlet)) == ("N", "E")

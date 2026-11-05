@@ -2152,7 +2152,6 @@ class _MultiPortVessel(_FaceFamilies):
         resolved = _block_face(face, self.name)
         self._validate_face(role, canonical, resolved)
         self._faces[canonical] = resolved
-        self._port_faces[canonical] = resolved
         self._stated.add(canonical)
         self._invalidate_layout()
         return self
