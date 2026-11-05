@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
-from pandid.layout.halo import Pad, balloon_pads
+from pandid.layout.halo import Pad, balloon_pads, pinned_balloons
 from pandid.layout.stages import slot
 from pandid.portgeom import COMPASS, pinned_x, pinned_y, port_faces, resolve_port, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
@@ -271,6 +271,9 @@ def _flag(port: Port | None) -> bool:
 def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None:
     """Give every unit a frame by layered drawing, keeping pins.
 
+    With ``fs._pin_balloons`` set, units step off each balloon pinned
+    on both axes and its chain.
+
     Parameters
     ----------
     fs : Flowsheet
@@ -330,7 +333,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
                     s.col = pin.col
                 if pin is not None and pin.row is not None:
                     s.row = pin.row
-    _clear_pins(units)
+    _clear_pins(units, pinned_balloons(fs, pads) if fs._pin_balloons else [])
     for unit in units:
         s = slot(unit)
         unit.frame = Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, col=s.col, row=s.row,
@@ -353,18 +356,23 @@ def _rank(layers: dict[int, list[_Node]]) -> None:
                 row += 1
 
 
-def _clear_pins(units: list[Unit]) -> None:
-    """Step units off the fully pinned units and the units before them.
+def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]]
+                ) -> None:
+    """Step units off fixed boxes, fully pinned units and units before.
 
-    If any unit has an x or y pin, each unit not pinned on both axes,
-    in x-then-y order, steps below (right of, if its y is pinned) a
-    box it comes within ``LANE`` of, up to one step more than there
-    are boxes. The boxes are the fully pinned units and those before.
+    If any unit has an x or y pin or ``fixed`` is not empty, each unit
+    not pinned on both axes, in x-then-y order, steps below a box it
+    comes within ``LANE`` of, up to one step more than there are boxes.
+    It steps right instead if its y is pinned, or if the box is in
+    ``fixed`` and its x is free. The boxes are ``fixed``, the fully
+    pinned units and the units before.
 
     Parameters
     ----------
     units : list[Unit]
         Units with set slots.
+    fixed : list[tuple[float, float, float, float]]
+        Further boxes to keep off, as left, top, right, bottom.
     """
     def free(u: Unit, axis: str) -> bool:
         """Return whether a unit is unpinned on one axis.
@@ -399,19 +407,20 @@ def _clear_pins(units: list[Unit]) -> None:
         s = slot(u)
         return unit_box(u, Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, mirrored=s.mirrored))
 
-    if all(free(u, "x") and free(u, "y") for u in units):
+    if not fixed and all(free(u, "x") and free(u, "y") for u in units):
         return
     placed = [u for u in units if not free(u, "x") and not free(u, "y")]
     for u in sorted((u for u in units if u not in placed),
                     key=lambda u: (slot(u).x or 0.0, slot(u).y or 0.0)):
         axis = "y" if free(u, "y") else "x"
-        for _ in range(len(placed) + 1):
+        for _ in range(len(fixed) + len(placed) + 1):
             a = box(u)
-            hit = next((b for b in map(box, placed) if boxes_overlap(a, b, LANE)), None)
+            hit = next((b for b in [*fixed, *map(box, placed)] if boxes_overlap(a, b, LANE)),
+                       None)
             if hit is None:
                 break
             s = slot(u)
-            if axis == "y":
+            if axis == "y" and not (hit in fixed and free(u, "x")):
                 s.y = (s.y or 0.0) + hit[3] + LANE - a[1]
             else:
                 s.x = (s.x or 0.0) + hit[2] + LANE - a[0]
