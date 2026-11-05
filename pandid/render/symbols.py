@@ -119,6 +119,32 @@ def spread(index: int, count: int, along: float, pitch: float,
     return first + span * index / (count - 1)
 
 
+def pinned(pin: float, along: float,
+           band: "tuple[float, float] | None" = None) -> float:
+    """Return the point a fraction of the way along a face.
+
+    The fraction runs from 0 at the face's top or left end to 1 at its
+    bottom or right end, and the point is kept inside the band.
+
+    Parameters
+    ----------
+    pin : float
+        Fraction of the face.
+    along : float
+        Face length.
+    band : tuple[float, float], optional
+        ``(lo, hi)`` part of the face to keep to; the whole face if
+        omitted.
+
+    Returns
+    -------
+    float
+        Coordinate along the face.
+    """
+    lo, hi = (0.0, along) if band is None else band
+    return min(max(pin * along, lo), hi)
+
+
 def bandless_face(who: str, face: str, at: float, members: "list[str]",
                   sym: "Symbol") -> ValueError:
     """Return the error for several nozzles on a one-point face.
@@ -238,8 +264,7 @@ class PortSeries:
         """
         along = height if self.face in ("W", "E") else width
         if pin is not None:
-            lo, hi = (0.0, along) if band is None else band
-            t = min(max(pin * along, lo), hi)
+            t = pinned(pin, along, band)
         else:
             t = spread(index, count, along, self.pitch, self.extent, self.at,
                        self.align, band)
@@ -1217,7 +1242,9 @@ _VESSEL_EXTENT = 0.7
 
 @lru_cache(maxsize=None)
 def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
-                  overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
+                  overlays: "tuple[Overlay, ...]" = (),
+                  ports: "tuple[tuple[str, tuple[float, float]], ...]" = ()
+                  ) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
     Each family is spread about the stencil's anchor within
@@ -1233,6 +1260,8 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         ``(port_name, face)`` for the inlet and outlet families.
     overlays : tuple[Overlay, ...], default=()
         The unit's composed parts.
+    ports : tuple[tuple[str, tuple[float, float]], ...], default=()
+        ``(name, point)`` nozzles the parts add, in body coordinates.
 
     Returns
     -------
@@ -1247,9 +1276,11 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         If a role has no placement on a requested face.
     ValueError
         If two or more nozzles share a face whose band is one point.
+    ValueError
+        If the parts leave a nozzle nearer another edge than its face.
     """
-    base = default_registry.composed(kind, variant, overlays)
-    ports = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
+    base = default_registry.composed(kind, variant, overlays, ports)
+    placed = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
     port_faces = {
         name: dict(menu) for name, menu in base.port_faces.items()
         if name not in ("inlet", "outlet")
@@ -1277,7 +1308,16 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
-            ports[name] = _face_point(face, t, inset, base.width, base.height)
+            placed[name] = _face_point(face, t, inset, base.width, base.height)
+            lands = outward_dir(*placed[name], base.width, base.height)
+            if lands != face:
+                raise ValueError(
+                    f"{kind}/{variant}: {name} is drawn on the {face} wall at "
+                    f"{placed[name]}, which the parts beside the body leave nearer the "
+                    f"{lands} edge of the {base.width:g}x{base.height:g} box, so its "
+                    f"line would leave {lands}. Put fewer nozzles on {face}, or the "
+                    f"parts on another wall"
+                )
     # Inlets and outlets count together on a point face.
     for face, on_face in by_face.items():
         band = base.bands.get(face)
@@ -1287,7 +1327,7 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     for role, members in members_by_role.items():
         if len(members) == 1 and menus[role]:
             port_faces[members[0]] = dict(menus[role])
-    return replace(base, ports=ports, port_faces=port_faces)
+    return replace(base, ports=placed, port_faces=port_faces)
 
 
 # Builders of symbols drawn per unit, by (kind, variant). A ``None``
@@ -1302,6 +1342,7 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("splitter", "default"): _junction,
     ("tank", None): lambda unit: unit.symbol(),
     ("vessel", None): lambda unit: unit.symbol(),
+    ("evaporator", None): lambda unit: unit.symbol(),
 }
 
 
@@ -1871,6 +1912,29 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         overlays=tuple(overlay for overlay, _ in parts),
         iso_reg=iso_reg,
     )
+
+
+def overlay_boxes(body: Symbol, overlays: "tuple[Overlay, ...]"
+                  ) -> "list[tuple[float, float, float, float]]":
+    """Return where :func:`compose` draws each stretchable part.
+
+    Parameters
+    ----------
+    body : Symbol
+        Body the parts are composed onto.
+    overlays : tuple[Overlay, ...]
+        Every part on the body.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Each part's ``(left, top, right, bottom)`` in the composed box.
+    """
+    ox = -min([0.0, *(o.x * body.width for o in overlays)])
+    oy = -min([0.0, *(o.y * body.height for o in overlays)])
+    return [(o.x * body.width + ox, o.y * body.height + oy,
+             (o.x + o.w) * body.width + ox, (o.y + o.h) * body.height + oy)
+            for o in overlays]
 
 
 # The ISO 10628-2 group-8 separating vessel outline, a body for
@@ -2644,6 +2708,8 @@ def _evaporator(name: str, *detail: str,
             "heating_in": (0.0, top + _EVAP_STEAM_INSET),
             "condensate": (_EVAP_W, bot - _EVAP_STEAM_INSET),
         },
+        # The straight shell, held 10 off each head.
+        bands={face: (_EVAP_HEAD + 10, _EVAP_HEAD + _EVAP_SHELL - 10) for face in ("W", "E")},
         gravity_fixed=True,
     )
 
@@ -2885,10 +2951,13 @@ class SymbolRegistry:
         return [self._parts[key] for key in sorted(self._parts)]
 
     def composed(self, kind: str, variant: str = "default",
-                 overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
+                 overlays: "tuple[Overlay, ...]" = (),
+                 ports: "tuple[tuple[str, tuple[float, float]], ...]" = ()
+                 ) -> Symbol:
         """Return ``(kind, variant)`` with ``overlays`` drawn on it.
 
-        Compositions are cached. With no overlays the body is returned.
+        Compositions are cached. With no overlays and no ports the body
+        is returned.
 
         Parameters
         ----------
@@ -2898,6 +2967,9 @@ class SymbolRegistry:
             Registered variant name.
         overlays : tuple[Overlay, ...], default=()
             Parts to draw, each registered with :meth:`register_part`.
+        ports : tuple[tuple[str, tuple[float, float]], ...], default=()
+            ``(name, point)`` nozzles to add to the body, in body
+            coordinates.
 
         Returns
         -------
@@ -2911,12 +2983,15 @@ class SymbolRegistry:
         ValueError
             If a part is unregistered or cannot be composed.
         """
-        if not overlays:
+        if not overlays and not ports:
             return self.get(kind, variant)
-        key = (kind, variant, tuple(overlays))
+        key = (kind, variant, tuple(overlays), tuple(ports))
         if key not in self._composed:
+            body = self.get(kind, variant)
+            if ports:
+                body = replace(body, ports={**body.ports, **dict(ports)})
             self._composed[key] = compose(
-                self.get(kind, variant),
+                body,
                 [(overlay, self.part(overlay.group, overlay.name))
                  for overlay in overlays],
             )
