@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from pandid.flowsheet import Flowsheet
+    from pandid.render.symbols import Overlay
     from pandid.streams import Stream
 
 _TOL = 1.0  # tolerance in px
@@ -416,7 +417,7 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     return (offset, span, sh <= dh) if offset < span else None
 
 
-def _drawn_part_boxes(u) -> list[tuple[object, tuple[float, float, float, float]]]:
+def _drawn_part_boxes(u) -> "list[tuple[Overlay, tuple[float, float, float, float]]]":
     """Return each part drawn on a placed unit, with its box on the sheet.
 
     Parameters
@@ -470,7 +471,7 @@ def _wall_clashes(u) -> list[Issue]:
         return []
     placed = _drawn_part_boxes(u)
     first = len(placed) - len(walls)
-    drawn = [(f"the {o.name} support", box) for o, box in placed[:first]]  # type: ignore[attr-defined]
+    drawn = [(f"the {o.name} support", box) for o, box in placed[:first]]
     drawn += [(f"the {part} at {place!r}", box)
               for (part, place), (_, box) in zip(walls, placed[first:])]
     issues = []
@@ -516,8 +517,7 @@ def _support_crossings(u) -> list[Issue]:
     held = {o.name for o in getattr(u, "overlays", ()) or ()} & (set(SUPPORTS) - {"skirt"})
     if not held:
         return []
-    boxes = [(o.name, box) for o, box in _drawn_part_boxes(u)  # type: ignore[attr-defined]
-             if o.name in held]  # type: ignore[attr-defined]
+    boxes = [(o.name, box) for o, box in _drawn_part_boxes(u) if o.name in held]
     issues = []
     for port_name, port in u.ports.items():
         if port.stream is None:

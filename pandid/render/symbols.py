@@ -1281,9 +1281,9 @@ _SWAGE_STEP, _SWAGE_TOP, _SWAGE_NECK, _SWAGE_CONE, _SWAGE_HEAD = 10.0, 15.0, 25.
 #: Swaged vessel: offset of the relief from the crown.
 _SWAGE_RELIEF = 9.0
 
-#: Horizontal drum: the inlet's offset on the top wall, the relief's
-#: and the drain's from the west head, and the vent's and the outlet's
-#: from the east head.
+#: Horizontal drum: the top inlet's, the relief's and the drain's
+#: offsets from the west end, and the vent's and the outlet's from the
+#: east end.
 _DRUM_INLET_N, _DRUM_RELIEF, _DRUM_DRAIN = 20.0, 30.0, 25.0
 _DRUM_VENT, _DRUM_OUTLET = 36.5, 23.5
 
@@ -1790,6 +1790,7 @@ _VESSEL_EXTENT = 0.7
 _SUPPORT_CLEARANCE = {"inlet": ARROWHEAD / 2 + MIN_HEAD_CLEARANCE, "outlet": MIN_HEAD_CLEARANCE}
 
 
+@lru_cache(maxsize=None)
 def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
                  ports: "tuple[tuple[str, tuple[float, float]], ...]",
                  size: "tuple[float, float] | None"
@@ -1965,6 +1966,7 @@ def _groups(faces: tuple[tuple[str, str], ...]) -> dict[tuple[str, str], list[st
     return groups
 
 
+@lru_cache(maxsize=None)
 def vessel_room(variant: str, faces: tuple[tuple[str, str], ...],
                 overlays: "tuple[Overlay, ...]",
                 ports: "tuple[tuple[str, tuple[float, float]], ...]",
@@ -3693,7 +3695,8 @@ class SymbolRegistry:
         self._expanders.pop((kind, variant), None)
         for key in [k for k in self._composed if k[:2] == (kind, variant)]:
             del self._composed[key]
-        vessel_symbol.cache_clear()
+        for cached in (vessel_symbol, vessel_room, _vessel_base):
+            cached.cache_clear()
 
     def register_part(self, part: OverlayPart) -> None:
         """Register one ISO 10628-2 group 26-29 supplementary symbol.
@@ -3706,7 +3709,8 @@ class SymbolRegistry:
         self._parts[part.key()] = part
         # Drop every composition; any may use this part.
         self._composed.clear()
-        vessel_symbol.cache_clear()
+        for cached in (vessel_symbol, vessel_room, _vessel_base):
+            cached.cache_clear()
 
     def part(self, group: int, name: str) -> OverlayPart:
         """Return the part registered as ``(group, name)``.
