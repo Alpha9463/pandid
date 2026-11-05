@@ -212,6 +212,21 @@ def test_angle_is_measured_from_the_flow_direction():
     assert ahead.frame.cy == pytest.approx(ahead.tap[1])
 
 
+def test_an_attached_balloon_keeps_off_another_units_tag():
+    """Check that sheet 16 draws LT-203 clear of M-201's tag, and no balloon on another's tag."""
+    from _render_cases import gallery
+    from pandid.layout.attach import _tag_boxes, on_a_tag
+    from pandid.layout.conflicts import boxes_overlap
+    from pandid.portgeom import unit_box
+
+    fs, _ = gallery.flowsheet("16_stirred_reactor_train")
+    fs.route()
+    lt = next(u for u in fs.units if u.name == "LT-203")
+    tag = next(box for owner, box in _tag_boxes(fs) if owner.name == "M-201")
+    assert not boxes_overlap(unit_box(lt, frame_of(lt)), tag)
+    assert not on_a_tag(fs)
+
+
 def test_angle_follows_a_reroute_rather_than_the_screen():
     """Check that the angle is measured from the flow on a vertical leg, not the screen."""
     fs = Flowsheet("v")

@@ -658,6 +658,8 @@ class Flowsheet:
         # and whether any did since route() turned that on.
         self._keep_clear = False
         self._kept_clear = False
+        # Whether an attached balloon keeps off other units' tags.
+        self._clear_tags = False
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes and moves its chain's room there.
         self._pin_balloons = False
@@ -2475,9 +2477,9 @@ class Flowsheet:
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face, on_a_tag
         from pandid.units import Instrument
-        from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
+        from pandid.layout.control import _drawn, _flaws, _hangable, _taps_off, place_control
         from pandid.layout.halo import pinned_balloons
         from pandid.validate import geometry_issues
 
@@ -2545,7 +2547,8 @@ class Flowsheet:
                 if chained:
                     attempt(may_hang=False, keep_clear=True)
 
-        def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
+        def keep_if_better(redo: Callable[[], None], before: Counter[str],
+                           measure: Callable[[Flowsheet], Counter[str]] = _flaws) -> None:
             """Redo the sheet, and undo that if a finding or clash grew or a
             tap left its line.
 
@@ -2554,14 +2557,16 @@ class Flowsheet:
             redo : Callable[[], None]
                 Lays out or routes the sheet again.
             before : Counter[str]
-                Findings and clashes of the sheet as it stands.
+                What ``measure`` counts on the sheet as it stands.
+            measure : Callable[[Flowsheet], Counter[str]], default=_flaws
+                Counts findings and clashes on a routed sheet.
             """
             prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
             free = self._free_faces
             try:
                 redo()
                 kept = _taps_off(self) <= off and not any(
-                    n > before[k] for k, n in _flaws(self).items())
+                    n > before[k] for k, n in measure(self).items())
             except Exception:
                 kept = False
             if not kept:
@@ -2580,12 +2585,23 @@ class Flowsheet:
             finally:
                 self._priced = False
 
+        def clear_tags() -> None:
+            """Place balloons again, each clear of other units' tags."""
+            self._clear_tags = True
+            try:
+                place()
+            finally:
+                self._clear_tags = False
+
         def settle_best() -> None:
-            """Settle the sheet, then priced where it draws a touch."""
+            """Settle the sheet, then priced where it draws a touch, then
+            with balloons clear of tags where one stands on a tag."""
             settle()
             touch = {"route-along-unit", "route-crosses-near-nozzle"}
             if tries and any(i.code in touch for i in geometry_issues(self)):
                 keep_if_better(priced, _flaws(self))
+            if tries and on_a_tag(self):
+                keep_if_better(clear_tags, _drawn(self), _drawn)
 
         def relaid() -> None:
             """Lay out with every signal exit a lane clear, and settle."""
