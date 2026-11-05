@@ -681,14 +681,14 @@ def test_a_block_round_trips_through_a_spec():
 
 
 def test_a_connection_moved_by_nozzle_is_written_back_where_it_was_moved_to():
-    """Check that a spec writes a moved connection's face in the declaration."""
+    """Check that a spec keeps a count and writes the moved face as a nozzle."""
     from pandid.spec import from_dict, to_dict
 
     fs = Flowsheet("bfd")
     fs.add(units.Block("Reaction", inputs=1, outputs=2)).nozzle("out_2", "S")
     (entry,) = [u for u in to_dict(fs)["units"] if u["kind"] == "Block"]
-    assert entry["outputs"] == ["E", "S"]
-    assert "port_faces" not in entry
+    assert entry["outputs"] == 2
+    assert entry["port_faces"] == {"out_2": "S"}
     assert from_dict(to_dict(fs)).units[0].face("out_2") == "S"
 
 

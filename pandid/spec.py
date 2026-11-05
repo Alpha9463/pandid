@@ -2059,9 +2059,12 @@ def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _write_connection_faces(unit, entry: dict[str, Any],
-                            default_input: str, default_output: str,
                             omit_bare_single: bool = False) -> None:
     """Write a Block, Tank or Vessel's faces and ``port_order``.
+
+    A family declared by a list is written as its faces, and one
+    declared by a count as the count, with each face ``nozzle()`` moved
+    under ``port_faces``.
 
     Parameters
     ----------
@@ -2069,20 +2072,18 @@ def _write_connection_faces(unit, entry: dict[str, Any],
         Unit to write.
     entry : dict[str, Any]
         Entry to add the keys to.
-    default_input : str
-        Default face of an input.
-    default_output : str
-        Default face of an output.
     omit_bare_single : bool, default=False
-        Omit a key for a single connection on the default face.
+        Omit a key for a single counted connection.
     """
-    for key, faces, default in (
-        ("inputs", unit.input_faces, default_input),
-        ("outputs", unit.output_faces, default_output),
-    ):
-        if omit_bare_single and len(faces) == 1 and faces[0] == default:
-            continue
-        entry[key] = len(faces) if all(f == default for f in faces) else list(faces)
+    for key, family in (("inputs", unit.inlets), ("outputs", unit.outlets)):
+        if any(port.name in unit._listed for port in family):
+            entry[key] = [unit._faces[port.name] for port in family]
+        elif not (omit_bare_single and len(family) == 1):
+            entry[key] = len(family)
+    moved = {name: face for name, face in unit._faces.items()
+             if name in unit._stated and name not in unit._listed}
+    if moved:
+        entry["port_faces"] = {**entry.get("port_faces", {}), **moved}
     declared = [port.name for port in (*unit.inlets, *unit.outlets)]
     port_order = {
         face: [port.name for port in unit.ports_on(face)]
@@ -2129,10 +2130,9 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
             and len(getattr(unit, "feeds")) > 1):
         entry["n_feeds"] = len(getattr(unit, "feeds"))
     if isinstance(unit, unit_types.Block):
-        _write_connection_faces(unit, entry, unit.DEFAULT_INPUT_FACE, unit.DEFAULT_OUTPUT_FACE)
+        _write_connection_faces(unit, entry)
     elif isinstance(unit, (unit_types.Tank, unit_types.Vessel)):
-        _write_connection_faces(unit, entry, unit._home_face("inlet"),
-                                unit._home_face("outlet"), omit_bare_single=True)
+        _write_connection_faces(unit, entry, omit_bare_single=True)
     elif isinstance(unit, unit_types.Mixer):
         entry["n_inlets"] = len(unit.inlets)
     elif isinstance(unit, unit_types.Splitter):
