@@ -1258,8 +1258,9 @@ _BAND_GAP = 10.0
 #: Offset of the relief from the crown of a dished head.
 _RELIEF_OFF_CROWN = 12.0
 
-#: Largest share of a head's half-width a relief sits off its crown.
-_RELIEF_SHARE = 0.6
+#: Least distance of a relief from the vent on the crown.
+_RELIEF_MIN = MIN_NOZZLE_PITCH / 2
+
 
 #: Side and drop of a dished vessel's own brackets, and the height of
 #: their foot above the bottom tangent line.
@@ -1353,6 +1354,27 @@ def _band(start: float, end: float) -> tuple[float, float]:
     return start + gap, end - gap
 
 
+def _relief_off(rx: float, depth: float, off: float) -> float:
+    """Return a relief's distance from a head's crown, kept where it is flat.
+
+    Parameters
+    ----------
+    rx : float
+        Head's half-width.
+    depth : float
+        Head's depth.
+    off : float
+        Distance wanted.
+
+    Returns
+    -------
+    float
+        ``off``, or less where the head there slopes more steeply than
+        it runs, so the relief's line leaves the head upward.
+    """
+    return min(off, rx * rx / math.hypot(rx, depth))
+
+
 def _on_head(rx: float, depth: float, off: float) -> float:
     """Return how far below the crown a point on a top head lies.
 
@@ -1434,7 +1456,7 @@ def _dished_ports(x0: float, x1: float, height: float) -> dict[str, tuple[float,
         Port anchors.
     """
     cx, rx = (x0 + x1) / 2, (x1 - x0) / 2
-    off = min(_RELIEF_OFF_CROWN, _RELIEF_SHARE * rx)
+    off = _relief_off(rx, _DISHED, _RELIEF_OFF_CROWN)
     return {"vent": (cx, 0.0), "relief": (cx - off, _on_head(rx, _DISHED, off)),
             "drain": (cx, height)}
 
@@ -1453,8 +1475,9 @@ def _default(w: float, h: float) -> tuple:
         Artwork, ports and bands.
     """
     art = f'<path d="{_upright(0.0, w, h, _HEAD)}" {_OUTLINE}/>'
+    off = _relief_off(w / 2, _HEAD, w / 4)
     ports = {"inlet": (0.0, h / 2), "outlet": (w, h / 2), "vent": (w / 2, 0.0),
-             "relief": (w / 4, _on_head(w / 2, _HEAD, w / 4)), "drain": (w / 2, h)}
+             "relief": (w / 2 - off, _on_head(w / 2, _HEAD, off)), "drain": (w / 2, h)}
     band = _band(_HEAD, h - _HEAD)
     return art, ports, {"W": band, "E": band}
 
@@ -1567,7 +1590,7 @@ def _swaged(w: float, h: float) -> tuple:
     """
     x0, x1, cx = _SWAGE_STEP, w - _SWAGE_STEP, w / 2
     r = (x1 - x0) / 2
-    off = min(_SWAGE_RELIEF, _RELIEF_SHARE * r)
+    off = _relief_off(r, _SWAGE_TOP, _SWAGE_RELIEF)
     neck = _SWAGE_TOP + _SWAGE_NECK
     wide = neck + _SWAGE_CONE
     knuckle = h - _SWAGE_HEAD
@@ -1700,7 +1723,8 @@ def _shell(variant: str, w: float, h: float) -> Symbol:
         svg=f'<g id="{name}">{art}</g>',
         width=w, height=h,
         ports={k: (round(x, 4), round(y, 4)) for k, (x, y) in ports.items()},
-        port_faces=faces,
+        port_faces={role: {face: (round(x, 4), round(y, 4)) for face, (x, y) in menu.items()}
+                    for role, menu in faces.items()},
         bands={k: (round(lo, 4), round(hi, 4)) for k, (lo, hi) in bands.items()},
         id_suffix="" if (w, h) == VESSEL_SIZES[variant] else f"_{w:g}x{h:g}",
         drawio_shape=_DRAWIO[variant],
@@ -1708,37 +1732,88 @@ def _shell(variant: str, w: float, h: float) -> Symbol:
     )
 
 
-def vessel_shell_fits(variant: str, width: float) -> tuple[float, float]:
+def vessel_shell_fits(variant: str) -> tuple[float, float]:
     """Return the smallest box a shell can be drawn in.
 
     Parameters
     ----------
     variant : str
         One of :data:`VESSEL_SIZES`.
-    width : float
-        The shell's width, which a swaged shell's height depends on.
 
     Returns
     -------
     tuple[float, float]
         Least width and least height.
     """
+    def reach(depth: float) -> float:
+        """Return the half-width a head needs to carry its relief clear of its vent.
+
+        Parameters
+        ----------
+        depth : float
+            Head's depth.
+
+        Returns
+        -------
+        float
+            Least half-width.
+        """
+        m = _RELIEF_MIN ** 2
+        return math.sqrt((m + math.sqrt(m * m + 4 * m * depth ** 2)) / 2)
+
     least = {
-        "default": (1.0, 2 * _HEAD),
-        "dished": (2 * _BRACKET + 1, 2 * _DISHED + _BRACKET_FOOT + _BRACKET),
-        "dome": (2 * _DISHED + _DOME_OFF + _DOME_W + _BAND_GAP,
-                 _DOME_NECK + _DOME_CAP + 2 * _DOME_NOZZLE),
-        "electrical_heating": (2 * _HEATER_REACH + 1, _HEATER_H + 2 * _HEATER_LEAD),
+        "default": (2 * reach(_HEAD), 2 * _HEAD),
+        "dished": (2 * reach(_DISHED) + 2 * _BRACKET,
+                   2 * _DISHED + _BRACKET_FOOT + _BRACKET),
+        # The relief stays off the head and nearer the roof than the end.
+        "dome": (max(2 * _DISHED + _BAND_GAP, 2 * (_DOME_NECK + _DOME_CAP + 1))
+                 + _DOME_OFF + _DOME_W, _DOME_NECK + _DOME_CAP + 2 * _DOME_NOZZLE),
+        "electrical_heating": (max(2 * reach(_DISHED), _HEATER_REACH + 1) + _HEATER_REACH,
+                               _HEATER_H + 2 * _HEATER_LEAD),
         "horizontal": (_DRUM_HEAD / min(_DRUM_INLET_N, 1 - _DRUM_OUTLET), 1.0),
-        "insulated": (2 * _CLAD + 1, 2 * (_DISHED + _CLAD_END)),
-        "jacketed": (2 * _CLAD + 1, 2 * (_DISHED + _CLAD_END)),
-        "swaged": (2 * _SWAGE_STEP + 1, _SWAGE_TOP + _SWAGE_NECK + _SWAGE_CONE + _SWAGE_HEAD),
+        "insulated": (2 * reach(_DISHED) + 2 * _CLAD, 2 * (_DISHED + _CLAD_END)),
+        "jacketed": (2 * reach(_DISHED) + 2 * _CLAD, 2 * (_DISHED + _CLAD_END)),
+        "swaged": (2 * reach(_SWAGE_TOP) + 2 * _SWAGE_STEP,
+                   _SWAGE_TOP + _SWAGE_NECK + _SWAGE_CONE + _SWAGE_HEAD),
     }
     return least[variant]
 
 
-def _own_brackets(variant: str, height: float) -> list[tuple[float, float]]:
-    """Return the stretches of a shell's side walls its own brackets cover.
+def vessel_floor(variant: str, width: float, height: float, x: float) -> float:
+    """Return how far down a shell's outline reaches at a point across it.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`VESSEL_SIZES`.
+    width, height : float
+        The shell's box.
+    x : float
+        Distance across the box, held to the shell's own span.
+
+    Returns
+    -------
+    float
+        Depth of the shell's lowest outline at ``x``.
+    """
+    heads = {
+        "default": (width / 2, width / 2, _HEAD),
+        "dished": (width / 2, width / 2 - _BRACKET, _DISHED),
+        "electrical_heating": ((width - _HEATER_REACH) / 2, (width - _HEATER_REACH) / 2, _DISHED),
+        "insulated": (width / 2, width / 2 - _CLAD, _DISHED),
+        "jacketed": (width / 2, width / 2 - _CLAD, _DISHED),
+        "swaged": (width / 2, width / 2, _SWAGE_HEAD),
+    }
+    if variant not in heads:
+        # A lying shell's floor is its straight bottom wall.
+        return height
+    cx, rx, depth = heads[variant]
+    off = min(abs(x - cx), rx)
+    return height - depth + depth * math.sqrt(max(0.0, 1 - (off / rx) ** 2))
+
+
+def _own_detail(variant: str, height: float) -> list[tuple[str, float, float]]:
+    """Return the stretches of a shell's side walls its own detail covers.
 
     Parameters
     ----------
@@ -1749,13 +1824,48 @@ def _own_brackets(variant: str, height: float) -> list[tuple[float, float]]:
 
     Returns
     -------
-    list[tuple[float, float]]
-        ``(top, bottom)`` of each bracket on the W and E walls.
+    list[tuple[str, float, float]]
+        ``(face, top, bottom)`` of the dished vessel's brackets and of
+        the electric heater with its leads.
     """
-    if variant != "dished":
-        return []
-    top = height - _DISHED - _BRACKET_FOOT - _BRACKET
-    return [(top, top + _BRACKET)]
+    if variant == "dished":
+        top = height - _DISHED - _BRACKET_FOOT - _BRACKET
+        return [(face, top, top + _BRACKET) for face in ("W", "E")]
+    if variant == "electrical_heating":
+        reach = _HEATER_H / 2 + _HEATER_LEAD
+        return [("E", height / 2 - reach, height / 2 + reach)]
+    return []
+
+
+def vessel_side(variant: str, width: float, height: float) -> tuple[float, float]:
+    """Return the stretch of a shell's west edge its outline meets.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`VESSEL_SIZES`.
+    width, height : float
+        The shell's box.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(top, bottom)`` down the west edge of the box.
+    """
+    if variant == "dished":
+        foot = height - _DISHED - _BRACKET_FOOT
+        return foot, foot
+    if variant in ("jacketed", "insulated"):
+        return _DISHED + _CLAD_END, height - _DISHED - _CLAD_END
+    if variant == "swaged":
+        return _SWAGE_TOP + _SWAGE_NECK + _SWAGE_CONE, height - _SWAGE_HEAD
+    if variant == "horizontal":
+        return height / 2, height / 2
+    if variant == "dome":
+        top = _DOME_NECK + _DOME_CAP
+        return top + (height - top) / 2, top + (height - top) / 2
+    head = _HEAD if variant == "default" else _DISHED
+    return head, height - head
 
 
 def _nearest_stretch(band: "tuple[float, float] | None", along: float,
@@ -1841,15 +1951,13 @@ def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
         spans += [(face, top, bottom) if face in ("W", "E") else (face, left, right)
                   for face, out in beside.items() if out]
     if kind == "vessel" and body is vessel_shell(variant, body.width, body.height):
-        spans += [(face, a + oy, b + oy) for a, b in _own_brackets(variant, body.height)
-                  for face in ("W", "E")]
+        spans += [(face, a + oy, b + oy) for face, a, b in _own_detail(variant, body.height)]
     return base, spans
 
 
 def _family_band(band: "tuple[float, float] | None", along: float, inset: float,
                  t0: float, count: int, spans: "list[tuple[float, float]]",
-                 clearance: float, pitch: float = MIN_NOZZLE_PITCH
-                 ) -> "tuple[tuple[float, float] | None, float]":
+                 clearance: float, wall: bool) -> "tuple[tuple[float, float] | None, float]":
     """Return the stretch a family is spread in, and the length it lacks.
 
     The stretch is nearer the family's face than either end of the box
@@ -1873,8 +1981,9 @@ def _family_band(band: "tuple[float, float] | None", along: float, inset: float,
         Stretches of the face supports cover.
     clearance : float
         Gap kept from a support.
-    pitch : float, default=MIN_NOZZLE_PITCH
-        Pitch the stretch must hold the family at.
+    wall : bool
+        Whether the face is a wall that lengthens with the shell, rather
+        than a head's apex.
 
     Returns
     -------
@@ -1883,10 +1992,10 @@ def _family_band(band: "tuple[float, float] | None", along: float, inset: float,
         a clear stretch to hold the family.
     """
     near = _nearest_stretch(band, along, inset, count) if count > 1 else band
-    if near is not None and near[0] >= near[1]:
-        # A head's apex: the nozzle cannot move along it.
+    if near is not None and near[0] >= near[1] and (count == 1 or not wall):
+        # A head's apex, or a lone nozzle: it cannot move along it.
         return near, 0.0
-    need = pitch * (count - 1)
+    need = MIN_NOZZLE_PITCH * (count - 1)
     pieces = [near or (0.0, along)]
     for a, b in spans:
         a, b = a - clearance, b + clearance
@@ -1951,6 +2060,25 @@ def _wall_members(base: Symbol, face: str, members: list[str], t0: float,
             + [n for n in order if beside[n] > t0])
 
 
+def _has_wall(variant: str, face: str) -> bool:
+    """Return whether a vessel shell's face is a wall at its natural size.
+
+    Parameters
+    ----------
+    variant : str
+        Vessel variant.
+    face : str
+        Face name.
+
+    Returns
+    -------
+    bool
+        Whether the face's band has length.
+    """
+    lo, hi = default_registry.get("vessel", variant).bands.get(face, (0.0, 1.0))
+    return lo < hi
+
+
 def _groups(faces: tuple[tuple[str, str], ...]) -> dict[tuple[str, str], list[str]]:
     """Return a tank's or vessel's families, by role and face.
 
@@ -1975,12 +2103,11 @@ def _groups(faces: tuple[tuple[str, str], ...]) -> dict[tuple[str, str], list[st
 def vessel_room(variant: str, faces: tuple[tuple[str, str], ...],
                 overlays: "tuple[Overlay, ...]",
                 ports: "tuple[tuple[str, tuple[float, float]], ...]",
-                size: "tuple[float, float]", pitch: float = MIN_NOZZLE_PITCH,
-                supports: bool = True) -> "tuple[float, float]":
+                size: "tuple[float, float]") -> "tuple[float, float]":
     """Return how much wider and taller a vessel's shell must be.
 
     The shell is long enough when each family has a stretch of its wall
-    that holds it at ``pitch``.
+    clear of the supports that holds it at :data:`MIN_NOZZLE_PITCH`.
 
     Parameters
     ----------
@@ -1994,10 +2121,6 @@ def vessel_room(variant: str, faces: tuple[tuple[str, str], ...],
         ``(name, point)`` nozzles the parts add, in body coordinates.
     size : tuple[float, float]
         The shell's box.
-    pitch : float, default=MIN_NOZZLE_PITCH
-        Pitch each family is held at.
-    supports : bool, default=True
-        Whether the stretch keeps clear of the supports.
 
     Returns
     -------
@@ -2017,8 +2140,8 @@ def vessel_room(variant: str, faces: tuple[tuple[str, str], ...],
                  if name not in ("inlet", "outlet", *dict(ports))}
         members = _wall_members(base, face, members, t0, band, along, fixed)
         _, short = _family_band(band, along, inset, t0, len(members),
-                                [(a, b) for f, a, b in spans if f == face and supports],
-                                _SUPPORT_CLEARANCE[role], pitch)
+                                [(a, b) for f, a, b in spans if f == face],
+                                _SUPPORT_CLEARANCE[role], _has_wall(variant, face))
         if face in ("W", "E"):
             tall = max(tall, short)
         else:
@@ -2104,7 +2227,7 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                                 {name: placed[name] for name in fixed})
         band, _ = _family_band(band, along, inset, t0, len(members),
                                [(a, b) for f, a, b in spans if f == face],
-                               _SUPPORT_CLEARANCE[role])
+                               _SUPPORT_CLEARANCE[role], kind == "vessel" and _has_wall(variant, face))
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)

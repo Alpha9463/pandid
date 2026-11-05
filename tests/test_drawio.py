@@ -45,8 +45,9 @@ from pandid.render.svg import (
     tap_lines,
     tap_route,
 )
-from pandid.render.symbols import _GROUP, Symbol, default_registry, expander
+from pandid.render.symbols import _GROUP, Symbol, default_registry, expander, overlay_boxes
 from pandid.render.weights import LineWeight
+from pandid.units import _drawn_parts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -2803,10 +2804,17 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
     inner = _GROUP.match(sym.svg).group(2)
     assert inner.count("<g transform=") >= len(sym.overlays)
 
-    for overlay, cell in zip(sym.overlays, children):
+    # A vessel's shell is drawn in place within the cell, its parts round it.
+    shell = _drawn_parts(unit, unit.__dict__["overlays"])[0] if unit.kind == "vessel" else None
+    boxes = [] if shell is None else overlay_boxes(shell, sym.overlays)
+    for i, (overlay, cell) in enumerate(zip(sym.overlays, children)):
         box = cell.find("mxGeometry")
         got = tuple(float(box.get(k)) for k in ("x", "y", "width", "height"))
         want = (overlay.x * w, overlay.y * h, overlay.w * w, overlay.h * h)
+        if boxes:
+            left, top, right, bottom = boxes[i]
+            kx, ky = w / sym.width, h / sym.height
+            want = (left * kx, top * ky, (right - left) * kx, (bottom - top) * ky)
         assert got == pytest.approx(want, abs=0.02), f"{unit.name}: {overlay.group}/{overlay.name}"
         assert _style(cell)["movable"] == "0" and _style(cell)["connectable"] == "0"
 

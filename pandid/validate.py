@@ -512,6 +512,7 @@ def _support_crossings(u) -> list[Issue]:
     """
     from pandid.portgeom import resolve_port
     from pandid.render.iso_parts import SUPPORTS
+    from pandid.units import _built_to_size
 
     # A skirt carries the bottom connections through it.
     held = {o.name for o in getattr(u, "overlays", ()) or ()} & (set(SUPPORTS) - {"skirt"})
@@ -528,11 +529,13 @@ def _support_crossings(u) -> list[Issue]:
         if crossed is None:
             continue
         dim = "height" if stub.face in ("W", "E") else "width"
+        cure = (f"Leave {u.name}.{dim} unset so the shell grows clear of it, give a larger "
+                f"{dim}, or take the line to another face with "
+                f"{u.name}.nozzle({port_name!r}, face)" if _built_to_size(u) else
+                f"Build {u.name} with supports= that keep clear of the line")
         issues.append(Issue(
             "warning", "line-through-support",
-            f"{u.name}: the line on {port_name} runs through its {crossed} support. Leave "
-            f"{u.name}.{dim} unset so the shell grows clear of it, give a larger {dim}, "
-            f"or take the line to another face with {u.name}.nozzle({port_name!r}, face)"))
+            f"{u.name}: the line on {port_name} runs through its {crossed} support. {cure}"))
     return issues
 
 

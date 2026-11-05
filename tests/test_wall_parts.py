@@ -224,15 +224,15 @@ def test_supports_refuses_a_wall_part_and_points_at_its_keyword():
 
 def test_a_box_too_small_for_its_parts_is_refused():
     """Check that a stated size with no room left for the body is refused."""
-    with pytest.raises(ValueError, match=r"give width=26 or more"):
+    with pytest.raises(ValueError, match=r"give width=46 or more"):
         Vessel("D-101", width=20, manholes=[("E", 0.3)], sockets=[("W", 0.6)])
 
 
 @pytest.mark.parametrize(
     ("build", "face", "names"),
     [
-        (lambda: Vessel("D-101", width=34, inputs=4, manholes=[("W", 0.8)]), "W", "in_"),
-        (lambda: Vessel("D-101", outputs=4, height=60, sockets=[("E", 0.6)]), "E", "out_"),
+        (lambda: Vessel("D-101", width=50, inputs=4, manholes=[("W", 0.8)]), "W", "in_"),
+        (lambda: Vessel("D-101", outputs=4, height=90, sockets=[("E", 0.6)]), "E", "out_"),
     ],
     ids=["narrow", "short"],
 )

@@ -942,9 +942,8 @@ def support_overlays(name: str) -> tuple:
 def _kept(start: float, size: float, natural: float, drawn: float) -> tuple[float, float]:
     """Return one axis of a part moved onto a body of another size.
 
-    A part across the body's middle keeps its gap to either end of the
-    body; any other part keeps its own size and its gap to the nearer
-    end.
+    A part across the body's middle keeps its share of the body; any
+    other part keeps its own size and its gap to the nearer end.
 
     Parameters
     ----------
@@ -960,7 +959,7 @@ def _kept(start: float, size: float, natural: float, drawn: float) -> tuple[floa
     """
     lead, length, tail = start * natural, size * natural, (1 - start - size) * natural
     if start < 0.5 < start + size and start >= 0 and start + size <= 1:
-        return lead / drawn, (drawn - lead - tail) / drawn
+        return start, size
     if start + size / 2 <= 0.5:
         return lead / drawn, length / drawn
     return (drawn - tail - length) / drawn, length / drawn
@@ -991,6 +990,44 @@ def anchored(overlay: "Overlay", natural: "Symbol", body: "Symbol") -> "Overlay"
     x, w = _kept(overlay.x, overlay.w, natural.width, body.width)
     y, h = _kept(overlay.y, overlay.h, natural.height, body.height)
     return replace(overlay, x=x, y=y, w=w, h=h)
+
+
+def seated(overlay: "Overlay", body: "Symbol", variant: str) -> "Overlay":
+    """Return a support moved to meet a vessel shell's outline.
+
+    A leg or skirt keeps its foot and starts where the shell's bottom
+    outline is highest across its width. A bracket or ring beside the
+    shell slides up or down until it meets the stretch of the side the
+    shell's outline reaches. Any other part is returned unchanged.
+
+    Parameters
+    ----------
+    overlay : Overlay
+        Placement on ``body``.
+    body : Symbol
+        The vessel shell drawn.
+    variant : str
+        The shell's variant.
+
+    Returns
+    -------
+    Overlay
+        Placement on ``body``.
+    """
+    from dataclasses import replace
+
+    from pandid.render.symbols import vessel_floor, vessel_side
+
+    w, h = body.width, body.height
+    if overlay.name in ("bracket", "ring"):
+        lo, hi = vessel_side(variant, w, h)
+        top = min(max(overlay.y * h, lo - overlay.h * h), hi)
+        return replace(overlay, y=top / h)
+    if overlay.name not in ("leg", "skirt"):
+        return overlay
+    top = min(vessel_floor(variant, w, h, x * w) for x in (overlay.x, overlay.x + overlay.w))
+    foot = (overlay.y + overlay.h) * h
+    return replace(overlay, y=top / h, h=(foot - top) / h)
 
 
 # Rake rectangle as fractions of the thickener body.

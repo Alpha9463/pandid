@@ -8,9 +8,9 @@ import zlib
 
 import pytest
 
-from pandid import Feed, Flare, Flowsheet, Product, Vessel
+from pandid import Evaporator, Feed, Flare, Flowsheet, Product, Vessel
 from pandid.portgeom import outward_dir, resolve_size
-from pandid.render.iso_parts import SUPPORTS
+from pandid.render.iso_parts import _CLUTTERED, SUPPORTS
 from pandid.render.symbols import (
     ARROWHEAD,
     MIN_HEAD_CLEARANCE,
@@ -142,9 +142,7 @@ def test_a_stated_size_draws_every_family_member_on_its_wall(size):
             vessel = _build(variant, supports, role, face, count, **size)
             sym = vessel.symbol() if vessel is not None else None
         except ValueError as exc:
-            assert "is too small to draw" in str(exc) or "leaves no room on its walls" in str(
-                exc
-            ), exc
+            assert "is too small to draw" in str(exc), exc
             continue
         if vessel is None or sym is None:
             continue
@@ -168,14 +166,16 @@ def _fed(vessel):
 
 
 def test_a_line_through_a_support_is_reported():
-    """Check that a stated size with no clear wall for a line is reported."""
-    fs = _fed(Vessel("D-1", variant="swaged", supports="bracket", height=97.5))
-    found = sorted(i.message for i in fs.validate() if i.code == "line-through-support")
-    assert [m.split(" runs")[0] for m in found] == [
-        "D-1: the line on in_1",
-        "D-1: the line on out_1",
+    """Check that a line drawn through a support beside its nozzle is reported."""
+    fs = Flowsheet("supported")
+    evaporator = fs.add(Evaporator("E-1", supports="bracket"))
+    fs.connect(evaporator.condensate, fs.add(Product("Condensate")).inlet)
+    fs.layout()
+    found = [i.message for i in fs.validate() if i.code == "line-through-support"]
+    assert found == [
+        "E-1: the line on condensate runs through its bracket support. Build E-1 with "
+        "supports= that keep clear of the line"
     ]
-    assert all("through its bracket support" in m and "D-1.height" in m for m in found)
 
 
 def test_an_unsized_shell_grows_clear_of_its_supports():
@@ -188,20 +188,25 @@ def test_an_unsized_shell_grows_clear_of_its_supports():
 
 def test_a_box_too_small_for_the_heads_is_refused_with_the_size_that_fits():
     """Check that a height the heads cannot fit in names the least that can."""
-    with pytest.raises(ValueError, match=r"D-1: a height of 60 is too small .* give height=62\.5"):
+    with pytest.raises(
+        ValueError, match=r"D-1: a height of 60 is too small .* give height=63 or more"
+    ):
         Vessel("D-1", variant="swaged", height=60).symbol()
 
 
 #: Distance a nozzle may sit from the drawn outline.
 ON_OUTLINE = 0.1
 
+#: Distance a part's corner may sit from the outline and still meet it.
+TOUCHING = 0.5
+
 
 def _sizes():
     """Yield each variant at its own size and over a grid down to its least."""
     for variant, (nw, nh) in VESSEL_SIZES.items():
-        widths = (None, vessel_shell_fits(variant, nw)[0], 1.5 * nw, 3 * nw)
+        widths = (None, vessel_shell_fits(variant)[0], 1.5 * nw, 3 * nw)
         for width in widths:
-            least = vessel_shell_fits(variant, width or nw)[1]
+            least = vessel_shell_fits(variant)[1]
             for height in (None, least, 1.5 * nh, 3 * nh):
                 yield variant, width, height
 
@@ -237,7 +242,8 @@ def _stencil_segments(style: str) -> list:
 @pytest.mark.parametrize(("variant", "width", "height"), list(_sizes()))
 def test_every_nozzle_is_on_the_outline_in_svg_and_drawio(variant, width, height):
     """Check every nozzle sits on the shell's outline as drawn and as exported."""
-    vessel = Vessel("D-1", variant=variant, width=width, height=height)
+    vessel = _drawable(variant, {}, {"width": width, "height": height})
+    assert vessel is not None
     fs = Flowsheet("outline")
     fs.add(vessel)
     fs.connect(fs.add(Feed("Feed")).outlet, vessel.inlet)
@@ -262,3 +268,196 @@ def test_every_nozzle_is_on_the_outline_in_svg_and_drawio(variant, width, height
             assert at, f"{cell.get('value')} names no {key} point"
             point = (float(at.group(1)) * sym.width, float(at.group(2)) * sym.height)
             assert _nearest_distance(point, stencil) <= ON_OUTLINE, f"drawio {cell.get('value')}"
+
+
+#: Each fitting a shell can carry, as constructor keywords.
+FITTINGS = {
+    "bare": {},
+    **{name: {"supports": name} for name in SUPPORTS},
+    "walls": {"manholes": "walls", "sockets": "walls"},
+}
+
+
+def _wall_places(variant: str) -> dict:
+    """Return a manhole and a socket on the middle of a variant's walls."""
+    body = default_registry.get("vessel", variant)
+    walls = [
+        f
+        for f, (lo, hi) in body.bands.items()
+        if lo < hi and f not in _CLUTTERED.get(("vessel", variant), ())
+    ]
+    if not walls:
+        return {}
+    face = walls[0]
+    lo, hi = body.bands[face]
+    along = body.height if face in ("W", "E") else body.width
+    return {
+        "manholes": [(face, (lo + 0.25 * (hi - lo)) / along)],
+        "sockets": [(face, (lo + 0.75 * (hi - lo)) / along)],
+    }
+
+
+def _build_case(variant: str, fitting: str, width, height):
+    """Return the vessel for one case, at the size its refusal names if it refuses."""
+    body = default_registry.get("vessel", variant)
+    keywords = dict(FITTINGS[fitting])
+    if fitting == "walls":
+        keywords = _wall_places(variant)
+        if not keywords:
+            return None
+    family = {}
+    for role, keyword in (("inlet", "inputs"), ("outlet", "outputs")):
+        face = outward_dir(*body.ports[role], body.width, body.height)
+        lo, hi = body.bands.get(face, (0.0, 0.0))
+        family[keyword] = 2 if lo < hi else 1
+    return _drawable(variant, {**keywords, **family}, {"width": width, "height": height})
+
+
+def _drawable(variant: str, keywords: dict, size: dict):
+    """Return a vessel at a size, or at the size its refusal names."""
+    for _ in range(3):
+        try:
+            vessel = Vessel("D-1", variant=variant, **keywords, **size)
+            vessel.symbol()
+            return vessel
+        except ValueError as exc:
+            if "cannot carry" in str(exc):
+                return None
+            fits = re.findall(r"(width|height)=([\d.]+)", str(exc).split("give")[-1])
+            assert fits, exc
+            size.update((axis, float(value)) for axis, value in fits)
+    raise AssertionError(f"{variant} with {keywords}: the size a refusal names is refused")
+
+
+def _drawn_shell(vessel):
+    """Return a vessel's symbol, its shell's outline and its parts' boxes."""
+    sym = vessel.symbol()
+    body, parts, _, _ = _drawn_parts(vessel, vessel.__dict__.get("overlays", ()))
+    ox = -min([0.0, *(o.x * body.width for o in parts)])
+    oy = -min([0.0, *(o.y * body.height for o in parts)])
+    outline = [
+        ((ax + ox, ay + oy), (bx + ox, by + oy))
+        for (ax, ay), (bx, by) in _collect_segments(body.svg)
+    ]
+    return sym, outline, list(zip(parts, overlay_boxes(body, parts)))
+
+
+def _crosses(a, b, c, d) -> bool:
+    """Return whether segment ab meets segment cd."""
+
+    def side(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    return (side(a, b, c) * side(a, b, d) <= 0) and (side(c, d, a) * side(c, d, b) <= 0)
+
+
+def _touches(box, outline) -> bool:
+    """Return whether a part's box meets the shell's outline."""
+    x0, y0, x1, y1 = box
+    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    edges = list(zip(corners, corners[1:] + corners[:1]))
+    for a, b in outline:
+        if any(_crosses(a, b, c, d) for c, d in edges):
+            return True
+        if any(x0 <= p[0] <= x1 and y0 <= p[1] <= y1 for p in (a, b)):
+            return True
+    # The outline's arcs are drawn as chords, which fall inside them.
+    return min(_nearest_distance(c, outline) for c in corners) <= TOUCHING
+
+
+def _faces_out(point, face, width, height, outline) -> bool:
+    """Return whether a nozzle's line leaves without running along the outline."""
+    dx, dy = {"N": (0, -1), "S": (0, 1), "W": (-1, 0), "E": (1, 0)}[face]
+    reach = {"N": point[1], "S": height - point[1], "W": point[0], "E": width - point[0]}[face]
+    along, t = 0.0, 0.5
+    while t < reach:
+        if _nearest_distance((point[0] + dx * t, point[1] + dy * t), outline) < 0.25:
+            along += 0.25
+        t += 0.25
+    return along <= 1.0
+
+
+def _check_drawn(where, vessel, sym, outline, parts):
+    """Check a drawing's parts, nozzles and families against its shell."""
+    for part, box in parts:
+        if part.name in (
+            *SUPPORTS,
+            "manhole",
+            "manhole_up",
+            "manhole_down",
+            "socket",
+            "socket_up",
+            "socket_down",
+        ):
+            assert _touches(box, outline), f"{where}: the {part.name} floats"
+    sockets = [box for part, box in parts if part.name.startswith("socket")]
+    for name, point in sym.ports.items():
+        # A socket's line starts at its flange, off the shell.
+        on = (
+            outline
+            if not name.startswith("socket_")
+            else [
+                seg
+                for x0, y0, x1, y1 in sockets
+                for seg in (
+                    ((x0, y0), (x1, y0)),
+                    ((x1, y0), (x1, y1)),
+                    ((x1, y1), (x0, y1)),
+                    ((x0, y1), (x0, y0)),
+                )
+            ]
+        )
+        assert _nearest_distance(point, on) <= ON_OUTLINE, f"{where}: {name} off the shell"
+        x, y = point
+        face = outward_dir(x, y, sym.width, sym.height)
+        assert _faces_out(point, face, sym.width, sym.height, outline), (
+            f"{where}: {name} faces {face} along the shell"
+        )
+    families: dict = {}
+    for name, face in vessel._faces.items():
+        x, y = sym.ports[name]
+        families.setdefault((name[:3], face), []).append(y if face in ("W", "E") else x)
+    for members in families.values():
+        members.sort()
+        assert all(b - a >= MIN_NOZZLE_PITCH - 1e-3 for a, b in zip(members, members[1:])), where
+
+
+def _fitted_cases():
+    """Yield every variant and fitting over a grid of sizes."""
+    for variant, (nw, nh) in VESSEL_SIZES.items():
+        for fitting in FITTINGS:
+            for width in (None, 1.0, 2 * nw):
+                for height in (None, 1.0, 2 * nh):
+                    yield variant, fitting, width, height
+
+
+@pytest.mark.parametrize(("variant", "fitting", "width", "height"), list(_fitted_cases()))
+def test_every_part_and_nozzle_sits_on_the_shell_in_svg_and_drawio(variant, fitting, width, height):
+    """Check parts touch the shell, nozzles face out and families keep their pitch."""
+    vessel = _build_case(variant, fitting, width, height)
+    if vessel is None:
+        return
+    where = f"{variant} with {fitting} at {width}x{height}"
+    sym, outline, parts = _drawn_shell(vessel)
+    _check_drawn(f"svg {where}", vessel, sym, outline, parts)
+    fs = Flowsheet("fitted")
+    fs.add(vessel)
+    cells = {c.get("id"): c for c in ET.fromstring(fs.to_drawio(check=False)).iter("mxCell")}
+    shell = next(c for c in cells.values() if c.get("value") == "D-1")
+    geometry = shell.find("mxGeometry")
+    assert geometry is not None
+    kx = sym.width / float(geometry.get("width", "1"))
+    ky = sym.height / float(geometry.get("height", "1"))
+    exported = []
+    for cell in cells.values():
+        if cell.get("parent") != shell.get("id") or "-p" not in (cell.get("id") or ""):
+            continue
+        g = cell.find("mxGeometry")
+        assert g is not None
+        x, y = float(g.get("x", "0")) * kx, float(g.get("y", "0")) * ky
+        w, h = float(g.get("width", "0")) * kx, float(g.get("height", "0")) * ky
+        exported.append((parts[len(exported)][0], (x, y, x + w, y + h)))
+    assert len(exported) == len(parts), f"drawio {where}: a part is not exported"
+    _check_drawn(
+        f"drawio {where}", vessel, sym, _stencil_segments(shell.get("style", "")), exported
+    )
