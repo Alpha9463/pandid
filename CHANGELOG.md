@@ -54,6 +54,8 @@ These are removed in 0.4.0.
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
   connected with `draw_as_recycle=True`, before or after the sheet is rendered.
+- Equipment or a line valve that would be drawn on a balloon pinned with
+  `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
 
 ## [0.2.0] - 2026-11-05
 
