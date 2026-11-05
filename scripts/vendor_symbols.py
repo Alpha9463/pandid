@@ -30,6 +30,9 @@ from pandid.render.symbols import CENTRED, FROM_START  # noqa: E402
 #: How each alignment is spelled in the generated file.
 _ALIGN_NAMES = {CENTRED: "CENTRED", FROM_START: "FROM_START"}
 
+#: Decimal places kept on every emitted size, port and series spacing.
+PLACES = 4
+
 STENCILS = HERE / "vendor_data" / "drawio"
 OUT = HERE.parent / "pandid" / "render" / "_vendored_symbols.py"
 
@@ -1020,9 +1023,9 @@ def drawing(el, kind, variant, port_map, sx, sy):
         series = {p: (e, at * (sy if e in ("W", "E") else sx),
                       pitch * (sy if e in ("W", "E") else sx), ext, align)
                   for p, (e, at, pitch, ext, align) in series.items()}
-    w, h = round(w, 1), round(h, 1)
-    ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
-    alts = {p: [(f, tuple(round(v, 1) for v in xy)) for f, xy in v]
+    w, h = round(w, PLACES), round(h, PLACES)
+    ports = {p: tuple(round(v, PLACES) for v in xy) for p, xy in ports.items()}
+    alts = {p: [(f, tuple(round(v, PLACES) for v in xy)) for f, xy in v]
             for p, v in alts.items()}
     # Emit the whole menu, home first.
     menu = {}
@@ -1176,8 +1179,8 @@ def render() -> str:
             # that name, and only a second one numbers them.
             if series:
                 declared = ", ".join(
-                    f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, 1)}, "
-                    f"extent={extent}, at={round(at, 1)}, singular={p!r}"
+                    f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, PLACES)}, "
+                    f"extent={extent}, at={round(at, PLACES)}, singular={p!r}"
                     + (f", align={_ALIGN_NAMES[align]})" if align != CENTRED else ")")
                     for p, (edge, at, pitch, extent, align) in series.items()
                 )

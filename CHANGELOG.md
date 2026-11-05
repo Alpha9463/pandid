@@ -59,6 +59,10 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- A valve's actuator sits on the body's centre line, so a balloon added with
+  `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
+  nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
+  `port_offset()` can differ in the second decimal.
 
 ## [0.2.0] - 2026-11-05
 

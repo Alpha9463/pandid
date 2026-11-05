@@ -1887,12 +1887,12 @@ def test_the_three_way_carries_the_run_at_the_familys_height_from_the_top():
 _OFF_THE_MODULE = {
     "psv": (
         (55.5, 94.5),
-        (19.8, 33.8),
+        (19.8214, 33.75),
         "The PSV stencil requires scaling to the valve family size.",
     ),
     "relief": (
         (40.0, 59.0),
-        (15.0, 22.1),
+        (15.0, 22.125),
         "The relief-valve stencil requires scaling to the family width.",
     ),
     "butterfly_pneumatic": (
