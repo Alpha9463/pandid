@@ -2046,17 +2046,95 @@ def test_a_refused_connection_mints_nothing():
     assert list(pic.ports) == ["pv", "sig_in", "sig_out"]
 
 
-def test_a_fifth_line_onto_a_balloon_is_reported_not_hidden():
-    """Check that a fifth line onto a balloon is reported as ``coincident-ports``."""
-    from pandid.validate import validate
-
+def _crowded(variant: str, outputs: int) -> tuple[Flowsheet, U.Instrument]:
+    """Return a pinned controller with a measurement in and ``outputs`` valves out."""
     fs = Flowsheet("crowded")
-    pic = fs.add(U.Instrument("PIC-301", variant="shared")).pin(x=400, y=400)
-    for i in range(5):
+    pic = fs.add(U.Instrument("PIC-301", variant=variant)).pin(x=400, y=400)
+    pt = fs.add(U.Instrument("PT-301")).pin(x=100, y=400)
+    fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    for i in range(outputs):
         cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100 + 180 * i, y=700)
         fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")
     fs.route()
-    assert [i.code for i in validate(fs) if i.severity == "error"] == ["coincident-ports"]
+    return fs, pic
+
+
+@pytest.mark.parametrize("outputs", [2, 6])
+@pytest.mark.parametrize("variant", ["default", "shared", "computer", "sis", "interlock"])
+def test_each_line_off_a_balloon_leaves_from_its_own_point(variant: str, outputs: int):
+    """Check that every line off a crowded balloon has a point of its own."""
+    from pandid.validate import validate
+
+    fs, pic = _crowded(variant, outputs)
+    points = [port_point(pic, frame_of(pic), n) for n, p in pic.ports.items() if p.stream]
+    assert len(points) == outputs + 1
+    assert len(set(points)) == len(points)
+    assert [i.code for i in validate(fs) if i.severity == "error"] == []
+
+
+def test_lines_sharing_a_face_of_a_balloon_meet_its_circle():
+    """Check that lines sharing a face of a round balloon end on its circle."""
+    _, pic = _crowded("default", 6)
+    frame = frame_of(pic)
+    for name, port in pic.ports.items():
+        if port.stream is not None:
+            x, y = port_point(pic, frame, name)
+            assert math.hypot(x - frame.cx, y - frame.cy) == pytest.approx(21.5, abs=0.6)
+
+
+def test_lines_sharing_a_face_of_a_wide_balloon_meet_its_circle():
+    """Check that lines sharing a face of a balloon in a wide box end on its circle."""
+    fs = Flowsheet("wide")
+    pic = fs.add(U.Instrument("PIC-1", width=200, height=44)).pin(x=400, y=400)
+    for i in range(6):
+        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100 + 180 * i, y=700)
+        pic.nozzle(fs.connect(pic, cv.actuator, kind="pneumatic").source.name, "S")
+    fs.route()
+    frame = frame_of(pic)
+    for name, port in pic.ports.items():
+        if port.stream is not None:
+            x, y = port_point(pic, frame, name)
+            assert math.hypot(x - frame.cx, y - frame.cy) == pytest.approx(21.5, abs=0.6)
+
+
+@pytest.mark.parametrize("outputs", [2, 6])
+def test_a_balloon_pinned_by_its_output_draws_that_output_on_the_pin(outputs: int):
+    """Check that the output a balloon is pinned by stays on the pin."""
+    fs = Flowsheet("pinned")
+    pic = fs.add(U.Instrument("PIC-1")).pin(port="sig_out", x=600, y=400)
+    for i in range(outputs):
+        feed = fs.add(U.Feed(f"F-{i}"))
+        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=1000, y=200 + 80 * i)
+        fs.connect(feed.outlet, cv.inlet)
+        fs.connect(cv.outlet, fs.add(U.Product(f"P-{i}")).inlet)
+        fs.connect(pic, cv.actuator, kind="pneumatic")
+    fs.route()
+    assert port_point(pic, frame_of(pic), "sig_out") == (600, 400)
+    points = [port_point(pic, frame_of(pic), n) for n, p in pic.ports.items() if p.stream]
+    assert len(set(points)) == outputs
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_outputs_past_four_share_the_face_toward_their_valves_in_their_order():
+    """Check that extra outputs join the face toward their valves, top to bottom."""
+    from pandid.portgeom import resolve_port
+
+    fs = Flowsheet("west")
+    pic = fs.add(U.Instrument("PIC-301")).pin(x=600, y=400)
+    pt = fs.add(U.Instrument("PT-301")).pin(x=900, y=400)
+    fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    for i in range(6):
+        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100, y=650 - 100 * i)
+        fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")
+    fs.route()
+    ends = {
+        frame_of(p.stream.dest.owner).cy: resolve_port(pic, frame_of(pic), name)
+        for name, p in pic.ports.items()
+        if p.stream is not None and p.stream.source is p
+    }
+    assert "E" not in {end.face for end in ends.values()}
+    west = [end.point[1] for _, end in sorted(ends.items()) if end.face == "W"]
+    assert len(west) > 1 and west == sorted(west)
 
 
 def test_a_pool_member_can_be_asked_for_by_name():

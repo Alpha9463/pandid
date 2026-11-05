@@ -6,6 +6,7 @@ the solver's ``_Slot``.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
@@ -184,18 +185,44 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
             lx, ly = (sym.width - px if mirrored else px), py / sym.height * h
             face = outward_dir(lx, ly, w, h, unit.kind, anchor, mirrored)
         else:
-            bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height,
-                                           rot, mirrored, mirror_y)
-            # The artwork fills the box, or keeps its aspect centred in it.
-            ox, oy, iw, ih = 0.0, 0.0, w, h
-            if not getattr(sym, "stretchable", True):
-                scale = min(w / bw, h / bh)
-                iw, ih = bw * scale, bh * scale
-                ox, oy = (w - iw) / 2, (h - ih) / 2
-            lx, ly = ox + bx * iw / bw, oy + by * ih / bh
+            (lx, ly), (ox, oy, iw, ih) = _to_box(sym, px, py, w, h, rot, mirrored, mirror_y)
             face = outward_dir(lx - ox, ly - oy, iw, ih, unit.kind, anchor, mirrored)
         out.setdefault(face, (lx, ly))
     return out
+
+
+def _to_box(sym, px: float, py: float, w: float, h: float, rot: int,
+            mirrored: bool, mirror_y: bool
+            ) -> tuple[tuple[float, float], tuple[float, float, float, float]]:
+    """Map a symbol point into a placed box, and return the artwork's box.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Symbol the point is on.
+    px, py : float
+        Point in symbol coordinates.
+    w, h : float
+        Placed box size.
+    rot : int
+        Clockwise turn in degrees: 0, 90, 180 or 270.
+    mirrored, mirror_y : bool
+        Left-right and top-bottom flips.
+
+    Returns
+    -------
+    tuple[tuple[float, float], tuple[float, float, float, float]]
+        Point from the box's top-left, and the artwork's ``(x, y, w, h)``
+        in the box.
+    """
+    bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height, rot, mirrored, mirror_y)
+    # The artwork fills the box, or keeps its aspect centred in it.
+    ox, oy, iw, ih = 0.0, 0.0, w, h
+    if not getattr(sym, "stretchable", True):
+        scale = min(w / bw, h / bh)
+        iw, ih = bw * scale, bh * scale
+        ox, oy = (w - iw) / 2, (h - ih) / 2
+    return (ox + bx * iw / bw, oy + by * ih / bh), (ox, oy, iw, ih)
 
 
 def _series_point(unit: "Unit", sym, port_name: str
@@ -461,10 +488,20 @@ class ResolvedPort(NamedTuple):
     face: str
 
 
-def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
+#: Spacing of the lines that share a face of an instrument.
+SHARED_PITCH = 10.0
+
+#: Largest fraction of an instrument's face those lines may span.
+SHARED_EXTENT = 0.7
+
+
+def resolve_port(unit: "Unit", frame, port_name: str, *, alone: bool = False
+                 ) -> ResolvedPort:
     """Resolve a port's drawn point, routing anchor and face.
 
     A boundary flag's port is the tip of its pennant for both points.
+    Lines that share a point on an instrument are spread along its face
+    and onto its rim.
 
     Parameters
     ----------
@@ -474,6 +511,8 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
         Its placement.
     port_name : str
         Port name or alias.
+    alone : bool, default=False
+        Resolve the port as if no other line shared its point.
 
     Returns
     -------
@@ -486,23 +525,16 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
         If the chosen face cannot be reached under the placement.
     """
     w, h = frame.w, frame.h
-    rot, mirrored, mirror_y = _xform(frame)
-    # A face set with ``nozzle()`` wins over the engine's choice.
-    canonical = unit._canonical_port_name(port_name)
-    want = (getattr(unit, "_port_faces", None) or {}).get(canonical)
-    if want is None:
-        want = (getattr(frame, "port_faces", None) or {}).get(canonical)
-    placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
-    if want is not None and want not in placements:
-        raise unreachable_face(unit, port_name, want, list(placements))
-    d, (px, py) = next(iter(placements.items())) if want is None else (want, placements[want])
+    d, (px, py) = _face_and_point(unit, frame, port_name)
 
     if unit.kind in ("feed", "product"):
         # The port is the end of the flag's box that the line meets.
         x0, _, x1, _ = unit_box(unit, frame)
-        tip = (x1 if (unit.kind == "feed") != mirrored else x0, frame.y + py)
+        tip = (x1 if (unit.kind == "feed") != _xform(frame)[1] else x0, frame.y + py)
         return ResolvedPort(tip, tip, d)
 
+    if not alone and unit.kind == "instrument":
+        px, py = _shared_point(unit, frame, port_name, d, (px, py))
     point = (frame.x + px, frame.y + py)
     ax, ay = point
     if d == "N":
@@ -514,6 +546,165 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     elif d == "E":
         ax = frame.x + w
     return ResolvedPort(point, (ax, ay), d)
+
+
+def _face_and_point(unit: "Unit", frame, port_name: str
+                    ) -> tuple[str, tuple[float, float]]:
+    """Return a port's face and its own point from the box's top-left.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    frame : Frame or _Slot
+        Its placement.
+    port_name : str
+        Port name or alias.
+
+    Returns
+    -------
+    tuple[str, tuple[float, float]]
+        Face and point.
+
+    Raises
+    ------
+    ValueError
+        If the chosen face cannot be reached under the placement.
+    """
+    rot, mirrored, mirror_y = _xform(frame)
+    # A face set with ``nozzle()`` wins over the engine's choice.
+    canonical = unit._canonical_port_name(port_name)
+    want = (getattr(unit, "_port_faces", None) or {}).get(canonical)
+    if want is None:
+        want = (getattr(frame, "port_faces", None) or {}).get(canonical)
+    placements = _drawn_placements(unit, port_name, frame.w, frame.h, rot, mirrored, mirror_y)
+    if want is not None and want not in placements:
+        raise unreachable_face(unit, port_name, want, list(placements))
+    return next(iter(placements.items())) if want is None else (want, placements[want])
+
+
+def _shared_point(unit: "Unit", frame, port_name: str, face: str,
+                  point: tuple[float, float]) -> tuple[float, float]:
+    """Return a connected port's point among the lines sharing it.
+
+    The lines on one point are spread along the artwork's side of the
+    face in the order of their peers' bearings, each moved in onto the
+    symbol's rim. A port the unit is pinned by keeps its own point, and
+    the others take places on either side of it.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    frame : Frame or _Slot
+        Its placement.
+    port_name : str
+        Port name or alias.
+    face : str
+        Face the port is on.
+    point : tuple[float, float]
+        The port's own point from the box's top-left.
+
+    Returns
+    -------
+    tuple[float, float]
+        Point from the box's top-left.
+    """
+    from pandid.render.symbols import spread
+
+    name = unit._canonical_port_name(port_name)
+    port = unit.ports.get(name)
+    pinned = {unit._canonical_port_name(p) for p, _ in pin_intent(unit).values() if p}
+    if port is None or port.stream is None or name in pinned:
+        return point
+    sharing = [other for other, p in unit.ports.items() if p.stream is not None
+               and _face_and_point(unit, frame, other) == (face, point)]
+    if len(sharing) < 2:
+        return point
+    sharing.sort(key=lambda other: _bearing(unit, frame, other, face))
+    sym = _sym(unit)
+    rot, mirrored, mirror_y = _xform(frame)
+    rim = [_to_box(sym, x, y, frame.w, frame.h, rot, mirrored, mirror_y)[0]
+           for x, y in getattr(sym, "rim", ())]
+    _, (ox, oy, iw, ih) = _to_box(sym, 0.0, 0.0, frame.w, frame.h, rot, mirrored, mirror_y)
+    upright = face in ("E", "W")
+    at, lo, along = (point[1], oy, ih) if upright else (point[0], ox, iw)
+    index, count = sharing.index(name), len(sharing)
+    fixed = next((i for i, other in enumerate(sharing) if other in pinned), None)
+    if fixed is not None:
+        # Odd places centred on the pinned port, which takes the middle one.
+        reach = max(fixed, count - 1 - fixed)
+        index, count = reach + index - fixed, 2 * reach + 1
+    t = spread(index, count, along, SHARED_PITCH, SHARED_EXTENT, at, band=(lo, lo + along))
+    inward = (_rim_depth(rim, face, t, frame.w, frame.h)
+              - _rim_depth(rim, face, at, frame.w, frame.h))
+    sign = -1.0 if face in ("E", "S") else 1.0
+    return (point[0] + sign * inward, t) if upright else (t, point[1] + sign * inward)
+
+
+def _bearing(unit: "Unit", frame, port_name: str, face: str) -> float:
+    """Return the angle from a face's normal to a port's peer unit.
+
+    The angle grows in the direction positions along the face grow.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    frame : Frame or _Slot
+        Its placement.
+    port_name : str
+        Connected port.
+    face : str
+        Face the port is on.
+
+    Returns
+    -------
+    float
+        Angle in radians, 0.0 while the peer is unplaced.
+    """
+    port = unit.ports[port_name]
+    stream = port.stream
+    assert stream is not None
+    owner = (stream.dest if stream.source is port else stream.source).owner
+    if owner.frame is None:
+        return 0.0
+    x0, y0, x1, y1 = unit_box(owner, owner.frame)
+    dx = (x0 + x1 - frame.w) / 2 - frame.x
+    dy = (y0 + y1 - frame.h) / 2 - frame.y
+    nx, ny = COMPASS[face]
+    return math.atan2(dy if face in ("E", "W") else dx, dx * nx + dy * ny)
+
+
+def _rim_depth(rim: "Sequence[tuple[float, float]]", face: str, t: float,
+               w: float, h: float) -> float:
+    """Return how far in from a face a polygon lies, ``t`` along the face.
+
+    Parameters
+    ----------
+    rim : Sequence[tuple[float, float]]
+        Convex polygon in the box; empty for the box itself.
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+    t : float
+        Position along the face.
+    w, h : float
+        Box size.
+
+    Returns
+    -------
+    float
+        Depth, or 0.0 where the polygon does not reach ``t``.
+    """
+    upright = face in ("E", "W")
+    cuts = []
+    for (x0, y0), (x1, y1) in zip(rim, [*rim[1:], *rim[:1]]):
+        a0, a1, b0, b1 = (y0, y1, x0, x1) if upright else (x0, x1, y0, y1)
+        if a0 != a1 and min(a0, a1) <= t <= max(a0, a1):
+            cuts.append(b0 + (b1 - b0) * (t - a0) / (a1 - a0))
+    if not cuts:
+        return 0.0
+    return {"W": min(cuts), "N": min(cuts), "E": w - max(cuts), "S": h - max(cuts)}[face]
 
 
 def port_point(unit: "Unit", frame, port_name: str) -> tuple[float, float]:
