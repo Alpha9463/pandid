@@ -942,6 +942,44 @@ def test_separation_keeps_a_run_out_of_a_unit_its_stream_does_not_join(
     assert abs(points[turn][0] - nearby.route.waypoints[other_turn][0]) >= 6.0 - 1e-9
 
 
+def test_separation_leaves_a_run_boxed_between_two_units_on_its_track() -> None:
+    """Keep a run where it was when every track near it enters a unit."""
+    from pandid.geometry import Frame
+    from pandid.routing.separation import separate_streams
+
+    fs = Flowsheet("boxed run")
+    pump = fs.add(Pump("P-1"))
+    pump.frame = Frame(x=624.0, y=187.0, w=70.0, h=67.0)
+    valve = fs.add(Valve("FV-202"))
+    valve.frame = Frame(x=591.6, y=259.5, w=19.8, h=24.5)
+    ends = [fs.add(Feed("F1")), fs.add(Product("P1")), fs.add(Feed("F2")), fs.add(Product("P2"))]
+    for unit in ends:
+        unit.frame = Frame(x=2000.0, y=2000.0, w=10.0, h=10.0)
+    boxed = [
+        (664.54, 293.08),
+        (639.54, 293.08),
+        (626.4, 293.08),
+        (626.4, 258.66),
+        (609.0, 258.66),
+        (609.0, 162.1),
+        (561.7, 162.1),
+        (561.7, 187.1),
+    ]
+    run = fs.connect(ends[0].outlet, ends[1].inlet)
+    run.route = Route(list(boxed))
+    beside = fs.connect(ends[2].outlet, ends[3].inlet)
+    beside.route = Route([(558.07, 258.66), (583.07, 258.66), (686.54, 258.66), (686.54, 315.08)])
+
+    separate_streams(fs)
+    assert run.route is not None
+    points = run.route.waypoints
+    bodies = [Rect(624.0, 694.0, 187.0, 254.0), Rect(591.6, 611.4, 259.5, 284.0)]
+    assert not any(
+        box.intersects_segment(*a, *b) for box in bodies for a, b in zip(points, points[1:])
+    )
+    assert points == boxed
+
+
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
     """Preview separation without changing routes, and match the real pass."""
     from pandid.routing.separation import preview_separated_waypoints, separate_streams

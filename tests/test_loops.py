@@ -1001,6 +1001,87 @@ def test_a_refused_face_warns_nothing(refused, match: str):
     assert caught == []
 
 
+def _take_the_transmitters_tag(fs: Flowsheet, drum: U.Vessel, lv: U.Valve) -> None:
+    fs.add_instrument("LT", 101)
+
+
+def _take_both_tags(fs: Flowsheet, drum: U.Vessel, lv: U.Valve) -> None:
+    fs.add_instrument("LT", 101)
+    fs.add_instrument("LIC", 101)
+
+
+#: ``(prepare, a call with two faults, the message of the one reported)``.
+_TWO_FAULTS = [
+    pytest.param(
+        _take_the_transmitters_tag,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, at="S", controller_face="Q"
+        ),
+        "face= is a side of LT-101",
+        id="a controller face before the transmitter's tag",
+    ),
+    pytest.param(
+        _take_both_tags,
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, at="S"),
+        "'LT-101' already exists",
+        id="the transmitter's tag before the controller's",
+    ),
+    pytest.param(
+        _take_the_controllers_tag,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv.inlet, at="S"
+        ),
+        "'LIC-101' already exists",
+        id="the controller's tag before a process acting_on",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv.inlet, at="S", measurement_kind="material"
+        ),
+        "is a process connection",
+        id="a process acting_on before the measurement kind",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L",
+            101,
+            measuring=drum,
+            acting_on=lv,
+            at="S",
+            measurement_kind="material",
+            output_kind="nonsense",
+        ),
+        "signal line",
+        id="the measurement kind before the output kind",
+    ),
+    pytest.param(
+        _stroke_the_valve_already,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_at="S"
+        ),
+        "already connected",
+        id="a stroked final element before the old controller face",
+    ),
+]
+
+
+@pytest.mark.parametrize("prepare, refused, match", _TWO_FAULTS)
+def test_a_loop_with_two_faults_reports_the_first_and_warns_nothing(prepare, refused, match):
+    """Check the order of a loop's refusals, and that none warns or changes the sheet."""
+    fs, drum, lv = _feedback_sheet()
+    prepare(fs, drum, lv)
+    before = _snapshot(fs)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match=match):
+            refused(fs, drum, lv)
+    assert caught == []
+    assert _snapshot(fs) == before
+    assert [i for i in fs.validate() if i.code == "deprecated"] == []
+
+
 @pytest.mark.parametrize(
     "old, member",
     [
@@ -1063,8 +1144,11 @@ def test_a_loop_refused_at_its_second_line_leaves_the_sheet_whole():
     drum = fs.add(U.Vessel("V-101"))
     lv = fs.add(U.Valve("LV-101", variant="control"))
     before = _snapshot(fs)
-    with pytest.warns(DeprecationWarning), pytest.raises(KeyError):
-        fs.add_control_loop("L", measuring=drum, acting_on=lv, at="S")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(KeyError):
+            fs.add_control_loop("L", measuring=drum, acting_on=lv, at="S")
+    assert caught == []
     assert _snapshot(fs) == before
     assert [i for i in fs.validate() if i.code == "deprecated"] == []
 

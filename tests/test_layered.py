@@ -10,7 +10,7 @@ import pytest
 from _layout_cases import build as build_biodiesel, build_unpinned
 from pandid import Block, Feed, Flowsheet, GravitySeparator, Product, Reactor
 from pandid import devices as D, units as U
-from pandid.layout.quality import measure_final
+from _quality import measure_final
 from pandid.portgeom import port_point, resolve_port
 from pandid.geometry import Frame, Route
 from pandid.streams import Stream

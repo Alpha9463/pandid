@@ -342,6 +342,17 @@ def test_a_flowsheet_with_nothing_to_tabulate_is_refused():
         fs.to_svg(show_stream_table="sheet", page_size="A3")
 
 
+def test_a_line_across_the_edge_with_nothing_stated_is_refused_for_the_property():
+    """Check that the refusal blames the missing property, not a missing boundary line."""
+    fs = Flowsheet("flagged")
+    feed = fs.add(U.Feed("F")).pin(x=100, y=100)
+    product = fs.add(U.Product("P")).pin(x=300, y=100)
+    fs.connect(feed.outlet, product.inlet)
+    with pytest.raises(ValueError, match="nothing to tabulate") as refused:
+        fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert "no stream states a property." in str(refused.value)
+
+
 def test_a_spelling_neither_backend_knows_is_refused():
     """Verify that a spelling neither backend knows is refused."""
     fs = _sheet(streams=3)

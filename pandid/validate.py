@@ -486,7 +486,8 @@ def _wall_clashes(u) -> list[Issue]:
     return issues
 
 
-def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
+def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
+                 table: bool | None = None) -> list["Issue"]:
     """Return the findings that need no layout, errors first.
 
     Parameters
@@ -495,6 +496,9 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         Sheet to check.
     tabulates : bool, default=True
         Whether the diagram must state boundary flow rates.
+    table : bool or None, optional
+        Whether the render draws the stream table; ``None`` when no
+        render is known.
 
     Returns
     -------
@@ -833,10 +837,22 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"block-level value on no sheet. Drop it, or take the name off "
                 f"the revision and let the block fill the row"))
 
-    # --- an ingoing or outgoing material with nothing to report ---
-    # ISO 10628-1 4.3.2 d), on a PFD where any stream states a property.
     runs = fs._named_runs()
-    if tabulates and any(s.properties for segments in runs.values() for s in segments):
+    stated = [name for name, segments in runs.items()
+              if any(s.properties for s in segments)]
+    if tabulates and stated and table is False:
+        # --- a PFD that states properties and is drawn without its table ---
+        # ISO 10628-1 4.3.2 d); one finding for the sheet.
+        warnings.append(Issue(
+            "warning", "stream-table-undrawn",
+            f"{_and(stated)} state{'s' if len(stated) == 1 else ''} "
+            f"properties and the sheet is drawn without its stream table, so "
+            f"none of them appears on it (ISO 10628-1:2014 4.3.2 d)). Draw "
+            f"the table under the drawing with render(show_stream_table=True), "
+            f"or as its own sheet with render(show_stream_table='sheet')"))
+    elif tabulates and stated:
+        # --- an ingoing or outgoing material with nothing to report ---
+        # ISO 10628-1 4.3.2 d), on a PFD where any stream states a property.
         for name, segments in runs.items():
             if any(s.properties for s in segments):
                 continue
@@ -1378,7 +1394,8 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
 
 
 def validate(fs: "Flowsheet", *, arrows: bool = True,
-             tabulates: bool = True) -> list["Issue"]:
+             tabulates: bool = True,
+             table: bool | None = None) -> list["Issue"]:
     """Return all validation issues for the flowsheet, errors first.
 
     Parameters
@@ -1389,12 +1406,15 @@ def validate(fs: "Flowsheet", *, arrows: bool = True,
         Passed to :func:`geometry_issues`.
     tabulates : bool, default=True
         Passed to :func:`model_issues`.
+    table : bool or None, optional
+        Passed to :func:`model_issues`.
 
     Returns
     -------
     list[Issue]
         Errors, then warnings.
     """
-    found = model_issues(fs, tabulates=tabulates) + geometry_issues(fs, arrows=arrows)
+    found = (model_issues(fs, tabulates=tabulates, table=table)
+             + geometry_issues(fs, arrows=arrows))
     return ([i for i in found if i.severity == "error"]
             + [i for i in found if i.severity == "warning"])

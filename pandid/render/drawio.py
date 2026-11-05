@@ -31,7 +31,8 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_routes)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
-                                   closed_marking, fail_marking, wears_arrowhead)
+                                   closed_marking, default_registry, fail_marking,
+                                   wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
@@ -562,15 +563,13 @@ class _Tags(NamedTuple):
     plates: list
 
 
-def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
+def _tag_pass(fs, joints: "str | None", direction: str) -> "_Tags":
     """Place the equipment tags with the SVG renderer's methods.
 
     Parameters
     ----------
     fs : Flowsheet
         Laid-out flowsheet.
-    registry : SymbolRegistry
-        Symbol registry.
     joints : str or None
         Sheet joint default, whose flange marks tags avoid.
     direction : str
@@ -584,7 +583,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
                                    flange_boxes, quadrant_labels)
 
-    sheet = SvgRenderer(registry)
+    sheet = SvgRenderer()
     ink = _ink(fs, direction)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
@@ -613,7 +612,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
                 near = {"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
                         "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[side]
             at[id(u)] = (side, item[0] - base[0], item[1] - base[1], near)
-        if closed_marking(u, registry) == "NC":
+        if closed_marking(u, default_registry) == "NC":
             items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
         letters = fail_marking(u)
         if letters:
@@ -730,22 +729,9 @@ def _dash(pattern: str) -> list[str]:
 
 
 class DrawioRenderer:
-    """Render a laid-out flowsheet to a draw.io ``mxfile`` document.
+    """Render a laid-out flowsheet to a draw.io ``mxfile`` document."""
 
-    Parameters
-    ----------
-    registry : SymbolRegistry, optional
-        Symbols to draw with; ``default_registry`` when omitted.
-
-    Attributes
-    ----------
-    registry : SymbolRegistry
-        Symbols drawn with.
-    """
-
-    def __init__(self, registry=None):  # numpydoc ignore=GL08
-        from pandid.render.symbols import default_registry
-        self.registry = registry or default_registry
+    def __init__(self):  # numpydoc ignore=GL08
         # Findings put on fs.warnings at the end of render().
         self._findings: list = []
         # Whether a side label is laid out by draw.io off the sheet's plates.
@@ -801,19 +787,20 @@ class DrawioRenderer:
         table_sheet = wants_table_sheet(show_stream_table)
         if table_sheet and border is None:
             border = "zone"
-        border, _diagram = _resolve_sheet(border, diagram)
+        border, kind = _resolve_sheet(border, diagram)
         sheet = _page(page_size)
         if table_sheet:
-            return self._table_sheet(fs, sheet, border)
+            return self._table_sheet(fs, sheet, border, kind)
 
         body: list[str] = []
         # Cell order is z-order: border and furniture first.
-        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table), border)
+        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table), border,
+                                                kind)
         body.extend(self._border(frame, border))
         body.extend(furniture)
         # Then equipment, runs, taps and balloons.
         joints = sheet_connections(diagram, connections)
-        tags = _tag_pass(fs, self.registry, joints, jump_direction)
+        tags = _tag_pass(fs, joints, jump_direction)
         balloons: list[str] = []
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
@@ -831,7 +818,7 @@ class DrawioRenderer:
 
         return self._document(fs, sheet, frame, body)
 
-    def _table_sheet(self, fs, sheet, border) -> str:
+    def _table_sheet(self, fs, sheet, border, diagram) -> str:
         """Return the stream table's own sheet as a draw.io document.
 
         Parameters
@@ -842,6 +829,8 @@ class DrawioRenderer:
             Fixed page, or ``None``.
         border : str
             ``"none"`` or ``"zone"``.
+        diagram : str
+            Diagram type the table belongs to.
 
         Returns
         -------
@@ -850,7 +839,7 @@ class DrawioRenderer:
         """
         from pandid.render.svg import table_sheet_plan
 
-        plan = table_sheet_plan(fs, sheet)
+        plan = table_sheet_plan(fs, sheet, diagram)
         self._findings.extend(plan.findings)
         body = list(self._border(plan.frame, border))
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
@@ -1094,7 +1083,7 @@ class DrawioRenderer:
             return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE["center"] + [
                 _drawn_type(_TAG_TYPE, fit, lines=len(lines),
                             box=self._cell_box(u))], (0.0, 0.0)
-        if closed_marking(u, self.registry) == "NC":
+        if closed_marking(u, default_registry) == "NC":
             lines.append("NC")
         letters = fail_marking(u)
         if letters:
@@ -1153,7 +1142,7 @@ class DrawioRenderer:
         list[str]
             Cell XML lines.
         """
-        sym = self.registry.for_unit(u)
+        sym = default_registry.for_unit(u)
         approx = self._approximation(u, sym)
         if approx is not None and approx.lost:
             self._findings.append(Issue(
@@ -1294,7 +1283,7 @@ class DrawioRenderer:
         turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
         for i, overlay in enumerate(sym.overlays):
-            part = self.registry.part(overlay.group, overlay.name)
+            part = default_registry.part(overlay.group, overlay.name)
             approx = _PART_APPROXIMATIONS.get((overlay.group, overlay.name))
             if part.drawio_shape:
                 keys = [f"shape={part.drawio_shape}"]
@@ -1450,8 +1439,8 @@ class DrawioRenderer:
         for n, s in enumerate(fs.streams):
             src_u, dst_u = s.source.owner, s.dest.owner
             points = polylines[n]
-            ex, ey = self._constraint(src_u, self.registry.for_unit(src_u), s.source.name)
-            tx, ty = self._constraint(dst_u, self.registry.for_unit(dst_u), s.dest.name)
+            ex, ey = self._constraint(src_u, default_registry.for_unit(src_u), s.source.name)
+            tx, ty = self._constraint(dst_u, default_registry.for_unit(dst_u), s.dest.name)
             signal = s.kind in _SIGNAL_KINDS
 
             keys = [
@@ -1469,7 +1458,7 @@ class DrawioRenderer:
                 # draw.io's jumpStyle takes the crossing style's name.
                 keys += [f"jumpStyle={crossing_style}", f"jumpSize={size}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
-            if arrows and wears_arrowhead(s, self.registry):
+            if arrows and wears_arrowhead(s, default_registry):
                 keys += ["endArrow=block", "endFill=1",
                          f"endSize={fit.length(ARROWHEAD):g}"]
             else:
@@ -1560,10 +1549,10 @@ class DrawioRenderer:
             target = index.get(id(inst))
             if target is None:  # not on the sheet
                 continue
-            entry = self._fraction(inst, self.registry.for_unit(inst), centre)
+            entry = self._fraction(inst, default_registry.for_unit(inst), centre)
             host = getattr(inst, "host", None)
             source = index.get(id(host)) if getattr(host, "frame", None) is not None else None
-            exit_at = (self._fraction(host, self.registry.for_unit(host), tap)
+            exit_at = (self._fraction(host, default_registry.for_unit(host), tap)
                        if source is not None else None)
             keys = [
                 "html=1", "edgeStyle=none", "rounded=0",
@@ -1598,7 +1587,7 @@ class DrawioRenderer:
     # -------------------------------------------------- furniture
 
     def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False,
-                   border: str = "none"):
+                   border: str = "none", diagram: "str | None" = None):
         """Return the furniture cells, the frame and the drawing fit.
 
         With a fixed ``sheet`` the drawing is fitted into the space the
@@ -1614,6 +1603,8 @@ class DrawioRenderer:
             Whether to dock the stream table.
         border : str, default="none"
             ``"none"`` or ``"zone"``.
+        diagram : str or None, optional
+            Diagram type; ``None`` is a PFD.
 
         Returns
         -------
@@ -1625,7 +1616,7 @@ class DrawioRenderer:
         ValueError
             If the page is too small for the furniture.
         """
-        plan = diagram_plan(fs, sheet, border, show_stream_table)
+        plan = diagram_plan(fs, sheet, border, show_stream_table, diagram)
         fit = _Fit(1.0, 0.0, 0.0) if plan.fit is None else _Fit(*plan.fit)
         # Fallbacks for the strip's name, date and scale.
         name = fs.name
