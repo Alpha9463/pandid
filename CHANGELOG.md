@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-field-undrawn` when a line-number field set in
+  `connect()` is not drawn, because `name=` replaces the line number or
+  `line_numbering_scheme` leaves the field out, and names the fix.
 
 ### Changed
 

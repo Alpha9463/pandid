@@ -1572,6 +1572,107 @@ def test_following_the_advice_draws_the_carrier_and_keeps_what_was_typed(scheme,
         assert value in str(getattr(duty, key)), f"{key}={value!r} lost: {found.message}"
 
 
+# --- line-field-undrawn -----------------------------------------------------
+
+
+def _line(scheme: str | None, **connect: Any) -> Flowsheet:
+    """Build a sheet with one line from a feed to a product."""
+    fs = Flowsheet("line") if scheme is None else Flowsheet("line", line_numbering_scheme=scheme)
+    fs.connect(fs.add(U.Feed("F")).outlet, fs.add(U.Product("P")).inlet, **connect)
+    return fs
+
+
+def _labels(fs: Flowsheet) -> str:
+    """Return the text of every label drawn on the sheet."""
+    return " ".join(re.findall(r">([^<]*)</text>", fs.to_svg()))
+
+
+# Scheme, connect() arguments and the fields the sheet leaves out.
+_UNDRAWN: dict[str, tuple[str | None, dict[str, Any], list[str]]] = {
+    "hidden-by-a-given-name": (None, {"name": "X-1", "service": "LPSTEAM"}, ["service"]),
+    "hidden-by-a-name-and-left-out-of-the-scheme": (
+        None,
+        {"name": "X-1", "size": 6, "insulation": "IH"},
+        ["size", "insulation"],
+    ),
+    "left-out-of-the-scheme": (
+        "{size}-{sequence}",
+        {"size": 6, "service": "P", "spec": "A1A"},
+        ["service", "spec"],
+    ),
+    "left-out-of-the-default-scheme": (
+        None,
+        {"size": 6, "schedule": 40, "sequence": 2001},
+        ["schedule"],
+    ),
+}
+
+
+@pytest.mark.parametrize("diagram", ["pfd", "p&id", "bfd"])
+@pytest.mark.parametrize(("scheme", "connect", "undrawn"), _UNDRAWN.values(), ids=list(_UNDRAWN))
+def test_a_line_number_field_the_sheet_does_not_draw_is_reported(
+    scheme: str | None, connect: dict[str, Any], undrawn: list[str], diagram: str
+) -> None:
+    """Check every field typed into connect() and drawn nowhere is named."""
+    fs = _line(scheme, **connect)
+    (found,) = _found(fs, "line-field-undrawn", diagram=diagram)
+    assert found.severity == "warning"
+    named = [key for key in re.findall(r"(\w+)=", found.message) if key in connect]
+    assert [key for key in named if key != "name"] == undrawn
+
+
+@pytest.mark.parametrize(("scheme", "connect", "undrawn"), _UNDRAWN.values(), ids=list(_UNDRAWN))
+def test_following_the_line_field_advice_draws_every_field(
+    scheme: str | None, connect: dict[str, Any], undrawn: list[str]
+) -> None:
+    """Check each fix the finding names, applied as written, draws every field."""
+    (found,) = _found(_line(scheme, **connect), "line-field-undrawn")
+    advice = [(key, ast.literal_eval(value)) for key, value in _ADVISED.findall(found.message)]
+    scheme = next((value for key, value in advice if key == "line_numbering_scheme"), scheme)
+    names = [value for key, value in advice if key == "name"]
+    if "name" in connect:
+        # Write the fields into the given name, or drop it.
+        assert names[0] != connect["name"] == names[1], found.message
+        fixes = [{**connect, "name": names[0]}, {k: v for k, v in connect.items() if k != "name"}]
+    else:
+        fixes = [connect]
+    for fix in fixes:
+        fs = _line(scheme, **fix)
+        assert _found(fs, "line-field-undrawn") == [], found.message
+        labels = _labels(fs)
+        for key, value in fix.items():
+            assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+@pytest.mark.parametrize(
+    ("scheme", "connect"),
+    [
+        (None, {}),
+        (None, {"size": 6, "service": "P", "spec": "A1A"}),
+        ("{size}", {"size": 6}),
+        (None, {"name": "6-P-2001", "size": 6, "service": "P", "sequence": 2001}),
+    ],
+    ids=["no-fields", "every-field-drawn", "automatic-sequence-left-out", "fields-in-a-given-name"],
+)
+def test_a_line_that_draws_every_field_it_states_is_not_reported(
+    scheme: str | None, connect: dict[str, Any]
+) -> None:
+    """Check a line whose label shows every typed field leaves the finding quiet."""
+    assert _found(_line(scheme, **connect), "line-field-undrawn") == []
+
+
+@pytest.mark.parametrize("diagram", ["pfd", "p&id"])
+def test_an_energy_line_s_hidden_service_is_reported_once(diagram: str) -> None:
+    """Check energy-carrier-missing alone reports a PFD energy line's service."""
+    fs, _ = heat_integrated(name="Q-1", service="LP steam")
+    codes = [
+        i.code
+        for i in fs.validate(diagram=diagram)
+        if i.code.startswith(("energy-carrier", "line-field"))
+    ]
+    assert codes == (["energy-carrier-missing"] if diagram == "pfd" else ["line-field-undrawn"])
+
+
 # --- validate() answers about the sheet that was drawn ------------------------
 
 

@@ -245,6 +245,9 @@ Set the line-number fields in `connect()` or on the returned stream. The
 `{service}`, `{sequence}`, `{spec}` and `{insulation}`; a callable can replace
 it. `line_number_start` controls the automatic sequence. This is separate from
 `stream_number_start`, which controls `S1`, `S2`, and so on.
+`validate()` reports `line-field-undrawn` for a field set on a line that its
+label does not draw, because a `name=` replaces the line number or the scheme
+leaves the field out.
 
 ### Stream properties and the table
 

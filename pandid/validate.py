@@ -931,6 +931,49 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                 f"into the label drawn on it, keeping the other arguments: "
                 f"{' and '.join(fixes)}"))
 
+    # --- a line-number field the line's label leaves out ---
+    from pandid.flowsheet import _unused_fields
+
+    scheme = fs.line_numbering_scheme
+    for name, segments in runs.items():
+        given = not all(s.auto_named for s in segments)
+        numbered = any(s.has_line_number for s in segments)
+        if not given and (callable(scheme) or not numbered):
+            continue
+        typed: dict[str, str | float] = {}
+        omitted: dict[str, str | float] = {}
+        for s in segments:
+            typed |= _unused_fields("", s)  # every field the author set
+            if not callable(scheme):
+                omitted |= _unused_fields(scheme, s)
+        if tabulates and segments[0].kind == "energy":
+            # Leave the service to energy-carrier-missing.
+            typed.pop("service", None)
+            omitted.pop("service", None)
+        undrawn = ({f: v for f, v in typed.items() if str(v) not in name}
+                   if given else omitted)
+        if not undrawn:
+            continue
+        it = "it" if len(undrawn) == 1 else "them"
+        fields = _and([f"{{{f}}}" for f in omitted])
+        wider = ("" if callable(scheme) or not omitted else
+                 f": Flowsheet(..., line_numbering_scheme="
+                 f"{scheme + ''.join(f'-{{{f}}}' for f in omitted)!r})")
+        if given:
+            written = " ".join([name, *map(str, undrawn.values())])
+            fix = f"Write {it} into the name: name={written!r}"
+            if numbered:
+                add = f" and add {fields} to line_numbering_scheme" if wider else ""
+                fix += f", or drop name={name!r}{add} so its line number draws {it}{wider}"
+            source = "the name given to connect()"
+        else:
+            fix = f"Add {fields} to the scheme, keeping its other arguments{wider}"
+            source = f"line_numbering_scheme {scheme!r}"
+        warnings.append(Issue(
+            "warning", "line-field-undrawn",
+            f"{name} states {_and([f'{f}={v!r}' for f, v in undrawn.items()])}, "
+            f"which {source} does not draw. {fix}"))
+
     return errors + warnings
 
 
