@@ -1056,3 +1056,38 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
     assert s2_recordings[-1][1][1] == 106.0, s2_recordings[-1]
+
+
+def test_a_stream_to_a_unit_with_no_frame_is_left_unrouted_with_a_warning(
+    same_file: Callable[[str], str],
+) -> None:
+    """Check that routing before layout skips the stream and says to call layout()."""
+    fs = Flowsheet("unplaced")
+    feed, product = fs.add(Feed("F")), fs.add(Product("P"))
+    line = fs.connect(feed.outlet, product.inlet, name="S1")
+
+    with pytest.warns(
+        UserWarning, match=r"'F' has no frame.*Call layout\(\) before route\(\)"
+    ) as caught:
+        DefaultRouter().route(fs)
+
+    assert line.route is None
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+
+
+def test_a_stream_to_a_port_the_graph_does_not_anchor_is_left_unrouted_with_a_warning(
+    same_file: Callable[[str], str],
+) -> None:
+    """Check that a stream to a placed unit off the sheet's unit list is skipped and named."""
+    fs = Flowsheet("unanchored")
+    feed = fs.add(Feed("F")).pin(x=100, y=100)
+    product = fs.add(Product("P")).pin(x=400, y=100)
+    line = fs.connect(feed.outlet, product.inlet, name="S1")
+    fs.layout()
+    fs.units.remove(product)
+
+    with pytest.warns(UserWarning, match=r"no anchor for port P\.inlet") as caught:
+        DefaultRouter().route(fs)
+
+    assert line.route is None
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
