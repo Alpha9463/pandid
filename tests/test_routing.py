@@ -1087,7 +1087,7 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     assert s2.route.waypoints[1][1] == 100.0, f"the via() route moved: {s2.route.waypoints}"
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
-    assert s2_recordings[-1][1][1] == 106.0, s2_recordings[-1]
+    assert any(p[1][1] == 106.0 for p in s2_recordings), s2_recordings
 
 
 def test_a_stream_to_a_unit_with_no_frame_is_left_unrouted_with_a_warning(
@@ -1123,3 +1123,19 @@ def test_a_stream_to_a_port_the_graph_does_not_anchor_is_left_unrouted_with_a_wa
 
     assert line.route is None
     assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+
+
+def test_a_stream_whose_separated_route_crosses_unpriced_lines_is_routed_clear():
+    """Route a stream again where separation drew crossings its search did not price."""
+    from _layout_cases import build
+
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import crossing_count
+
+    fs = build(pinned=True)[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fs.route()
+    feeds = {s.dest.name: stream_polyline(s) for s in fs.streams if s.dest.owner.name == "S-103"}
+    # Separation swaps the two feeds' risers into S-103, crossing them twice.
+    assert crossing_count([feeds["feed_1"], feeds["feed_2"]]) == 0

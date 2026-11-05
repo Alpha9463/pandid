@@ -169,12 +169,14 @@ KIND_MAP = {
                               "outlet": [("S", 50.0), ("E", 165.0), ("W", 165.0)],
                               "duty": ("E", 100.0),
                               "vent": ("AT", 100.0, 20.0)}),
-    # Jacketed stirred tank: ``vessel/jacketed``'s stencil. The duty takes the jacket
-    # and the vent the shell wall above it. Three feeds 16 apart fit in 0.34 of the
+    # Jacketed stirred tank: ``vessel/jacketed``'s stencil. The jacket, y 12.69..82.69,
+    # takes its supply low and its return high, each 10 off its end on the east face;
+    # the vent takes the shell wall above it. Three feeds 16 apart fit in 0.34 of the
     # 95.4 body, on the jacket.
     ("reactor", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
                               {"feed": ("SERIES", "W", 47.7, 16, 0.34),
-                               "outlet": ("S", 26.0), "duty": ("E", 47.7),
+                               "outlet": ("S", 26.0),
+                               "jacket_in": ("E", 72.7), "jacket_out": ("E", 22.7),
                                "vent": ("AT", 46.0, 10.0)}),
     # The flash drum: the vessel's stencil, nozzle places and box, with the phases
     # named. The feed family is centred on y = 100 at a 40 pitch, so two feeds sit
