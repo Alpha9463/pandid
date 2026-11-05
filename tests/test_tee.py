@@ -9,6 +9,7 @@ import pytest
 from pandid import Flowsheet, units
 from pandid.document import equipment_table
 from pandid.portgeom import port_offset, port_point
+from _quality import measure_final
 
 RUN_Y = 220.0
 BYPASS_Y = RUN_Y - 31.0
@@ -397,3 +398,58 @@ def test_the_branch_is_drawn_at_the_weight_of_the_run(cv303):
     assert branch, "the drain leg is a stream like any other"
     assert 'stroke-width="2"' in default_registry.get("tee").svg
     assert re.search(r'stroke="black" stroke-width="2"', svg)
+
+
+# A header of tees
+
+
+def _header(n: int, stated: dict | None = None) -> Flowsheet:
+    """Return n pumps fed off a run of tees, the last on the run's end."""
+    fs = Flowsheet("Header")
+    mixer = fs.add(units.Mixer("MX", n_inlets=n))
+    fs.connect(mixer.outlet, fs.add(units.Product("P")).inlet)
+    run = fs.add(units.Feed("F")).outlet
+    for i, inlet in enumerate(mixer.inlets):
+        pump = fs.add(units.Pump(f"P-{i}"))
+        if i < n - 1:
+            tee = fs.add(units.Tee())
+            if stated is not None:
+                tee.pin(**stated)
+            fs.connect(run, tee.inlet)
+            fs.connect(tee.branch, pump.suction)
+            run = tee.outlet
+        else:
+            fs.connect(run, pump.suction)
+        fs.connect(pump.discharge, inlet)
+    return fs
+
+
+def _branch_crosses_its_run(tee) -> bool:
+    """Return whether a tee's branch line reaches both sides of the run."""
+    run_y = port_point(tee, tee.frame, "inlet")[1]
+    ys = [y for _, y in tee.branch.stream.route.waypoints]
+    return min(ys) < run_y - 1 and max(ys) > run_y + 1
+
+
+@pytest.mark.parametrize("n", [3, 6, 8])
+def test_each_branch_leaves_the_header_on_the_side_of_its_pump(n):
+    fs = _header(n)
+    fs.route()
+    tees = [u for u in fs.units if u.kind == "tee"]
+    assert [t.name for t in tees if _branch_crosses_its_run(t)] == []
+    if n == 3:
+        assert measure_final(fs).crossings == 0
+
+
+def test_a_stated_branch_side_is_kept():
+    fs = _header(3, {"mirrored": False})
+    fs.route()
+    assert {u.frame.mirror_y for u in fs.units if u.kind == "tee"} == {False}
+
+
+def test_routing_a_header_again_draws_the_same_sheet():
+    fs = _header(3)
+    fs.route()
+    drawn = [(u.name, u.frame) for u in fs.units], [s.route for s in fs.streams]
+    fs.route()
+    assert ([(u.name, u.frame) for u in fs.units], [s.route for s in fs.streams]) == drawn
