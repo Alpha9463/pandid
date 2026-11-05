@@ -4066,12 +4066,11 @@ class Reactor(Unit):
     feed_7: Port
     feed_8: Port
 
+    # "jacketed" builds jacket_in and jacket_out in place of duty; use
+    # ``rx.port(name)`` for them.
     outlet: Port
     vent: Port
     duty: Port
-    # Present only on "jacketed", in place of duty.
-    jacket_in: Port
-    jacket_out: Port
     # Present only with an agitator.
     drive: Port
     # feed_1 to feed_n, top to bottom.

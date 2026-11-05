@@ -174,8 +174,8 @@ def main():
                sequence=207, spec="CS")
     fs.connect(hv205.outlet, fe205.inlet)
     fs.connect(fe205.outlet, cv205.inlet)
-    fs.connect(cv205.outlet, rx.jacket_in)
-    fs.connect(rx.jacket_out, hv209.inlet, size=150, service="CWR",
+    fs.connect(cv205.outlet, rx.port("jacket_in"))
+    fs.connect(rx.port("jacket_out"), hv209.inlet, size=150, service="CWR",
                sequence=212, spec="CS")
     fs.connect(hv209.outlet, cwr_jkt.inlet)
 

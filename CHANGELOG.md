@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On a PFD, `validate()` warns when an energy line does not name its carrier.
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
 - A jacketed reactor has a utility inlet and outlet on its jacket:
-  `rx.jacket_in`, low on the jacket, and `rx.jacket_out`, high on it.
+  `jacket_in`, low on the jacket, and `jacket_out`, high on it.
 
 ### Changed
 

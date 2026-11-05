@@ -100,8 +100,9 @@ def test_a_jacketed_reactor_has_a_jacket_inlet_and_outlet():
     """Check that the jacketed body's utility pair replaces its single duty port."""
     r = U.Reactor("R-1", variant="jacketed")
     assert list(r.ports) == ["outlet", "vent", "jacket_in", "jacket_out", "drive", "feed_1"]
-    assert (r.jacket_in.direction, r.jacket_in.role) == ("inlet", "utility")
-    assert (r.jacket_out.direction, r.jacket_out.role) == ("outlet", "utility")
+    jacket_in, jacket_out = r.port("jacket_in"), r.port("jacket_out")
+    assert (jacket_in.direction, jacket_in.role) == ("inlet", "utility")
+    assert (jacket_out.direction, jacket_out.role) == ("outlet", "utility")
 
 
 def test_the_jacket_nozzles_sit_on_the_jacket_wall():
@@ -130,8 +131,8 @@ def test_the_jacket_supply_and_return_connect_to_their_nozzles():
     r = fs.add(U.Reactor("R-1", variant="jacketed", width=152, height=360))
     cws = fs.add(U.Feed("CWS"))
     cwr = fs.add(U.Product("CWR"))
-    supply = fs.connect(cws.outlet, r.jacket_in)
-    back = fs.connect(r.jacket_out, cwr.inlet)
+    supply = fs.connect(cws.outlet, r.port("jacket_in"))
+    back = fs.connect(r.port("jacket_out"), cwr.inlet)
     fs.to_svg()
     assert supply.kind == back.kind == "material"
     assert r.frame is not None and supply.route is not None and back.route is not None
@@ -151,7 +152,7 @@ def test_duty_on_a_jacketed_reactor_is_deprecated_for_jacket_in(same_file):
         duty = r.duty
     assert len(caught) == 1
     assert same_file(caught[0].filename) == same_file(__file__)
-    assert duty is r.jacket_in
+    assert duty is r.port("jacket_in")
     fs.connect(cws.outlet, duty)
     found = [i.message for i in fs.validate() if i.code == "deprecated"]
     assert found == [str(caught[0].message)]
