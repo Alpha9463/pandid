@@ -1275,7 +1275,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
 
         # Soft: a tap line drawn through a unit, with no clear way round.
-        for inst, route in tap_routes(fs):
+        # route() weighs square turns, so this waits for the drawn sheet.
+        for inst, route in () if fs._routing else tap_routes(fs):
             for u, box in boxes:
                 if u is inst or u is inst.host:
                     continue
