@@ -57,8 +57,8 @@ These are removed in 0.4.0.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
 - Reassigning `variant` on a unit built with supports, an agitator, internals,
-  manholes or sockets redraws them on the new body, or refuses a body that
-  cannot carry them with the constructor's message and keeps the old one.
+  manholes or sockets redraws them on the new body and keeps any overlays added
+  since, or refuses a body that cannot carry them and keeps the old one.
 
 ## [0.2.0] - 2026-11-05
 
