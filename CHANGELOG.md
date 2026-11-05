@@ -61,6 +61,9 @@ These are removed in 0.4.0.
 - `duty` on `Reactor(variant="jacketed")`, which now draws `jacket_in`. Use
   `JacketedReactor`, with `jacket_in` for the jacket's supply and `jacket_out`
   for its return.
+- Reassigning `variant` on a built `Valve`, `Vessel`, `Tank`, `Filter`,
+  `HeatExchanger`, `Reactor` or `Separator`, whose ports or faces come from it.
+  Build a new unit with `variant=`.
 
 ### Fixed
 
