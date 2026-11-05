@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
   drawn with `diagram="p&id"` or `diagram="bfd"`.
+- Units pinned with `pin(row=)` and no `col=` are drawn in row order across the
+  sheet, so `pin(row=2)` is drawn above `pin(row=3)` in another column.
 
 ## [0.2.0] - 2026-11-05
 
