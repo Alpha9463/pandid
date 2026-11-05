@@ -681,28 +681,28 @@
     <symbol id="sym_hex_straight_tubes_s130x40" viewBox="0 0 130 40" overflow="visible"><rect x="0" y="0" width="130" height="40" fill="white" stroke="#111" stroke-width="2"/><path d="M 19.5 0 L 19.5 40 M 110.5 0 L 110.5 40 M 110.5 10 L 19.5 10 M 110.5 20 L 19.5 20 M 110.5 30 L 19.5 30" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_hex_straight_tubes_s140x44" viewBox="0 0 140 44" overflow="visible"><rect x="0" y="0" width="140" height="44" fill="white" stroke="#111" stroke-width="2"/><path d="M 21 0 L 21 44 M 119 0 L 119 44 M 119 11 L 21 11 M 119 22 L 21 22 M 119 33 L 21 33" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
-    <symbol id="sym_valve_control" viewBox="0 0 24.5 19.8" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="white" stroke="#111" stroke-width="4"/></g></symbol>
-    <symbol id="sym_vessel_horizontal_s120x40" viewBox="0 0 120 40" overflow="visible"><path d="M 7.567213 40 L 112.485246 40 A 20 7.566164 90 0 0 120.05141 20 A 20 7.566164 90 0 0 112.485246 0 L 7.567213 0 A 20 7.566164 90 0 0 0.001049 20 A 20 7.566164 90 0 0 7.567213 40 Z M 7.567213 0 L 7.567213 40 M 112.485246 0 L 112.485246 40" fill="white" stroke="#111" stroke-width="2"/></symbol>
+    <symbol id="sym_valve_control" viewBox="0 0 24.5 19.75" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="white" stroke="#111" stroke-width="4"/></g></symbol>
+    <symbol id="sym_vessel_horizontal_s120x40" viewBox="0 0 120 40" overflow="visible"><path d="M 7.563906 40 L 112.436094 40 A 20 7.562858 90 0 0 119.998951 20 A 20 7.562858 90 0 0 112.436094 0 L 7.563906 0 A 20 7.562858 90 0 0 0.001049 20 A 20 7.562858 90 0 0 7.563906 40 Z M 7.563906 0 L 7.563906 40 M 112.436094 0 L 112.436094 40" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
     <use href="#sym_column_ce5d94ab1_s110x340" x="300" y="250" width="110" height="340" />
     <use href="#sym_column_ccf4dcb41_s110x300" x="980" y="290" width="110" height="300" />
     <use href="#sym_hex_straight_tubes_s140x44" x="620" y="800" width="140" height="44" />
-    <use href="#sym_hex_condenser_s70x70_ty" x="1000" y="139.66" width="70" height="70" transform="translate(0, 349.32) scale(1, -1)" />
-    <use href="#sym_vessel_horizontal_s120x40" x="1200" y="128.32" width="120" height="40" />
+    <use href="#sym_hex_condenser_s70x70_ty" x="1000" y="139.68" width="70" height="70" transform="translate(0, 349.36) scale(1, -1)" />
+    <use href="#sym_vessel_horizontal_s120x40" x="1200" y="128.36" width="120" height="40" />
     <use href="#sym_hex_kettle_s130x46" x="1400" y="640" width="130" height="46" />
     <use href="#sym_hex_straight_tubes_s130x40" x="370" y="960" width="130" height="40" />
     <use href="#sym_pump" x="530" y="870" width="70.0" height="67.0" transform="translate(1130, 0) scale(-1, 1)" />
     <use href="#sym_pump" x="1350" y="210" width="70.0" height="67.0" />
-    <use href="#sym_valve_control" x="460" y="809.6" width="24.5" height="19.8" />
+    <use href="#sym_valve_control" x="460" y="809.56" width="24.5" height="19.75" />
     <polygon points="39.312,532.97 105.0,532.97 120.0,545.97 105.0,558.97 39.312,558.97" fill="transparent" stroke="black" stroke-width="2" />
     <text x="72.156" y="541.97" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Sour Gas</text>
     <text x="72.156" y="553.97" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-301</text>
     <polygon points="1147.308,658.3636363636364 1215.0,658.3636363636364 1230.0,671.3636363636364 1215.0,684.3636363636364 1147.308,684.3636363636364" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1181.154" y="667.3636363636364" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">LP Steam</text>
     <text x="1181.154" y="679.3636363636364" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-901</text>
-    <polygon points="800.0,164.6625 865.0,164.6625 880.0,174.6625 865.0,184.6625 800.0,184.6625" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="832.5" y="174.6625" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CWS</text>
+    <polygon points="800.0,164.68 865.0,164.68 880.0,174.68 865.0,184.68 800.0,184.68" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="832.5" y="174.68" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CWS</text>
     <polygon points="170.0,970.0 235.0,970.0 250.0,980.0 235.0,990.0 170.0,990.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="202.5" y="980.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CWS</text>
     <polygon points="355.0,127.0 428.692,127.0 443.692,140.0 428.692,153.0 355.0,153.0" fill="transparent" stroke="black" stroke-width="2" />
@@ -721,16 +721,16 @@
   </g>
   <g id="streams">
     <path d="M 120.0,545.97 L 300.0,545.97" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 355.0,250.0 L 355.0,174.6625 L 330.0,174.6625 L 330.0,140.0 L 355.0,140.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 355.0,250.0 L 355.0,174.68 L 330.0,174.68 L 330.0,140.0 L 355.0,140.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 355.0,590.0 L 355.0,822.0 L 460.0,822.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 484.5,822.0 L 620.0,822.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 760.0,822.0 L 880.0,822.0 L 880.0,775 M 880.0,765 L 880.0,447.5 L 980.0,447.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1035.0,290.0 L 1035.0,201.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1035.0,148.325 L 1200.0,148.325" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1272.1311475409836,128.325 L 1272.1311475409836,60 L 1700.0,60.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1289.1803278688524,168.325 L 1289.1803278688524,240.0 L 1350.0,240.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1035.0,148.36 L 1200.0,148.36" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1272.099628577671,128.36 L 1272.099628577671,60 L 1700.0,60.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1289.1413589687568,168.36 L 1289.1413589687568,240.0 L 1350.0,240.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1420.0,220.0 L 1480.0,220.0 L 1480.0,305 M 1480.0,315 L 1480.0,342.5 L 1090.0,342.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1035.0,590.0 L 1035.0,730.0 L 1465.0710382513662,730.0 L 1465.0710382513662,681.8181818181819" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1035.0,590.0 L 1035.0,730.0 L 1465.0,730.0 L 1465.0,681.8181818181819" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1490.9289617486338,640.0 L 1490.9289617486338,552.5 L 1090.0,552.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1520.7650273224044,681.8181818181819 L 1520.7650273224044,770.0 L 725.0,770.0 L 725.0,800.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 655.0,844.0 L 655.0,900.0 L 600.0,900.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -738,8 +738,8 @@
     <path d="M 402.5,1000.0 L 402.5,1040.0 L 150.0,1040.0 L 150.0,550.97 M 150.0,540.97 L 150.0,294.03 L 300.0,294.03" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1230.0,671.3636363636364 L 1400.0,671.3636363636364" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1530.0,660.9090909090909 L 1700.0,660.9090909090909" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 880.0,174.6625 L 1008.6625,174.6625" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1061.3375,174.6625 L 1130.0,174.6625 L 1130.0,310.0 L 1700.0,310.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 880.0,174.68 L 1008.68,174.68" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1061.32,174.68 L 1130.0,174.68 L 1130.0,310.0 L 1700.0,310.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 250.0,980.0 L 370.0,980.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 500.0,980.0 L 760.0,980.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <rect x="193.7" y="539.5" width="32.7" height="13.0" fill="white" />
@@ -752,12 +752,12 @@
     <text x="880.0" y="634.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 880.0, 634.8)">S-405</text>
     <rect x="1028.5" y="229.2" width="13.0" height="32.7" fill="white" />
     <text x="1035.0" y="245.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1035.0, 245.5)">S-406</text>
-    <rect x="1101.2" y="141.8" width="32.7" height="13.0" fill="white" />
-    <text x="1117.5" y="148.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-407</text>
+    <rect x="1101.2" y="141.9" width="32.7" height="13.0" fill="white" />
+    <text x="1117.5" y="148.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-407</text>
     <rect x="1469.7" y="53.5" width="32.7" height="13.0" fill="white" />
-    <text x="1486.1" y="60.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-408</text>
-    <rect x="1272.2" y="187.8" width="13.0" height="32.7" fill="white" />
-    <text x="1278.7" y="204.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1278.7, 204.2)">S-409</text>
+    <text x="1486.0" y="60.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-408</text>
+    <rect x="1272.1" y="187.8" width="13.0" height="32.7" fill="white" />
+    <text x="1278.6" y="204.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1278.6, 204.2)">S-409</text>
     <rect x="1233.7" y="723.5" width="32.7" height="13.0" fill="white" />
     <text x="1250.0" y="730.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-410</text>
     <rect x="1274.1" y="546.0" width="32.7" height="13.0" fill="white" />
@@ -791,9 +791,9 @@
     <rect x="670.0" y="778.0" width="40.0" height="15.0" fill="white" />
     <text x="690.0" y="790.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-401</text>
     <rect x="1015.0" y="117.7" width="40.0" height="15.0" fill="white" />
-    <text x="1035.0" y="129.6625" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-402</text>
-    <rect x="1330.0" y="140.8" width="40.0" height="15.0" fill="white" />
-    <text x="1330.0" y="148.325" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-401</text>
+    <text x="1035.0" y="129.68" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-402</text>
+    <rect x="1330.0" y="140.9" width="40.0" height="15.0" fill="white" />
+    <text x="1330.0" y="148.36" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-401</text>
     <rect x="1445.0" y="618.0" width="40.0" height="15.0" fill="white" />
     <text x="1465.0" y="630" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-403</text>
     <rect x="415.0" y="938.0" width="40.0" height="15.0" fill="white" />
@@ -803,6 +803,6 @@
     <rect x="1355.3" y="188.0" width="59.4" height="15.0" fill="white" />
     <text x="1385.0" y="200.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">P-402A/B</text>
     <rect x="448.9" y="787.6" width="46.7" height="15.0" fill="white" />
-    <text x="472.25" y="799.6" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">LV-401</text>
+    <text x="472.25" y="799.5575" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">LV-401</text>
   </g>
 </svg>
