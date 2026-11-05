@@ -939,7 +939,7 @@ def test_the_revision_date_column_holds_a_full_date():
     fs.title_block = TitleBlock(
         title="Demo", revisions=[Revision("A", "2026-01-01", "Issued", "AA")]
     )
-    svg = fs.to_svg(border="zone")
+    svg = fs.to_svg(border="zone", show_stream_table=True)
     assert ">2026-01-01</text>" in svg
     assert not fs.warnings
 

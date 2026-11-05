@@ -281,6 +281,13 @@ class Unit:
     # Backing store for pin_.
     _pin: "Pin | None" = None
 
+    # What a unit with no composed parts, large end or normal position
+    # reads as. Hidden from type checkers.
+    if not TYPE_CHECKING:
+        overlays = ()
+        large_end = "inlet"
+        normal_position = "open"
+
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
         """Return PORTS from the nearest class that declares it.
@@ -4195,6 +4202,7 @@ class Reactor(Unit):
             self._add_port(*spec)
         # Internals are drawn first, under the stirrer shaft.
         from pandid.render.iso_parts import agitator_overlays, internals_overlays
+        from pandid.render.symbols import default_registry
 
         _compose_onto(
             self,
@@ -4203,6 +4211,15 @@ class Reactor(Unit):
             ("agitator", agitator, lambda name, body: agitator_overlays(name, self.kind, body)),
         )
         if agitator is not None:
+            # An agitator hangs from the head of an upright body.
+            bodies = {v: default_registry.get(self.kind, v)
+                      for v in default_registry.variants(self.kind)}
+            upright = [v for v, body in bodies.items() if body.height >= body.width]
+            if self.variant not in upright:
+                raise ValueError(
+                    f"{name}: {type(self).__name__} variant {self.variant!r} cannot carry "
+                    f"agitator={agitator!r}; variants that can: {', '.join(upright)}"
+                )
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:

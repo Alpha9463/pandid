@@ -3,7 +3,7 @@
 import ast
 import re
 from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -985,12 +985,13 @@ def test_a_default_mixer_is_not_a_finding():
     assert _found(fs, "nozzles-crowded") == []
 
 
+@pytest.mark.parametrize("n_feeds", [2, 3])
 @pytest.mark.parametrize("variant", ["default", "jacketed", "tubular"])
-def test_a_default_two_feed_reactor_is_not_a_finding(variant: str):
-    """Check that a stock reactor's two feeds are not reported crowded."""
+def test_a_stock_reactors_feeds_are_not_a_finding(variant: str, n_feeds: int):
+    """Check that a stock reactor's two or three feeds are not reported crowded."""
     fs = Flowsheet("reactor")
-    r = fs.add(U.Reactor("R-1", n_feeds=2, variant=variant))
-    for i in (1, 2):
+    r = fs.add(U.Reactor("R-1", n_feeds=n_feeds, variant=variant))
+    for i in range(1, n_feeds + 1):
         fs.connect(fs.add(U.Feed(f"F{i}")).outlet, r.ports[f"feed_{i}"])
     fs.connect(r.outlet, fs.add(U.Product("P")).inlet)
     fs.route()
@@ -1328,6 +1329,25 @@ def test_only_a_pfd_owes_a_flow_on_every_boundary_line(diagram, reported):
     assert len([w for w in fs.warnings if w.code == "boundary-flow-missing"]) == reported
 
 
+def _table_columns(drawn: str) -> list[str]:
+    """Return the stream names heading the table columns of an SVG or draw.io export."""
+    if "<mxfile" in drawn:
+        return re.findall(r'id="[^"]*-r0-c\d+"[^>]*value="(S\d+)"', drawn)
+    tables = re.findall(r'<g id="stream_table[^"]*">.*?</g>', drawn, re.S)
+    return re.findall(r">(S\d+)</text>", "".join(tables))
+
+
+@pytest.mark.parametrize("draw", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize("table", [True, "sheet"])
+@pytest.mark.parametrize(
+    ("diagram", "columns"), [("pfd", ["S1", "S2"]), ("p&id", ["S1"]), ("bfd", ["S1"])]
+)
+def test_only_a_pfd_keeps_an_empty_column_for_a_boundary_line(draw, table, diagram, columns):
+    """Check that the table keeps S2's empty boundary column on a PFD alone."""
+    fs = _partly_tabulated()
+    assert _table_columns(getattr(fs, draw)(diagram=diagram, show_stream_table=table)) == columns
+
+
 # --- stream-table-missing --------------------------------------------------
 
 
@@ -1374,6 +1394,63 @@ def test_a_pid_or_a_bfd_is_not_reported(diagram):
     assert fs.validate(diagram=diagram) == []
     fs.to_svg(diagram=diagram)
     assert fs.warnings == []
+
+
+# --- stream-table-undrawn --------------------------------------------------
+
+
+def _tabulated() -> Flowsheet:
+    """Build a PFD that states a flow on both of its lines."""
+    fs = _untabulated()
+    for s in fs.streams:
+        s.properties = {"Flow (kg/h)": "4200"}
+    return fs
+
+
+def _undrawn(fs: Flowsheet) -> list:
+    """Return the stream-table-undrawn findings of the last render."""
+    return [w for w in fs.warnings if w.code == "stream-table-undrawn"]
+
+
+@pytest.mark.parametrize("draw", ["to_svg", "to_drawio"])
+def test_a_pfd_drawn_without_the_table_its_flows_need_is_reported(draw):
+    fs = _tabulated()
+    getattr(fs, draw)()
+    (found,) = _undrawn(fs)
+    assert found.severity == "warning"
+    assert found.message.startswith("S1 and S2 state properties")
+    assert "4.3.2 d)" in found.message
+    assert "render(show_stream_table=True)" in found.message
+    assert _found(fs, "stream-table-undrawn") == [found]
+
+
+def test_validate_answers_for_the_table_it_is_told_about():
+    """Check that validate() follows show_stream_table, or the last render's."""
+    fs = _tabulated()
+    assert _found(fs, "stream-table-undrawn") == []
+    assert len(_found(fs, "stream-table-undrawn", show_stream_table=False)) == 1
+    fs.to_svg(show_stream_table=True)
+    assert _found(fs, "stream-table-undrawn") == []
+    with pytest.raises(ValueError, match="show_stream_table='sheets'"):
+        fs.validate(show_stream_table=cast(Any, "sheets"))
+
+
+@pytest.mark.parametrize(
+    ("diagram", "table"),
+    [("pfd", True), ("pfd", "sheet"), ("p&id", False), ("bfd", False)],
+)
+def test_a_drawn_table_or_a_sheet_that_owes_none_is_not_reported(diagram, table):
+    """Check that a drawn table, a P&ID and a BFD report no stream-table-undrawn."""
+    fs = _tabulated()
+    fs.to_svg(diagram=diagram, show_stream_table=table)
+    assert _undrawn(fs) == []
+
+
+def test_an_undrawn_table_takes_the_place_of_its_empty_column():
+    """Check that an undrawn table reports no boundary-flow-missing column."""
+    fs = _partly_tabulated()
+    fs.to_svg()
+    assert [w.code for w in fs.warnings] == ["stream-table-undrawn"]
 
 
 def test_the_bfd_owes_no_table_and_heads_its_lines_all_the_same():

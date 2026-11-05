@@ -9,7 +9,7 @@ import pytest
 
 from _layout_cases import build as build_biodiesel, build_unpinned
 from pandid import Flowsheet, units as U
-from pandid.layout.quality import _HARD_CODES, measure_final
+from _quality import _HARD_CODES, measure_final
 from pandid.portgeom import pin_intent, port_point
 
 #: Allowance on a budgeted extent, as a fraction of it.

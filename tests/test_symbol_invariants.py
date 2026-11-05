@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+import warnings
 import xml.etree.ElementTree as ET
 from typing import Any, NamedTuple
 
@@ -1036,17 +1037,23 @@ def test_series_members_lie_on_drawn_geometry(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_every_port_series_sets_two_members_an_arrowhead_pitch_apart(entry):
-    """Verify every series pitch, and two members' gap, is MIN_NOZZLE_PITCH."""
+def test_every_port_series_sets_its_members_an_arrowhead_pitch_apart(entry):
+    """Verify every series pitch, and its members' gaps, is MIN_NOZZLE_PITCH.
+
+    Every series is checked at two members, and a reactor's at three.
+    """
     (kind, variant), sym = entry
     for series in sym.port_series:
         assert series.pitch >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}"
         band = sym.bands.get(series.face)
-        (x0, y0), (x1, y1) = (
-            series.placement(i, 2, sym.width, sym.height, band=band) for i in (0, 1)
-        )
-        gap = abs(y1 - y0) if series.face in ("W", "E") else abs(x1 - x0)
-        assert gap >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix}: {gap}"
+        axis = 1 if series.face in ("W", "E") else 0
+        for count in (2, 3) if kind == "reactor" else (2,):
+            along = [
+                series.placement(i, count, sym.width, sym.height, band=band)[axis]
+                for i in range(count)
+            ]
+            gap = min(b - a for a, b in zip(along, along[1:]))
+            assert gap >= MIN_NOZZLE_PITCH, f"{kind}/{variant} {series.prefix} x{count}: {gap}"
 
 
 def test_a_lone_member_lands_where_the_fixed_nozzle_did():
@@ -1305,6 +1312,42 @@ def test_a_holdup_family_stays_on_its_wall_and_its_ink_at_every_count(kind, vari
                     assert d <= GEOM_TOL, f"{where} is {d:.1f}u from the nearest drawn stroke"
 
 
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_a_holdup_family_keeps_its_pitch_from_the_fixed_nozzles_on_its_wall(kind, variant):
+    """Verify no vent, relief or drain sits nearer a family than its pitch."""
+    sym = default_registry.get(kind, variant)
+    segments = _collect_segments(sym.svg)
+    w, h = sym.width, sym.height
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            for count in range(2, 9 if _has_wall(sym, face) else 2):
+                unit = _holdup(kind, variant, role, [face] * count)
+                run = [
+                    _face_local(face, *port_offset(unit, f"{prefix}{i}"), w, h)[0]
+                    for i in range(1, count + 1)
+                ]
+                pitch = min(abs(b - a) for a, b in zip(run, run[1:]))
+                for name in ("vent", "relief", "drain"):
+                    at = port_offset(unit, name)
+                    if outward_dir(at[0], at[1], w, h) != face:
+                        continue
+                    t = _face_local(face, at[0], at[1], w, h)[0]
+                    gap = min(abs(t - member) for member in run)
+                    where = f"{kind}/{variant} {name} beside {count} {role}s on {face}"
+                    assert gap >= pitch - 1e-6, f"{where}: {gap:.1f}u off, pitch {pitch:.1f}u"
+                    d = _nearest_distance(at, segments)
+                    assert d <= GEOM_TOL, f"{where} is {d:.1f}u from the nearest drawn stroke"
+
+
+def test_four_bottom_outlets_leave_a_tanks_drain_its_own_nozzle():
+    """Verify ``outputs=["S"] * 4`` builds without stacking out_1 on the drain."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tank = units.Tank("X-1", outputs=["S"] * 4)
+        points = [port_offset(tank, name) for name in ("drain", "out_1", "out_2", "out_3", "out_4")]
+    assert len(set(points)) == 5
+
+
 @pytest.mark.parametrize(("kind", "variant"), _BANDED, ids=_BANDED_IDS)
 def test_every_declared_wall_lies_on_the_drawing(kind, variant):
     """Verify each declared wall lies on the drawing."""
@@ -1403,6 +1446,34 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
         assert drawn.bands == sym.bands, (
             f"vessel/{variant} on {supports}s lost the wall its body declares"
         )
+
+
+@pytest.mark.parametrize(("kind", "variant"), _COMPOSABLE, ids=_COMPOSABLE_IDS)
+@pytest.mark.parametrize("supports", [None, "leg", "skirt", "bracket", "ring"])
+def test_every_member_of_a_family_leaves_the_face_it_is_drawn_on(kind, variant, supports):
+    """Verify a supported family is drawn nearest its own face, for every count."""
+    sym = default_registry.get(kind, variant)
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            for count in range(2, 9):
+                faces = [face] * count
+                try:
+                    vessel = (
+                        units.Vessel("X-1", variant=variant, supports=supports, inputs=faces)
+                        if role == "inlet"
+                        else units.Vessel("X-1", variant=variant, supports=supports, outputs=faces)
+                    )
+                except ValueError as exc:
+                    assert not _has_wall(sym, face) or "cannot carry" in str(exc), exc
+                    continue
+                drawn = vessel.symbol()
+                for i in range(1, count + 1):
+                    x, y = drawn.ports[f"{prefix}{i}"]
+                    lands = outward_dir(x, y, drawn.width, drawn.height)
+                    assert lands == face, (
+                        f"{kind}/{variant} on {supports}: {prefix}{i} of {count} on {face} "
+                        f"leaves {lands}"
+                    )
 
 
 def test_a_wall_moves_with_the_ink_when_a_part_grows_the_box_upwards():
