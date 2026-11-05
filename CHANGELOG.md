@@ -53,6 +53,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A valve or fitting on a line from a `Splitter`, or into a `Mixer`, sits next
+  to the unit at the line's other end, so a bank of pumps draws its isolation
+  valves beside the pumps without crossings. One given `at=` keeps its place.
 - A balloon takes any number of signal lines. Lines on one side of it leave
   from separate points on its outline instead of stacking on one point.
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet

@@ -65,6 +65,8 @@ class Link:
         Level pipe its furniture needs.
     rise : float
         Upright pipe its furniture needs when its ends stack.
+    beside : bool
+        Whether its furniture needs its room beside its gap's lanes.
     """
 
     source: Port
@@ -72,6 +74,7 @@ class Link:
     recycle: bool = False
     room: float = 0.0
     rise: float = 0.0
+    beside: bool = False
 
 
 @dataclass(eq=False)
@@ -872,12 +875,15 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
     east = {k: max((n.pad.east for n in layers.get(k, [])), default=0.0) for k in width}
     west = {k: max((n.pad.west for n in layers.get(k, [])), default=0.0) for k in width}
     room = dict.fromkeys(width, 0.0)
+    beside = dict.fromkeys(width, 0.0)
     # Furniture room goes in the gap after the pipe's west end.
     for s in segs:
         if s.link.room and s.lport is not None:
             room[s.left.layer] = max(room[s.left.layer], s.link.room + END_ROOM)
+            if s.link.beside:
+                beside[s.left.layer] = max(beside[s.left.layer], s.link.room)
     for k, lanes in (_lanes(segs) if widen else {}).items():
-        room[k] = max(room[k], 2 * MIN_ESCAPE + (lanes + 1) * LANE_PITCH)
+        room[k] = max(room[k], 2 * MIN_ESCAPE + (lanes + 1) * LANE_PITCH + beside[k])
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
         left[k] = x
