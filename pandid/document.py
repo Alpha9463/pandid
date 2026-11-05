@@ -14,6 +14,7 @@ from pandid.deprecation import Deprecation
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.streams import Stream
     from pandid.units import Unit
     from pandid.validate import Issue
 
@@ -734,15 +735,51 @@ def _line(fs: "Flowsheet", flags: "list[Unit]") -> _Line:
     -------
     tuple
         Line number, service and size, each ``None`` when unstated,
-        and all ``None`` unless exactly one stream ends at the flags. A
-        stream number the sheet assigned is not a line number.
+        and all ``None`` unless exactly one stream ends at the flags.
+        The service is read from the segment at the flags, else from
+        the first segment of the line that states it; the size, as
+        :func:`_size_at` finds it. A stream number the sheet assigned
+        is not a line number.
     """
-    runs = [s for s in fs.streams if s.source.owner in flags or s.dest.owner in flags]
-    if len(runs) != 1:
+    at = [s for s in fs.streams if s.source.owner in flags or s.dest.owner in flags]
+    if len(at) != 1:
         return (None, None, None)
-    (s,) = runs
-    return (s.name if s.has_line_number or not s.auto_named else None,
-            _drawn_text(s.service) or None, _drawn_text(s.size) or None)
+    run = fs._named_runs().get(at[0].name, at)
+    service = next((s.service for s in (*at, *run) if s.service is not None), None)
+    return (at[0].name if any(s.has_line_number or not s.auto_named for s in run) else None,
+            _drawn_text(service) or None, _drawn_text(_size_at(flags, at[0], run)) or None)
+
+
+def _size_at(flags: "list[Unit]", segment: "Stream", run: "list[Stream]") -> "str | float | None":
+    """Return the size stated nearest a connector's flags on its line.
+
+    Walk the line away from the flags to the first segment that states
+    a size; a reducer ends the walk.
+
+    Parameters
+    ----------
+    flags : list[Unit]
+        Flags drawn for one connector.
+    segment : Stream
+        The one stream that ends at the flags.
+    run : list[Stream]
+        Segments of its line.
+
+    Returns
+    -------
+    str, float or None
+        The size, or ``None`` when no segment this side of a reducer
+        states one.
+    """
+    upstream = segment.dest.owner in flags
+    here: "Stream | None" = segment
+    for _ in run:
+        if here is None or here.size is not None:
+            break
+        unit = here.source.owner if upstream else here.dest.owner
+        port = None if unit.kind == "reducer" else unit.ports.get("inlet" if upstream else "outlet")
+        here = next((s for s in run if port is not None and s is port.stream), None)
+    return None if here is None else here.size
 
 
 def _connectors(fs: "Flowsheet") -> "dict[tuple[str, str, str], tuple[list[Unit], _Line]]":

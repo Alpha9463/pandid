@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-field-undrawn` when a line-number field set in
+  `connect()` is not drawn: `name=` replaces the line number,
+  `line_numbering_scheme` leaves the field out, or the field is stated past a
+  valve or tee that carries another segment's number on. It names the fix.
 
 ### Changed
 
@@ -67,6 +71,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- Lines that cross on their way into a mixer are laid on lanes even where they
+  share their stretch of the gap with only some of the lines beside them, so the
+  last two pumps of a header of tees no longer cross into the mixer.
 - The equipment list and `fs.equipment_list()` include centrifuges and
   crushing machines.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,
