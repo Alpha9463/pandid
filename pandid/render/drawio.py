@@ -6,9 +6,13 @@ edges between their ports.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import math
+import re
+import urllib.parse
+import zlib
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 from xml.sax.saxutils import escape
@@ -235,6 +239,65 @@ class _Fit(NamedTuple):
         return self.scale * v
 
 
+def drawio_stencil(svg: str, width: float, height: float,
+                   offset: "tuple[float, float]" = (0.0, 0.0)) -> str:
+    """Return a draw.io inline stencil drawing an artwork's outlines.
+
+    The artwork's paths, of ``M``, ``L``, ``A`` and ``Z`` commands in
+    absolute coordinates, and its rectangles become the stencil's own
+    geometry, so draw.io draws them as placed rather than stretching a
+    library shape.
+
+    Parameters
+    ----------
+    svg : str
+        Artwork.
+    width, height : float
+        The stencil's box.
+    offset : tuple[float, float], default=(0.0, 0.0)
+        Where the artwork's origin falls in the box.
+
+    Returns
+    -------
+    str
+        A ``stencil(...)`` shape name for a cell's style.
+    """
+    dx, dy = offset
+    out = []
+    for tag, attrs in re.findall(r"<(path|rect)\b([^>]*?)/?>", svg):
+        a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
+        if tag == "rect":
+            out.append(f'<rect x="{fmt(float(a["x"]) + dx, 4)}" y="{fmt(float(a["y"]) + dy, 4)}" '
+                       f'w="{fmt(float(a["width"]), 4)}" h="{fmt(float(a["height"]), 4)}"/>')
+        else:
+            steps, tokens = [], a["d"].replace(",", " ").split()
+            i = 0
+            while i < len(tokens):
+                cmd, i = tokens[i], i + 1
+                if cmd == "Z":
+                    steps.append("<close/>")
+                    continue
+                n = 7 if cmd == "A" else 2
+                v = [float(t) for t in tokens[i:i + n]]
+                i += n
+                x, y = fmt(v[-2] + dx, 4), fmt(v[-1] + dy, 4)
+                if cmd == "A":
+                    steps.append(f'<arc rx="{fmt(v[0], 4)}" ry="{fmt(v[1], 4)}" '
+                                 f'x-axis-rotation="{fmt(v[2], 4)}" '
+                                 f'large-arc-flag="{int(v[3])}" sweep-flag="{int(v[4])}" '
+                                 f'x="{x}" y="{y}"/>')
+                else:
+                    steps.append(f'<{"move" if cmd == "M" else "line"} x="{x}" y="{y}"/>')
+            out.append(f"<path>{''.join(steps)}</path>")
+        out.append("<stroke/>" if a.get("fill", "none") == "none" else "<fillstroke/>")
+    xml = (f'<shape w="{fmt(width, 4)}" h="{fmt(height, 4)}" aspect="variable" '
+           f'strokewidth="inherit"><foreground>{"".join(out)}</foreground></shape>')
+    # draw.io reads a stencil as raw-deflated, base64'd encodeURIComponent text.
+    packer = zlib.compressobj(9, zlib.DEFLATED, -15)
+    data = urllib.parse.quote(xml, safe="-_.!~*'()").encode("ascii")
+    return f"stencil({base64.b64encode(packer.compress(data) + packer.flush()).decode('ascii')})"
+
+
 class _Piece(NamedTuple):
     """A draw.io built-in shape placed inside a stand-in's cell.
 
@@ -307,6 +370,9 @@ HOP_DROPPED = "drawio-hop-dropped"
 
 _BALLOON_FILL = "#ffffff"
 
+#: Drawings exported as an inline stencil of their own outline.
+OWN_OUTLINE = frozenset({("silo", "default"), ("silo", "bunker")})
+
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
 _APPROXIMATIONS = {
@@ -373,10 +439,6 @@ _APPROXIMATIONS = {
         None, "the dished head, the cone and leg, the draft tube and the baffle"),
     ("flotation_cell", "default"): _Approximation(
         None, "the open tank, the launder outside its lip, the air standpipe and the froth"),
-    ("silo", "default"): _Approximation(
-        None, "the cone under the shell"),
-    ("silo", "bunker"): _Approximation(
-        None, "the open top and the cone under the walls"),
     ("kiln", "default"): _Approximation(
         None, "the shell's fall from feed end to discharge, its riding rings and its drive"),
     ("kiln", "fluidized_bed"): _Approximation(
@@ -1027,6 +1089,8 @@ class DrawioRenderer:
                     f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                     f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
         stencil = sym.drawio_shape or sym.drawio_body_shape
+        if not stencil and (u.kind, u.variant) in OWN_OUTLINE:
+            stencil = drawio_stencil(sym.svg, sym.width, sym.height)
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
             keys = [f"shape={stencil}", "outlineConnect=0",

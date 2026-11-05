@@ -1,6 +1,10 @@
 """Check the silo and the bunker, ISO 10628-2 items 1.9 and 1.8."""
 
+import re
+import xml.etree.ElementTree as ET
+
 import pytest
+from test_drawio import _inline_stencil
 
 from pandid import Bunker, Conveyor, Feed, Flowsheet, Product, Silo
 from pandid.portgeom import port_faces
@@ -69,3 +73,48 @@ def test_a_silo_between_two_conveyors_draws_and_is_scheduled():
     assert 'id="sym_silo"' in fs.to_svg()
     assert [i for i in fs.validate() if i.severity == "error"] == []
     assert "SI-101" in [row["tag"] for row in fs.equipment_list()]
+
+
+def _exported_outline(unit) -> "tuple[list[tuple[str, float, float]], bool]":
+    """Return the draw.io stencil path a unit exports as, and whether it is filled."""
+    fs = Flowsheet("Export")
+    feed = fs.add(Feed("F"))
+    fs.add(unit)
+    out = fs.add(Product("P"))
+    fs.connect(feed.outlet, unit.feed)
+    fs.connect(unit.discharge, out.inlet)
+    cell = next(
+        c for c in ET.fromstring(fs.to_drawio()).iter("mxCell") if c.get("value") == unit.name
+    )
+    shape = re.search(r"shape=(stencil\([^)]*\))", cell.get("style", ""))
+    assert shape, f"{unit.name} exports as a {cell.get('style')!r} box, not its outline"
+    stencil = _inline_stencil(shape.group(1))
+    assert stencil is not None
+    path = stencil.find("foreground/path")
+    assert path is not None
+    steps = [
+        (step.tag, float(step.get("x", "nan")), float(step.get("y", "nan")))
+        for step in path
+        if step.tag != "close"
+    ]
+    return steps, stencil.find("foreground/fillstroke") is not None
+
+
+@pytest.mark.parametrize(
+    ("unit", "variant", "closed"),
+    [(Silo("SI-101"), "default", True), (Bunker("BN-101"), "bunker", False)],
+    ids=["silo", "bunker"],
+)
+def test_draw_io_gets_the_outline_the_sheet_draws(unit, variant, closed):
+    """Check that the draw.io export traces the SVG outline, open or closed as drawn."""
+    d = re.search(r' d="([^"]*)"', default_registry.get("silo", variant).svg)
+    assert d
+    tokens = d.group(1).split()
+    drawn = [
+        ("move" if tokens[i] == "M" else "line", float(tokens[i + 1]), float(tokens[i + 2]))
+        for i in range(0, len(tokens), 3)
+        if tokens[i] in "ML"
+    ]
+    steps, filled = _exported_outline(unit)
+    assert steps == drawn
+    assert filled == closed

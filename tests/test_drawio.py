@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import base64
 import html
 import math
 from dataclasses import dataclass
 from decimal import Decimal
 import pathlib
 import re
+import urllib.parse
 import xml.etree.ElementTree as ET
+import zlib
 
 import pytest
 
@@ -25,6 +28,7 @@ from pandid.render.drawio import (
     _hops,
     _PART_APPROXIMATIONS,
     DrawioRenderer,
+    OWN_OUTLINE,
 )
 from pandid.render.svg import (
     CROSSING_STYLES,
@@ -78,6 +82,26 @@ def _stencil_keys() -> set[str]:
 STENCIL_KEYS = _stencil_keys()
 
 
+def _inline_stencil(shape: str) -> ET.Element | None:
+    """Return the stencil an inline ``stencil(...)`` shape decodes to."""
+    if not (shape.startswith("stencil(") and shape.endswith(")")):
+        return None
+    packed = base64.b64decode(shape[len("stencil(") : -1])
+    root = ET.fromstring(urllib.parse.unquote(zlib.decompress(packed, -15).decode()))
+    assert root.tag == "shape" and root.find("foreground") is not None, shape
+    return root
+
+
+def _resolves(shape: str | None) -> bool:
+    """Return whether a shape reference names something draw.io draws."""
+    return (
+        shape is None
+        or shape in STENCIL_KEYS
+        or shape in _BUILTIN_SHAPES
+        or _inline_stencil(shape) is not None
+    )
+
+
 def _every_drawing() -> list[tuple[str, str, Symbol]]:
     """Collect registered, closed, and reversed symbol drawings."""
     out = [
@@ -109,6 +133,8 @@ def test_every_drawing_exports_as_a_stencil_or_a_written_down_approximation(entr
         assert sym.stretchable, f"{kind}/{variant} references a fixed-aspect stencil"
         return
     base = variant.split(" [")[0]
+    if (kind, base) in OWN_OUTLINE:
+        return
     assert (kind, base) in _APPROXIMATIONS, f"{kind}/{base} has no stencil and no approximation"
     assert _APPROXIMATIONS[(kind, base)].shape in _BUILTIN_SHAPES
 
@@ -241,7 +267,7 @@ def test_an_exported_sheet_references_only_shapes_that_resolve(every_symbol_shee
             if key.startswith("shape="):
                 shapes.add(key[len("shape=") :])
     assert shapes, "no shape references at all -- the sheet exported as blank boxes"
-    unresolved = sorted(s for s in shapes if s not in STENCIL_KEYS and s not in _BUILTIN_SHAPES)
+    unresolved = sorted(s for s in shapes if not _resolves(s))
     assert not unresolved, f"unresolvable shape references: {unresolved}"
 
 
@@ -2191,9 +2217,7 @@ def test_each_representative_export_matches_its_rendered_sheet(settled_gallery, 
         assert float(geometry.get("height")) == pytest.approx(y1 - y0, abs=0.01)
         at[id(u)] = _style(cells[f"u{i}"])
         shape = at[id(u)].get("shape")
-        assert shape is None or shape in STENCIL_KEYS or shape in _BUILTIN_SHAPES, (
-            f"{stem}: {u.name} references {shape!r}, which resolves to nothing"
-        )
+        assert _resolves(shape), f"{stem}: {u.name} references {shape!r}, which resolves to nothing"
 
     for n, s in enumerate(fs.streams):
         drawn = stream_polyline(s)
