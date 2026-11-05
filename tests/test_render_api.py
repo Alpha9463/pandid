@@ -778,7 +778,7 @@ MUTATIONS = {
 @pytest.mark.parametrize("mutation", list(MUTATIONS), ids=list(MUTATIONS))
 def test_every_mutation_that_can_move_something_marks_the_sheet_stale(mutation):
     fs = _mutable()
-    fs.to_svg()
+    fs.to_svg(show_stream_table=True)
     assert not fs.warnings, "the fixture stopped being a clean sheet"
     assert (fs._layout_stale, fs._route_stale) == (False, False)
     MUTATIONS[mutation](fs)

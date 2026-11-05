@@ -235,15 +235,38 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, tap lines through units or tag halos, and runs
-        two lines or tap lines share.
+        through tag halos, line segments through units other than
+        balloons on that line and the end of a line leaving its own
+        nozzle straight out of the face, tap lines through units or tag
+        halos, and runs two lines or tap lines share.
     """
     from collections import Counter
 
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
-    from pandid.portgeom import unit_box
+    from pandid.portgeom import COMPASS, resolve_port, unit_box
     from pandid.render.svg import tap_lines, tap_route
+
+    def outward(port, nozzle: tuple[float, float], other: tuple[float, float]) -> bool:
+        """Return whether a segment leaves a nozzle straight out of its face.
+
+        Parameters
+        ----------
+        port : Port
+            Port the segment ends at.
+        nozzle : tuple[float, float]
+            The segment's end at the nozzle.
+        other : tuple[float, float]
+            Its other end.
+
+        Returns
+        -------
+        bool
+            True if the segment runs along the face's outward normal.
+        """
+        nx, ny = COMPASS[resolve_port(port.owner, port.owner.frame, port.name).face]
+        dx, dy = other[0] - nozzle[0], other[1] - nozzle[1]
+        return abs(dx * ny - dy * nx) < 1e-6 and dx * nx + dy * ny >= 0.0
 
     def crosses(points: list, box: _Box) -> bool:
         """Return whether a polyline crosses a box.
@@ -267,8 +290,17 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     flaws["unit-on-tag"] = sum(boxes_overlap(box, h, -_BODY_TOL)
                                for _, box in boxes for h in halos)
-    lines = [stream_path(s) for s in fs.streams if s.route is not None]
+    drawn = [s for s in fs.streams if s.route is not None]
+    lines = [stream_path(s) for s in drawn]
     flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
+    # A line meets its own unit at a nozzle that may sit inside the box,
+    # and leaves it straight out of the nozzle's face.
+    flaws["line-through-unit"] = sum(
+        segment_crosses_box(a, b, box) for s, points in zip(drawn, lines)
+        for k, (a, b) in enumerate(zip(points, points[1:]))
+        for u, box in boxes if getattr(u, "host", None) is not s
+        and not (k == 0 and u is s.source.owner and outward(s.source, a, b))
+        and not (k == len(points) - 2 and u is s.dest.owner and outward(s.dest, b, a)))
     taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
     for inst, route in taps:
         flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes

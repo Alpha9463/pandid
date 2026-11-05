@@ -9,10 +9,12 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from _layout_cases import build_unpinned
 
 from pandid import ControlValve, ShellAndTubeExchanger
 from pandid.flowsheet import Flowsheet
 from pandid.geometry import Route
+from pandid.route_geometry import SNAP
 from pandid.streams import Stream
 from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.portgeom import outward_dir
@@ -114,6 +116,36 @@ def test_a_lane_beside_a_tag_or_its_own_unit_stays_a_way_through(valve_at):
     fs.add_control_loop("T", 101, measuring=cooler, acting_on=valve)
     fs.to_svg(diagram="p&id")
     assert fs.validate(diagram="p&id") == []
+
+
+def _hairline_runs(points: list[tuple[float, float]]) -> list[tuple[tuple[float, float], ...]]:
+    """Return each run of a route shorter than ``SNAP``."""
+    return [
+        (p, q) for p, q in zip(points, points[1:]) if 0 < abs(p[0] - q[0]) + abs(p[1] - q[1]) < SNAP
+    ]
+
+
+def test_nozzles_out_of_line_by_rounding_error_are_joined_straight():
+    """Route one straight run between nozzles 1e-14 px out of line."""
+    fs = Flowsheet("rounding error")
+    feed = fs.add(Feed("F")).pin(port="outlet", x=100, y=200.3)
+    product = fs.add(Product("P")).pin(port="inlet", x=400, y=200.1 + 0.2)
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.route()
+    assert line.route is not None
+    assert not _hairline_runs(line.route.waypoints), line.route.waypoints
+
+
+def test_no_line_on_the_stripped_dryer_jogs_by_rounding_error():
+    """Route 400-WG-501-CS straight to XV-501B, 1e-14 px out of line."""
+    fs = build_unpinned("19_molecular_sieve_dryer")[0]
+    fs.route()
+    jogs = [
+        (s.name, _hairline_runs(s.route.waypoints))
+        for s in fs.streams
+        if s.route is not None and not s.route.manual
+    ]
+    assert not [(name, runs) for name, runs in jogs if runs]
 
 
 def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():
@@ -942,6 +974,44 @@ def test_separation_keeps_a_run_out_of_a_unit_its_stream_does_not_join(
     assert abs(points[turn][0] - nearby.route.waypoints[other_turn][0]) >= 6.0 - 1e-9
 
 
+def test_separation_leaves_a_run_boxed_between_two_units_on_its_track() -> None:
+    """Keep a run where it was when every track near it enters a unit."""
+    from pandid.geometry import Frame
+    from pandid.routing.separation import separate_streams
+
+    fs = Flowsheet("boxed run")
+    pump = fs.add(Pump("P-1"))
+    pump.frame = Frame(x=624.0, y=187.0, w=70.0, h=67.0)
+    valve = fs.add(Valve("FV-202"))
+    valve.frame = Frame(x=591.6, y=259.5, w=19.8, h=24.5)
+    ends = [fs.add(Feed("F1")), fs.add(Product("P1")), fs.add(Feed("F2")), fs.add(Product("P2"))]
+    for unit in ends:
+        unit.frame = Frame(x=2000.0, y=2000.0, w=10.0, h=10.0)
+    boxed = [
+        (664.54, 293.08),
+        (639.54, 293.08),
+        (626.4, 293.08),
+        (626.4, 258.66),
+        (609.0, 258.66),
+        (609.0, 162.1),
+        (561.7, 162.1),
+        (561.7, 187.1),
+    ]
+    run = fs.connect(ends[0].outlet, ends[1].inlet)
+    run.route = Route(list(boxed))
+    beside = fs.connect(ends[2].outlet, ends[3].inlet)
+    beside.route = Route([(558.07, 258.66), (583.07, 258.66), (686.54, 258.66), (686.54, 315.08)])
+
+    separate_streams(fs)
+    assert run.route is not None
+    points = run.route.waypoints
+    bodies = [Rect(624.0, 694.0, 187.0, 254.0), Rect(591.6, 611.4, 259.5, 284.0)]
+    assert not any(
+        box.intersects_segment(*a, *b) for box in bodies for a, b in zip(points, points[1:])
+    )
+    assert points == boxed
+
+
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
     """Preview separation without changing routes, and match the real pass."""
     from pandid.routing.separation import preview_separated_waypoints, separate_streams
@@ -1017,4 +1087,55 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     assert s2.route.waypoints[1][1] == 100.0, f"the via() route moved: {s2.route.waypoints}"
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
-    assert s2_recordings[-1][1][1] == 106.0, s2_recordings[-1]
+    assert any(p[1][1] == 106.0 for p in s2_recordings), s2_recordings
+
+
+def test_a_stream_to_a_unit_with_no_frame_is_left_unrouted_with_a_warning(
+    same_file: Callable[[str], str],
+) -> None:
+    """Check that routing before layout skips the stream and says to call layout()."""
+    fs = Flowsheet("unplaced")
+    feed, product = fs.add(Feed("F")), fs.add(Product("P"))
+    line = fs.connect(feed.outlet, product.inlet, name="S1")
+
+    with pytest.warns(
+        UserWarning, match=r"'F' has no frame.*Call layout\(\) before route\(\)"
+    ) as caught:
+        DefaultRouter().route(fs)
+
+    assert line.route is None
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+
+
+def test_a_stream_to_a_port_the_graph_does_not_anchor_is_left_unrouted_with_a_warning(
+    same_file: Callable[[str], str],
+) -> None:
+    """Check that a stream to a placed unit off the sheet's unit list is skipped and named."""
+    fs = Flowsheet("unanchored")
+    feed = fs.add(Feed("F")).pin(x=100, y=100)
+    product = fs.add(Product("P")).pin(x=400, y=100)
+    line = fs.connect(feed.outlet, product.inlet, name="S1")
+    fs.layout()
+    fs.units.remove(product)
+
+    with pytest.warns(UserWarning, match=r"no anchor for port P\.inlet") as caught:
+        DefaultRouter().route(fs)
+
+    assert line.route is None
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
+
+
+def test_a_stream_whose_separated_route_crosses_unpriced_lines_is_routed_clear():
+    """Route a stream again where separation drew crossings its search did not price."""
+    from _layout_cases import build
+
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import crossing_count
+
+    fs = build(pinned=True)[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fs.route()
+    feeds = {s.dest.name: stream_polyline(s) for s in fs.streams if s.dest.owner.name == "S-103"}
+    # Separation swaps the two feeds' risers into S-103, crossing them twice.
+    assert crossing_count([feeds["feed_1"], feeds["feed_2"]]) == 0

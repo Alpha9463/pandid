@@ -43,7 +43,7 @@ text.
 | `layout()` / `route()` | Resolve equipment coordinates and stream paths. `render()` calls both. |
 | `render(path, **options)` | Write SVG, draw.io, PDF or PNG according to the extension. |
 | `to_svg(**options)` / `show(**options)` | Return SVG text or open a browser preview. |
-| `validate(*, diagram=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
+| `validate(*, diagram=None, show_stream_table=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
 | `to_dict()` / `from_dict(spec)` | Serialize intent or build an equivalent sheet. |
 | `from_json(path)` / `from_yaml(path)` | Read a spec file; YAML needs `pandid[yaml]`. |
 | `line_list()` / `equipment_list()` / `instrument_index()` | Return a schedule as rows; see [Schedules](#schedules). |
@@ -104,6 +104,8 @@ The names depend on the class and variant. Common patterns are:
   `overflow`/`underflow`.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.
+- Reactors use `feed`, `outlet`, `vent` and `duty`. A `JacketedReactor` has
+  `jacket_in` low on the jacket and `jacket_out` high on it in place of `duty`.
 - Multi-feed equipment exposes `feed_1`, `feed_2`, and so on when configured.
 
 ### Equipment classes
@@ -141,7 +143,8 @@ fs.render("drum.svg")
 ### `Block`: the block flow diagram
 
 `Block(name, inputs=1, outputs=1)` draws a plant section. Counts create
-`in_1`... and `out_1`... ports; face sequences such as `inputs=["W", "N"]`
+`in_1`... and `out_1`... ports on the west and east faces, which the layout
+may move to face their peers; face sequences such as `inputs=["W", "N"]`
 set each port's side. `block.ports_on("N")` lists a face's ports,
 `block.order_on("N", ports)` sets their order, and `block.face("in_1")`
 returns the declared face. An unpinned block sizes itself for its ports and name.
@@ -190,6 +193,23 @@ when the piping convention matters. The choice is made on the rendered sheet; a
 `Block`'s declared faces turn with the block.
 
 The default `Reactor` offers `outlet` on `"S"`, `"E"` or `"W"`. `"S"` is used unless a side face gives a more direct run.
+
+A count such as `inputs=2` leaves the faces of a `Block`'s, `Tank`'s or
+`Vessel`'s connections to the engine; a list such as `inputs=["W", "N"]`
+states each one. The engine moves a counted connection to another face only
+where the family's lines need fewer bends, the box has room, and no two lines
+on that face cross or crowd. `route()` keeps the move only where the drawn
+sheet has fewer bends or crossings and no new finding. The faces on offer:
+
+| Unit | Inlets | Outlets |
+|---|---|---|
+| `Block` | `"W"`, `"E"`, `"N"`, `"S"` | `"W"`, `"E"`, `"N"`, `"S"` |
+| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"` | `"S"`; `"gas_holder"`: `"E"` |
+| `Vessel` | `"W"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`; `"horizontal"`: `"S"` |
+
+A head, roof or cone drawn to a point takes one connection. Fix a face with a
+list, with `unit.nozzle("in_2", "N")`, or by pinning the nozzle with
+`unit.pin(port="in_2", x=..., y=...)`.
 
 Symbols whose function depends on gravity should keep their upright orientation.
 Validation reports `gravity-turned` when one is rotated away from it.
@@ -388,7 +408,7 @@ built-in spec format.
 ```text
 pandid draw SPEC [-o OUT] [--diagram {pfd,p&id,bfd}] [--page-size SIZE]
                    [--border {none,zone}] [--stream-table [sheet]]
-pandid validate SPEC [--diagram {pfd,p&id,bfd}]
+pandid validate SPEC [--diagram {pfd,p&id,bfd}] [--stream-table [sheet]]
 pandid symbols [--kind KIND]
 ```
 

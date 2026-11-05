@@ -212,8 +212,9 @@ def test_the_run_time_getattr_stays_hidden_from_checkers():
         and stmt.test.operand.id == "TYPE_CHECKING"
         and any(isinstance(b, ast.FunctionDef) and b.name == "__getattr__" for b in stmt.body)
     ]
-    assert guarded == ["Unit"], (
-        f"expected Unit alone to hide a run-time __getattr__ from checkers, got {guarded}"
+    assert guarded == ["Unit", "Reactor"], (
+        f"expected Unit and Reactor alone to hide a run-time __getattr__ from checkers, "
+        f"got {guarded}"
     )
 
 
@@ -260,6 +261,7 @@ def test_only_these_classes_supersede_a_declaration():
         "PlateExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "SpiralExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "ThinFilmEvaporator": ["shell_in", "shell_out", "tube_in", "tube_out"],
+        "JacketedReactor": ["duty"],
         "CheckValve": ["actuator"],
     }
 

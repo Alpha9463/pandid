@@ -278,6 +278,9 @@ class Unit:
     # Attributes __setattr__ refuses to reassign after __init__.
     _FIXED_AT_CONSTRUCTION: frozenset[str] = frozenset()
 
+    # Composition parts, redrawn when the variant is reassigned.
+    _composition: "tuple[_Part, ...]" = ()
+
     # Whether __init__ builds ports or faces from the variant.
     _VARIANT_BUILDS = False
 
@@ -290,6 +293,13 @@ class Unit:
 
     # Backing store for pin_.
     _pin: "Pin | None" = None
+
+    # What a unit with no composed parts, large end or normal position
+    # reads as. Hidden from type checkers.
+    if not TYPE_CHECKING:
+        overlays = ()
+        large_end = "inlet"
+        normal_position = "open"
 
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
@@ -454,7 +464,8 @@ class Unit:
             number.
         ValueError
             If ``width`` or ``height`` is a number that is not positive
-            and finite.
+            and finite, or a reassigned ``variant`` cannot carry the
+            unit's parts, manholes or sockets.
         AttributeError
             If an attribute fixed at construction is reassigned.
 
@@ -481,10 +492,13 @@ class Unit:
                 f"leave the drawing disagreeing with the object. Build a new "
                 f"{type(self).__name__} with {name}={value!r} instead."
             )
-        built = name == "variant" and name in self.__dict__
+        old = self.__dict__.get(name)
         super().__setattr__(name, value)
-        if built and self._VARIANT_BUILDS:
-            _VARIANT_REASSIGNED.warn(self, where=self.name)
+        if name == "variant" and old is not None:
+            if self._composition:
+                _recompose(self, old)
+            if self._VARIANT_BUILDS:
+                _VARIANT_REASSIGNED.warn(self, where=self.name)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
 
@@ -498,6 +512,12 @@ class Unit:
             Tag, or ``""``.
         """
         return "" if self.balloon is not None else self.name
+
+    def _check_parts(self) -> None:
+        """Refuse parts this unit's rules forbid on its variant.
+
+        A plain unit refuses none.
+        """
 
     def repeats(self, other: "Unit") -> bool:
         """Return whether this unit is another drawing of ``other``.
@@ -1493,6 +1513,7 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     """
     from pandid.render.symbols import default_registry
 
+    unit._composition = parts
     stated = [(keyword, value, place) for keyword, value, place in parts if value is not None]
     overlays = _placed(stated, unit.variant)
     if not overlays:
@@ -1512,6 +1533,59 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
             f"{named}; variants that can: {', '.join(able) or 'none'}"
         )
     unit.overlays = overlays
+
+
+def _recompose(unit: "Unit", old: str) -> None:
+    """Redraw a unit's parts on its new variant, or restore ``old``.
+
+    Overlays added after the parts are kept, after the redrawn parts.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit whose variant was reassigned.
+    old : str
+        Variant it had.
+
+    Raises
+    ------
+    ValueError
+        If the overlays no longer begin with the parts the unit was
+        built with, or the new variant cannot carry the parts, the
+        added overlays, the manholes or the sockets; the unit keeps
+        ``old`` and its overlays.
+    """
+    from pandid.render.symbols import default_registry
+
+    overlays = unit.__dict__.get("overlays")
+    stated = [(keyword, value, place) for keyword, value, place in unit._composition
+              if value is not None]
+    built, current = _placed(stated, old), tuple(overlays or ())
+    walls = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
+    try:
+        if current[:len(built)] != built:
+            raise ValueError(
+                f"{unit.name}: its overlays no longer begin with the parts it was built "
+                f"with, so a new variant cannot redraw them. Build "
+                f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
+                f"instead"
+            )
+        _compose_onto(unit, *unit._composition)
+        unit._check_parts()
+        added = current[len(built):]
+        if added:
+            drawn = _placed(stated, unit.variant) + added
+            unit.overlays = drawn
+            default_registry.composed(unit.kind, unit.variant, drawn)
+        for keyword, placed in zip(("manholes", "sockets"), walls):
+            _on_walls(unit, keyword, placed)
+        if any(walls):
+            default_registry.for_unit(unit)
+    except ValueError:
+        unit.__dict__["variant"] = old
+        if overlays is not None:
+            unit.__dict__["overlays"] = overlays
+        raise
 
 
 #: Placements of a wall part, ``(face, fraction)`` each.
@@ -1675,9 +1749,78 @@ class _FaceFamilies(Unit):
 
     # Family port name -> face, in drawn order.
     _faces: dict[str, str]
+    # Family ports whose face a list named, and those whose face the
+    # author named by a list or nozzle().
+    _listed: frozenset[str]
+    _stated: set[str]
 
     # Error wording: the unit noun, a variable name and a family port.
     _NOUN, _VAR, _MEMBER = "unit", "v", "inlet or outlet"
+
+    def _record_lists(self, inputs: "int | Sequence[str]",
+                      outputs: "int | Sequence[str]") -> None:
+        """Record which families were declared by a list of faces.
+
+        Parameters
+        ----------
+        inputs, outputs : int or Sequence[str]
+            Count, or one face per port, as declared.
+        """
+        self._listed = frozenset(
+            port.name
+            for family, spec in ((self.inlets, inputs), (self.outlets, outputs))
+            if not isinstance(spec, int)
+            for port in family
+        )
+        self._stated = set(self._listed)
+
+    def _offered(self, port_name: str) -> list[str]:
+        """Return the faces a family port may take, its own face first.
+
+        Parameters
+        ----------
+        port_name : str
+            Family port name.
+
+        Returns
+        -------
+        list[str]
+            Faces on the unit's own axes.
+        """
+        raise NotImplementedError
+
+    def _fits(self, faces: dict[str, str], frame: Frame) -> bool:
+        """Return whether a placed box can draw the families on faces.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Family port name to face, in drawn order.
+        frame : Frame
+            The unit's placed box.
+
+        Returns
+        -------
+        bool
+            True if every face has room for its ports.
+        """
+        raise NotImplementedError
+
+    def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
+        """Return the symbol with the families on the given faces.
+
+        Parameters
+        ----------
+        faces : dict[str, str], optional
+            Family port name to face, in drawn order; the declared
+            faces when omitted.
+
+        Returns
+        -------
+        Symbol
+            Artwork with the families placed.
+        """
+        raise NotImplementedError
 
     @property
     def input_faces(self) -> tuple[str, ...]:
@@ -2005,6 +2148,47 @@ class _MultiPortVessel(_FaceFamilies):
             self.inlet = self.inlets[0]
         if len(self.outlets) == 1:
             self.outlet = self.outlets[0]
+        self._record_lists(inputs, outputs)
+
+    def _offered(self, port_name: str) -> list[str]:
+        """Return the faces the artwork offers a family port's role.
+
+        Parameters
+        ----------
+        port_name : str
+            Family port name.
+
+        Returns
+        -------
+        list[str]
+            Faces on the unit's own axes, the port's face first.
+        """
+        role = "inlet" if port_name.startswith("in_") else "outlet"
+        sym = self._registry_symbol()
+        menu = sym.port_faces.get(role, {}) if sym is not None else {}
+        home = self._faces[port_name]
+        return [home, *(face for face in menu if face != home)]
+
+    def _fits(self, faces: dict[str, str], frame: Frame) -> bool:
+        """Return whether the artwork can draw the families on faces.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Family port name to face, in drawn order.
+        frame : Frame
+            The unit's placed box.
+
+        Returns
+        -------
+        bool
+            True if the symbol builds with the families on ``faces``.
+        """
+        try:
+            self.symbol(faces)
+        except ValueError:
+            return False
+        return True
 
     def _connect(self, name: str, direction: str, face: str) -> Port:
         """Check a family port's face, then create the port.
@@ -2067,12 +2251,18 @@ class _MultiPortVessel(_FaceFamilies):
         resolved = _block_face(face, self.name)
         self._validate_face(role, canonical, resolved)
         self._faces[canonical] = resolved
-        self._port_faces[canonical] = resolved
+        self._stated.add(canonical)
         self._invalidate_layout()
         return self
 
-    def symbol(self) -> "Symbol":
-        """Return the symbol with the current port faces and overlays.
+    def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
+        """Return the symbol with the families on faces, and overlays.
+
+        Parameters
+        ----------
+        faces : dict[str, str], optional
+            Family port name to face, in drawn order; the declared
+            faces when omitted.
 
         Returns
         -------
@@ -2088,9 +2278,10 @@ class _MultiPortVessel(_FaceFamilies):
         from pandid.render.symbols import vessel_symbol
 
         overlays = tuple(getattr(self, "overlays", ()) or ())
+        on = self._faces if faces is None else faces
         walls, ports, scale = _drawn_walls(self, overlays)
         return _kept_on_walls(self, vessel_symbol(
-            self.kind, self.variant, tuple(self._faces.items()), overlays + walls, ports), scale)
+            self.kind, self.variant, tuple(on.items()), overlays + walls, ports), scale)
 
 
 class Vessel(_MultiPortVessel):
@@ -4024,6 +4215,16 @@ def _stage_fractions(
     return fractions
 
 
+#: Deprecation of ``duty`` on a jacketed reactor.
+_JACKET_DUTY = Deprecation(
+    what="duty on a jacketed Reactor",
+    instead=("JacketedReactor, with jacket_in for the jacket's supply and "
+             "jacket_out for its return"),
+    removed_in="0.4.0",
+    note="duty draws jacket_in, low on the jacket",
+)
+
+
 class Reactor(Unit):
     """Reactor: a vessel body with an agitator and internals.
 
@@ -4032,7 +4233,9 @@ class Reactor(Unit):
     ``internals="fluidised_bed"`` a fluidised bed. The agitator is
     drawn with its motor, which carries the ``drive`` port. ``vent``
     is the off-gas port, absent on ``"tubular"``; ``duty`` is the
-    jacket or coil connection.
+    heating or cooling connection. ``"jacketed"`` has ``jacket_in``,
+    low on the jacket, and ``jacket_out``, high on it, in place of
+    ``duty``.
 
     Parameters
     ----------
@@ -4082,6 +4285,8 @@ class Reactor(Unit):
     feed_7: Port
     feed_8: Port
 
+    # "jacketed" builds jacket_in and jacket_out in place of duty;
+    # JacketedReactor declares them.
     outlet: Port
     vent: Port
     duty: Port
@@ -4101,6 +4306,12 @@ class Reactor(Unit):
         ("duty", "inlet", "energy"),
     ]
     _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {
+        "jacketed": [
+            ("outlet", "outlet", "process"),
+            ("vent", "outlet", "vapor"),
+            ("jacket_in", "inlet", "utility"),
+            ("jacket_out", "outlet", "utility"),
+        ],
         "tubular": [
             ("outlet", "outlet", "process"),
             ("duty", "inlet", "energy"),
@@ -4143,6 +4354,28 @@ class Reactor(Unit):
             else None,
         }
 
+    def _check_parts(self) -> None:
+        """Refuse an agitator on a body wider than it is tall.
+
+        Raises
+        ------
+        ValueError
+            If the reactor has an agitator and its body is not upright.
+        """
+        from pandid.render.symbols import default_registry
+
+        if self.agitator is None:
+            return
+        # An agitator hangs from the head of an upright body.
+        bodies = {v: default_registry.get(self.kind, v)
+                  for v in default_registry.variants(self.kind)}
+        upright = [v for v, body in bodies.items() if body.height >= body.width]
+        if self.variant not in upright:
+            raise ValueError(
+                f"{self.name}: {type(self).__name__} variant {self.variant!r} cannot carry "
+                f"agitator={self.agitator!r}; variants that can: {', '.join(upright)}"
+            )
+
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
@@ -4170,11 +4403,42 @@ class Reactor(Unit):
             # Placed by the body's aspect.
             ("agitator", agitator, lambda name, body: agitator_overlays(name, self.kind, body)),
         )
+        self._check_parts()
         if agitator is not None:
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
             self.feed = self.feeds[0]
+
+    # Hidden from type checkers.
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Return ``jacket_in`` for ``duty`` on a jacketed body.
+
+            Only a body whose ports come from the variant table
+            answers; a class with its own ``PORTS`` does not.
+
+            Parameters
+            ----------
+            name : str
+                Attribute asked for.
+
+            Returns
+            -------
+            Any
+                ``jacket_in``, after a deprecation warning.
+
+            Raises
+            ------
+            AttributeError
+                For any other missing attribute; it lists the ports.
+            """
+            jacket = self.__dict__.get("ports", {}).get("jacket_in")
+            if name == "duty" and jacket is not None and not self._declared_ports():
+                _JACKET_DUTY.warn(self, where=self.name)
+                return jacket
+            return super().__getattr__(name)
 
 
 class Separator(Unit):
@@ -4847,6 +5111,7 @@ class Block(_FaceFamilies):
             self._add_connection(f"out_{i}", "outlet", face)
             for i, face in enumerate(out_faces, start=1)
         )
+        self._record_lists(inputs, outputs)
         self._check_box()
 
     def _add_connection(self, name: str, direction: str, face: str) -> Port:
@@ -4986,11 +5251,18 @@ class Block(_FaceFamilies):
         except ValueError:
             self._faces[port_name] = was
             raise
+        self._stated.add(port_name)
         self._invalidate_layout()
         return self
 
-    def symbol(self) -> "Symbol":
+    def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
         """Return this block's symbol, built to its connections.
+
+        Parameters
+        ----------
+        faces : dict[str, str], optional
+            Connection name to face, in drawn order; the declared faces
+            when omitted.
 
         Returns
         -------
@@ -4999,8 +5271,75 @@ class Block(_FaceFamilies):
         """
         from pandid.render.symbols import block_symbol
 
+        on = self._faces if faces is None else faces
         # Pass the name only when it sizes the box.
-        return block_symbol(tuple(self._faces.items()), "" if self.width is not None else self.tag)
+        return block_symbol(tuple(on.items()), "" if self.width is not None else self.tag)
+
+    def _offered(self, port_name: str) -> list[str]:
+        """Return every face of the box, the connection's own first.
+
+        Parameters
+        ----------
+        port_name : str
+            Connection name.
+
+        Returns
+        -------
+        list[str]
+            Faces on the box's own axes.
+        """
+        home = self._faces[port_name]
+        return [home, *(face for face in ("W", "E", "N", "S") if face != home)]
+
+    def _fits(self, faces: dict[str, str], frame: Frame) -> bool:
+        """Return whether the placed box holds each face's connections.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Connection name to face, in drawn order.
+        frame : Frame
+            The block's placed box.
+
+        Returns
+        -------
+        bool
+            True if no face is shorter than its connections need.
+        """
+        turned = int(frame.orientation) % 360 in (90, 270)
+        return self._crowded(faces, frame.w, frame.h, turned) is None
+
+    def _crowded(self, faces: dict[str, str], w: float, h: float,
+                 turned: bool) -> tuple[str, int, str, float, float] | None:
+        """Return the first face too short for its connections, or None.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Connection name to face, in drawn order.
+        w, h : float
+            Placed box size.
+        turned : bool
+            Whether the block is turned a quarter.
+
+        Returns
+        -------
+        tuple[str, int, str, float, float] or None
+            Face, connection count, box axis, its drawn length and the
+            length needed.
+        """
+        sym = self.symbol(faces)
+        for face, count in Counter(faces.values()).items():
+            # A single connection needs no spacing.
+            if count < 2:
+                continue
+            upright = face in ("W", "E")
+            along = sym.height if upright else sym.width
+            # A quarter turn swaps which box axis a face runs along.
+            drawn, axis = (w, "width") if upright == turned else (h, "height")
+            if drawn < along - 1e-9:
+                return face, count, axis, drawn, along
+        return None
 
     def _check_box(self) -> None:
         """Raise if the placed box crowds a face's connections.
@@ -5014,20 +5353,12 @@ class Block(_FaceFamilies):
         from pandid.portgeom import resolve_size
         from pandid.render.symbols import block_box_too_small
 
-        sym = self.symbol()
         placed = self.pin_
         w, h = resolve_size(self, placed)
         turned = int(getattr(placed, "orientation", 0) or 0) in (90, 270)
-        for face, count in Counter(self._faces.values()).items():
-            # A single connection needs no spacing.
-            if count < 2:
-                continue
-            upright = face in ("W", "E")
-            along = sym.height if upright else sym.width
-            # A quarter turn swaps which box axis a face runs along.
-            drawn, axis = (w, "width") if upright == turned else (h, "height")
-            if drawn < along - 1e-9:
-                raise block_box_too_small(self.name, face, count, axis, drawn, along, turned=turned)
+        crowded = self._crowded(self._faces, w, h, turned)
+        if crowded is not None:
+            raise block_box_too_small(self.name, *crowded, turned=turned)
 
 
 # Defined at run time only; type checkers still report a missing name.

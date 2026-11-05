@@ -991,6 +991,22 @@ def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
 
 
+def test_a_controller_is_not_hung_where_its_line_passes_through_it_twice() -> None:
+    """Check that hanging is refused where it adds a leg through the controller."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+
+    fs, lic, _ = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    line.via([(100, 200), (500, 200)])
+    fs.route()
+
+    box, path = unit_box(lic, frame_of(lic)), stream_path(line)
+    assert sum(segment_crosses_box(a, b, box) for a, b in zip(path, path[1:])) == 1
+
+
 def test_a_hung_controllers_line_clears_a_balloon_on_the_actuator() -> None:
     """Check that a hung controller's line misses a balloon hung on the actuator face."""
     fs, _, valve = _hung_controller()
@@ -2463,10 +2479,7 @@ def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
 def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
     """Settle a balloon chain whose asked spot lies on the tapped line.
 
-    Returns
-    -------
-    None
-        Routing settles, the line runs straight, and TIC keeps off it.
+    Routing settles, the line runs straight, and TIC keeps off it.
     """
     from pandid.layout.attach import stream_path
 
@@ -2490,13 +2503,124 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
 
 
+@pytest.mark.parametrize(("offset", "hung", "angle"), [(50, 35, 135), (60, 35, 90)])
+def test_a_balloon_hung_across_the_tapped_line_settles_clear_of_it(
+    offset: float, hung: float, angle: float
+) -> None:
+    """Settle a chain whose asked spot crosses the tapped line, with the line drawn straight."""
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("hung across")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=offset, angle=90)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=hung, angle=angle)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    assert {y for _, y in stream_path(line)} == {200.0}
+    assert [i.code for i in fs.validate() if i.code.startswith("route-")] == []
+
+
+def test_keeping_a_hung_balloon_further_off_keeps_a_settled_drawing() -> None:
+    """Keep the settled drawing the touch-clear step finds when a wider gap does worse."""
+    from pandid.layout.control import _flaws, _taps_off
+
+    fs = Flowsheet("wider gap")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=200)
+    fs.add(U.Vessel("V")).pin(x=300, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.7, offset=60, angle=270)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="N", offset=45, angle=90)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+    assert _flaws(fs)["tap-through-unit"] == 0
+
+
+def test_a_refused_retry_keeps_the_hung_balloons_it_started_from() -> None:
+    """Put back the drawing before a refused retry, not the one before every step."""
+    from pandid.layout.control import _flaws, _taps_off
+
+    fs = Flowsheet("refused retry")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=100)
+    fs.add(U.Vessel("V")).pin(x=300, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=70, angle=180)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="E", offset=100, angle=45)
+    pt = fs.add_instrument("PT", 1, sensing=line, at=0.3, offset=70)
+    fs.add_instrument("PIC", 1, near=pt, face="S", offset=50)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert id(pt) not in _taps_off(fs)
+    assert _flaws(fs)["tap-through-unit"] == 0
+
+
+def _chains_by_a_vessel(
+    product: tuple[float, float],
+    chains: list[tuple[float, float, float, str, float, float]],
+    vessel: tuple[float, float] = (300, 100),
+) -> Flowsheet:
+    """Return a routed line past a vessel, with a TT-TIC chain per (TT at, offset, angle, TIC face, offset, angle)."""
+    fs = Flowsheet("chains")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=product[0], y=product[1])
+    fs.add(U.Vessel("V")).pin(x=vessel[0], y=vessel[1])
+    line = fs.connect(feed.outlet, prod.inlet)
+    for n, (at, offset, angle, face, hung, hung_angle) in enumerate(chains, 1):
+        tt = fs.add_instrument("TT", n, sensing=line, at=at, offset=offset, angle=angle)
+        tic = fs.add_instrument("TIC", n, near=tt, face=face, offset=hung, angle=hung_angle)
+        fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+    return fs
+
+
+def test_keeping_hung_balloons_further_off_leaves_the_priced_fallback_to_run() -> None:
+    """Settle with every tap on its line, as the priced fallback does before any wider gap."""
+    from pandid.layout.control import _taps_off
+
+    fs = _chains_by_a_vessel(
+        (500, 200), [(0.5, 60, 90, "W", 35, 135), (0.3, 35, 135, "E", 25, 180)]
+    )
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+
+
+def test_keeping_hung_balloons_further_off_leaves_the_priced_remedy_judged_as_before() -> None:
+    """Keep the line off the vessel's wall, as the priced remedy does before any wider gap."""
+    fs = _chains_by_a_vessel((400, 100), [(0.7, 60, 135, "N", 70, 0), (0.7, 35, 0, "S", 45, 90)])
+
+    assert "route-along-unit" not in [i.code for i in fs.validate()]
+
+
+def test_a_second_route_starts_from_the_drawing_before_balloons_were_kept_further_off() -> None:
+    """Settle a second route() as it settles where no balloon was kept further off."""
+    from pandid.layout.control import _taps_off
+
+    chains: list[tuple[float, float, float, str, float, float]] = [
+        (0.8, 50, 90, "W", 35, 180),
+        (0.3, 50, 225, "S", 50, 90),
+        (0.2, 40, 135, "N", 100, 90),
+    ]
+    fs = _chains_by_a_vessel((600, 100), chains, vessel=(220, 200))
+    fs.route()
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+
+
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
 
-    Returns
-    -------
-    None
-        TIC's free x is the one its asked offset and angle give.
+    TIC's free x is the one its asked offset and angle give.
     """
     from pandid.layout.attach import _anchor, _standoff_box
     from pandid.portgeom import resolve_size
@@ -2521,10 +2645,7 @@ def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
 def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
     """Keep the first drawing when keeping TIC off its line adds a clash.
 
-    Returns
-    -------
-    None
-        No tap line crosses a unit.
+    No tap line crosses a unit.
     """
     from pandid.layout.control import _flaws
 
@@ -2542,10 +2663,7 @@ def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
 def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():
     """Keep the first drawing when the keep-off attempt does not settle either.
 
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
+    TT's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2568,10 +2686,7 @@ def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():
 def test_routing_again_draws_the_same_sheet():
     """Route a sheet whose keep-off attempt is kept twice, to the same drawing.
 
-    Returns
-    -------
-    None
-        The second route() gives the first route()'s drawing.
+    The second route() gives the first route()'s drawing.
     """
     fs = Flowsheet("second route")
     feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
@@ -2590,10 +2705,7 @@ def test_routing_again_draws_the_same_sheet():
 def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
     """Keep the hung drawing when keeping chained balloons clear adds a crossing.
 
-    Returns
-    -------
-    None
-        No line crosses a unit.
+    No line crosses a unit.
     """
     fs = Flowsheet("crossing")
     feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=100)
@@ -2612,10 +2724,7 @@ def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
 def test_keeping_chained_balloons_clear_disconnects_no_tap():
     """Keep the first drawing when keeping chained balloons clear moves a tap off its line.
 
-    Returns
-    -------
-    None
-        TT-1's tap lies on the final line.
+    TT-1's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2640,10 +2749,7 @@ def test_keeping_chained_balloons_clear_disconnects_no_tap():
 def test_a_run_that_doubles_back_is_two_runs():
     """Split a straight run where it reverses along its track.
 
-    Returns
-    -------
-    None
-        The excursion and its return are separate runs.
+    The excursion and its return are separate runs.
     """
     from pandid.layout.control import _straight_runs
 
@@ -2665,10 +2771,7 @@ def test_a_run_that_doubles_back_is_two_runs():
 def test_an_unsettled_hang_is_not_kept():
     """Keep the unhung drawing when hanging the controller takes a tap off its line.
 
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
+    TT's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2693,10 +2796,7 @@ def test_an_unsettled_hang_is_not_kept():
 def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
     """Keep an unsettled hang whose tap lies on its line where the unhung one does not.
 
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
+    TT's tap lies on the final line.
     """
     from pandid.layout.attach import stream_path
 
@@ -2721,10 +2821,7 @@ def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
 def test_a_hang_whose_taps_end_on_their_line_is_kept():
     """Keep a hang that takes a tap off its line where keeping balloons clear puts it back.
 
-    Returns
-    -------
-    None
-        The sheet settles with both taps on the final line.
+    The sheet settles with both taps on the final line.
     """
     from pandid.layout.attach import stream_path
 
