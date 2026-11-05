@@ -155,7 +155,7 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     unit : Unit
         Unit that owns the port.
     port_name : str
-        Port name.
+        Port name or alias.
     w, h : float
         Placed box size.
     rot : int
@@ -169,6 +169,7 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
         Face to point from the box's top-left, own face first.
     """
     sym = _sym(unit)
+    port_name = unit._canonical_port_name(port_name)
     anchor = unit._symbol_anchor(port_name)
     menu = (getattr(sym, "port_faces", None) or {}).get(anchor)
     if menu:
@@ -264,7 +265,7 @@ def is_anchored(unit: "Unit", port_name: str) -> bool:
     unit : Unit
         Unit that owns the port.
     port_name : str
-        Port name.
+        Port name or alias.
 
     Returns
     -------
@@ -272,6 +273,7 @@ def is_anchored(unit: "Unit", port_name: str) -> bool:
         True if the symbol or a port series places the port.
     """
     sym = _sym(unit)
+    port_name = unit._canonical_port_name(port_name)
     return (unit._symbol_anchor(port_name) in sym.ports
             or _series_point(unit, sym, port_name) is not None)
 

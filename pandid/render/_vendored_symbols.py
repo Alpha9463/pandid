@@ -317,7 +317,7 @@ def register_vendored(registry):
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=52.0, height=95.4,
-        ports={'outlet': (26.0, 95.4), 'duty': (52.0, 47.7), 'vent': (46.0, 10.0)},
+        ports={'outlet': (26.0, 95.4), 'jacket_in': (52.0, 72.7), 'jacket_out': (52.0, 22.7), 'vent': (46.0, 10.0)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         gravity_fixed=True,
         port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.34, at=47.7, singular='feed'),),

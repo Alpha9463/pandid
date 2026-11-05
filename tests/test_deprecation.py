@@ -257,7 +257,7 @@ def test_the_package_declares_only_the_announced_deprecations():
     from pandid.routing import _RECOVER_EXITS, _ROUTER
     from pandid.spec import _EQUIPMENT_LIST_TYPE
     from pandid.streams import _LINE_COMPONENTS
-    from pandid.units import _AT_FACE, _DEFAULT_FACES, _PLACEMENT_HINTS
+    from pandid.units import _AT_FACE, _DEFAULT_FACES, _JACKET_DUTY, _PLACEMENT_HINTS
 
     assert declarations() == {
         "pandid.document._EQUIPMENT_LIST": _EQUIPMENT_LIST,
@@ -268,5 +268,6 @@ def test_the_package_declares_only_the_announced_deprecations():
         "pandid.streams._LINE_COMPONENTS": _LINE_COMPONENTS,
         "pandid.units._AT_FACE": _AT_FACE,
         "pandid.units._DEFAULT_FACES": _DEFAULT_FACES,
+        "pandid.units._JACKET_DUTY": _JACKET_DUTY,
         "pandid.units._PLACEMENT_HINTS": _PLACEMENT_HINTS,
     }
