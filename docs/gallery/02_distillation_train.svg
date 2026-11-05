@@ -469,7 +469,7 @@
     <symbol id="sym_splitter" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_tee" viewBox="0 0 12.0 12.0" overflow="visible"><path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_valve" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="4"/></g></symbol>
-    <symbol id="sym_vessel_horizontal_s130x42" viewBox="0 0 130 42" overflow="visible"><path d="M 8.197814 42 L 121.859016 42 A 21 8.196678 90 0 0 130.055694 21 A 21 8.196678 90 0 0 121.859016 0 L 8.197814 0 A 21 8.196678 90 0 0 0.001137 21 A 21 8.196678 90 0 0 8.197814 42 Z M 8.197814 0 L 8.197814 42 M 121.859016 0 L 121.859016 42" fill="white" stroke="#111" stroke-width="2"/></symbol>
+    <symbol id="sym_vessel_horizontal_s130x42" viewBox="0 0 130 42" overflow="visible"><path d="M 8.194232 42 L 121.805768 42 A 21 8.193096 90 0 0 129.998864 21 A 21 8.193096 90 0 0 121.805768 0 L 8.194232 0 A 21 8.193096 90 0 0 0.001136 21 A 21 8.193096 90 0 0 8.194232 42 Z M 8.194232 0 L 8.194232 42 M 121.805768 0 L 121.805768 42" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
     <polygon points="125.316,502.0 195.0,502.0 210.0,515.0 195.0,528.0 125.316,528.0" fill="transparent" stroke="black" stroke-width="2" />
@@ -480,8 +480,8 @@
     <use href="#sym_hex" x="520" y="495" width="60.0" height="60.0" />
     <use href="#sym_column_ca20047b0" x="690" y="420" width="100.0" height="200.0" />
     <use href="#sym_hex" x="710" y="230" width="60.0" height="60.0" transform="translate(0, 520) scale(1, -1)" />
-    <use href="#sym_vessel_horizontal_s130x42" x="911.58" y="315" width="130" height="42" />
-    <use href="#sym_tee" x="1002.2" y="409" width="12.0" height="12.0" transform="rotate(90, 1008.2, 415) translate(0, 830) scale(1, -1)" />
+    <use href="#sym_vessel_horizontal_s130x42" x="911.6" y="315" width="130" height="42" />
+    <use href="#sym_tee" x="1002.17" y="409" width="12.0" height="12.0" transform="rotate(90, 1008.17, 415) translate(0, 830) scale(1, -1)" />
     <use href="#sym_hex_kettle_s120x44" x="830" y="645" width="120" height="44" />
     <polygon points="1070.0,402.0 1155.704,402.0 1170.704,415.0 1155.704,428.0 1070.0,428.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1112.852" y="411.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Light Product</text>
@@ -489,8 +489,8 @@
     <use href="#sym_pump" x="1010" y="700" width="70.0" height="67.0" />
     <use href="#sym_column_c94688fb2" x="1260" y="420" width="100.0" height="200.0" />
     <use href="#sym_hex" x="1280" y="230" width="60.0" height="60.0" transform="translate(0, 520) scale(1, -1)" />
-    <use href="#sym_vessel_horizontal_s130x42" x="1481.58" y="315" width="130" height="42" />
-    <use href="#sym_tee" x="1572.2" y="409" width="12.0" height="12.0" transform="rotate(90, 1578.2, 415) translate(0, 830) scale(1, -1)" />
+    <use href="#sym_vessel_horizontal_s130x42" x="1481.6" y="315" width="130" height="42" />
+    <use href="#sym_tee" x="1572.17" y="409" width="12.0" height="12.0" transform="rotate(90, 1578.17, 415) translate(0, 830) scale(1, -1)" />
     <use href="#sym_hex_kettle_s120x44" x="1400" y="645" width="120" height="44" />
     <polygon points="1640.0,402.0 1723.028,402.0 1738.028,415.0 1723.028,428.0 1640.0,428.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1681.514" y="411.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Med Product</text>
@@ -509,18 +509,18 @@
     <path d="M 580.0,525.0 L 690.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 740.0,420.0 L 740.0,290.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 740.0,230.0 L 740.0,205.0 L 940.0,205.0 L 940.0,315.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1008.1967213114755,357.0 L 1008.1967213114755,409.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1008.1967213114755,421.0 L 1008.1967213114755,455.0 L 790.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1014.1967213114755,415.0 L 1070.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1008.1669215643434,357.0 L 1008.1669215643434,409.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1008.1669215643434,421.0 L 1008.1669215643434,455.0 L 790.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1014.1669215643434,415.0 L 1070.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 740.0,620.0 L 740.0,714.0 L 890.0655737704918,714.0 L 890.0655737704918,685.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 913.9344262295082,645.0 L 913.9344262295082,595.0 L 790.0,595.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 941.4754098360656,685.0 L 941.4754098360656,730.0 L 1010.0,730.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1080.0,710.0 L 1235.0,710.0 L 1235.0,525.0 L 1260.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1310.0,420.0 L 1310.0,290.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1310.0,230.0 L 1310.0,205.0 L 1510.0,205.0 L 1510.0,315.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1578.1967213114754,357.0 L 1578.1967213114754,409.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1578.1967213114754,421.0 L 1578.1967213114754,455.0 L 1360.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1584.1967213114754,415.0 L 1640.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1578.1669215643435,357.0 L 1578.1669215643435,409.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1578.1669215643435,421.0 L 1578.1669215643435,455.0 L 1360.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1584.1669215643435,415.0 L 1640.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1310.0,620.0 L 1310.0,714.0 L 1460.0655737704917,714.0 L 1460.0655737704917,685.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1483.9344262295083,645.0 L 1483.9344262295083,595.0 L 1360.0,595.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1511.4754098360656,685.0 L 1511.4754098360656,730.0 L 1580.0,730.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -604,7 +604,7 @@
     <rect x="780.0" y="252.5" width="40.0" height="15.0" fill="white" />
     <text x="780.0" y="260.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-101</text>
     <rect x="1051.6" y="328.5" width="40.0" height="15.0" fill="white" />
-    <text x="1051.5846994535518" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-101</text>
+    <text x="1051.597116014857" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-101</text>
     <rect x="960.0" y="659.5" width="40.0" height="15.0" fill="white" />
     <text x="960.0" y="667.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-102</text>
     <rect x="1015.3" y="678.0" width="59.4" height="15.0" fill="white" />
@@ -614,7 +614,7 @@
     <rect x="1350.0" y="252.5" width="40.0" height="15.0" fill="white" />
     <text x="1350.0" y="260.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-201</text>
     <rect x="1621.6" y="328.5" width="40.0" height="15.0" fill="white" />
-    <text x="1621.5846994535518" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-201</text>
+    <text x="1621.597116014857" y="336.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-201</text>
     <rect x="1530.0" y="659.5" width="40.0" height="15.0" fill="white" />
     <text x="1530.0" y="667.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-202</text>
     <rect x="1585.3" y="678.0" width="59.4" height="15.0" fill="white" />

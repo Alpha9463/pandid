@@ -1015,7 +1015,7 @@
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_reactor_cdef8c078_s85x180" viewBox="0 0 85 180" overflow="visible"><path d="M 0 53.650949 A 42.5 10.244518 0 0 1 42.5 43.406431 A 42.5 10.244518 0 0 1 85 53.650949 L 85 169.755482 A 42.5 10.244518 0 0 1 42.5 180 A 42.5 10.244518 0 0 1 0 169.755482 Z" fill="white" stroke="#111" stroke-width="1.999941"/><line x1="42.5" y1="28.229383" x2="42.5" y2="147.21768" fill="none" stroke="black" stroke-width="1.000001"/><rect x="22.1" y="117.470606" width="40.8" height="29.747074" fill="none" stroke="black" stroke-width="1.000001"/><path d="M 32.3 117.470606 L 32.3 147.21768 M 52.7 117.470606 L 52.7 147.21768" fill="none" stroke="black" stroke-width="1.000001"/><ellipse cx="42.500055" cy="14.114678" rx="14.166676" ry="14.114678" fill="none" stroke="black" stroke-width="0.999999"/><path d="M 37.187551 21.172017 L 37.187551 7.057339 L 42.500055 14.114678 L 47.812558 7.057339 L 47.812558 21.172017" fill="none" stroke="black" stroke-width="0.999999"/></symbol>
     <symbol id="sym_separator_cyclone_s90x140" viewBox="0 0 90 140" overflow="visible"><path d="M 0 0 L 90 0 L 90 93.333333 L 45 140 L 0 93.333333 Z" fill="white" stroke="#111" stroke-width="2"/><path d="M 39.375 17.5 A 33.75 17.5 0 0 1 73.125 35 A 33.75 17.5 0 0 1 39.375 52.5 A 11.25 5.833333 0 0 1 29.214112 49.664183 A 11.25 5.833333 0 0 1 29.214112 43.680817 A 11.25 5.833333 0 0 1 39.375 40.845 A 33.75 17.5 0 0 1 69.32835 49.459083 A 33.75 17.5 0 0 1 69.32835 67.21925 A 33.75 17.5 0 0 1 39.375 75.833333" fill="none" stroke="#111" stroke-width="2"/><path d="M 39.375 73.5 L 39.375 78.166667 L 33.75 75.833333 Z" fill="#111" stroke="#111" stroke-width="2"/></symbol>
-    <symbol id="sym_tank_s70x90" viewBox="0 0 70 90" overflow="visible"><rect x="0" y="23.993717" width="70" height="65.968586" fill="white" stroke="#111" stroke-width="2"/><path d="M 0 23.993717 A 70.680628 52.5 90 0 1 70 23.993717 Z" fill="white" stroke="#111" stroke-width="2"/></symbol>
+    <symbol id="sym_tank_s70x90" viewBox="0 0 70 90" overflow="visible"><rect x="0" y="24.003771" width="70" height="65.996229" fill="white" stroke="#111" stroke-width="2"/><path d="M 0 24.003771 A 70.710245 52.5 90 0 1 70 24.003771 Z" fill="white" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_tee" viewBox="0 0 12.0 12.0" overflow="visible"><path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
@@ -1047,10 +1047,10 @@
     <polygon points="2980.0,1917.0 3164.416,1917.0 3179.416,1930.0 3164.416,1943.0 2980.0,1943.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="3072.208" y="1926.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Alumina to Cooling and Storage</text>
     <text x="3072.208" y="1938.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-904</text>
-    <use href="#sym_tank_s70x90" x="1350" y="1757.59" width="70" height="90" />
-    <polygon points="1078.62,1824.696335078534 1215.0,1824.696335078534 1230.0,1837.696335078534 1215.0,1850.696335078534 1078.62,1850.696335078534" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1146.81" y="1833.696335078534" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Caustic Soda Make-up</text>
-    <text x="1146.81" y="1845.696335078534" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-906</text>
+    <use href="#sym_tank_s70x90" x="1350" y="1757.57" width="70" height="90" />
+    <polygon points="1078.62,1824.7121307353866 1215.0,1824.7121307353866 1230.0,1837.7121307353866 1215.0,1850.7121307353866 1078.62,1850.7121307353866" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1146.81" y="1833.7121307353866" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Caustic Soda Make-up</text>
+    <text x="1146.81" y="1845.7121307353866" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-906</text>
     <use href="#sym_evaporator_falling_film_s100x200" x="1550" y="1942.5" width="100" height="200" />
     <polygon points="1247.308,2012.0 1315.0,2012.0 1330.0,2025.0 1315.0,2038.0 1247.308,2038.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1281.154" y="2021.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">LP Steam</text>
@@ -1077,17 +1077,17 @@
     <path d="M 1705.0,1386.0 L 1705.0,1180 L 1920.0,1180.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1965.0,1166.0 L 1965.0,940.0 L 1215.0,940.0 L 1215.0,1125 M 1215.0,1135 L 1215.0,1555 M 1215.0,1565 L 1215.0,1800 L 1350.0,1800.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2200.0,1500.0 L 2220.0,1500 L 2220.0,1615 M 2220.0,1625 L 2220.0,1660.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 2290.0,1700.0 L 2340,1700 L 2340,1620.0 L 1290.0,1620.0 L 1290.0,1795 M 1290.0,1805 L 1290.0,1818.848167539267 L 1350.0,1818.848167539267" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 2290.0,1700.0 L 2340,1700 L 2340,1620.0 L 1290.0,1620.0 L 1290.0,1795 M 1290.0,1805 L 1290.0,1818.8560653676932 L 1350.0,1818.8560653676932" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2220.0,1740.0 L 2220.0,1840.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2410.0,1850.0 L 2520.0,1850.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1230.0,1837.696335078534 L 1350.0,1837.696335078534" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1385.0,1847.5916230366493 L 1385.0,1980 L 1550.0,1980.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1230.0,1837.7121307353866 L 1350.0,1837.7121307353866" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1385.0,1847.57385292269 L 1385.0,1980 L 1550.0,1980.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1330.0,2025.0 L 1550.0,2025.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1650.0,2097.5 L 1820.0,2097.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1600.0,1942.5 L 1600.0,1830 L 1700.0,1830.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1600.0,2142.5 L 1600.0,2220 L 1800.0,2220.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2160.0,2000.0 L 2235.0,2000.0 L 2235.0,2060.0 L 2260.0,2060.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 2180.0,2230.0 L 2310.0,2230 L 2310.0,2102.5454545454545" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 2180.0,2230.0 L 2310.0,2230 L 2310.0,2102.5333333333333" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2360.0,2090.3030303030305 L 2580.0,2090.3030303030305 L 2580.0,1996.6666666666667" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2640.0,1930.0 L 2829.0,1930.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 2580.0,1796.6666666666667 L 2580.0,1720.0 L 2790.0,1720.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -1167,7 +1167,7 @@
     <rect x="2890.0" y="1768.5" width="48.7" height="15.0" fill="white" />
     <text x="2890.0" y="1776.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">CY-903</text>
     <rect x="1364.0" y="1735.6" width="42.0" height="15.0" fill="white" />
-    <text x="1385.0" y="1747.5916230366493" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">M-902</text>
+    <text x="1385.0" y="1747.57385292269" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">M-902</text>
     <rect x="1546.0" y="1920.5" width="48.0" height="15.0" fill="white" />
     <text x="1570.0" y="1932.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">EV-901</text>
     <rect x="1815.0" y="2168.0" width="40.0" height="15.0" fill="white" />
