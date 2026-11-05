@@ -348,3 +348,23 @@ def test_layout_reads_a_stated_lone_inlet_on_its_stated_face():
     fs.layout()
     assert (_face(listed, "in_1"), _face(moved, "in_1")) == ("N", "E")
     assert (layered._face(listed.inlet), layered._face(moved.inlet)) == ("N", "E")
+
+
+@pytest.mark.parametrize(
+    ("cls", "options", "moves"),
+    [
+        (units.Tank, {}, {"inlet": "E", "vent": "N"}),
+        (units.Vessel, {"variant": "horizontal"}, {"inlet": "N", "relief": "N"}),
+    ],
+    ids=["tank", "lying-drum"],
+)
+def test_a_moved_inlet_and_a_moved_stencil_nozzle_both_round_trip(cls, options, moves):
+    """Keep every face ``nozzle()`` moved when the sheet is written and read."""
+    fs = Flowsheet("faces")
+    unit = fs.add(cls("V-1", **options))
+    for port, face in moves.items():
+        unit.nozzle(port, face)
+    got = from_dict(to_dict(fs)).units[0]
+    assert isinstance(got, units.Tank | units.Vessel)
+    assert got.face("in_1") == moves["inlet"]
+    assert to_dict(from_dict(to_dict(fs))) == to_dict(fs)

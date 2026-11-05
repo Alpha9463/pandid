@@ -2102,7 +2102,7 @@ def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
             pin["mirrored"] = mirror or False
         entry["pin"] = pin
     if unit._port_faces:
-        entry["port_faces"] = dict(unit._port_faces)
+        entry["port_faces"] = {**entry.get("port_faces", {}), **unit._port_faces}
     return entry
 
 
