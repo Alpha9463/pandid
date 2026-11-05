@@ -1585,9 +1585,27 @@ def _line(scheme: str | None, *legs: dict[str, Any]) -> Flowsheet:
     return fs
 
 
-def _labels(fs: Flowsheet) -> str:
+def _labels(fs: Flowsheet, diagram: str = "pfd") -> str:
     """Return the text of every label drawn on the sheet."""
-    return " ".join(re.findall(r">([^<]*)</text>", fs.to_svg()))
+    return " ".join(re.findall(r">([^<]*)</text>", fs.to_svg(diagram=diagram)))
+
+
+def _advised(
+    message: str, scheme: Any, legs: list[dict[str, Any]]
+) -> tuple[Any, list[list[dict[str, Any]]]]:
+    """Return the scheme and the legs of each fix a finding names, applied as written."""
+    advice = [(key, ast.literal_eval(value)) for key, value in _ADVISED.findall(message)]
+    scheme = next((value for key, value in advice if key == "line_numbering_scheme"), scheme)
+    names = [value for key, value in advice if key == "name"]
+    if not names:
+        return scheme, [legs]
+    # Write the fields into the given name, or into a name on the first leg.
+    target = next((i for i, leg in enumerate(legs) if "name" in leg), 0)
+    applied = [[{**leg, "name": names[0]} if i == target else leg for i, leg in enumerate(legs)]]
+    if any(leg.get("name") in names for leg in legs):
+        # Drop the given name.
+        applied.append([{k: v for k, v in leg.items() if k != "name"} for leg in legs])
+    return scheme, applied
 
 
 # Scheme, connect() arguments per leg, the fields the sheet leaves out, and
@@ -1657,22 +1675,7 @@ def test_following_the_line_field_advice_draws_every_field(
 ) -> None:
     """Check each fix the finding names, applied as written, draws every typed value."""
     (found,) = _found(_line(scheme, *legs), "line-field-undrawn")
-    advice = [(key, ast.literal_eval(value)) for key, value in _ADVISED.findall(found.message)]
-    scheme = next((value for key, value in advice if key == "line_numbering_scheme"), scheme)
-    names = [value for key, value in advice if key == "name"]
-    given = next((leg["name"] for leg in legs if "name" in leg), None)
-    # Write the fields into the given name, or into a name on the first leg.
-    target = next((i for i, leg in enumerate(legs) if "name" in leg), 0)
-    applied = (
-        [[{**leg, "name": names[0]} if i == target else leg for i, leg in enumerate(legs)]]
-        if names
-        else []
-    )
-    if given in names:
-        # Drop the given name.
-        applied.append([{k: v for k, v in leg.items() if k != "name"} for leg in legs])
-    if not names:
-        applied.append(legs)
+    scheme, applied = _advised(found.message, scheme, legs)
     assert len(applied) == fixes, found.message
     for fix in applied:
         fs = _line(scheme, *fix)
@@ -1681,6 +1684,29 @@ def test_following_the_line_field_advice_draws_every_field(
         for leg in fix:
             for key, value in leg.items():
                 assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+@pytest.mark.parametrize(
+    ("scheme", "diagram", "fixes"),
+    [("{size}-{sequence}", "pfd", 2), (lambda s: f"{s.size}-{s.sequence}", "p&id", 1)],
+    ids=["pfd-scheme-without-the-service", "callable-scheme-without-the-service"],
+)
+def test_following_the_line_field_advice_keeps_an_energy_line_s_carrier(
+    scheme: Any, diagram: str, fixes: int
+) -> None:
+    """Check each fix for a named energy line, applied as written, still draws its carrier."""
+    legs = [{"name": "Q-LPSTEAM", "size": 6, "service": "LPSTEAM"}]
+    fs, _ = heat_integrated(Flowsheet("heat", line_numbering_scheme=scheme), **legs[0])
+    (found,) = _found(fs, "line-field-undrawn", diagram=diagram)
+    scheme, applied = _advised(found.message, scheme, legs)
+    assert len(applied) == fixes, found.message
+    for (fix,) in applied:
+        fs, _ = heat_integrated(Flowsheet("heat", line_numbering_scheme=scheme), **fix)
+        codes = {i.code for i in fs.validate(diagram=diagram)}
+        assert not codes & {"line-field-undrawn", "energy-carrier-missing"}, found.message
+        labels = _labels(fs, diagram)
+        for key, value in fix.items():
+            assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
 
 
 @pytest.mark.parametrize(

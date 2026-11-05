@@ -932,7 +932,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                 f"{' and '.join(fixes)}"))
 
     # --- a line-number field the line's label leaves out ---
-    from pandid.flowsheet import _unused_fields
+    from pandid.flowsheet import _format_line_number, _unused_fields
 
     scheme = fs.line_numbering_scheme
     for name, segments in runs.items():
@@ -942,40 +942,44 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
         if not given and (callable(scheme) or origin is None):
             continue
         # Every field the author set, by field and value.
-        typed = {(f, str(v)): v for s in segments for f, v in _unused_fields("", s).items()}
-        if tabulates and segments[0].kind == "energy":
-            # Leave the service to energy-carrier-missing.
-            typed = {key: v for key, v in typed.items() if key[0] != "service"}
+        authored = {(f, str(v)): v for s in segments for f, v in _unused_fields("", s).items()}
+        # Leave an energy line's service on a PFD to energy-carrier-missing.
+        typed = {key: v for key, v in authored.items()
+                 if not (tabulates and segments[0].kind == "energy" and key[0] == "service")}
         carried = ({(f, str(v)) for f, v in _unused_fields("", origin).items()}
                    if origin is not None else set())
-        omitted = ([] if origin is None or callable(scheme) else
-                   [f for f, v in _unused_fields(scheme, origin).items() if (f, str(v)) in typed])
+        omitted = [] if origin is None or callable(scheme) else list(_unused_fields(scheme, origin))
         undrawn = [(f, v) for (f, text), v in typed.items()
                    if (text not in name if given else (f, text) not in carried or f in omitted)]
         if not undrawn:
             continue
+        # The line number the scheme, widened by the omitted fields, would draw.
+        widened = scheme if callable(scheme) else scheme + "".join(f"-{{{f}}}" for f in omitted)
+        try:
+            label = _format_line_number(widened, origin) if origin is not None else ""
+        except Exception:  # a scheme that cannot number this line
+            label = ""
+        numbered = set(authored) <= carried and all(text in label for _, text in authored)
         it = "it" if len(undrawn) == 1 else "them"
-        written = " ".join([name, *(str(v) for _, v in undrawn)])
-        # A line number draws only the fields of the segment it is formed from.
-        numbered = origin is not None and set(typed) <= carried
+        extra = [str(v) for (_, text), v in authored.items() if text not in name]
+        them = "it" if len(extra) == 1 else "them"
+        named = f"name={' '.join([name, *extra])!r}"
         fields = _and([f"{{{f}}}" for f in omitted])
-        wider = ("" if callable(scheme) or not omitted else
-                 f": Flowsheet(..., line_numbering_scheme="
-                 f"{scheme + ''.join(f'-{{{f}}}' for f in omitted)!r})")
+        call = f": Flowsheet(..., line_numbering_scheme={widened!r})" if omitted else ""
         if given:
-            fix = f"Write {it} into the name: name={written!r}"
+            fix = f"Write {them} into the name: {named}"
             if numbered:
-                add = f" and add {fields} to line_numbering_scheme" if wider else ""
-                fix += f", or drop name={name!r}{add} so its line number draws {it}{wider}"
+                add = f" and add {fields} to line_numbering_scheme" if omitted else ""
+                fix += f", or drop name={name!r}{add} so its line number draws {it}{call}"
             source = "the name given to connect()"
         elif numbered:
-            fix = f"Add {fields} to the scheme, keeping its other arguments{wider}"
+            fix = f"Add {fields} to the scheme, keeping its other arguments{call}"
             source = f"line_numbering_scheme {scheme!r}"
         else:
             assert origin is not None
             fix = (f"Set new_line_number = True on the valve, fitting or tee where a "
-                   f"new line number starts, or name the line with {it} in one of its "
-                   f"connect() calls: name={written!r}")
+                   f"new line number starts, or name the line with {them} in one of its "
+                   f"connect() calls: {named}")
             source = (f"its line number, formed from the segment from "
                       f"{origin.source.owner.name} to {origin.dest.owner.name},")
         warnings.append(Issue(
