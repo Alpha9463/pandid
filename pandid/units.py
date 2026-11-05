@@ -1301,7 +1301,7 @@ class Valve(_NormallyPositioned):
             If the actuator is unknown or contradicts the variant, or
             the pairing is not drawn.
         """
-        from pandid.render.symbols import ACTUATED, ACTUATORS, actuated_variant
+        from pandid.render.symbols import ACTUATORS, actuated_variant, variant_actuator
 
         if not actuator:
             return variant
@@ -1313,13 +1313,13 @@ class Valve(_NormallyPositioned):
                 f"variant."
             )
         # A variant with a built-in actuator accepts only that one.
-        fitted = {a for (_, a), drawn in ACTUATED.items() if drawn == variant}
+        fitted = variant_actuator(variant)
         if fitted:
-            if actuator in fitted:
+            if actuator == fitted:
                 return variant
             raise ValueError(
                 f"{name}: variant {variant!r} already draws a valve with a "
-                f"{', '.join(repr(a) for a in sorted(fitted))} operator on it, so it "
+                f"{fitted!r} operator on it, so it "
                 f"cannot also take actuator={actuator!r} -- one drawing, two "
                 f"operators. Name the body and the actuator (variant='gate', "
                 f"actuator={actuator!r}), or the pairing on its own "

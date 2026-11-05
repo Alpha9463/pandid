@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)])`. Each socket
   is a port, `socket_1`, `socket_2`, and so on.
 
+### Changed
+
+- `connect()` no longer needs `kind=` for a signal line: a line to a valve
+  with a diaphragm actuator, or none drawn, is pneumatic and any other is
+  electric. `add_control_loop()` infers its output line the same way, so a
+  loop acting on a motor or solenoid valve, or on another controller, now
+  draws an electric signal.
+
 ### Fixed
 
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
