@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
   (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
   rotor on its shaft, or `None`.
+- `CentrifugalFan` and `AxialFan` draw those fans, and
+  `Blower(variant="general")` draws the ISO 10628-2 fan.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
