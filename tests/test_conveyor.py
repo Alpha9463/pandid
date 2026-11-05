@@ -306,12 +306,12 @@ def test_a_turned_or_flipped_conveyor_still_meets_its_streams(pin):
 
 
 def test_a_conveyor_is_scheduled_on_the_equipment_list():
-    from pandid.document import equipment_list
+    from pandid.document import equipment_table
 
     fs = Flowsheet("cake handling")
     fs.add(U.Conveyor("BC-301"))
     fs.add(U.Conveyor("BC-302", description="Filter Cake Conveyor Belt"))
-    assert equipment_list(fs).rows == [
+    assert equipment_table(fs).rows == [
         ("BC-301", "Conveyor"),
         ("BC-302", "Filter Cake Conveyor Belt"),
     ]

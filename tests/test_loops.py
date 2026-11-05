@@ -4,8 +4,15 @@ import warnings
 
 import pytest
 
-from pandid import ControlValve, Flowsheet, Instrument, units as U
-from pandid.document import equipment_list
+from pandid import (
+    ControlValve,
+    Flowsheet,
+    Instrument,
+    MotorOperatedValve,
+    SolenoidValve,
+    units as U,
+)
+from pandid.document import equipment_table
 from pandid.spec import from_dict, to_dict
 from pandid.validate import validate
 
@@ -261,7 +268,7 @@ def test_a_loop_never_reaches_the_units_list_or_an_equipment_list():
     fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
 
     assert loop not in fs.units
-    rows = equipment_list(fs).rows
+    rows = equipment_table(fs).rows
     assert "303" not in repr(rows) and "F-303" not in repr(rows)
     assert [tag for tag, _ in rows] == ["V-101"]
 
@@ -538,6 +545,65 @@ def test_the_helper_draws_what_the_long_hand_draws(placement):
     assert one_liner.to_svg() == long_hand.to_svg()
 
 
+@pytest.mark.parametrize("by_unit", [False, True], ids=["ports", "units"])
+def test_a_long_hand_loop_with_no_kind_draws_what_the_helper_draws(by_unit):
+    """Check that signal lines connected with no kind take the helper's kinds."""
+    long_hand, drum, lv = _feedback_sheet()
+    loop = long_hand.add_loop("L", 101)
+    lt = long_hand.add_instrument("LT", loop, sensing=drum)
+    lic = long_hand.add_instrument("LIC", loop, near=lt, variant="shared")
+    long_hand.connect(lt if by_unit else lt.sig_out, lic if by_unit else lic.sig_in)
+    long_hand.connect(lic if by_unit else lic.sig_out, lv if by_unit else lv.actuator)
+
+    one_liner, drum, lv = _feedback_sheet()
+    one_liner.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+
+    assert [s.kind for s in long_hand.streams][-2:] == ["electric", "pneumatic"]
+    assert [s.kind for s in long_hand.streams] == [s.kind for s in one_liner.streams]
+    assert one_liner.to_svg() == long_hand.to_svg()
+
+
+def _valve_on_a_line(cls: type[U.Valve], actuator: str):
+    """Return a sheet with a valve built with ``actuator`` in one line, the line and the valve."""
+    fs = Flowsheet("actuated")
+    feed, valve = fs.add(U.Feed("Feed")), fs.add(cls("XV-101", actuator=actuator))
+    line = fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, fs.add(U.Product("Product")).inlet)
+    return fs, line, valve
+
+
+_ACTUATED = [
+    (U.Valve, "diaphragm", "pneumatic"),
+    (ControlValve, "", "pneumatic"),
+    (U.Valve, "", "pneumatic"),
+    (U.Valve, "motor", "electric"),
+    (MotorOperatedValve, "", "electric"),
+    (U.Valve, "solenoid", "electric"),
+    (SolenoidValve, "", "electric"),
+    (U.Valve, "hydraulic", "electric"),
+]
+
+
+@pytest.mark.parametrize("cls, actuator, kind", _ACTUATED)
+def test_the_signal_to_a_valve_takes_the_kind_its_actuator_reads(cls, actuator, kind):
+    """Check that an unstated output kind is pneumatic to a diaphragm, electric to a motor."""
+    fs, line, valve = _valve_on_a_line(cls, actuator)
+    assert fs.add_control_loop("F", 101, measuring=line, acting_on=valve).output.kind == kind
+
+    fs, line, valve = _valve_on_a_line(cls, actuator)
+    assert fs.connect(fs.add_instrument("FIC", 101), valve).kind == kind
+
+
+def test_a_stated_output_kind_wins_over_the_valves_actuator():
+    """Check that an explicit kind to a motor-operated valve is kept."""
+    fs, line, valve = _valve_on_a_line(U.Valve, "motor")
+    loop = fs.add_control_loop("F", 101, measuring=line, acting_on=valve, output_kind="pneumatic")
+    assert loop.output.kind == "pneumatic"
+
+    fs, line, valve = _valve_on_a_line(U.Valve, "motor")
+    assert fs.connect(fs.add_instrument("FIC", 101), valve, kind="pneumatic").kind == "pneumatic"
+
+
 def test_the_balloons_it_places_land_clear_of_the_sheet():
     """Check that the loop's balloons are placed, sized and clear of each other and the sheet."""
     fs, drum, lv = _feedback_sheet()
@@ -737,7 +803,7 @@ def test_the_loop_it_builds_still_reaches_no_equipment_list():
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
 
     assert loop not in fs.units and loop.loop not in fs.units
-    assert [tag for tag, _ in equipment_list(fs).rows] == ["V-101"]
+    assert [tag for tag, _ in equipment_table(fs).rows] == ["V-101"]
     assert loop.transmitter in fs.units and loop.controller in fs.units
 
 

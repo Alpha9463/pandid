@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from pandid import Condenser, Flowsheet, Pin, Stream, units as U
-from pandid.portgeom import pin_intent, pinned_x, pinned_y, port_point
+from pandid.portgeom import pin_intent, pinned_x, pinned_y, port_point, resolve_port
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
 from test_symbol_invariants import _drawing
@@ -311,16 +311,17 @@ def _loop_with_a_balloon():
     return fs, lic
 
 
-def test_two_live_connections_on_one_point_are_an_error():
+def test_two_lines_named_onto_one_face_of_a_balloon_are_drawn_apart():
+    """Check that two lines put on one face of a balloon keep it at two points."""
     fs, lic = _loop_with_a_balloon()
     lic.nozzle("sig_in", "W")
     lic.nozzle("sig_out", "W")
     fs.layout()
-    errors = [i for i in fs.validate() if i.severity == "error"]
-    assert [i.code for i in errors] == ["coincident-ports"]
-    assert "LIC-101.sig_in and LIC-101.sig_out" in errors[0].message
-    with pytest.raises(ValueError, match="coincident-ports"):
-        fs.to_svg()
+    assert lic.frame is not None
+    ends = [resolve_port(lic, lic.frame, name) for name in ("sig_in", "sig_out")]
+    assert [end.face for end in ends] == ["W", "W"]
+    assert ends[0].point != ends[1].point
+    assert [i for i in fs.validate() if i.severity == "error"] == []
 
 
 def test_distinct_placements_on_the_same_balloon_are_fine():

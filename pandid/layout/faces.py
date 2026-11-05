@@ -52,6 +52,9 @@ def select_faces(fs: "Flowsheet") -> None:
                 face = _best(unit, frame, name, usable, target, taken)
             if face is None:
                 face = _best(unit, frame, name, menu, target, taken)
+            if face is None and is_control(unit):
+                # Every face is taken; share the best one.
+                face = _best(unit, frame, name, menu, target, set())
             if face is None:
                 # Every face is taken; keep the symbol's placement.
                 continue
@@ -154,7 +157,7 @@ def _point(unit: "Unit", frame, port_name: str) -> tuple[float, ...]:
     """
     from pandid.portgeom import resolve_port
 
-    return tuple(round(v, 3) for v in resolve_port(unit, frame, port_name).point)
+    return tuple(round(v, 3) for v in resolve_port(unit, frame, port_name, alone=True).point)
 
 
 def _reference(port: "Port") -> tuple[float, float] | None:
@@ -219,7 +222,7 @@ def _best(unit: "Unit", frame, port_name: str, menu: list[str],
     scored = []
     for rank, face in enumerate(menu):
         frame.port_faces[port_name] = face
-        point, anchor, landed = resolve_port(unit, frame, port_name)
+        point, anchor, landed = resolve_port(unit, frame, port_name, alone=True)
         if tuple(round(v, 3) for v in point) in taken:
             continue
         normal = face_point(unit, frame, landed)[1]

@@ -28,7 +28,7 @@ from pandid import (
     Tee,
     Vessel,
 )
-from pandid.document import Revision, TableBox, TitleBlock, equipment_list
+from pandid.document import Revision, TableBox, TitleBlock, equipment_table
 from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 # --- Stream property table --------------------------------------------
@@ -196,7 +196,7 @@ def main():
 
     # --- Sheet furniture ----------------------------------------------
     # include= names the rows: the two tees carry no tag to schedule.
-    fs.add_annotation(equipment_list(fs, align="top", include=[
+    fs.add_annotation(equipment_table(fs, align="top", include=[
         "T-301", "E-301", "V-301", "E-302", "HX-301", "M-301", "M-302", "F-301",
         "BC-301",
     ]))

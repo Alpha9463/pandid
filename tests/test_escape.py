@@ -11,7 +11,7 @@ from pandid.document import (
     Revision,
     TableBox,
     TitleBlock,
-    equipment_list,
+    equipment_table,
     legend,
     notes,
 )
@@ -129,7 +129,7 @@ def _plant(payload: str, field: str) -> Flowsheet:
         date=at("date", "2026-01-01"),
         revisions=[Revision(rev=at("revision", "A"), date="2026-01-01", description="Issued")],
     )
-    fs.annotations.append(equipment_list(fs, align="top-left"))
+    fs.annotations.append(equipment_table(fs, align="top-left"))
     fs.annotations.append(notes([at("note text", "Vent to flare.")]))
     fs.annotations.append(legend([("SS", at("legend entry", "316L"))]))
     fs.annotations.append(Annotation(title=at("annotation title", "REMARKS"), rows=["none"]))

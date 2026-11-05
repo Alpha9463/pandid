@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
+  the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
   off-page connectors without a partner or on lines that disagree, a tag on two
   kinds of equipment, a drawing number on two sheets, and references to
@@ -19,8 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On a PFD, `validate()` warns when an energy line does not name its carrier.
   Name it with `fs.connect(..., service="LP steam")`, which its line number draws.
 
+### Changed
+
+- `connect()` no longer needs `kind=` for a signal line: a line to a valve
+  with a diaphragm actuator, or none drawn, is pneumatic and any other is
+  electric. `add_control_loop()` infers its output line the same way, so a
+  loop acting on a motor or solenoid valve, or on another controller, now
+  draws an electric signal.
+
+### Deprecated
+
+These are removed in 0.4.0.
+
+- `pandid.document.equipment_list()`, the drawn box, and the spec box
+  `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
+
 ### Fixed
 
+- A balloon takes any number of signal lines. Lines on one side of it leave
+  from separate points on its outline instead of stacking on one point.
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet
   drawn with `diagram="p&id"` or `diagram="bfd"`.
 

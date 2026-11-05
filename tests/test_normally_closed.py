@@ -113,6 +113,7 @@ def test_darkening_keeps_every_field_but_the_artwork_the_id_and_the_fill() -> No
         faceless_ports=frozenset({"actuator"}),
         port_series=(PortSeries("drain_", "S"),),
         bands={"S": (2.0, 20.0)},
+        rim=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)),
         label_pos="center",
         id_suffix="_x",
         stretchable=False,
