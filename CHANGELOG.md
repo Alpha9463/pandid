@@ -64,6 +64,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
+  the train is drawn in the column beside that unit, where that adds no
+  crossing, bend or finding, instead of at the sheet's left edge.
 - The equipment list and `fs.equipment_list()` include centrifuges and
   crushing machines.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,

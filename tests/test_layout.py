@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import pandid
 from pandid import Flowsheet, devices as D, units as U
 from pandid.layout.attach import place_attached, stream_path
 from pandid.layout.control import _grid as control_grid
@@ -16,7 +17,7 @@ from pandid.layout.layered import BAND_WIDTH, COL_GAP, MARGIN
 from pandid.portgeom import pin_intent, port_faces, port_point, unit_box
 from pandid.routing.metrics import real_bends
 
-from _layout_cases import build, overlaps
+from _layout_cases import build, frame_of, overlaps
 
 Box = tuple[float, float, float, float]
 
@@ -265,29 +266,49 @@ def test_a_recycle_into_a_south_face_does_not_drag_its_source_back() -> None:
     assert b.frame.col == a.frame.col + 1
 
 
-def test_a_branch_ranks_beside_the_spine_it_joins() -> None:
-    """Check that a blower feeding a tower far along the train sits one column from it."""
+@pytest.mark.parametrize(
+    ("machine", "side"), [(U.Blower, 1), (D.CentrifugalPump, -1), (D.CentrifugalFan, -1)]
+)
+def test_a_branch_ranks_beside_the_spine_it_joins(
+    machine: type[U.Blower | U.Pump], side: int
+) -> None:
+    """Check that a machine feeding a tower far along the train sits one column from it."""
     fs = Flowsheet("slack")
     water = fs.add(U.Feed("Water"))
     a = fs.add(U.Filter("F-1"))
     b = fs.add(U.Filter("F-2"))
     tower = fs.add(U.Stripper("D-1"))
     air = fs.add(U.Feed("Air"))
-    blower = fs.add(U.Blower("B-1"))
+    mover = fs.add(machine("B-1"))
     fs.connect(water.outlet, a.inlet)
     fs.connect(a.outlet, b.inlet)
     fs.connect(b.outlet, tower.feed)
-    fs.connect(air.outlet, blower.suction)
-    fs.connect(blower.discharge, tower.boilup_in)
-    fs.layout()
+    fs.connect(air.outlet, mover.suction)
+    fs.connect(mover.discharge, tower.boilup_in)
+    fs.route()
 
-    assert air.frame is not None and blower.frame is not None
-    assert tower.frame is not None and b.frame is not None
-    assert air.frame.col is not None and blower.frame.col is not None
-    assert tower.frame.col is not None and b.frame.col is not None
-    assert abs(blower.frame.col - tower.frame.col) == 1
-    assert abs(air.frame.col - blower.frame.col) == 1
-    assert blower.frame.col > b.frame.col
+    assert air.frame is not None and mover.frame is not None and tower.frame is not None
+    assert mover.frame.col is not None and tower.frame.col is not None
+    # A north discharge lands east of the tower's east nozzle, an east one west of it.
+    assert mover.frame.col == tower.frame.col + side
+    assert air.frame.col == mover.frame.col - 1
+
+
+def test_a_fan_on_the_degasser_sheet_sits_beside_the_degasser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check that example 15's air blower drawn as a centrifugal fan sits beside the degasser."""
+    from _render_cases import gallery
+
+    monkeypatch.setattr(pandid, "Blower", D.CentrifugalFan)
+    fs, _ = gallery.flowsheet("15_demineralised_water")
+    fs.route()
+
+    units = {u.name: u for u in fs.units}
+    assert isinstance(units["B-801"], D.CentrifugalFan)
+    fan, degasser = frame_of(units["B-801"]).col, frame_of(units["D-801"]).col
+    assert fan is not None and degasser is not None
+    assert fan == degasser - 1
 
 
 def test_a_relief_valve_is_drawn_over_the_vessel_it_protects() -> None:

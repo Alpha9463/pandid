@@ -276,7 +276,9 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     """Give every unit a frame by layered drawing, keeping pins.
 
     With ``fs._pin_balloons`` set, units step off each balloon pinned
-    on both axes and its chain.
+    on both axes and its chain. With ``fs._near_branches`` set, each
+    branch :func:`_layers` finds ends just before the unit it feeds;
+    ``fs._far_branches`` records whether one is left where it is.
 
     Parameters
     ----------
@@ -292,7 +294,8 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     nodes, node_of, stacked, fs._stack_spans = _stacks(units, links, fs._split_stacks)
     edges = [(node_of[link.source.owner], node_of[link.dest.owner], link) for link in links
              if node_of[link.source.owner] is not node_of[link.dest.owner]]
-    kept = {id(link) for _, _, link in _layers(nodes, edges)}
+    west_east, fs._far_branches = _layers(nodes, edges, fs._near_branches)
+    kept = {id(link) for _, _, link in west_east}
     layers, segs = _chains(nodes, edges, units)
     for seg in segs:
         seg.back = id(seg.link) not in kept
@@ -595,13 +598,16 @@ def _east(link: Link) -> tuple[int, int]:
     return (2 - abs(vote), -1 if vote < 0 else 1)
 
 
-def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
-            ) -> list[tuple[_Node, _Node, Link]]:
+def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], near: bool
+            ) -> tuple[list[tuple[_Node, _Node, Link]], bool]:
     """Assign each stack a layer and return the pipes kept west to east.
 
     Pipes are kept surest first unless they close a cycle. A column
     pin fixes a stack's layer; an unpinned source sits just before its
-    nearest consumer.
+    nearest consumer. A branch is a run of stacks off a feed flag, each
+    with one pipe in and one out, that ends more than a layer before
+    the unit it feeds; no unit in it or its flag is pinned by column or
+    ``x``.
 
     Parameters
     ----------
@@ -609,11 +615,14 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
         Stacks to layer.
     edges : list[tuple[_Node, _Node, Link]]
         Pipes between different stacks.
+    near : bool
+        Move each branch to end just before the unit it feeds.
 
     Returns
     -------
-    list[tuple[_Node, _Node, Link]]
-        Kept pipes as ``(west, east, link)``.
+    tuple[list[tuple[_Node, _Node, Link]], bool]
+        Kept pipes as ``(west, east, link)``, and whether a branch is
+        left where it is.
     """
     succ: dict[_Node, list[_Node]] = {n: [] for n in nodes}
 
@@ -662,11 +671,28 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
              for n in nodes if any(u._pin is not None and u._pin.col is not None for u in n.members)}
     for n in order:
         n.layer = fixed.get(n, max((p.layer + 1 for p in pred[n]), default=0))
+    free = {n for n in nodes if not any(
+        u._pin is not None and (u._pin.col is not None or u._pin.x is not None) for u in n.members)}
+    far = False
+    for n in order:
+        if pred[n] or n not in free or not any(u.kind == "feed" for u in n.members):
+            continue
+        chain, end = [], n
+        while (len(succ[end]) == 1 and len(pred[succ[end][0]]) == 1
+               and len(succ[succ[end][0]]) == 1 and succ[end][0] in free):
+            end = succ[end][0]
+            chain.append(end)
+        shift = succ[end][0].layer - 1 - end.layer if chain else 0
+        if shift > 0 and not near:
+            far = True
+        elif shift > 0:
+            for m in chain:
+                m.layer += shift
     # Put a source just before its nearest consumer.
     for n in reversed(order):
         if not pred[n] and succ[n] and n not in fixed:
             n.layer = min(m.layer for m in succ[n]) - 1
-    return kept
+    return kept, far
 
 
 def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: list[Unit]
