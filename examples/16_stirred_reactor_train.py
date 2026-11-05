@@ -53,6 +53,7 @@ def main():
     water = fs.add(Feed("Process Water", reference="P&ID-101"))
     quench = fs.add(Feed("QWSH", header=True))
     cws_jkt = fs.add(Feed("CWSH", header=True))
+    cwr_jkt = fs.add(Product("CWRH", header=True))
     cws_cool = fs.add(Feed("CWSH", header=True))
     cwr_cool = fs.add(Product("CWRH", header=True))
     vent_gas = fs.add(Product("To Vent Scrubber", reference="P&ID-902"))
@@ -85,12 +86,15 @@ def main():
     cv205 = fs.add(ControlValve(flow205.tag("CV"), fail="open",
                                 description="Jacket Cooling Water Control Valve"))
     hv207 = fs.add(Valve("HV-207", description="E-201 Cooling Water Block Valve"))
+    hv209 = fs.add(Valve("HV-209",
+                         description="Jacket Cooling Water Return Block Valve"))
 
     # --- Placement ----------------------------------------------------
     rx_x, rx_y = 640.0, 230.0
     rx.pin(x=rx_x, y=rx_y)
     charge_y = rx_y + port_offset(rx, "feed")[1]
-    jacket_y = rx_y + port_offset(rx, "duty")[1]
+    supply_y = rx_y + port_offset(rx, "jacket_in")[1]
+    return_y = rx_y + port_offset(rx, "jacket_out")[1]
     vent_y = rx_y + port_offset(rx, "vent")[1]
     draw_x = rx_x + port_offset(rx, "outlet")[0]
 
@@ -120,11 +124,13 @@ def main():
     cv204.pin(port="inlet", x=1150, y=vent_run_y)
     vent_gas.pin(port="inlet", x=1540, y=vent_run_y)
 
-    # The jacket water runs east to west, so its devices are mirrored.
-    cws_jkt.pin(mirrored=True).pin(port="outlet", x=1540, y=jacket_y)
-    hv205.pin(mirrored=True).pin(port="inlet", x=1420, y=jacket_y)
-    fe205.pin(mirrored=True).pin(port="inlet", x=1300, y=jacket_y)
-    cv205.pin(mirrored=True).pin(port="inlet", x=1150, y=jacket_y)
+    # The jacket supply runs east to west, so its devices are mirrored.
+    cws_jkt.pin(mirrored=True).pin(port="outlet", x=1540, y=supply_y)
+    hv205.pin(mirrored=True).pin(port="inlet", x=1420, y=supply_y)
+    fe205.pin(mirrored=True).pin(port="inlet", x=1300, y=supply_y)
+    cv205.pin(mirrored=True).pin(port="inlet", x=1150, y=supply_y)
+    hv209.pin(port="inlet", x=1420, y=return_y)
+    cwr_jkt.pin(port="inlet", x=1540, y=return_y)
 
     product_y = 720.0
     cv203.pin(port="inlet", x=880, y=product_y)
@@ -168,7 +174,10 @@ def main():
                sequence=207, spec="CS")
     fs.connect(hv205.outlet, fe205.inlet)
     fs.connect(fe205.outlet, cv205.inlet)
-    fs.connect(cv205.outlet, rx.duty)
+    fs.connect(cv205.outlet, rx.jacket_in)
+    fs.connect(rx.jacket_out, hv209.inlet, size=150, service="CWR",
+               sequence=212, spec="CS")
+    fs.connect(hv209.outlet, cwr_jkt.inlet)
 
     draw = fs.connect(rx.outlet, cv203.inlet, size=100, service="PG",
                       sequence=208, spec="SS").via([(draw_x, product_y)])
@@ -264,7 +273,6 @@ def main():
         "measurements, independent of TIC-202.",
         "Z-1 shuts XV-201 and opens XV-206 together; the quench is sized "
         "for the full reactor inventory.",
-        "R-101 jacket cooling water return is on P&ID-202.",
     ], title="GENERAL NOTES", numbered=False, align="bottom-left"))
     fs.add_annotation(legend({
         "SS": "Stainless Steel 316L",
