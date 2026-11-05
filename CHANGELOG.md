@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Vessel` and `Evaporator` draw manholes and sockets on their walls:
+  `Vessel("D-101", manholes=[("E", 0.3)], sockets=[("W", 0.7)])`. Each socket
+  is a port, `socket_1`, `socket_2`, and so on.
+
 ### Fixed
 
 - The `boundary-flow-missing` warning is made on a PFD only, not on a sheet

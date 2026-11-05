@@ -489,6 +489,21 @@ _PART_APPROXIMATIONS = {
         "partialRectangle", "the two feet turned in at the base ring",
         keys=("top=0", "bottom=0")),
     (26, "ring"): _Approximation("partialRectangle", "", keys=("right=0",)),
+    (26, "manhole"): _Approximation(
+        "partialRectangle", "the flanges and the gap before the cover", keys=("right=0",)),
+    (26, "manhole_up"): _Approximation(
+        "partialRectangle", "the flanges and the gap before the cover", keys=("bottom=0",)),
+    (26, "manhole_down"): _Approximation(
+        "partialRectangle", "the flanges and the gap before the cover", keys=("top=0",)),
+    (26, "socket"): _Approximation(
+        "partialRectangle", "the stub from the wall to the flange",
+        keys=("top=0", "right=0", "bottom=0")),
+    (26, "socket_up"): _Approximation(
+        "partialRectangle", "the stub from the wall to the flange",
+        keys=("left=0", "right=0", "bottom=0")),
+    (26, "socket_down"): _Approximation(
+        "partialRectangle", "the stub from the wall to the flange",
+        keys=("left=0", "right=0", "top=0")),
     (27, "tray"): _Approximation("line", ""),
     (27, "baffle_tray"): _Approximation("line", "the riser at the deck's end"),
     (27, "bubble_cap_tray"): _Approximation("line", "the cap over the deck's opening"),

@@ -16,6 +16,13 @@ TABLE_2 = {
     (26, "bracket"): ("26.2", "C2006", "Support bracket"),
     (26, "skirt"): ("26.3", "C2007", "Support skirt"),
     (26, "ring"): ("26.4", "C2008", "Support ring"),
+    # Each drawn on a west wall, and turned to point up and down.
+    (26, "manhole"): ("26.5", "X8159", "Manhole"),
+    (26, "manhole_up"): ("26.5", "X8159", "Manhole"),
+    (26, "manhole_down"): ("26.5", "X8159", "Manhole"),
+    (26, "socket"): ("26.6", "X8160", "Socket, connection nozzle"),
+    (26, "socket_up"): ("26.6", "X8160", "Socket, connection nozzle"),
+    (26, "socket_down"): ("26.6", "X8160", "Socket, connection nozzle"),
     (27, "tray"): ("27.1", "C2044", "Tray (general)"),
     (27, "baffle_tray"): ("27.2", "X8166", "Tray with baffle"),
     (27, "bubble_cap_tray"): ("27.3", "C2010", "Tray, bubble-cap type"),
@@ -80,9 +87,9 @@ def test_the_parts_are_exactly_the_table_2_rows_they_claim():
 
 
 def test_each_group_ships_the_items_it_was_drawn_for():
-    """Check that groups 20 and 26-29 register 1, 4, 8, 10 and 14 parts."""
+    """Check that groups 20 and 26-29 register 1, 10, 8, 10 and 14 parts."""
     counts = {g: len(default_registry.part_names(g)) for g in (20, 26, 27, 28, 29)}
-    assert counts == {20: 1, 26: 4, 27: 8, 28: 10, 29: 14}
+    assert counts == {20: 1, 26: 10, 27: 8, 28: 10, 29: 14}
     assert default_registry.part_names(20) == ["motor"]
 
 

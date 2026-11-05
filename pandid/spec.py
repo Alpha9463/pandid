@@ -28,7 +28,8 @@ The format::
       - {kind: Vessel, name: V-101, variant: horizontal,
          width: 130, height: 42, port_faces: {inlet: N},
          pin: {x: 680, y: 210, mirrored: y}}
-      - {kind: Vessel, name: D-301, supports: skirt}
+      - {kind: Vessel, name: D-301, supports: skirt,
+         manholes: [[E, 0.3]], sockets: [[W, 0.6]]}
       - {kind: Reactor, name: R-201, internals: packing, agitator: null}
       - {kind: Column, name: T-101, internals: valve_tray, trays: 30}
 
@@ -394,6 +395,30 @@ def _faces(value: Any, where: str) -> int | list[str]:
     return [_text(face, f"{where}[{i}]") for i, face in enumerate(_sequence(value, where))]
 
 
+def _walls(value: Any, where: str) -> list[tuple[Any, ...]]:
+    """Check a ``manholes`` or ``sockets`` list of placements.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    list[tuple]
+        One ``(face, fraction)`` per item, for the class to check.
+
+    Raises
+    ------
+    SpecError
+        If it is not a list of lists.
+    """
+    return [tuple(_sequence(item, f"{where}[{i}]"))
+            for i, item in enumerate(_sequence(value, where))]
+
+
 def _composed(value: Any, default: Any, where: str) -> Any:
     """Check a composition value: a count, a part name or ``None``.
 
@@ -661,6 +686,7 @@ _KIND_READERS: dict[str, Callable[[Any, str], Any]] = {
     "normal_position": _text, "fail": _text, "branch": _text, "large_end": _text,
     "header": _flag, "inputs": _faces, "outputs": _faces,
     "feed_stages": _stages, "draw_stages": _stages,
+    "manholes": _walls, "sockets": _walls,
 }
 # Each class's constructor keywords.
 _TAKES = {cls: inspect.signature(cls).parameters.keys() for cls in _CLASSES.values()}
@@ -2124,6 +2150,10 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
     _write_composition(unit, entry)
+    if isinstance(unit, (unit_types.Vessel, unit_types.Evaporator)):
+        for key, places in (("manholes", unit.manholes), ("sockets", unit.sockets)):
+            if places:
+                entry[key] = [list(place) for place in places]
     # One feed is the default.
     if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _KIND_OWNERS["n_feeds"])
             and len(getattr(unit, "feeds")) > 1):
