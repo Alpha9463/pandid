@@ -238,8 +238,8 @@ def _compute_offsets(
         runs' if none is fixed. Where the run on that track, or a
         segment either side of it stretched to meet it, would enter a
         unit body, the run takes the first of the same tracks, out to
-        :data:`REACH` grid steps, on which neither would, and keeps the
-        first track if there is none.
+        :data:`REACH` grid steps, on which neither would, and stays on
+        its own track if there is none.
 
         Parameters
         ----------
@@ -295,7 +295,7 @@ def _compute_offsets(
                 if blocked(run, target):
                     clear = (t for t in chain(own, slots(base, occupied, range(REACH + 1)))
                              if not blocked(run, t))
-                    target = next(clear, target)
+                    target = next(clear, track)
                 run["target"] = target
                 occupied.append(target)
 

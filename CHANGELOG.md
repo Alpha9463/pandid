@@ -48,6 +48,7 @@ These are removed in 0.4.0.
   touch, so `Reactor("R-1", n_feeds=2)` no longer raises `nozzles-crowded`.
 - Lines drawn side by side no longer push a pipe into a unit body: a run moved
   off a shared track, and the segments either side of it, keep clear of every unit.
+  A run with no clear track nearby stays on the track the router laid it on.
 - `validate()` reports a `route-crosses-unit` warning for a slanted `via()` leg
   drawn through a unit, including the unit the line connects to.
 - `on=` puts a valve, fitting or valve station on a recycle line, including one
