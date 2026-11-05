@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from pandid.routing.visibility import MIN_ESCAPE
+from pandid.routing.visibility import MIN_ESCAPE, TAG_CLEAR, _tag_halo
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -514,6 +514,48 @@ def _tapped_runs(inst: "Instrument") -> tuple[Box, ...]:
                  for axis, fixed, lo, hi in segments)
 
 
+def _tag_boxes(fs: "Flowsheet") -> "list[tuple[Unit, Box]]":
+    """Return each placed unit's tag, as its halo less a line's clearance.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+
+    Returns
+    -------
+    list[tuple[Unit, Box]]
+        Each labelled unit and its tag box as ``(left, top, right,
+        bottom)``.
+    """
+    halos = ((u, _tag_halo(u, u.frame)) for u in fs.units if u.frame is not None)
+    return [(u, (r.x_min + TAG_CLEAR, r.y_min + TAG_CLEAR,
+                 r.x_max - TAG_CLEAR, r.y_max - TAG_CLEAR))
+            for u, r in halos if r is not None]
+
+
+def on_a_tag(fs: "Flowsheet") -> bool:
+    """Return whether an attached balloon stands on another unit's tag.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+
+    Returns
+    -------
+    bool
+        True if a placed attached balloon overlaps the tag of a unit
+        other than its host.
+    """
+    from pandid.portgeom import unit_box
+
+    tags = _tag_boxes(fs)
+    return any(_intrusion(unit_box(u, u.frame), box, -TOUCHING) > 0.0
+               for u in fs.units if is_attached(u) and u.frame is not None
+               for owner, box in tags if owner is not u.host)
+
+
 def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
@@ -538,6 +580,8 @@ def place_attached(fs: "Flowsheet") -> bool:
                  if u.frame is not None and not is_attached(u)]
     mounted = fs._mounted_layout
     keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if mounted else 0.0)
+    # Units' tags, each with the unit it labels.
+    tags = _tag_boxes(fs) if fs._clear_tags else []
     # Place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     while pending:
@@ -552,9 +596,11 @@ def place_attached(fs: "Flowsheet") -> bool:
             w, h = resolve_size(inst)
             runs = _tapped_runs(inst) if fs._keep_clear else ()
             fs._kept_clear = fs._kept_clear or bool(runs)
+            # A balloon may stand on its own host's tag.
+            clear = [box for owner, box in tags if owner is not inst.host]
             distance, angle = _clear_standoff(
                 inst, (tx, ty), ref, w, h,
-                obstacles + keepouts if mounted else obstacles,
+                (obstacles + keepouts if mounted else obstacles) + clear,
                 [] if mounted else keepouts, runs, fs._keep_clear)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2

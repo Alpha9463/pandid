@@ -1981,6 +1981,65 @@ def arrow_marker_id(color: str) -> str:
     return ident("arrow", color.lstrip("#"))
 
 
+def balloon_lettering(u, x: float, y: float, w: float, h: float
+                      ) -> "list[tuple[float, float, float, bool, str]]":
+    """Return the lines a balloon is lettered with, centred on each point.
+
+    A diamond carries the number alone; other balloons carry their
+    letters over their loop number.
+
+    Parameters
+    ----------
+    u : Instrument
+        Balloon.
+    x, y, w, h : float
+        Drawn box.
+
+    Returns
+    -------
+    list[tuple[float, float, float, bool, str]]
+        ``(x, y, font_size, bold, text)`` for each line.
+    """
+    from pandid.units import split_tag
+
+    variant = getattr(u, "variant", "default")
+    tag = getattr(u, "tag", "") or u.name
+    top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
+    cx, cy = x + w / 2, y + h / 2
+    if variant in _DIAMOND_BALLOONS:
+        # The number goes in the lower half of the diamond.
+        return [(cx, cy + 7, 11.0, False, bot or top.upper())]
+    if not top:
+        return [(cx, cy, _TAG_TYPE, False, bot or top)]
+    # Letters above a location bar and the number below it.
+    letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
+    out = [(cx, cy + letters_dy, _TAG_TYPE, True, top.upper())]
+    if bot:
+        out.append((cx, cy + number_dy, 11.0, False, bot))
+    return out
+
+
+def lettering_boxes(u) -> "list[tuple[float, float, float, float]]":
+    """Return the box each line of a placed balloon's lettering covers.
+
+    Parameters
+    ----------
+    u : Instrument
+        Placed balloon.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        One ``(left, top, right, bottom)`` box per line.
+    """
+    f = u.frame
+    out = []
+    for lx, ly, size, _bold, text in balloon_lettering(u, f.x, f.y, f.w, f.h):
+        half = F.text_width(text, size) / 2
+        out.append((lx - half, ly - size / 2, lx + half, ly + size / 2))
+    return out
+
+
 def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     """Return the halo rectangle of an equipment tag.
 
@@ -3497,8 +3556,10 @@ class SvgRenderer:
             drawing.extend(balloons)
             drawing.append('  </g>')
         # Tags and quadrant codes go last, on halos, over every line.
-        drawing.extend(self._draw_unit_labels(
-            unit_labels + drawn_codes(fs, joints, jump_direction, plates)))
+        codes = drawn_codes(fs, joints, jump_direction, plates)
+        drawing.extend(self._draw_unit_labels(unit_labels + codes))
+        # Every plate text is written on, the codes' included.
+        self.plates = plates + [b for b in map(_unit_label_box, codes) if b is not None]
         fs.warnings = fs.warnings + self._findings
 
         # The debug overlay is drawn first, under the sheet's ink.
@@ -3914,30 +3975,12 @@ class SvgRenderer:
         list[str]
             SVG ``<text>`` lines.
         """
-        from pandid.units import split_tag
-
-        variant = getattr(u, "variant", "default")
-        tag = getattr(u, "tag", "") or u.name
-        top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
-        cx, cy = x + u_width / 2, y + u_height / 2
-        if variant in _DIAMOND_BALLOONS:
-            # The number goes in the lower half of the diamond.
-            return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
-                    f'font-size="11" text-anchor="middle" '
-                    f'dominant-baseline="middle">{escaped(bot or top.upper())}</text>']
-        if not top:
-            return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
-                    f'font-size="{_TAG_TYPE:g}" text-anchor="middle" '
-                    f'dominant-baseline="middle">{escaped(bot or top)}</text>']
-        # Letters above a location bar and the number below it.
-        letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
-        out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
-               f'font-size="{_TAG_TYPE:g}" font-weight="bold" text-anchor="middle" '
-               f'dominant-baseline="middle">{escaped(top.upper())}</text>']
-        if bot:
-            out.append(f'    <text x="{cx}" y="{cy + number_dy}" font-family="sans-serif" '
-                       f'font-size="11" text-anchor="middle" '
-                       f'dominant-baseline="middle">{escaped(bot)}</text>')
+        out = []
+        for lx, ly, size, bold, text in balloon_lettering(u, x, y, u_width, u_height):
+            weight = ' font-weight="bold"' if bold else ""
+            out.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
+                       f'font-size="{size:g}"{weight} text-anchor="middle" '
+                       f'dominant-baseline="middle">{escaped(text)}</text>')
         return out
 
     def _label_place(self, lpos: str, x: float, y: float, u_width: float,

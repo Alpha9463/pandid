@@ -212,6 +212,80 @@ def test_angle_is_measured_from_the_flow_direction():
     assert ahead.frame.cy == pytest.approx(ahead.tap[1])
 
 
+def test_an_attached_balloon_keeps_off_another_units_tag():
+    """Check that sheet 16 draws LT-203 clear of M-201's tag, and no balloon on another's tag."""
+    from _render_cases import gallery
+    from pandid.layout.attach import _tag_boxes, on_a_tag
+    from pandid.layout.conflicts import boxes_overlap
+    from pandid.portgeom import unit_box
+
+    fs, _ = gallery.flowsheet("16_stirred_reactor_train")
+    fs.route()
+    lt = next(u for u in fs.units if u.name == "LT-203")
+    tag = next(box for owner, box in _tag_boxes(fs) if owner.name == "M-201")
+    assert not boxes_overlap(unit_box(lt, frame_of(lt)), tag)
+    assert not on_a_tag(fs)
+
+
+def test_a_balloon_kept_off_a_tag_does_not_cross_a_line_to_get_there():
+    """Check that clearing a mixer's tag does not move TT-1 so its tap crosses the run above."""
+    from pandid.render.svg import tap_lines, tap_route
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import crossing_count
+
+    fs = Flowsheet("tap crossing")
+    feed, product = fs.add(U.Feed("F-1")).pin(x=100, y=400), fs.add(U.Product("P-1"))
+    lower = fs.connect(feed.outlet, product.pin(x=600, y=400).inlet)
+    upper = fs.add(U.Feed("F-2")).pin(x=100, y=330)
+    mixer = fs.add(U.Fitting("M-101", variant="static_mixer", label_pos="bottom"))
+    mixer.pin(port="inlet", x=325, y=330)
+    fs.connect(upper.outlet, mixer.inlet)
+    fs.connect(mixer.outlet, fs.add(U.Product("P-2")).pin(x=600, y=330).inlet)
+    fs.add_instrument("TT", 1, sensing=lower, at=0.4, offset=50, angle=45)
+    fs.route()
+    lines = [stream_polyline(s) for s in fs.streams]
+    taps = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
+    assert taps
+    assert crossing_count(lines + taps) == 0
+
+
+def test_a_balloon_kept_off_a_tag_is_not_moved_under_other_text():
+    """Check that clearing a mixer's tag does not move TT-1 under HV-2's NC plate."""
+    import re
+
+    from pandid.layout.conflicts import boxes_overlap
+    from pandid.portgeom import unit_box
+
+    fs = Flowsheet("NC overlap")
+    feed, product = fs.add(U.Feed("F-1")).pin(x=100, y=400), fs.add(U.Product("P-1"))
+    lower = fs.connect(feed.outlet, product.pin(x=600, y=400).inlet)
+    valve = fs.add(
+        U.Valve("HV-2", variant="butterfly", normal_position="closed", label_pos="bottom")
+    ).pin(x=230, y=316)
+    mixer = fs.add(U.Fitting("M-101", variant="static_mixer", label_pos="bottom"))
+    mixer.pin(port="inlet", x=325, y=320)
+    upper = fs.add(U.Feed("F-2")).pin(x=100, y=323.5)
+    fs.connect(upper.outlet, valve.inlet)
+    fs.connect(valve.outlet, mixer.inlet)
+    fs.connect(mixer.outlet, fs.add(U.Product("P-2")).pin(x=600, y=250).inlet)
+    tt = fs.add_instrument("TT", 1, near=lower, at=0.4, offset=50, angle=45)
+    body = fs.to_svg(diagram="p&id").split("</defs>", 1)[1]
+    nc = re.search(r'<text x="([\d.]+)" y="([\d.]+)"[^>]*>NC</text>', body)
+    assert nc is not None
+    x, y = float(nc.group(1)), float(nc.group(2))
+    plates = [
+        (float(m[0]), float(m[1]), float(m[0]) + float(m[2]), float(m[1]) + float(m[3]))
+        for m in re.findall(
+            r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" '
+            r'fill="white" />',
+            body,
+        )
+    ]
+    under_nc = [p for p in plates if p[0] <= x <= p[2] and p[1] <= y <= p[3]]
+    assert under_nc
+    assert not any(boxes_overlap(unit_box(tt, frame_of(tt)), p) for p in under_nc)
+
+
 def test_angle_follows_a_reroute_rather_than_the_screen():
     """Check that the angle is measured from the flow on a vertical leg, not the screen."""
     fs = Flowsheet("v")
