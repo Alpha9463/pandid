@@ -80,6 +80,9 @@ These are removed in 0.4.0.
   vent, relief and drain on that wall.
 - Equipment or a line valve that would be drawn on a balloon pinned with
   `pin(x=, y=)` is moved clear of it and of the balloons hung on it.
+- `route()` routes a line again where moving it off a shared track makes it
+  cross lines its route did not count, and keeps the new drawing only if it
+  has no more crossings, bends or findings.
 - A vessel whose supports, manholes or sockets widen its box draws every inlet
   or outlet on the wall it was given, so
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
