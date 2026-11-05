@@ -71,6 +71,7 @@ def main():
     hv202 = fs.add(Valve("HV-202", description="Process Water Block Valve"))
     # Both tees combine.
     charge = fs.add(Tee(branch="inlet"))    # the water joins the oxide
+    charge.new_line_number = True           # the charge line has its own number
     mixer = fs.add(Fitting("M-201", variant="static_mixer",
                            description="Reactor Charge Static Mixer"))
     dump = fs.add(Tee(branch="inlet"))      # the quench joins the charge
@@ -221,7 +222,7 @@ def main():
     fs.connect(fic205.sig_out, cv205.actuator, kind="pneumatic")
 
     # --- Loop 203: reactor level on the product draw ------------------
-    lt203 = fs.add_instrument("LT", level203, sensing=rx, face="W", offset=90)
+    lt203 = fs.add_instrument("LT", level203, sensing=rx, face="W", offset=90, angle=60)
     lic203 = fs.add_instrument("LIC", level203, near=lt203, face="N", offset=90,
                                variant="shared")
     lic203.nozzle("sig_out", "E")
