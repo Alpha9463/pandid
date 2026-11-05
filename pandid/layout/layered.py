@@ -276,7 +276,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     fs : Flowsheet
         Sheet being laid out.
     units : list[Unit]
-        Units to place.
+        Units to place, each with its slot seeded from its pin.
     links : list[Link]
         Pipes between the units.
     """
