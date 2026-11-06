@@ -90,7 +90,7 @@ def _choose_family_faces(fs: "Flowsheet", unit: "_Families", frame,
     members : list[str]
         Connected family ports no author statement fixes.
     """
-    from pandid.portgeom import _xform, drawn_side, family_faces, pin_intent
+    from pandid.portgeom import _xform, drawn_side, family_faces, pin_intent, stated_faces
 
     rot, mx, my = _xform(frame)
     pinned = {port for port, _ in pin_intent(unit).values()}
@@ -103,7 +103,7 @@ def _choose_family_faces(fs: "Flowsheet", unit: "_Families", frame,
         target = _reference(unit.ports[name])
         if target is None or name in held:
             continue
-        faces = family_faces(unit, frame) or unit._faces
+        faces = family_faces(unit, frame) or stated_faces(unit, frame)
         # A lone port its menu moved keeps the face it was moved to.
         moved = {frame.port_faces[other] for other in unit._faces
                  if other in frame.port_faces and other not in members}

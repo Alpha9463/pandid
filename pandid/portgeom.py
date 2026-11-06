@@ -144,6 +144,49 @@ def drawn_side(face: str, rot: int, mirrored: bool, mirror_y: bool) -> str:
     return outward_dir(bx, by, bw, bh)
 
 
+def own_faces(placed) -> dict[str, str]:
+    """Return the symbol's own face drawn on each face under a placement.
+
+    Parameters
+    ----------
+    placed : Pin, Frame, _Slot or None
+        Placement.
+
+    Returns
+    -------
+    dict[str, str]
+        Drawn face to own face.
+    """
+    rot, mx, my = _xform(placed)
+    return {drawn_side(face, rot, mx, my): face for face in COMPASS_FACES}
+
+
+def stated_faces(unit: "_Families", placed) -> dict[str, str]:
+    """Return a unit's family faces with its ``nozzle()`` faces applied.
+
+    A face ``nozzle()`` names as drawn is turned onto the unit's own
+    axes under the placement; if the faces cannot all be drawn there,
+    the unit's own faces are returned.
+
+    Parameters
+    ----------
+    unit : _Families
+        Unit with port families.
+    placed : Pin, Frame, _Slot or None
+        Placement.
+
+    Returns
+    -------
+    dict[str, str]
+        Port name to face on the unit's own axes, in drawn order.
+    """
+    own = own_faces(placed)
+    stated = {name: own[face] for name, face in unit._port_faces.items()
+              if name in unit._faces and own[face] != unit._faces[name]}
+    faces = {**unit._faces, **stated}
+    return faces if stated and unit._fits(faces, placed) else unit._faces
+
+
 def family_faces(unit: "_Families", placed) -> dict[str, str] | None:
     """Return a unit's family faces with the engine's choices applied.
 
@@ -166,13 +209,13 @@ def family_faces(unit: "_Families", placed) -> dict[str, str] | None:
     chosen = getattr(placed, "port_faces", None)
     if not chosen:
         return None
-    rot, mx, my = _xform(placed)
-    own = {drawn_side(face, rot, mx, my): face for face in COMPASS_FACES}
+    own = own_faces(placed)
+    faces = stated_faces(unit, placed)
     menus = _sym(unit).port_faces
     moved = {name: own[face] for name, face in chosen.items()
              if name in unit._faces and name not in unit._stated
-             and len(menus.get(name, ())) < 2 and own[face] != unit._faces[name]}
-    return {**unit._faces, **moved} if moved else None
+             and len(menus.get(name, ())) < 2 and own[face] != faces[name]}
+    return {**faces, **moved} if moved else None
 
 
 def _placed_sym(unit: "Unit", placed):
@@ -193,7 +236,7 @@ def _placed_sym(unit: "Unit", placed):
     from pandid.units import _Families
 
     if isinstance(unit, _Families):
-        return unit.symbol(family_faces(unit, placed))
+        return unit.symbol(family_faces(unit, placed) or stated_faces(unit, placed))
     return _sym(unit)
 
 

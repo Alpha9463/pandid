@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from pandid import Flowsheet, units
@@ -701,3 +703,70 @@ def test_a_feed_and_a_draw_on_one_column_wall_stay_apart():
     draw = resolve_port(column, column.frame, "draw")
     assert (feed.face, draw.face) == ("E", "E")
     assert abs(feed.point[1] - draw.point[1]) >= 16
+
+
+# The face each of a symbol's own faces is drawn on under a placement.
+_DRAWN = {
+    "as drawn": {"N": "N", "E": "E", "S": "S", "W": "W"},
+    "mirror x": {"N": "N", "E": "W", "S": "S", "W": "E"},
+    "mirror y": {"N": "S", "E": "E", "S": "N", "W": "W"},
+    "turn 90": {"N": "E", "E": "S", "S": "W", "W": "N"},
+    "turn 180": {"N": "S", "E": "W", "S": "N", "W": "E"},
+    "turn 270": {"N": "W", "E": "N", "S": "E", "W": "S"},
+}
+# Turn and mirror of each placement.
+_PLACEMENTS: dict[str, tuple[int, bool | str]] = {
+    "as drawn": (0, False),
+    "mirror x": (0, True),
+    "mirror y": (0, "y"),
+    "turn 90": (90, False),
+    "turn 180": (180, False),
+    "turn 270": (270, False),
+}
+
+
+@pytest.mark.parametrize("placement", list(_DRAWN))
+@pytest.mark.parametrize(
+    ("build", "own"),
+    [
+        pytest.param(lambda: units.Column("T-1"), "W", id="column-feed-home"),
+        pytest.param(lambda: units.Column("T-1"), "E", id="column-feed-across"),
+        pytest.param(lambda: units.Reactor("R-1"), "W", id="reactor-feed-home"),
+        pytest.param(lambda: units.Reactor("R-1"), "N", id="reactor-feed-head"),
+        pytest.param(lambda: units.Separator("V-1"), "W", id="separator-feed-home"),
+        pytest.param(lambda: units.Separator("V-1"), "E", id="separator-feed-across"),
+    ],
+)
+def test_nozzle_puts_a_series_member_on_the_face_as_drawn(
+    build: Callable[[], Unit], own: str, placement: str
+):
+    """Draw a feed on the face nozzle() names, under any turn or mirror."""
+    drawn = _DRAWN[placement][own]
+    fs = Flowsheet("series")
+    turn, mirror = _PLACEMENTS[placement]
+    unit = fs.add(build()).pin(x=300, y=100, orientation=turn, mirrored=mirror)
+    unit.nozzle("feed", drawn)
+    read = from_dict(to_dict(fs))
+    for sheet, placed in ((fs, unit), (read, read.units[0])):
+        sheet.layout()
+        assert placed.frame is not None
+        port = resolve_port(placed, placed.frame, "feed")
+        cx = placed.frame.x + placed.frame.w / 2
+        cy = placed.frame.y + placed.frame.h / 2
+        side = {
+            "E": port.point[0] > cx,
+            "W": port.point[0] < cx,
+            "N": port.point[1] < cy,
+            "S": port.point[1] > cy,
+        }
+        assert (port.face, side[drawn]) == (drawn, True)
+
+
+def test_nozzle_on_a_mirrored_column_names_the_face_as_drawn():
+    """Put a mirrored column's feed on the east wall nozzle() names."""
+    fs = Flowsheet("column")
+    column = fs.add(units.Column("T")).pin(x=300, y=100, mirrored=True).nozzle("feed", "E")
+    fs.layout()
+    assert column.frame is not None
+    port = resolve_port(column, column.frame, "feed")
+    assert (port.face, port.point) == ("E", (400.0, 205.0))

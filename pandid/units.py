@@ -4823,9 +4823,10 @@ class _SeriesFamilies(_Families):
         Parameters
         ----------
         faces : dict[str, str]
-            Series member to face, in drawn order.
+            Series member to face on the unit's own axes, in drawn
+            order.
         frame : Frame or None
-            The unit's placed box; unused.
+            The unit's placed box.
 
         Returns
         -------
@@ -4833,21 +4834,26 @@ class _SeriesFamilies(_Families):
             True if the symbol builds and every staged member on a
             further face is inside its stretch.
         """
-        return self._misfit(faces) is None
+        return self._misfit(faces, frame) is None
 
-    def _misfit(self, faces: dict[str, str]) -> str | None:
+    def _misfit(self, faces: dict[str, str], placed=None) -> str | None:
         """Return why the members cannot be drawn on faces, or None.
 
         Parameters
         ----------
         faces : dict[str, str]
-            Series member to face, in drawn order.
+            Series member to face on the unit's own axes, in drawn
+            order.
+        placed : Pin, Frame or None, optional
+            Placement whose drawn faces the reason names.
 
         Returns
         -------
         str or None
             Reason, or None if they can.
         """
+        from pandid.portgeom import _xform, drawn_side
+
         try:
             self.symbol(faces)
         except ValueError as exc:
@@ -4860,13 +4866,14 @@ class _SeriesFamilies(_Families):
             pin = self._series_pin(name)
             if series is None or face == series.face or pin is None:
                 continue
-            placed = series.on(face)
-            assert placed is not None
-            _, lo, hi = placed.reach(sym.width, sym.height)
+            on = series.on(face)
+            assert on is not None
+            _, lo, hi = on.reach(sym.width, sym.height)
             along = sym.height if face in ("W", "E") else sym.width
             if not lo - 1e-9 <= pin * along <= hi + 1e-9:
-                return (f"{name}'s stage puts it outside the stretch of the {face} wall "
-                        f"clear of the other nozzles there")
+                return (f"{name}'s stage puts it outside the stretch of the "
+                        f"{drawn_side(face, *_xform(placed))} wall clear of the other "
+                        f"nozzles there")
         return None
 
     def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
@@ -4898,8 +4905,9 @@ class _SeriesFamilies(_Families):
     def nozzle(self: _SeriesFamiliesT, port_name: str, face: str) -> _SeriesFamiliesT:
         """Move a port to a named face.
 
-        A feed or draw moves to any face its series offers. Other ports
-        use :meth:`Unit.nozzle`.
+        The face is as drawn, so a turned or mirrored unit takes the
+        face the reader sees. A feed or draw moves to any face its
+        series offers. Other ports use :meth:`Unit.nozzle`.
 
         Parameters
         ----------
@@ -4921,22 +4929,25 @@ class _SeriesFamilies(_Families):
             If ``face`` is not a face, or the series offers no such
             face or no room on it for the port.
         """
+        from pandid.portgeom import own_faces, stated_faces, unreachable_face
+
         canonical = self._canonical_port_name(port_name)
         if canonical not in self._faces:
             return super().nozzle(port_name, face)
         resolved = _block_face(face, self.name)
-        offered = self._offered(canonical)
+        placed = self.pin_ if self.pin_ is not None else self.frame
+        drawn = {own: on for on, own in own_faces(placed).items()}
+        offered = [drawn[own] for own in self._offered(canonical)]
         if resolved not in offered:
-            from pandid.portgeom import unreachable_face
-
             raise unreachable_face(self, canonical, resolved, offered)
-        misfit = self._misfit({**self._faces, canonical: resolved})
+        faces = stated_faces(self, placed)
+        misfit = self._misfit({**faces, canonical: own_faces(placed)[resolved]}, placed)
         if misfit is not None:
             raise ValueError(
                 f"{self.name}: {misfit}. Keep {canonical} on "
-                f"{self._faces[canonical]}, or move it with "
+                f"{drawn[faces[canonical]]}, or move it with "
                 f"nozzle({canonical!r}, ...) to another of {', '.join(offered)}")
-        self._faces[canonical] = resolved
+        self._port_faces[canonical] = resolved
         self._stated.add(canonical)
         self._invalidate_layout()
         return self
