@@ -340,6 +340,7 @@ def register_vendored(registry):
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 85.0), 'E': (100.0, 85.0), 'N': (50.0, 6.4)}},
         bands={'W': (36.0, 85.0), 'E': (36.0, 85.0), 'S': (10.0, 90.0), 'N': (50.0, 50.0)},
+        family_faces={'outlet': {'W': (0.0, 85.0), 'E': (100.0, 85.0)}},
     ), 'default')
 
     registry.register('tank', Symbol(
@@ -350,6 +351,7 @@ def register_vendored(registry):
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 80.0), 'E': (100.0, 80.0), 'N': (50.0, 0.0)}},
         bands={'W': (30.0, 80.0), 'E': (30.0, 80.0), 'S': (10.0, 90.0), 'N': (50.0, 50.0)},
+        family_faces={'outlet': {'W': (0.0, 80.0), 'E': (100.0, 80.0)}},
     ), 'conical')
 
     registry.register('reducer', Symbol(
@@ -804,6 +806,7 @@ def register_vendored(registry):
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
         bands={'W': (10.0, 60.0), 'E': (10.0, 60.0), 'S': (10.0, 90.0)},
+        family_faces={'outlet': {'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
     ), 'floating_roof')
 
     registry.register('tank', Symbol(
@@ -853,6 +856,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.gas_holder',
         gravity_fixed=True,
         bands={'W': (45.0, 80.0), 'E': (45.0, 80.0)},
+        family_faces={'inlet': {'E': (70.0, 45.0)}, 'outlet': {'W': (0.0, 45.0)}},
     ), 'gas_holder')
 
     registry.register('thickener', Symbol(

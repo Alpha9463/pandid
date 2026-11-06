@@ -110,6 +110,10 @@ The names depend on the class and variant. Common patterns are:
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
+- A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
+  `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
+  heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
+  its bottom one.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.
 - Reactors use `feed`, `outlet`, `vent` and `duty`. A `JacketedReactor` has
@@ -212,10 +216,11 @@ sheet has fewer bends or crossings and no new finding. The faces on offer:
 | Unit | Inlets | Outlets |
 |---|---|---|
 | `Block` | `"W"`, `"E"`, `"N"`, `"S"` | `"W"`, `"E"`, `"N"`, `"S"` |
-| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"` | `"S"`; `"gas_holder"`: `"E"` |
-| `Vessel` | `"W"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`; `"horizontal"`: `"S"` |
+| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"`, `"E"` | `"S"`; `"default"`, `"conical"` and `"floating_roof"` also `"W"`, `"E"` low on the wall; `"gas_holder"`: `"E"`, `"W"` |
+| `Vessel` | `"W"`, `"E"`, `"N"` (the top head); `"dome"`: `"W"`, `"E"`; `"electrical_heating"`: `"W"`, `"N"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`, `"W"`; `"horizontal"`: `"S"` |
 
-A head, roof or cone drawn to a point takes one connection. Fix a face with a
+An inlet and an outlet on one wall are spread apart along it, the inlet
+above. A head, roof or cone drawn to a point takes one connection. Fix a face with a
 list, with `unit.nozzle("in_2", "N")`, or by pinning the nozzle with
 `unit.pin(port="in_2", x=..., y=...)`.
 

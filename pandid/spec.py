@@ -2191,6 +2191,24 @@ def _write_connection_faces(unit, entry: dict[str, Any],
         entry["port_order"] = port_order
 
 
+def _default_count(unit: Unit, keyword: str) -> int:
+    """Return the count a unit's own class builds when ``keyword`` is unset.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit being written.
+    keyword : str
+        Count keyword, such as ``"n_feeds"``.
+
+    Returns
+    -------
+    int
+        The constructor's default for ``keyword``.
+    """
+    return inspect.signature(type(unit)).parameters[keyword].default
+
+
 def _write_unit(unit: Unit) -> dict[str, Any]:
     """Write one ``units:`` entry.
 
@@ -2223,9 +2241,8 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         for key, places in (("manholes", unit.manholes), ("sockets", unit.sockets)):
             if places:
                 entry[key] = [list(place) for place in places]
-    # One feed is the default.
     if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _KIND_OWNERS["n_feeds"])
-            and len(getattr(unit, "feeds")) > 1):
+            and len(getattr(unit, "feeds")) != _default_count(unit, "n_feeds")):
         entry["n_feeds"] = len(getattr(unit, "feeds"))
     if isinstance(unit, unit_types.Block):
         _write_connection_faces(unit, entry)
@@ -2238,7 +2255,7 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     elif isinstance(unit, unit_types.Column):
         if unit.feed_stages is not None:
             entry["feed_stages"] = list(unit.feed_stages)
-        if len(unit.draws) > 0:
+        if len(unit.draws) != _default_count(unit, "n_draws"):
             entry["n_draws"] = len(unit.draws)
         if unit.draw_stages is not None:
             entry["draw_stages"] = list(unit.draw_stages)

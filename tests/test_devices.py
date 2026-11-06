@@ -171,7 +171,7 @@ def test_a_spec_may_name_a_device_class_in_either_spelling():
 def test_a_kind_tag_still_names_the_class_that_owns_the_whole_kind():
     """Check that each ``kind`` tag aliases the ``units`` class that owns the whole kind."""
     # Share their kind with Column.
-    shares_a_kind = {"Absorber", "Stripper", "DistillationColumn"}
+    shares_a_kind = {"Absorber", "ExtractionColumn", "Stripper", "DistillationColumn"}
     for name in units.__all__:
         if name == "Unit" or name in shares_a_kind:
             continue

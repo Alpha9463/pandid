@@ -392,3 +392,189 @@ def test_a_line_leaving_a_roof_nozzle_across_the_roof_is_counted_through_its_tan
     fs.connect(tank.vent, product.inlet).via([(550, 307.9)])
     fs.route()
     assert _flaws(fs)["line-through-unit"] == 1
+
+
+# --- Tank outlets and upright vessels -----------------------------------------
+
+
+# A default tank at (300, 300) is 100 x 95.5: its walls take a fill and a draw
+# 85 down. A default vessel there is 62 x 100: its walls take a nozzle 50 down
+# and its top head one at (346.5, 301).
+@pytest.mark.parametrize(
+    ("x", "y", "mirrored", "face"),
+    [(650, 385, False, "E"), (100, 385, True, "W"), (450, 600, False, "S")],
+    ids=["right", "left", "below"],
+)
+def test_a_tank_outlet_takes_the_wall_toward_its_peer(x, y, mirrored, face):
+    """Draw a tank's draw-off low on the wall toward its peer."""
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1", inputs=0)).pin(x=300, y=300)
+    _flag(fs, tank, "out_1", x, y, mirrored)
+    fs.route()
+    assert _face(tank, "out_1") == face
+
+
+@pytest.mark.parametrize(
+    ("port", "x", "y", "mirrored", "face"),
+    [
+        ("in_1", 336, 150, False, "N"),
+        ("in_1", 650, 350, True, "E"),
+        ("in_1", 100, 350, False, "W"),
+        ("out_1", 100, 350, True, "W"),
+        ("out_1", 650, 350, False, "E"),
+    ],
+    ids=["in-above", "in-right", "in-left", "out-left", "out-right"],
+)
+def test_an_upright_vessel_connection_takes_the_face_toward_its_peer(port, x, y, mirrored, face):
+    """Choose among the walls and head an upright vessel offers."""
+    fs = Flowsheet("vessel")
+    inputs = 1 if port == "in_1" else 0
+    vessel = fs.add(units.Vessel("V-1", inputs=inputs, outputs=1 - inputs)).pin(x=300, y=300)
+    _flag(fs, vessel, port, x, y, mirrored)
+    fs.route()
+    assert _face(vessel, port) == face
+
+
+def test_nozzle_moves_a_tank_outlet_onto_a_wall():
+    """Take ``nozzle("outlet", "E")`` on a tank."""
+    tank = units.Tank("TK-1").nozzle("outlet", "E")
+    assert tank.face("out_1") == "E"
+
+
+def test_an_inlet_and_an_outlet_on_one_wall_are_spread_inlet_above():
+    """Spread a vessel's inlet and outlet apart on the wall they share."""
+    fs = Flowsheet("vessel")
+    vessel = fs.add(units.Vessel("V-1")).pin(x=300, y=300).nozzle("out_1", "W")
+    fs.layout()
+    assert vessel.frame is not None
+    inlet = resolve_port(vessel, vessel.frame, "in_1")
+    outlet = resolve_port(vessel, vessel.frame, "out_1")
+    assert (inlet.face, outlet.face) == ("W", "W")
+    assert outlet.point[1] - inlet.point[1] >= BLOCK_PITCH - 10
+
+
+def test_an_outlet_never_takes_the_wall_a_lone_inlet_was_moved_to():
+    """Leave a lone inlet the wall it was moved to, and lay the sheet out."""
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1")).pin(x=300, y=300)
+    _flag(fs, tank, "in_1", 650, 385, True)
+    # The outlet's peer is above the floor to the east, so E would suit it too.
+    _flag(fs, tank, "out_1", 650, 330, False)
+    fs.route()
+    assert _face(tank, "in_1") == "E"
+    assert _face(tank, "out_1") != "E"
+
+
+def test_a_rejected_wall_outlet_leaves_the_inlet_moves_main_draws():
+    """Keep the inlet moves on the stencil's faces when the added faces lose."""
+    fs = Flowsheet("tank")
+    tank = fs.add(units.Tank("TK-1", inputs=2, outputs=2)).pin(x=400, y=400)
+    _flag(fs, tank, "in_1", 100, 380, False)
+    _flag(fs, tank, "in_2", 100, 180, False)
+    _flag(fs, tank, "out_1", 780, 100, False)
+    _flag(fs, tank, "out_2", 100, 780, True)
+    fs.route()
+    quality = measure_final(fs)
+    assert _face(tank, "in_2") == "N"
+    assert (quality.crossings, quality.bends) == (1, 7)
+
+
+def _tank_to_mixer(case: str) -> Flowsheet:
+    """Build a tank whose outlets reach a mixer by a pump and a vessel."""
+    if case == "A":
+        tk, v, p, m, n, out = (900, 100), (600, 550), (600, 100), (300, 300), 5, (900, 300)
+    else:
+        tk, v, p, m, n, out = (600, 100), (1100, 650), (600, 550), (900, 300), 3, (300, 650)
+    fs = Flowsheet("tank to mixer")
+    tank = fs.add(units.Tank("TK-1", inputs=2, outputs=2)).pin(x=tk[0], y=tk[1])
+    vessel = fs.add(units.Vessel("V-1")).pin(x=v[0], y=v[1])
+    pump = fs.add(units.Pump("P-1")).pin(x=p[0], y=p[1])
+    mixer = fs.add(units.Mixer("M-1", n_inlets=n)).pin(x=m[0], y=m[1])
+    product = fs.add(units.Product("Product")).pin(x=out[0], y=out[1])
+    for k, y in enumerate((100, 340)):
+        feed = fs.add(units.Feed(f"Feed-{k}")).pin(x=70, y=y)
+        fs.connect(feed.outlet, tank.inlets[k])
+    fs.connect(tank.outlets[0], pump.suction)
+    fs.connect(pump.discharge, mixer.in_1)
+    fs.connect(tank.outlets[1], vessel.inlet)
+    fs.connect(vessel.outlet, mixer.in_2)
+    last = fs.connect(mixer.outlet, product.inlet)
+    for k in range(n - 2):
+        additive = fs.add(units.Feed(f"Additive-{k}")).pin(x=70, y=700 + 150 * k)
+        fs.connect(additive.outlet, mixer.inlets[k + 2])
+    if case == "B":
+        fs.add_instrument("FI", 101, sensing=last, at=0.5, offset=90)
+    return fs
+
+
+@pytest.mark.parametrize(
+    ("case", "crossings", "bends"), [("A", 18, 28), ("B", 6, 22)], ids=["mixer-grown", "balloon"]
+)
+def test_the_family_face_trial_never_draws_worse_than_main(case, crossings, bends):
+    """Judge the family faces from main's starting state, and keep the winner as scored."""
+    from pandid.layout.control import _taps_off
+
+    fs = _tank_to_mixer(case)
+    fs.route()
+    quality = measure_final(fs)
+    assert quality.crossings <= crossings
+    assert quality.bends <= bends
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+
+
+def test_a_second_route_draws_no_line_on_another():
+    """Route a sheet twice without the trials' caches joining two lines."""
+    from pandid.layout.control import _flaws
+
+    fs = Flowsheet("tank to mixer")
+    tank = fs.add(units.Tank("TK-1", inputs=2)).pin(x=900, y=600)
+    vessel = fs.add(units.Vessel("V-1", variant="jacketed")).pin(x=900, y=100)
+    pump = fs.add(units.Pump("P-1")).pin(x=900, y=350)
+    mixer = fs.add(units.Mixer("M-1")).pin(x=1200, y=100)
+    product = fs.add(units.Product("Product")).pin(x=300, y=100)
+    feeds = [
+        fs.add(units.Feed(name)).pin(x=70, y=y)
+        for name, y in (("Feed-0", 100), ("Feed-1", 340), ("Vessel feed", 950))
+    ]
+    for a, b in [
+        (feeds[0].outlet, tank.inlets[0]),
+        (feeds[1].outlet, tank.inlets[1]),
+        (tank.outlets[0], pump.suction),
+        (pump.discharge, mixer.inlets[0]),
+        (feeds[2].outlet, vessel.inlet),
+        (vessel.outlet, mixer.inlets[1]),
+        (mixer.outlet, product.inlet),
+    ]:
+        fs.connect(a, b)
+    fs.layout()
+    for _ in range(2):
+        fs.route()
+        assert _flaws(fs)["line-on-line"] == 0
+
+
+def test_every_route_starts_main_from_mains_own_last_drawing():
+    """Judge each route() against main's drawing of that call, not the last winner."""
+    from pandid.routing.lanes import _score
+
+    fs = Flowsheet("blending")
+    tank = fs.add(units.Tank("TK-1")).pin(x=1200, y=850)
+    vessel = fs.add(units.Vessel("V-1")).pin(x=1200, y=600)
+    pump = fs.add(units.Pump("P-1")).pin(x=900, y=350)
+    mixer = fs.add(units.Mixer("M-1")).pin(x=900, y=850)
+    product = fs.add(units.Product("Product")).pin(x=600, y=350)
+    feed = fs.add(units.Feed("Feed-0")).pin(x=70, y=100)
+    vessel_feed = fs.add(units.Feed("Vessel feed")).pin(x=70, y=950)
+    fs.connect(feed.outlet, tank.inlet)
+    fs.connect(tank.outlet, pump.suction)
+    fs.connect(pump.discharge, mixer.inlets[0])
+    fs.connect(vessel_feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, mixer.inlets[1])
+    line = fs.connect(mixer.outlet, product.inlet)
+    fs.add_instrument("FI", 101, sensing=line, at=0.5, offset=60)
+    fs.layout()
+    crossings = []
+    for _ in range(3):
+        fs.route()
+        crossings.append(_score(fs)[0]["crossings"])
+    assert crossings == [8, 8, 8]

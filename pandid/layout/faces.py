@@ -104,9 +104,13 @@ def _choose_family_faces(fs: "Flowsheet", unit: "_FaceFamilies", frame,
         if target is None or name in held:
             continue
         faces = family_faces(unit, frame) or unit._faces
-        home, *others = unit._offered(name)
+        # A lone port its menu moved keeps the face it was moved to.
+        moved = {frame.port_faces[other] for other in unit._faces
+                 if other in frame.port_faces and other not in members}
+        home, *others = unit._offered(name, fs._added_faces)
         menu = [drawn_side(face, rot, mx, my) for face in (
             home, *(face for face in others if unit._fits({**faces, name: face}, frame)))]
+        menu = menu[:1] + [face for face in menu[1:] if face not in moved]
         if len(menu) < 2:
             continue
         before = _lines(unit, frame, family, held)
