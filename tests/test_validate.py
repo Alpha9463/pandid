@@ -1599,10 +1599,15 @@ def _advised(
     names = [value for key, value in advice if key == "name"]
     if not names:
         return scheme, [legs]
+    given = next((leg["name"] for leg in legs if "name" in leg), None)
     # Write the fields into the given name, or into a name on the first leg.
     target = next((i for i, leg in enumerate(legs) if "name" in leg), 0)
-    applied = [[{**leg, "name": names[0]} if i == target else leg for i, leg in enumerate(legs)]]
-    if any(leg.get("name") in names for leg in legs):
+    applied = [
+        [{**leg, "name": written} if i == target else leg for i, leg in enumerate(legs)]
+        for written in names
+        if written != given
+    ]
+    if given in names:
         # Drop the given name.
         applied.append([{k: v for k, v in leg.items() if k != "name"} for leg in legs])
     return scheme, applied
@@ -1644,6 +1649,7 @@ _UNDRAWN: dict[str, tuple[str | None, list[dict[str, Any]], list[str], int]] = {
     ),
     "stated-past-a-valve": (None, [{"size": 6}, {"spec": "A1A"}], ["spec"], 1),
     "changed-past-a-valve": (None, [{"size": 6, "service": "P"}, {"size": 4}], ["size"], 1),
+    "sequence-hidden-by-a-given-name": (None, [{"name": "X-1", "sequence": 2740}], ["sequence"], 2),
 }
 
 
@@ -1709,6 +1715,45 @@ def test_following_the_line_field_advice_keeps_an_energy_line_s_carrier(
             assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
 
 
+def test_following_the_line_field_advice_under_a_scheme_that_reads_the_name():
+    """Check a drop-name fix is judged by the line number the unnamed line would get."""
+
+    def scheme(s: Stream) -> str:
+        """Write the service only on a line named for unit X."""
+        return f"{s.size}-{s.service}" if s.name.startswith("X") else f"{s.size}"
+
+    legs = [{"name": "X-1", "size": 6, "service": "LPS"}]
+    (found,) = _found(_line(cast(Any, scheme), *legs), "line-field-undrawn")
+    _, applied = _advised(found.message, scheme, legs)
+    for fix in applied:
+        fs = _line(cast(Any, scheme), *fix)
+        labels = _labels(fs)
+        for key, value in fix[0].items():
+            assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+@pytest.mark.parametrize("taken", ["6-P-1002", "X-1 6 P"], ids=["by-drop-name", "by-write-name"])
+def test_following_the_line_field_advice_keeps_two_lines_apart(taken: str):
+    """Check no fix renames a line to the line number another line draws."""
+    legs = [{"name": "X-1", "size": 6, "service": "P"}]
+
+    def sheet(*fix: dict[str, Any]) -> Flowsheet:
+        """Build a line named *taken* and then the line under test."""
+        fs = Flowsheet("line")
+        fs.connect(fs.add(U.Feed("G")).outlet, fs.add(U.Product("Q")).inlet, name=taken)
+        fs.connect(fs.add(U.Feed("F")).outlet, fs.add(U.Product("P")).inlet, **fix[0])
+        return fs
+
+    (found,) = _found(sheet(*legs), "line-field-undrawn")
+    _, applied = _advised(found.message, None, legs)
+    assert len(applied) == 1, found.message
+    for fix in applied:
+        fs = sheet(*fix)
+        fs.renumber_streams()
+        assert fs.streams[0].name != fs.streams[1].name, found.message
+        assert _found(fs, "line-field-undrawn") == [], found.message
+
+
 @pytest.mark.parametrize(
     ("scheme", "legs"),
     [
@@ -1717,6 +1762,7 @@ def test_following_the_line_field_advice_keeps_an_energy_line_s_carrier(
         ("{size}", [{"size": 6}]),
         (None, [{"name": "6-P-2001", "size": 6, "service": "P", "sequence": 2001}]),
         (None, [{"size": 6, "service": "P"}, {"size": 6}]),
+        (None, [{"sequence": 2740}]),
     ],
     ids=[
         "no-fields",
@@ -1724,6 +1770,7 @@ def test_following_the_line_field_advice_keeps_an_energy_line_s_carrier(
         "automatic-sequence-left-out",
         "fields-in-a-given-name",
         "repeated-past-a-valve",
+        "sequence-alone",
     ],
 )
 def test_a_line_that_draws_every_field_it_states_is_not_reported(
@@ -2402,7 +2449,7 @@ def test_a_crossing_an_arrowhead_length_clear_of_the_nozzle_is_not_reported():
 
 def _run_over_vessel(offset: float, balloon: bool = False, flag: bool = False) -> Flowsheet:
     """Build a run drawn *offset* px above V-1's box, its LT-1, or a corner-pinned flag Q."""
-    from pandid.portgeom import drawn_box
+    from pandid.portgeom import unit_box
 
     fs = Flowsheet("edge")
     v = fs.add(U.Vessel("V-1")).pin(x=300, y=200)
@@ -2418,7 +2465,7 @@ def _run_over_vessel(offset: float, balloon: bool = False, flag: bool = False) -
     run = fs.connect(a.outlet, ap.inlet)
     fs.layout()
     assert lt.frame is not None and a.frame is not None and ap.frame is not None
-    top = drawn_box(lt, lt.frame)[1] - offset
+    top = unit_box(lt, lt.frame)[1] - offset
     (ax, ay), (bx, by) = port_point(a, a.frame, "outlet"), port_point(ap, ap.frame, "inlet")
     run.via([(ax + 30, ay), (ax + 30, top), (bx - 30, top), (bx - 30, by)])
     return fs
@@ -2496,12 +2543,10 @@ def _run_over_flag(offset: float) -> Flowsheet:
 
 def test_a_flag_is_measured_by_the_pennant_it_draws():
     """Check that a run inside a flag's box but clear of its pennant is not reported."""
-    from pandid.portgeom import unit_box
-
     fs = _run_over_flag(14.0)
     air = next(u for u in fs.units if u.name == "Air")
-    # The run is a pixel inside the top of the flag's box.
-    assert air.frame is not None and unit_box(air, air.frame)[1] == 175.0
+    # The run is a pixel inside the top of the flag's frame.
+    assert air.frame is not None and air.frame.y == 175.0
     assert _found(fs, "route-along-unit") == []
     assert len(_found(_run_over_flag(1.5), "route-along-unit")) == 1
 
@@ -2509,14 +2554,20 @@ def test_a_flag_is_measured_by_the_pennant_it_draws():
 # --- a valve under the arrowhead into a nozzle --------------------------------
 
 
-def _suction(placed: dict[str, float]) -> Flowsheet:
-    """Build a pump suction carrying valves and strainers at line fractions."""
+def _suction(placed: dict[str, float | None], apart: float | None = None) -> Flowsheet:
+    """Build a pump suction carrying valves and strainers at line fractions.
+
+    With ``apart``, the feed and the pump suction are pinned that far apart.
+    """
     fs = Flowsheet("arrowhead")
-    pump = fs.add(U.Pump("P-1"))
-    line = fs.connect(fs.add(U.Feed("F")).outlet, pump.suction)
+    feed, pump = fs.add(U.Feed("F")), fs.add(U.Pump("P-1"))
+    if apart is not None:
+        feed.pin(x=100, y=200)
+        pump.pin(port="suction", x=100 + apart, y=200)
+    line = fs.connect(feed.outlet, pump.suction)
     for name, at in placed.items():
         kind = U.Valve(name) if name.startswith("HV") else U.Fitting(name, variant="strainer")
-        fs.add(kind, on=line, at=at)
+        fs.add(kind, on=line, **({} if at is None else {"at": at}))
     fs.connect(pump.discharge, fs.add(U.Product("Out")).inlet)
     fs.route()
     return fs
@@ -2527,20 +2578,47 @@ def _order(fs: Flowsheet) -> list[str]:
     return [s.dest.owner.name for s in fs.streams if s.dest.owner.kind in ("valve", "fitting")]
 
 
-@pytest.mark.parametrize(
-    "placed",
-    [{"HV-1": 0.99}, {"HV-1": 0.8}, {"HV-1": 0.7, "ST-1": 0.99}, {"HV-1": 0.5, "ST-1": 0.95}],
-)
-def test_following_the_arrowhead_advice_keeps_the_order_and_clears_it(placed):
-    fs = _suction(placed)
+def _advice(fs: Flowsheet) -> str:
+    """Return the one valve-under-arrowhead message on a sheet."""
     (issue,) = _found(fs, "valve-under-arrowhead")
     assert "P-1.suction" in issue.message
-    call = re.search(r"fs\.add\((\S+), on=S1, at=([0-9.]+)\)", issue.message)
-    assert call is not None, issue.message
-    name, at = call.group(1), float(call.group(2))
-    again = _suction({**placed, name: at})
-    assert _order(again) == _order(fs)
-    assert _found(again, "valve-under-arrowhead") == []
+    return issue.message
+
+
+_NUMBER = re.compile(r"fs\.add\((\S+), on=S1, at=(\d[0-9.]*)\)")
+
+
+@pytest.mark.parametrize(("at", "apart"), [(0.99, None), (0.8, None), (0.99, 150.0)])
+def test_following_the_at_advised_for_a_lone_valve_clears_it(at, apart):
+    call = _NUMBER.search(_advice(_suction({"HV-1": at}, apart)))
+    assert call is not None and call.group(1) == "HV-1"
+    assert _found(_suction({"HV-1": float(call.group(2))}, apart), "valve-under-arrowhead") == []
+
+
+@pytest.mark.parametrize(
+    ("placed", "bounds"),
+    [
+        ({"HV-1": 0.7, "ST-1": 0.99}, "between HV-1 (at=0.7) and the P-1.suction end"),
+        (
+            {"HV-1": None, "HV-2": 0.9, "ST-1": 0.99},
+            "between HV-2 (at=0.9) and the P-1.suction end",
+        ),
+    ],
+)
+def test_a_valve_with_neighbours_is_given_the_bounds_that_keep_the_order(placed, bounds):
+    message = _advice(_suction(placed))
+    assert bounds in message and "fs.add(ST-1, on=S1, at=...)" in message
+    assert _NUMBER.search(message) is None
+
+
+@pytest.mark.parametrize(
+    ("placed", "apart", "move"),
+    [({"HV-1": 0.99}, 45.0, "pin P-1 at least"), ({"HV-1": 0.9, "ST-1": 0.99}, 120.0, "move HV-1")],
+)
+def test_pinned_ends_with_no_room_name_what_to_move(placed, apart, move):
+    message = _advice(_suction(placed, apart))
+    assert move in message
+    assert _NUMBER.search(message) is None
 
 
 def test_a_valve_clear_of_the_arrowhead_is_not_reported():

@@ -1057,3 +1057,51 @@ def test_open_ends_have_a_single_port_each_way():
     assert U.Vent("V-1").inlet.direction == "inlet"
     assert set(U.Funnel("FN-1").ports) == {"outlet"}
     assert U.Funnel("FN-1").outlet.direction == "outlet"
+
+
+@pytest.mark.parametrize(("reference", "least"), [("", 42), ("P&ID-201", 48)])
+@pytest.mark.parametrize("cls", [U.Feed, U.Product])
+def test_a_flag_too_short_to_letter_is_refused_with_the_height_that_fits(
+    cls: type[U.Feed] | type[U.Product], reference: str, least: int
+) -> None:
+    """Check that a flag below its insets and lettering is refused, naming the height that fits."""
+    for short in (least - 1, 30):
+        with pytest.raises(ValueError, match=rf"X: a height of {short} .* give height={least} "):
+            cls("X", height=short, reference=reference)
+    assert cls("X", height=least, reference=reference).height == least
+
+
+def test_a_flag_height_or_reference_set_later_too_short_to_letter_is_refused_unchanged() -> None:
+    """Check that a later height or reference with no room to letter leaves the flag as it was."""
+    flag = U.Feed("X", height=45)
+    with pytest.raises(ValueError, match="give height=42 or more"):
+        flag.height = 30
+    with pytest.raises(ValueError, match="with a reference; give height=48 or more"):
+        flag.reference = "P&ID-201"
+    assert (flag.height, flag.reference) == (45, "")
+
+
+def test_setting_a_reference_after_a_render_reroutes_clear_of_the_taller_pennant() -> None:
+    """Check that a reference set after a render lays out and routes the sheet again."""
+    from pandid import Flowsheet
+    from pandid.portgeom import unit_box
+
+    fs = Flowsheet("two services")
+    air = fs.add(U.Feed("Air")).pin(x=300, y=200)
+    vessel = fs.add(U.Vessel("V-101")).pin(x=700, y=300)
+    feed = fs.add(U.Feed("Feed")).pin(x=100, y=188)
+    product = fs.add(U.Product("Product")).pin(x=500, y=188)
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.connect(air.outlet, vessel.inlet)
+    fs.to_svg()
+    air.reference = "PFD-302"
+    fs.to_svg()
+    frame, route = air.frame, line.route
+    assert frame is not None and route is not None
+    left, top, right, bottom = unit_box(air, frame)
+    points = route.waypoints
+    assert not any(
+        top < a[1] < bottom and min(a[0], b[0]) < right and max(a[0], b[0]) > left
+        for a, b in zip(points, points[1:])
+        if a[1] == b[1]
+    )
