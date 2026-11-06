@@ -801,8 +801,6 @@ class Flowsheet:
         # drawings it holds for the next route() or layout() are put back
         # only while that is unchanged.
         self._stated_then: tuple | None = None
-        # Whether balloons keep off lines drawn by hand while route() runs.
-        self._hand_held = False
         # The corner and nozzle faces of each balloon a via() line meets,
         # by id(), as the drawing the line was typed against has them.
         self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
@@ -2596,9 +2594,8 @@ class Flowsheet:
         line, nor, to hang a controller, its transmitter. Where any of
         these is kept, the next route() or layout() starts from the drawing
         before them, unless the author has stated a pin, ``via()`` route or
-        note position since; then it starts from the drawing shown and,
-        where nothing is laid out again, balloons keep off lines drawn by
-        hand. A controller hung beside its valve then stays there where a
+        note position since; then it starts from the drawing shown. A
+        controller hung beside its valve then stays there where a
         ``via()`` line meets it or its transmitter; any other is kept there
         only if the sheet so drawn passes the hang's terms against the
         sheet drawn without it. Then, where a line that found no path runs
@@ -2648,10 +2645,6 @@ class Flowsheet:
 
         if not self._in_route:
             self._hold_typed()
-        # Balloons keep off lines drawn by hand on the drawing shown, where
-        # the author has stated coordinates since and nothing is laid out
-        # again.
-        self._hand_held = not (self._unedited() or self._layout_stale)
         self._put_main()
         tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
         start = self._drawing() if tries and self._offers_family_faces() else None
@@ -2680,7 +2673,6 @@ class Flowsheet:
             self._in_route = outer
             if not outer:
                 self._stated_then = self._stated()
-                self._hand_held = False
 
     def _close_bands(self) -> None:
         """Close the empty bands across the drawing, kept only if no

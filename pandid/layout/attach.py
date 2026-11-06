@@ -661,9 +661,10 @@ def _typed_boxes(fs: "Flowsheet", units: "list[Unit]") -> dict[int, Box]:
 def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
-    A balloon held where a ``via()`` line met it stays there, and no
-    other balloon is placed over it or over a balloon pinned on both
-    axes. A controller route() hung beside
+    Each balloon keeps off the runs between the points of every
+    ``via()`` line that does not end at it. A balloon held where a
+    ``via()`` line met it stays there, and no other balloon is placed
+    over it or over a balloon pinned on both axes. A controller route() hung beside
     the valve it drives stays there while its attachment and that valve
     are unchanged. Balloons left unplaced are recorded in
     ``fs.unplaced_instruments``.
@@ -689,11 +690,12 @@ def place_attached(fs: "Flowsheet") -> bool:
                  if u.frame is not None and not is_attached(u)]
     mounted = fs._mounted_layout
     keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if mounted else 0.0)
-    # Runs of lines drawn by hand, each with the units it joins.
+    # Runs between the points of each line drawn by hand, with the units
+    # it joins.
     held = [((s.source.owner, s.dest.owner),
              (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
-            for s in fs.streams if fs._hand_held and s.route is not None and s.route.manual
-            for a, b in zip(stream_path(s), stream_path(s)[1:])]
+            for s in fs.streams if s.route is not None and s.route.manual
+            for a, b in zip(s.route.waypoints, s.route.waypoints[1:])]
     # Place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     typed = _typed_boxes(fs, pending)

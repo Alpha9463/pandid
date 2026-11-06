@@ -3314,6 +3314,51 @@ def test_a_measurement_line_frozen_on_a_bank_keeps_both_balloons_where_drawn():
     assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
 
 
+def test_a_signal_line_frozen_on_a_bank_stays_clear_over_five_routes():
+    """Freeze FIC-201's output with via() and route the bank five more times.
+
+    Each route exports the P&ID and draws no line through a unit.
+    """
+    fs, loops = _valved_bank(10)
+    line = loops[1].output
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    for _ in range(5):
+        fs.route()
+        fs.to_svg(diagram="p&id")
+
+        assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_line_drawn_by_hand_before_routing_is_kept_clear_on_every_route():
+    """Type a signal line across a transmitter's spot, then route three times.
+
+    The transmitter keeps off the line on each route, and each route draws the same.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("held line")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    product = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
+    fs.add_instrument("FT", 101).attach(fs.connect(feed.outlet, product.inlet), at=0.5)
+    first = fs.add_instrument("XI", 1).pin(x=100, y=213)
+    second = fs.add_instrument("XI", 2).pin(x=600, y=213)
+    fs.connect(first.sig_out, second.sig_in, kind="electric").via([(200, 235), (500, 235)])
+    drawn = []
+    for _ in range(3):
+        fs.route()
+        drawn.append(
+            (
+                [(frame_of(u).x, frame_of(u).y) for u in fs.units],
+                [stream_path(s) for s in fs.streams],
+            )
+        )
+
+        assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+    assert drawn[1] == drawn[0]
+    assert drawn[2] == drawn[0]
+
+
 @pytest.mark.parametrize("name", ["FT-202", "FIC-202"])
 def test_a_balloon_pinned_where_drawn_keeps_other_balloons_off_it(name: str):
     """Pin a balloon where a bank draws it, and route again.
