@@ -112,6 +112,13 @@ DEVICES = {
     top. ISO 10628-2 item 4.5 X8106.
 """),
 
+    # --- Silos -------------------------------------------------------
+    ("silo", "bunker"): ("Bunker", """Bunker: an open bin for bulk solids over a conical bottom.
+
+    ISO 10628-2 item 1.8, 2064. Solids enter over the west wall at
+    ``feed`` and leave the cone at ``discharge``.
+"""),
+
     # --- Kilns and calciners ------------------------------------------
     ("kiln", "default"): ("RotaryKiln", """Rotary kiln: a sloping, turning shell fired down its length."""),
     ("kiln", "fluidized_bed"): ("FluidizedBedCalciner", """Fluidised-bed calciner: solids held up in the firing gas.
@@ -417,6 +424,7 @@ STAYS_ON_BASE = {
     ("evaporator", "default"):
         "the general row: two tubesheets around a boxed element, no element chosen",
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",
+    ("silo", "default"): "Silo's own drawing (ISO item 1.9 X2062, the closed silo)",
     ("crystallizer", "default"): "Crystallizer's own drawing (the draft-tube baffle body)",
     ("flotation_cell", "default"): "FlotationCell's own drawing (the mechanical cell)",
     ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
