@@ -2886,10 +2886,10 @@ class Flowsheet:
             True if such a move is drawn.
         """
         from pandid.portgeom import family_faces
-        from pandid.units import _FaceFamilies
+        from pandid.units import _Families
 
         for u in self.units:
-            faces = family_faces(u, u.frame) if isinstance(u, _FaceFamilies) else None
+            faces = family_faces(u, u.frame) if isinstance(u, _Families) else None
             if faces and (not added or any(face not in u._offered(name, added=False)
                                            for name, face in faces.items())):
                 return True
@@ -2904,10 +2904,10 @@ class Flowsheet:
             True if some unit's symbol offers one to a port no author
             statement fixes.
         """
-        from pandid.units import _FaceFamilies
+        from pandid.units import _Families
 
         return any(
-            isinstance(u, _FaceFamilies)
+            isinstance(u, _Families)
             and any(len(u._offered(name)) > len(u._offered(name, added=False))
                     for name in u._faces
                     if u.ports[name].stream is not None and name not in u._stated)

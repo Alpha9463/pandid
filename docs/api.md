@@ -223,7 +223,22 @@ sheet has fewer bends or crossings and no new finding. The faces on offer:
 An inlet and an outlet on one wall are spread apart along it, the inlet
 above. A head, roof or cone drawn to a point takes one connection. Fix a face with a
 list, with `unit.nozzle("in_2", "N")`, or by pinning the nozzle with
-`unit.pin(port="in_2", x=..., y=...)`.
+`unit.pin(port="in_2", x=..., y=...)`. A list and the tables give the faces of
+the unit upright, which turn with it. On a `Tank` or `Vessel`, `nozzle()` names
+the face as drawn, so a turned or mirrored unit takes the face the reader sees;
+on a `Block` it names the box's own side.
+
+A reactor's, column's or separator's feeds and draws move the same way:
+
+| Unit | Feeds | Draws |
+|---|---|---|
+| `Reactor` | `"W"`; `"default"` and `"jacketed"` also `"N"`, one feed on the top head beside the drive | |
+| `Column` | `"W"`, `"E"` | `"E"`, `"W"` |
+| `Separator` | `"W"`; `"default"` and `"knockout"` also `"E"` | |
+
+A feed or draw on the opposite wall keeps its stage height, which must lie
+between the condenser and reboiler duty nozzles. Fix one with
+`column.nozzle("feed_2", "E")`, which names the face as drawn.
 
 Symbols whose function depends on gravity should keep their upright orientation.
 Validation reports `gravity-turned` when one is rotated away from it.

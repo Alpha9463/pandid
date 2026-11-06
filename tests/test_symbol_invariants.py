@@ -447,6 +447,25 @@ def test_every_port_placement_lies_on_the_drawing(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_every_further_face_of_a_series_lies_on_the_drawing(entry):
+    """Verify each face a port series also offers starts on ink."""
+    (kind, variant), sym = entry
+    further = [placed for series in sym.port_series for placed in series.also]
+    if not further or kind in _DYNAMIC_KINDS:
+        return
+    segments = _collect_segments(sym.svg)
+    for placed in further:
+        for count in (1, 2):
+            for index in range(count if placed.extent else 1):
+                x, y = placed.placement(index, count, sym.width, sym.height)
+                d = _nearest_distance((x, y), segments)
+                assert d <= GEOM_TOL, (
+                    f"{kind}/{variant} {placed.prefix}* on {placed.face} at ({x}, {y}) is "
+                    f"{d:.1f}u from the nearest drawn stroke"
+                )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_no_two_ports_coincide(entry):
     """Verify distinct ports do not share coordinates."""
     (kind, variant), sym = entry
