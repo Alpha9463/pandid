@@ -426,7 +426,7 @@ def _standoff_box(tap: Point, ref: Point, distance: float, angle: float,
 
 
 def pinned_axes(fs: "Flowsheet | None") -> tuple[bool, bool]:
-    """Return whether a unit on a sheet is pinned on x, and on y.
+    """Return the axes balloons keep to the sheet on: x, and y.
 
     Parameters
     ----------
@@ -436,10 +436,13 @@ def pinned_axes(fs: "Flowsheet | None") -> tuple[bool, bool]:
     Returns
     -------
     tuple[bool, bool]
-        Whether any unit has an ``x`` pin, and whether any has a ``y``
-        pin; both False without a sheet.
+        While route() keeps balloons on the sheet, whether any unit has
+        an ``x`` pin, and whether any has a ``y`` pin; both False
+        otherwise or without a sheet.
     """
-    pins = [u._pin for u in fs.units if u._pin is not None] if fs is not None else []
+    if fs is None or not fs._on_sheet:
+        return False, False
+    pins = [u._pin for u in fs.units if u._pin is not None]
     return any(p.x is not None for p in pins), any(p.y is not None for p in pins)
 
 
@@ -454,7 +457,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     A balloon whose requested box straddles its stream tap keeps it. No
     candidate's box, moved to the balloon's pin, may come within
     ``clearance`` of ``runs``, or reach past the sheet's top or left edge
-    on an axis a unit is pinned on.
+    on an axis :func:`pinned_axes` names.
 
     Parameters
     ----------

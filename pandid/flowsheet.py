@@ -804,6 +804,9 @@ class Flowsheet:
         # The corner and nozzle faces of each balloon a via() line meets,
         # by id(), as the drawing the line was typed against has them.
         self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
+        # Whether balloons keep to the sheet on each axis a unit is pinned
+        # on.
+        self._on_sheet = False
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -2675,6 +2678,7 @@ class Flowsheet:
                 else:
                     self._put_drawing(mains)
             if tries and self._auto_laid:
+                self._keep_on_sheet(router or DefaultRouter())
                 self._close_bands()
         finally:
             self._in_route = outer
@@ -3080,6 +3084,70 @@ class Flowsheet:
             stale = self._layout_stale
             self._put_state(held)
             self._layout_stale = stale
+
+    def _keep_on_sheet(self, router) -> bool:
+        """Place each balloon drawn past the sheet's top or left edge, on an
+        axis a unit is pinned on, again on the sheet, holding every other
+        balloon where it is drawn, kept only if fewer units are drawn past
+        the edge, no tap leaves its line and nothing route() is judged by
+        grows.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+
+        Returns
+        -------
+        bool
+            Whether the new places are kept.
+        """
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, pinned_axes
+        from pandid.layout.control import _taps_off, place_control
+        from pandid.layout.stages import is_control
+        from pandid.routing.lanes import _score
+
+        held, self._on_sheet = self._typed_at, True
+        try:
+            px, py = pinned_axes(self)
+
+            def off() -> list[Unit]:
+                """Return the units drawn past an edge balloons keep to.
+
+                Returns
+                -------
+                list[Unit]
+                    Each such unit.
+                """
+                return [u for u in self.units if u.frame is not None
+                        and ((px and u.frame.x < 0.0) or (py and u.frame.y < 0.0))]
+
+            loose = off()
+            if not any(is_control(u) for u in loose):
+                return False
+            prior, unplaced = self._geometry(), list(self.unplaced_instruments)
+            before, taps = _score(self), _taps_off(self)
+            self._typed_at = {**held, **{id(u): (u.frame.x, u.frame.y, dict(u.frame.port_faces))
+                                         for u in self.units if is_control(u) and u not in loose
+                                         and u.frame is not None and u.pin_ is None}}
+            try:
+                self.route_converged = False
+                for _ in range(MAX_PLACEMENT_PASSES):
+                    if not place_control(self):
+                        self.route_converged = True
+                        break
+                    router.route(self)
+                new = _score(self)
+                kept = (len(off()) < len(loose) and new[1] <= taps
+                        and not any(n > before[0][k] for k, n in new[0].items()))
+            except Exception:
+                kept = False
+        finally:
+            self._typed_at, self._on_sheet = held, False
+        if not kept:
+            self._put_geometry(prior, keep_manual=False)
+            self.unplaced_instruments = unplaced
+        return kept
 
     def _keep_further_off(self, router) -> bool:
         """Place each balloon hung from a balloon an arrowhead clear of its

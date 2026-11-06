@@ -1209,6 +1209,19 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     # --- geometric checks (need resolved frames) ---
     placed = [u for u in fs.units if u.frame is not None]
     if placed:
+        # Soft: a unit drawn past the sheet's top or left edge.
+        for u in placed:
+            past = [(edge, axis, v) for edge, axis, v in (("left", "x", u.frame.x),
+                                                          ("top", "y", u.frame.y)) if v < 0]
+            if past:
+                where = " and ".join(f"{axis}={v:g}, past the sheet's {edge} edge"
+                                     for edge, axis, v in past)
+                warnings.append(Issue(
+                    "warning", "unit-off-sheet",
+                    f"{u.name} is drawn at {where}, where no pin can put it, so it "
+                    f"cannot be pinned where it is drawn. The units pinned near that "
+                    f"edge leave it no room on the sheet: pin it on the sheet with "
+                    f"{u.name}.pin(x=..., y=...), or pin them further from the edge"))
         # Soft: a placement the sheet did not honour.
         for u in placed:
             missed: list[str] = []

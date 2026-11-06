@@ -438,3 +438,40 @@ def test_a_unit_pinned_where_drawn_moves_nothing_on_later_routes(stem: str, name
         fs.route()
 
         assert _boxes(fs) == before
+
+
+def _vessel_at_the_top(face: str, count: int) -> Flowsheet:
+    """Return a vessel pinned at the sheet's top edge with balloons on one face."""
+    fs = Flowsheet("vessel")
+    vessel = fs.add(U.Vessel("V-101").pin(x=300, y=0))
+    pump = fs.add(U.Pump("P-101"))
+    fs.connect(fs.add(U.Feed("Feed")).outlet, vessel.inlet)
+    fs.connect(vessel.outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Product("Product")).inlet)
+    for k in range(count):
+        fs.add_instrument(["PI", "TI", "LI", "AI"][k], 101 + k, sensing=vessel, face=face)
+    fs.route()
+    return fs
+
+
+def test_a_balloon_kept_on_the_sheet_draws_no_tap_through_another() -> None:
+    """Check that a balloon moved on the sheet shares no tap and draws none through a balloon."""
+    from pandid.layout.control import _flaws
+
+    fs = _vessel_at_the_top("E", 2)
+    flaws = _flaws(fs)
+
+    assert (flaws["tap-through-unit"], flaws["line-on-line"]) == (0, 0)
+    assert [u.name for u in fs.units if frame_of(u).y < 0] == []
+    assert fs.to_svg(diagram="p&id")
+
+
+def test_a_balloon_left_off_the_sheet_is_reported_and_draws() -> None:
+    """Check that a balloon no clear spot on the sheet takes is reported, and the sheet draws."""
+    fs = _vessel_at_the_top("W", 4)
+    off = sorted(u.name for u in fs.units if frame_of(u).y < 0)
+
+    assert off == ["AI-104", "LI-103"]
+    assert sorted(i.message.split()[0] for i in fs.validate() if i.code == "unit-off-sheet") == off
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+    assert fs.to_svg(diagram="p&id")

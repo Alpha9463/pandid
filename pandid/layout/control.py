@@ -258,8 +258,9 @@ def _actuator_spots(valve: "Unit", w: float, h: float,
 
     The balloon stands :data:`ACTUATOR_OFFSET` out from the actuator,
     square to its face, and steps out and swings as an attached balloon
-    does, at each place clear of every blocked box and, on an axis a
-    unit is pinned on, of the sheet's top or left edge.
+    does, at each place clear of every blocked box and, on an axis
+    :func:`~pandid.layout.attach.pinned_axes` names, of the sheet's top
+    or left edge.
 
     Parameters
     ----------
@@ -373,11 +374,12 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     Returns
     -------
     Counter[str]
-        Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, line segments through units other than
-        balloons on that line and the end of a line leaving its own
-        nozzle straight out of the face, tap lines through units or tag
-        halos, and runs two lines or tap lines share.
+        Each validate() finding by code but ``unit-off-sheet``, plus
+        units on tag halos, lines through tag halos, line segments
+        through units other than balloons on that line and the end of a
+        line leaving its own nozzle straight out of the face, tap lines
+        through units or tag halos, and runs two lines or tap lines
+        share.
     """
     from collections import Counter
 
@@ -424,7 +426,7 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         """
         return any(segment_crosses_box(a, b, box) for a, b in zip(points, points[1:]))
 
-    flaws = Counter(i.code for i in fs.validate())
+    flaws = Counter(i.code for i in fs.validate() if i.code != "unit-off-sheet")
     halos = _halos(fs)
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     flaws["unit-on-tag"] = sum(boxes_overlap(box, h, -_BODY_TOL)
