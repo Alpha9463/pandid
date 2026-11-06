@@ -4853,8 +4853,10 @@ class _SeriesFamilies(_Families):
         except ValueError as exc:
             return str(exc)
         sym = self._series_symbol()
+        if sym is None:
+            return None
         for name, face in faces.items():
-            series = sym.series_for(name) if sym is not None else None
+            series = sym.series_for(name)
             pin = self._series_pin(name)
             if series is None or face == series.face or pin is None:
                 continue
@@ -4921,7 +4923,7 @@ class _SeriesFamilies(_Families):
         """
         canonical = self._canonical_port_name(port_name)
         if canonical not in self._faces:
-            return Unit.nozzle(self, port_name, face)
+            return super().nozzle(port_name, face)
         resolved = _block_face(face, self.name)
         offered = self._offered(canonical)
         if resolved not in offered:

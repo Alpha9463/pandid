@@ -260,7 +260,8 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
         coords = list(menu.values())
     elif (placed := _series_point(unit, sym, port_name)) is not None:
         coords = [placed]
-        declared = sym.series_for(port_name).face
+        series = sym.series_for(port_name)
+        declared = series.face if series is not None else None
     else:
         # An unanchored port falls back to the symbol's centre.
         coords = [sym.ports.get(anchor, (sym.width / 2, sym.height / 2))]
