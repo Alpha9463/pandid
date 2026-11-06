@@ -4150,10 +4150,8 @@ class SvgRenderer:
         is kept.
 
         Given ``labels``, the tag then also tries every side, free sides
-        first, sliding until its near end reaches the corner. It takes
-        the spot that erases least, then covers fewest labels, among
-        those that erase no more symbols, impulse lines or pipes than
-        the first placement.
+        first, sliding until its near end reaches the corner, and takes
+        the spot that erases least, then covers fewest labels.
 
         Parameters
         ----------
@@ -4242,7 +4240,7 @@ class SvgRenderer:
             for sx, sy in _slide(lx, ly, (face + along) / 2, edgewise):
                 spot = (sx, sy, anchor, baseline, side, tag)
                 cost = score(spot)
-                if cost < least and all(a <= b for a, b in zip(cost, damage)):
+                if cost < least:
                     best, least = spot, cost
                     if least == (0, 0, 0, 0):
                         break
