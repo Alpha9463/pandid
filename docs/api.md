@@ -225,6 +225,18 @@ above. A head, roof or cone drawn to a point takes one connection. Fix a face wi
 list, with `unit.nozzle("in_2", "N")`, or by pinning the nozzle with
 `unit.pin(port="in_2", x=..., y=...)`.
 
+A reactor's, column's or separator's feeds and draws move the same way:
+
+| Unit | Feeds | Draws |
+|---|---|---|
+| `Reactor` | `"W"`; `"default"` and `"jacketed"` also `"N"`, one feed on the top head beside the drive | |
+| `Column` | `"W"`, `"E"` | `"E"`, `"W"` |
+| `Separator` | `"W"`; `"default"` and `"knockout"` also `"E"` | |
+
+A feed or draw on the opposite wall keeps its stage height, which must lie
+between the reflux and boil-up duty nozzles. Fix one with
+`column.nozzle("feed_2", "E")`.
+
 Symbols whose function depends on gravity should keep their upright orientation.
 Validation reports `gravity-turned` when one is rotated away from it.
 

@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upright `Vessel` takes its inlet on either wall or the top head and its outlet
   on either wall: `Tank("TK-1").nozzle("outlet", "E")`. A counted one moves
   there toward its peer where that draws fewer bends.
+- A `Reactor` takes a feed on its top head beside the drive, a `Column` its
+  feeds and draws on either wall at their stage height, and an upright
+  `Separator` its feeds on either wall: `Reactor("R-1").nozzle("feed", "N")`.
+  Layout moves one there toward its peer where that draws fewer bends.
 
 ### Changed
 
