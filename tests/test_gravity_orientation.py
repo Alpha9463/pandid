@@ -217,6 +217,8 @@ GRAVITY_FIXED = {
     ("kiln", "fluidized_bed"),
     ("kiln", "shaft"),
     ("thickener", "default"),
+    ("silo", "default"),
+    ("silo", "bunker"),
     ("flotation_cell", "default"),
 }
 

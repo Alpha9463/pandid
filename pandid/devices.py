@@ -26,6 +26,7 @@ from pandid.units import (
     Reactor,
     ScreeningDevice,
     Separator,
+    Silo,
     Tank,
     Valve,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "ClimbingFilmEvaporator",
     "PlateEvaporator",
     "CombustionChamber",
+    "Bunker",
     "RotaryKiln",
     "FluidizedBedCalciner",
     "ShaftKiln",
@@ -539,6 +541,23 @@ class CombustionChamber(Furnace):
     inlet: Port
     outlet: Port
     fuel: Port
+
+
+class Bunker(Silo):
+    """Bunker: an open bin for bulk solids over a conical bottom.
+
+    ISO 10628-2 item 1.8, 2064. Solids enter over the west wall at
+    ``feed`` and leave the cone at ``discharge``.
+
+    Parameters are those of :class:`~pandid.units.Silo`.
+    """
+
+    VARIANTS = ("default", "bunker")
+    VARIANT_ALIASES = {"default": "bunker"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
 
 
 class RotaryKiln(Kiln):

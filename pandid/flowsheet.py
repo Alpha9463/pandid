@@ -6,6 +6,7 @@ A flowsheet also lays out, routes, validates and renders its drawing.
 from __future__ import annotations
 import copy
 from contextlib import contextmanager
+from dataclasses import replace
 from math import isfinite
 from numbers import Integral
 from pathlib import Path
@@ -223,6 +224,35 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
             f"its other arguments: Flowsheet(..., line_numbering_scheme={wider!r})"
         )
     return line_number
+
+
+def _numbered(run: "list[Stream]") -> "Stream | None":
+    """Return the stream a run's line number is formed from.
+
+    The first segment that states a field other than the sequence
+    carries the number, with the first sequence the author set on any
+    segment; a run that states only a sequence is numbered by the first
+    segment that states it.
+
+    Parameters
+    ----------
+    run : list[Stream]
+        Segments of one line, in sheet order.
+
+    Returns
+    -------
+    Stream or None
+        The carrier, a copy of it holding the run's sequence, or
+        ``None`` when the run states no line-number field.
+    """
+    carrier = next((s for s in run if any(getattr(s, f) not in (None, "") for f in _LINE_FIELDS)),
+                   None)
+    sequenced = next((s for s in run if s.sequence not in (None, "", s._auto_sequence)), None)
+    if carrier is None or sequenced is None:
+        return carrier if carrier is not None else sequenced
+    if carrier.sequence not in (None, "", carrier._auto_sequence):
+        return carrier
+    return replace(carrier, sequence=sequenced.sequence)
 
 
 def _unused_fields(scheme: str, stream: Stream) -> "dict[str, str | float]":
@@ -3279,7 +3309,7 @@ class Flowsheet:
             # An explicit name on any segment names its whole group.
             name = next((s.name for s in group if not s.auto_named), None)
             if name is None:
-                carrier = next((s for s in group if s.has_line_number), None)
+                carrier = _numbered(group)
                 name = (_format_line_number(self.line_numbering_scheme, carrier)
                         if carrier is not None else
                         _format_stream_name(self.stream_naming_scheme, number))
