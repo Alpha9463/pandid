@@ -118,9 +118,9 @@ These are removed in 0.4.0.
 - Where no clear side or spot beside its valve takes a balloon's signal line out
   of a unit for free, `route()` takes it out at a cost of at most two more line
   crossings or runs along units, and no other finding.
-- After `pin()`, `nozzle()`, `attach()` or `via()` on a routed sheet, the next
-  `route()` starts from the drawing shown, so a line drawn by hand to a
-  controller `route()` hung beside its valve still meets it there.
+- After `pin()` or `via()` on a routed sheet, the next `route()` starts from the
+  drawing shown, so a line drawn by hand to a controller `route()` hung beside
+  its valve still meets it there.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.

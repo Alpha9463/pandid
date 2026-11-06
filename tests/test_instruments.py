@@ -3220,44 +3220,50 @@ def test_a_line_frozen_from_a_controller_beside_its_valve_keeps_its_points():
     assert _drawn_wrong(fs, line) == []
 
 
-def test_a_transmitter_pinned_where_drawn_keeps_the_controller_beside_its_valve():
-    """Pin FT-201 where a bank draws it and route again.
-
-    FIC-201 keeps its place off FV-11, and its lines stay clear of units.
-    """
-    fs, loops = _valved_bank(10)
-    controller, transmitter = loops[1].controller, loops[1].transmitter
-    valve = next(u for u in fs.units if u.name == "FV-11")
-
-    def off_valve() -> tuple[float, float]:
-        """Return FIC-201's corner from FV-11's."""
-        return (
-            frame_of(controller).x - frame_of(valve).x,
-            frame_of(controller).y - frame_of(valve).y,
-        )
-
-    drawn = off_valve()
-    transmitter.pin(x=frame_of(transmitter).x, y=frame_of(transmitter).y)
-    fs.route()
-
-    assert off_valve() == pytest.approx(drawn)
-    assert [m for s in (loops[1].measurement, loops[1].output) for m in _drawn_wrong(fs, s)] == []
+def _edit_bank(fs: Flowsheet, loops: list[ControlLoop], edit: str) -> None:
+    """State one thing more on a routed bank, as an author editing it would."""
+    units = {u.name: u for u in fs.units}
+    transmitter = loops[1].transmitter
+    if edit == "pin transmitter":
+        transmitter.pin(x=300, y=110)
+    elif edit == "pin valve":
+        units["FV-11"].pin(x=430, y=230)
+    elif edit == "pin pump":
+        units["P-1"].pin(x=560, y=200)
+    elif edit == "nozzle on valve":
+        units["FV-11"].nozzle("actuator", "N")
+    else:
+        assert transmitter.host is not None
+        transmitter.attach(transmitter.host, at=0.3)
 
 
-@pytest.mark.parametrize(("at", "offset"), [(0.3, 45.0), (0.5, 70.0)])
-def test_a_transmitter_moved_along_its_line_keeps_the_controller_beside_its_valve(
-    at: float, offset: float
+@pytest.mark.parametrize(
+    "edit", ["pin transmitter", "pin valve", "pin pump", "nozzle on valve", "attach transmitter"]
+)
+def test_an_edit_after_a_controller_hangs_beside_its_valve_draws_no_line_through_a_unit(
+    edit: str,
 ):
-    """Attach FT-201 at another at= or offset= after its controller was hung beside FV-11.
+    """Route a bank, state a pin, nozzle face or attachment, and route again.
 
-    FIC-201 stays where it was drawn, and its lines stay clear of units.
+    The P&ID exports, and no line is drawn through a unit.
     """
     fs, loops = _valved_bank(10)
-    controller, transmitter = loops[1].controller, loops[1].transmitter
-    drawn = frame_of(controller)
-    assert transmitter.host is not None
-    transmitter.attach(transmitter.host, at=at, offset=offset)
+    assert fs._beside
+    _edit_bank(fs, loops, edit)
     fs.route()
+    fs.to_svg(diagram="p&id")
 
-    assert (frame_of(controller).x, frame_of(controller).y) == pytest.approx((drawn.x, drawn.y))
-    assert [m for s in (loops[1].measurement, loops[1].output) for m in _drawn_wrong(fs, s)] == []
+    assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
+    """State a nozzle face and an attachment on a routed bank.
+
+    Neither changes what route() reads as coordinates typed against the drawing.
+    """
+    fs, loops = _valved_bank(10)
+    stated = fs._stated()
+    _edit_bank(fs, loops, "nozzle on valve")
+    _edit_bank(fs, loops, "attach transmitter")
+
+    assert fs._stated() == stated

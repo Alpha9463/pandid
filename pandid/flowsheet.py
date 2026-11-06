@@ -2591,11 +2591,13 @@ class Flowsheet:
         Neither step turns or moves a balloon at an end of a ``via()``
         line, nor, to hang a controller, its transmitter. Where any of
         these is kept, the next route() or layout() starts from the drawing
-        before them, unless the author has stated a pin, nozzle face,
-        balloon attachment, ``via()`` route or note position since; then it
-        starts from the drawing shown, a controller hung beside its valve
-        stays there and, where nothing is laid out again, balloons keep off
-        lines drawn by hand. Then, where a line that found no path runs
+        before them, unless the author has stated a pin, ``via()`` route or
+        note position since; then it starts from the drawing shown and,
+        where nothing is laid out again, balloons keep off lines drawn by
+        hand. A controller hung beside its valve then stays there where a
+        ``via()`` line meets it or its transmitter; any other is kept there
+        only if the sheet so drawn passes the hang's terms against the
+        sheet drawn without it. Then, where a line that found no path runs
         through a unit, the sheet is routed again with each such line drawn
         round the units in its way where a clear route exists, kept only if
         no tap leaves its line and no finding, clash, crossing or fallback
@@ -2606,8 +2608,8 @@ class Flowsheet:
         that started, with family faces as well, and drawn in full only if
         a move takes one. That drawing is kept only if it beats the first;
         either way the next route() or layout() starts from the first,
-        unless the author has stated a pin, nozzle face, balloon
-        attachment, ``via()`` route or note position since.
+        unless the author has stated a pin, ``via()`` route or note
+        position since.
 
         Last, with the default router and layout engine, each band across
         the drawing that holds no unit, tag, package frame, annotation
@@ -2621,9 +2623,9 @@ class Flowsheet:
         if no crossing, bend, fallback, finding or clash grows, no tap
         leaves its line and nothing more is drawn over a placed
         annotation. The next route() or layout() starts from the drawing
-        before it, unless the author has stated a pin, nozzle face,
-        balloon attachment, ``via()`` route or note position since; then
-        it starts from the closed drawing those were read against.
+        before it, unless the author has stated a pin, ``via()`` route or
+        note position since; then it starts from the closed drawing those
+        were read against.
 
         Parameters
         ----------
@@ -2709,23 +2711,16 @@ class Flowsheet:
             self._plain_stale = False
 
     def _stated(self) -> tuple:
-        """Return every drawing coordinate and face the author has stated.
+        """Return every drawing coordinate the author has stated.
 
         Returns
         -------
         tuple
-            Each pinned unit's pin and the nozzles it places, each unit's
-            nozzle faces, each balloon's attachment, each manual route's
-            waypoints and each placed annotation's position.
+            Each pinned unit's pin and the nozzles it places, each manual
+            route's waypoints and each placed annotation's position.
         """
-        from pandid.layout.attach import _attachment
-        from pandid.units import Instrument
-
         return (tuple((u, copy.copy(u._pin), dict(u._pin_ports)) for u in self.units
                       if u._pin is not None),
-                tuple((u, dict(u._port_faces)) for u in self.units if u._port_faces),
-                tuple((u, _attachment(u)) for u in self.units
-                      if isinstance(u, Instrument) and u.host is not None),
                 tuple((s, tuple(s.route.waypoints)) for s in self.streams
                       if s.route is not None and s.route.manual),
                 tuple((a, a.position) for a in self.annotations
@@ -2757,6 +2752,7 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
+        from pandid.layout.control import _out_of_unit, _taps_off
         from pandid.routing import DefaultRouter
 
         self._put_unkept()
@@ -2765,6 +2761,45 @@ class Flowsheet:
         if held is not None and not (self._layout_stale
                                      or any(u.frame is None for u in self.units)):
             self._put_state(held)
+        # A controller an earlier route() hung beside its valve stays there
+        # while a via() line meets it or its transmitter.
+        units = {id(u): u for u in self.units}
+        drawn = {k: v for k, v in self._beside.items() if k in units
+                 and _by_hand([units[k], getattr(units[k], "host", None) or units[k]])}
+        if (drawn == self._beside or self._laying_out
+                or not (router is None or type(router) is DefaultRouter)):
+            self._route_stepped(router)
+            return
+        # Keep the rest only where they draw as their hang step requires
+        # against the drawing without them.
+        start = self._drawing()
+        self._route_stepped(router)
+        hung, counts, off = self._drawing(), self._counted_flaws(), _taps_off(self)
+        self._put_drawing(start)
+        self._beside = drawn
+        self._route_stepped(router)
+        fresh = self._counted_flaws()
+        if off <= _taps_off(self) and (not any(n > fresh[k] for k, n in counts.items())
+                                       or _out_of_unit(fresh, counts)):
+            self._put_drawing(hung)
+
+    def _route_stepped(self, router=None) -> None:
+        """Route the sheet, then run the steps that judge each change.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.routing import DefaultRouter
+
         self._route_faces(router)
         if ((self._stack_spans or self._rows_out or self._tees_away) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
@@ -2960,8 +2995,8 @@ class Flowsheet:
 
     def _put_unkept(self) -> None:
         """Put back the state held from before balloons were kept further off
-        or moved clear, unless the author has stated drawing coordinates or
-        faces since.
+        or moved clear, unless the author has stated drawing coordinates
+        since.
 
         Whether the layout is stale is kept as it stands.
         """
@@ -3139,8 +3174,8 @@ class Flowsheet:
 
     def _put_main(self) -> None:
         """Put back main's drawing held behind a family-face or closed-band
-        drawing, unless the author has stated drawing coordinates or faces
-        since route().
+        drawing, unless the author has stated drawing coordinates since
+        route().
 
         Whether the layout and routes are stale is kept as it stands.
         """
