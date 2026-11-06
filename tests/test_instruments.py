@@ -2879,7 +2879,9 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
         ), (tt.name, tt.tap, points)
 
 
-def _valved_bank(first_tag: int) -> tuple[Flowsheet, list[ControlLoop]]:
+def _valved_bank(
+    first_tag: int, controller_face: str | None = None
+) -> tuple[Flowsheet, list[ControlLoop]]:
     """Route three pumps in parallel, each with a flow loop on its valved suction line."""
     from pandid.devices import ControlValve
 
@@ -2895,7 +2897,9 @@ def _valved_bank(first_tag: int) -> tuple[Flowsheet, list[ControlLoop]]:
         fs.connect(pump.discharge, inlet)
         pairs.append((line, fs.add(ControlValve(f"FV-{first_tag + i}"), on=line, at=0.5)))
     loops = [
-        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve)
+        fs.add_control_loop(
+            "F", 200 + i, measuring=line, acting_on=valve, controller_face=controller_face
+        )
         for i, (line, valve) in enumerate(pairs)
     ]
     fs.route()
@@ -2988,3 +2992,43 @@ def test_a_hand_drawn_line_into_a_blocked_nozzle_keeps_its_face():
     assert line.route is not None
     assert line.route.waypoints == points
     assert [m for m in _drawn_wrong(fs, line) if "slant" in m] == []
+
+
+@pytest.mark.parametrize("first_tag", [10, 20, 50, 99])
+def test_a_controller_with_no_clear_side_hangs_beside_its_valve(first_tag: int):
+    """Draw FT-201's line to FIC-201 clear of units where no side of FIC-201 is clear by FT-201.
+
+    The line takes no fallback path and crosses no unit.
+    """
+    fs, loops = _valved_bank(first_tag)
+    line = loops[1].measurement
+
+    assert line.route is not None and not line.route.used_fallback
+    assert _drawn_wrong(fs, line) == []
+
+
+def test_a_controller_hung_beside_its_valve_stays_clear_over_repeated_routes():
+    """Route a bank three times; FIC-201's lines stay clear of units each time.
+
+    Neither line takes a fallback path or crosses a unit after each route().
+    """
+    fs, loops = _valved_bank(10)
+    lines = [loops[1].measurement, loops[1].output]
+    for again in (False, True, True):
+        if again:
+            fs.route()
+
+        assert [s.name for s in lines if s.route is None or s.route.used_fallback] == []
+        assert [m for s in lines for m in _drawn_wrong(fs, s)] == []
+
+
+def test_a_controller_on_a_stated_face_is_not_hung_beside_its_valve():
+    """Leave a controller hung from the transmitter face its author stated.
+
+    No spot beside its valve is offered.
+    """
+    from pandid.layout.control import _beside_valve
+
+    fs, loops = _valved_bank(10, controller_face="E")
+
+    assert [list(_beside_valve(fs, loop.controller)) for loop in loops] == [[], [], []]
