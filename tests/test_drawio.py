@@ -19,7 +19,7 @@ from _render_cases import _script, copy_settled_case
 from test_crossing_style import _ARC, MARKED, _paths
 from _layout_cases import overlaps
 import pandid
-from pandid import units
+from pandid import devices, units
 from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import (
@@ -2876,3 +2876,89 @@ def test_an_annotation_of_empty_rows_exports() -> None:
     fs.annotations.append(Annotation(title="NOTES", rows=[(), ()]))
 
     ET.fromstring(fs.to_drawio(check=False))
+
+
+# Drawings exported as their own outline.
+
+
+def _stencil_svg(stencil: ET.Element) -> str:
+    """Return the SVG a decoded draw.io stencil's foreground draws."""
+    out = []
+    foreground = stencil.find("foreground")
+    assert foreground is not None
+    for el in foreground:
+        if el.tag == "path":
+            d = []
+            for step in el:
+                at = f"{step.get('x')} {step.get('y')}"
+                if step.tag == "move":
+                    d.append(f"M {at}")
+                elif step.tag == "line":
+                    d.append(f"L {at}")
+                elif step.tag == "arc":
+                    d.append(
+                        f"A {step.get('rx')} {step.get('ry')} {step.get('x-axis-rotation')} "
+                        f"{step.get('large-arc-flag')} {step.get('sweep-flag')} {at}"
+                    )
+                elif step.tag == "close":
+                    d.append("Z")
+            out.append(f'<path d="{" ".join(d)}"/>')
+        elif el.tag == "rect":
+            out.append(
+                f'<rect x="{el.get("x")}" y="{el.get("y")}" '
+                f'width="{el.get("w")}" height="{el.get("h")}"/>'
+            )
+        elif el.tag == "ellipse":
+            rx, ry = float(el.get("w", "0")) / 2, float(el.get("h", "0")) / 2
+            cx, cy = float(el.get("x", "0")) + rx, float(el.get("y", "0")) + ry
+            out.append(f'<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}"/>')
+    return f"<g>{''.join(out)}</g>"
+
+
+def _rounded(segments) -> list:
+    """Return segments as sorted, direction-free pairs of rounded points."""
+    return sorted(
+        tuple(sorted((round(x, 2), round(y, 2)) for x, y in segment)) for segment in segments
+    )
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: units.Silo("SI-1"),
+        lambda: devices.Bunker("BN-1"),
+        lambda: units.Crystallizer("CR-1"),
+        lambda: units.FlotationCell("FC-1"),
+        lambda: units.Blower("B-1", variant="general"),
+        lambda: devices.CentrifugalFan("K-1"),
+        lambda: devices.AxialFan("K-2"),
+        lambda: units.Furnace("F-1", variant="general"),
+        lambda: devices.CombustionChamber("FH-1"),
+    ],
+    ids=[
+        "silo",
+        "bunker",
+        "crystallizer",
+        "flotation_cell",
+        "fan",
+        "centrifugal",
+        "axial",
+        "furnace",
+        "combustion_chamber",
+    ],
+)
+def test_a_drawing_exported_as_its_outline_traces_the_sheets_artwork(build):
+    """Check that each own-outline drawing's draw.io stencil draws the SVG body's geometry."""
+    from test_symbol_invariants import _collect_segments
+
+    unit = build()
+    assert (unit.kind, unit.variant) in OWN_OUTLINE
+    fs = Flowsheet("outline")
+    fs.add(unit)
+    cell = next(c for c in _model(fs, check=False).iter("mxCell") if c.get("value") == unit.name)
+    stencil = _inline_stencil(_style(cell).get("shape", ""))
+    assert stencil is not None, f"{unit.name} exports as a box, not its outline"
+    body = default_registry.get(unit.kind, unit.variant)
+    assert _rounded(_collect_segments(_stencil_svg(stencil))) == _rounded(
+        _collect_segments(body.svg)
+    )

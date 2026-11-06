@@ -245,9 +245,10 @@ def drawio_stencil(svg: str, width: float, height: float,
     """Return a draw.io inline stencil drawing an artwork's outlines.
 
     The artwork's paths, of ``M``, ``L``, ``A`` and ``Z`` commands in
-    absolute coordinates, and its rectangles become the stencil's own
-    geometry, so draw.io draws them as placed rather than stretching a
-    library shape.
+    absolute coordinates, and its rectangles, circles and lines become
+    the stencil's own geometry, so draw.io draws them as placed rather
+    than stretching a library shape. Each keeps its stroke width as a
+    fraction of the artwork's widest.
 
     Parameters
     ----------
@@ -264,12 +265,27 @@ def drawio_stencil(svg: str, width: float, height: float,
         A ``stencil(...)`` shape name for a cell's style.
     """
     dx, dy = offset
-    out = []
-    for tag, attrs in re.findall(r"<(path|rect)\b([^>]*?)/?>", svg):
+    base = max((float(w) for w in re.findall(r'stroke-width="([\d.]+)"', svg)), default=1.0)
+    out, drawn = [], 1.0
+    for tag, attrs in re.findall(r"<(path|rect|circle|line)\b([^>]*?)/?>", svg):
         a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
+        weight = float(a.get("stroke-width", base)) / base
+        if weight != drawn:
+            out.append(f'<strokewidth width="{fmt(weight, 4)}"/>')
+            drawn = weight
         if tag == "rect":
             out.append(f'<rect x="{fmt(float(a["x"]) + dx, 4)}" y="{fmt(float(a["y"]) + dy, 4)}" '
                        f'w="{fmt(float(a["width"]), 4)}" h="{fmt(float(a["height"]), 4)}"/>')
+        elif tag == "circle":
+            r = float(a["r"])
+            out.append(f'<ellipse x="{fmt(float(a["cx"]) - r + dx, 4)}" '
+                       f'y="{fmt(float(a["cy"]) - r + dy, 4)}" '
+                       f'w="{fmt(2 * r, 4)}" h="{fmt(2 * r, 4)}"/>')
+        elif tag == "line":
+            out.append(f'<path><move x="{fmt(float(a["x1"]) + dx, 4)}" '
+                       f'y="{fmt(float(a["y1"]) + dy, 4)}"/>'
+                       f'<line x="{fmt(float(a["x2"]) + dx, 4)}" '
+                       f'y="{fmt(float(a["y2"]) + dy, 4)}"/></path>')
         else:
             steps, tokens = [], a["d"].replace(",", " ").split()
             i = 0
@@ -372,7 +388,12 @@ HOP_DROPPED = "drawio-hop-dropped"
 _BALLOON_FILL = "#ffffff"
 
 #: Drawings exported as an inline stencil of their own outline.
-OWN_OUTLINE = frozenset({("silo", "default"), ("silo", "bunker")})
+OWN_OUTLINE = frozenset({
+    ("silo", "default"), ("silo", "bunker"),
+    ("crystallizer", "default"), ("flotation_cell", "default"),
+    ("blower", "general"), ("blower", "centrifugal"), ("blower", "axial"),
+    ("furnace", "general"), ("furnace", "combustion_chamber"),
+})
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
@@ -436,10 +457,6 @@ _APPROXIMATIONS = {
         None, "the dished heads and the long tube bundle"),
     ("evaporator", "plate"): _Approximation(
         None, "the dished heads and the plate pack between them"),
-    ("crystallizer", "default"): _Approximation(
-        None, "the dished head, the cone and leg, the draft tube and the baffle"),
-    ("flotation_cell", "default"): _Approximation(
-        None, "the open tank, the launder outside its lip, the air standpipe and the froth"),
     ("kiln", "default"): _Approximation(
         None, "the shell's fall from feed end to discharge, its riding rings and its drive"),
     ("kiln", "fluidized_bed"): _Approximation(
@@ -470,18 +487,8 @@ _APPROXIMATIONS = {
         None, "the belt, its two pulleys and the loading and discharge chutes"),
     ("elevator", "z_form"): _Approximation(
         None, "the Z-shaped casing, the belt's three runs and its four pulleys"),
-    ("blower", "general"): _Approximation(
-        None, "the two chords converging on the discharge and the impeller"),
-    ("blower", "centrifugal"): _Approximation(
-        None, "the scroll casing, its outlet and the eye"),
-    ("blower", "axial"): _Approximation(
-        None, "the propeller across the casing"),
     ("boiler", "default"): _Approximation(
         None, "the shell's own outline and the dome on its crown"),
-    ("furnace", "general"): _Approximation(
-        None, "the lining inside the walls and the chamfered floor"),
-    ("furnace", "combustion_chamber"): _Approximation(
-        None, "the burner plate and the flame on it"),
     ("stack", "default"): _Approximation(
         None, "the tapered shaft and the foundation flange under it"),
     ("flare", "default"): _Approximation(
@@ -1095,13 +1102,14 @@ class DrawioRenderer:
                     f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
         stencil = sym.drawio_shape or sym.drawio_body_shape
         body = self._shell(u)
+        if body is None and not stencil and (u.kind, u.variant) in OWN_OUTLINE:
+            body = default_registry.get(u.kind, u.variant)
         if body is not None:
-            # A shell built to size is drawn as built.
+            # A shell built to size, or a drawing exported as its own
+            # outline, is drawn as built; its parts are child cells.
             shift = (-min([0.0, *(o.x * body.width for o in sym.overlays)]),
                      -min([0.0, *(o.y * body.height for o in sym.overlays)]))
             stencil = drawio_stencil(body.svg, sym.width, sym.height, shift)
-        elif not stencil and (u.kind, u.variant) in OWN_OUTLINE:
-            stencil = drawio_stencil(sym.svg, sym.width, sym.height)
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
             keys = [f"shape={stencil}", "outlineConnect=0",
