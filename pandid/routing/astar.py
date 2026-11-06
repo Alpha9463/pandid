@@ -25,6 +25,11 @@ NOZZLE_PENALTY = BEND_PENALTY
 TOUCH_PENALTY = BEND_PENALTY
 
 
+#: Cost of a lane edge run inside the frame of a package the line has
+#: no end in.
+FENCE_PENALTY = 4 * BEND_PENALTY
+
+
 #: Discount on the bend a side arrival turns into the goal stub, so the
 #: side arrival wins an exact tie.
 SIDE_ARRIVAL_TIE = 1e-6
