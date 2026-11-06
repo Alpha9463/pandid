@@ -7,6 +7,7 @@ or attributes. A port family is also a tuple, such as ``mixer.inlets``.
 
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -164,6 +165,15 @@ _PLACEMENT_HINTS = Deprecation(
 )
 
 
+#: Deprecation of reassigning a variant that builds the unit's ports.
+_VARIANT_REASSIGNED = Deprecation(
+    what="reassigning variant on a built unit",
+    instead="a new unit built with variant=",
+    removed_in="0.4.0",
+    note="its ports and faces are built from the variant it was given",
+)
+
+
 #: Deprecation of a vessel's default_input_face() and default_output_face().
 _DEFAULT_FACES = Deprecation(
     what="default_input_face() or default_output_face()",
@@ -230,7 +240,8 @@ class Unit:
     name : str
         Tag.
     variant : str
-        Registry variant name.
+        Registry variant name. Reassigning it is deprecated on a unit
+        whose ports or faces are built from it.
     ports : dict[str, Port]
         Ports by name.
     flowsheet : Flowsheet or None
@@ -273,6 +284,9 @@ class Unit:
 
     # Composition parts, redrawn when the variant is reassigned.
     _composition: "tuple[_Part, ...]" = ()
+
+    # Whether __init__ builds ports or faces from the variant.
+    _VARIANT_BUILDS = False
 
     COMPOSITION: dict[str, Any] = {}
 
@@ -458,6 +472,12 @@ class Unit:
             unit's parts, manholes or sockets.
         AttributeError
             If an attribute fixed at construction is reassigned.
+
+        Warns
+        -----
+        DeprecationWarning
+            If ``variant`` is reassigned on a unit whose ports or faces
+            are built from it.
         """
         if name in ("width", "height") and value is not None:
             where = self.__dict__.get("name", "?")
@@ -478,7 +498,7 @@ class Unit:
             )
         old = self.__dict__.get(name)
         super().__setattr__(name, value)
-        if name == "variant" and old is not None and self._composition:
+        if name == "variant" and old is not None:
             _recompose(self, old)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
@@ -1324,6 +1344,7 @@ class Valve(_NormallyPositioned):
     ]
     #: Ports by variant, defaulting to :data:`_DEFAULT_PORTS`.
     _VARIANT_PORTS = {"three_way": [*_DEFAULT_PORTS, ("branch", "outlet", "process")]}
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -1561,6 +1582,9 @@ def _recompose(unit: "Unit", old: str) -> None:
     """Redraw a unit's parts on its new variant, or restore ``old``.
 
     Overlays added after the parts are kept, after the redrawn parts.
+    On a unit whose ports or faces are built from its variant, the
+    reassignment is reported as deprecated. Whatever raises, the unit
+    keeps ``old`` and its overlays.
 
     Parameters
     ----------
@@ -1574,8 +1598,12 @@ def _recompose(unit: "Unit", old: str) -> None:
     ValueError
         If the overlays no longer begin with the parts the unit was
         built with, or the new variant cannot carry the parts, the
-        added overlays, the manholes or the sockets; the unit keeps
-        ``old`` and its overlays.
+        added overlays, the manholes or the sockets.
+
+    Warns
+    -----
+    DeprecationWarning
+        If the unit's ports or faces are built from its variant.
     """
     from pandid.render.symbols import default_registry
 
@@ -1585,27 +1613,32 @@ def _recompose(unit: "Unit", old: str) -> None:
     built, current = _placed(stated, old), tuple(overlays or ())
     walls = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
     try:
-        if current[:len(built)] != built:
-            raise ValueError(
-                f"{unit.name}: its overlays no longer begin with the parts it was built "
-                f"with, so a new variant cannot redraw them. Build "
-                f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
-                f"instead"
-            )
-        _compose_onto(unit, *unit._composition)
-        unit._check_parts()
-        added = current[len(built):]
-        if added:
-            drawn = _placed(stated, unit.variant) + added
-            unit.overlays = drawn
-            default_registry.composed(unit.kind, unit.variant, drawn)
-        for keyword, placed in zip(("manholes", "sockets"), walls):
-            _on_walls(unit, keyword, placed)
-        if any(walls):
-            default_registry.for_unit(unit)
-    except ValueError:
+        if unit._composition:
+            if current[:len(built)] != built:
+                raise ValueError(
+                    f"{unit.name}: its overlays no longer begin with the parts it was "
+                    f"built with, so a new variant cannot redraw them. Build "
+                    f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
+                    f"instead"
+                )
+            _compose_onto(unit, *unit._composition)
+            unit._check_parts()
+            added = current[len(built):]
+            if added:
+                drawn = _placed(stated, unit.variant) + added
+                unit.overlays = drawn
+                default_registry.composed(unit.kind, unit.variant, drawn)
+            for keyword, placed in zip(("manholes", "sockets"), walls):
+                _on_walls(unit, keyword, placed)
+            if any(walls):
+                default_registry.for_unit(unit)
+        if unit._VARIANT_BUILDS:
+            _VARIANT_REASSIGNED.warn(unit, where=unit.name, stacklevel=4)
+    except BaseException:
         unit.__dict__["variant"] = old
-        if overlays is not None:
+        if overlays is None:
+            unit.__dict__.pop("overlays", None)
+        else:
             unit.__dict__["overlays"] = overlays
         raise
 
@@ -1723,21 +1756,50 @@ def _kept_on_walls(unit: "Unit", sym: "Symbol", scale: tuple[float, float]) -> "
     return sym
 
 
-def _drawn_walls(unit: "Unit", overlays: tuple) -> tuple[tuple, tuple, tuple[float, float]]:
-    """Return a unit's manholes and sockets placed at their drawn size.
+def _built_to_size(unit: "Unit") -> bool:
+    """Return whether a unit's shell is built to the size it is drawn at.
 
     Parameters
     ----------
     unit : Unit
-        Vessel or evaporator.
+        Unit to check.
+
+    Returns
+    -------
+    bool
+        Whether it is a vessel drawn with its shipped shell.
+    """
+    from pandid.render.symbols import VESSEL_SIZES, default_registry, vessel_shell
+
+    return (unit.kind == "vessel" and unit.variant in VESSEL_SIZES
+            and default_registry.get(unit.kind, unit.variant) is vessel_shell(unit.variant))
+
+
+def _drawn_parts(unit: "Unit", overlays: tuple, faces: "dict[str, str] | None" = None) -> tuple:
+    """Return the body a unit is drawn on, with every part placed on it.
+
+    A vessel's shell is built to the stated size, its parts kept at
+    their own size; with no size stated, the shell grows until each
+    nozzle family has room on its wall clear of the supports. Any other
+    body is drawn at its own size and placed scaled, and the manholes
+    and sockets are placed at their drawn size.
+
+    Parameters
+    ----------
+    unit : Unit
+        Tank, vessel or evaporator.
     overlays : tuple[Overlay, ...]
-        The unit's other parts.
+        The unit's parts, placed for its body at its natural size.
+    faces : dict[str, str], optional
+        A vessel's family port name to face; the declared faces when
+        omitted.
 
     Returns
     -------
     tuple
-        The parts; each socket's port in body coordinates; and the
-        ``(x, y)`` scale the drawing is placed at.
+        The body; every part on it, manholes and sockets last; each
+        socket's port in body coordinates; and the ``(x, y)`` scale the
+        drawing is placed at.
 
     Raises
     ------
@@ -1746,16 +1808,204 @@ def _drawn_walls(unit: "Unit", overlays: tuple) -> tuple[tuple, tuple, tuple[flo
         room for the body.
     """
     from pandid.render.iso_parts import wall_overlays
+    from pandid.render.symbols import default_registry
 
     manholes, sockets = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
-    if not manholes and not sockets:
-        return (), (), (1.0, 1.0)
     # A quarter turn swaps the stated sizes onto the drawing's axes.
     turn = getattr(unit, "_pin", None)
     quarter = int(getattr(turn, "orientation", 0) or 0) in (90, 270)
     size = (unit.height, unit.width) if quarter else (unit.width, unit.height)
-    return wall_overlays(unit.kind, unit.variant, overlays, manholes, sockets, size,
-                         unit.name)
+    natural = default_registry.get(unit.kind, unit.variant)
+    if not _built_to_size(unit):
+        if not manholes and not sockets:
+            return natural, overlays, (), (1.0, 1.0)
+        walls, ports, scale = wall_overlays(unit.kind, unit.variant, overlays, manholes,
+                                            sockets, size, unit.name)
+        return natural, overlays + walls, ports, scale
+
+    on = tuple((getattr(unit, "_faces", {}) if faces is None else faces).items())
+    try:
+        return (*_shell_parts(unit, overlays, on, size), (1.0, 1.0))
+    except ValueError as exc:
+        if size == (None, None):
+            raise
+        raise _too_small(unit, overlays, on, size) from exc
+
+
+def _shell_parts(unit: "Unit", overlays: tuple, faces: "tuple[tuple[str, str], ...]",
+                 size: "tuple[float | None, float | None]") -> tuple:
+    """Return a vessel's shell built to a size, with its parts placed on it.
+
+    Parameters
+    ----------
+    unit : Unit
+        Vessel built to size.
+    overlays : tuple[Overlay, ...]
+        Its parts, placed for its shell at its natural size.
+    faces : tuple[tuple[str, str], ...]
+        Family port name and face, in drawn order.
+    size : tuple[float or None, float or None]
+        Stated width and height of the drawn box, on the drawing's axes;
+        a shell grows along an axis left ``None`` until each family has
+        room on its wall clear of the supports.
+
+    Returns
+    -------
+    tuple
+        The shell; every part on it, manholes and sockets last; and each
+        socket's port in body coordinates.
+
+    Raises
+    ------
+    ValueError
+        If the stated size cannot hold the shell, its parts and its
+        families.
+    """
+    from pandid.render.iso_parts import anchored, seated, wall_overlays
+    from pandid.render.symbols import (default_registry, vessel_room, vessel_shell,
+                                       vessel_shell_fits, vessel_symbol)
+
+    manholes, sockets = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
+    natural = default_registry.get(unit.kind, unit.variant)
+
+    def placed(body):
+        """Return the parts and the sockets' ports on one shell.
+
+        Parameters
+        ----------
+        body : Symbol
+            The shell.
+
+        Returns
+        -------
+        tuple
+            Parts, then the sockets' ports.
+        """
+        drawn = tuple(seated(anchored(o, natural, body), body, unit.variant)
+                      for o in overlays)
+        walls, ports, _ = wall_overlays(unit.kind, unit.variant, drawn, manholes, sockets,
+                                        (None, None), unit.name, body)
+        return drawn + walls, ports
+
+    parts, ports = placed(natural)
+    grown = default_registry.composed(unit.kind, unit.variant, parts, ports)
+    reach = (grown.width - natural.width, grown.height - natural.height)
+    w, h = (length if stated is None else stated - extra
+            for length, stated, extra in zip((natural.width, natural.height), size, reach))
+    if any(length < least for length, least in zip((w, h), vessel_shell_fits(unit.variant))):
+        raise ValueError("the box leaves no room for the shell's heads")
+    body = vessel_shell(unit.variant, w, h)
+    parts, ports = placed(body)
+    # Grow the shell along each axis no size is stated for, by what each
+    # step showed the shortfall falls per unit of growth.
+    short = vessel_room(unit.variant, faces, parts, ports, (w, h))
+    rate = [1.0, 1.0]
+    for _ in range(8):
+        step = [0.0 if stated is not None else lack / r
+                for stated, lack, r in zip(size, short, rate)]
+        if max(step) <= 1e-9:
+            break
+        w, h = w + step[0], h + step[1]
+        body = vessel_shell(unit.variant, w, h)
+        parts, ports = placed(body)
+        was, short = short, vessel_room(unit.variant, faces, parts, ports, (w, h))
+        rate = [min(1.0, max(0.25, (a - b) / g)) if g > 0 else r
+                for a, b, g, r in zip(was, short, step, rate)]
+    room = vessel_room(unit.variant, faces, parts, ports, (w, h))
+    if any(more > 1e-9 and stated is not None for more, stated in zip(room, size)):
+        raise ValueError("the walls cannot hold each family apart, clear of the supports")
+    vessel_symbol(unit.kind, unit.variant, faces, parts, ports, (w, h))
+    return body, parts, ports
+
+
+def _too_small(unit: "Unit", overlays: tuple, faces: "tuple[tuple[str, str], ...]",
+               size: "tuple[float | None, float | None]") -> ValueError:
+    """Return the refusal of a stated size, naming the least size that draws.
+
+    Parameters
+    ----------
+    unit : Unit
+        Vessel built to size.
+    overlays : tuple[Overlay, ...]
+        Its parts, placed for its shell at its natural size.
+    faces : tuple[tuple[str, str], ...]
+        Family port name and face, in drawn order.
+    size : tuple[float or None, float or None]
+        Stated width and height of the drawn box, on the drawing's axes.
+
+    Returns
+    -------
+    ValueError
+        The refusal.
+    """
+    from pandid.render.symbols import default_registry
+
+    def fits(trial):
+        """Return whether the vessel draws at a size.
+
+        Parameters
+        ----------
+        trial : tuple[float or None, float or None]
+            Width and height.
+
+        Returns
+        -------
+        bool
+            Whether it draws.
+        """
+        try:
+            _shell_parts(unit, overlays, faces, trial)
+        except ValueError:
+            return False
+        return True
+
+    def scaled(factor, axes):
+        """Return the stated size with some axes scaled.
+
+        Parameters
+        ----------
+        factor : float
+            Scale.
+        axes : tuple[int, ...]
+            Axes to scale.
+
+        Returns
+        -------
+        tuple[float or None, float or None]
+            Width and height.
+        """
+        return tuple(v * factor if i in axes and v is not None else v
+                     for i, v in enumerate(size))
+
+    given = {i: v for i, v in enumerate(size) if v is not None}
+    stated = tuple(given)
+    natural = default_registry.get(unit.kind, unit.variant)
+    # Look as far as many times the natural size.
+    limit = max([64.0, *(16 * (natural.width, natural.height)[i] / v
+                         for i, v in given.items() if v)])
+    # A quarter turn swaps the drawing's axes back onto the sheet's.
+    turn = getattr(unit, "_pin", None)
+    names = (("height", "width") if int(getattr(turn, "orientation", 0) or 0) in (90, 270)
+             else ("width", "height"))
+    for axes in [(i,) for i in stated] + ([stated] if len(stated) > 1 else []):
+        lo, hi = 1.0, 1.25
+        while hi < limit and not fits(scaled(hi, axes)):
+            lo, hi = hi, hi * 1.25
+        if hi >= limit:
+            continue
+        for _ in range(24):
+            mid = (lo + hi) / 2
+            lo, hi = (lo, mid) if fits(scaled(mid, axes)) else (mid, hi)
+        was = " and ".join(f"a {names[i]} of {given[i]:g}" for i in axes)
+        fix = " and ".join(f"{names[i]}={math.ceil(given[i] * hi - 1e-9):g}" for i in axes)
+        return ValueError(
+            f"{unit.name}: {was} is too small to draw this {unit.variant!r} vessel with "
+            f"its nozzles and parts; give {fix} or more"
+        )
+    return ValueError(
+        f"{unit.name}: Vessel(variant={unit.variant!r}) cannot be drawn at the size "
+        f"given; leave width and height unset to draw it at its own size"
+    )
 
 
 _FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
@@ -2008,6 +2258,8 @@ class _MultiPortVessel(_FaceFamilies):
     inlets, outlets : tuple[Port, ...]
         Port families in declaration order.
     """
+
+    _VARIANT_BUILDS = True
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
@@ -2299,9 +2551,10 @@ class _MultiPortVessel(_FaceFamilies):
 
         overlays = tuple(getattr(self, "overlays", ()) or ())
         on = self._faces if faces is None else faces
-        walls, ports, scale = _drawn_walls(self, overlays)
+        body, parts, ports, scale = _drawn_parts(self, overlays, on)
+        size = (body.width, body.height) if _built_to_size(self) else None
         return _kept_on_walls(self, vessel_symbol(
-            self.kind, self.variant, tuple(on.items()), overlays + walls, ports), scale)
+            self.kind, self.variant, tuple(on.items()), parts, ports, size), scale)
 
 
 class Vessel(_MultiPortVessel):
@@ -2312,6 +2565,13 @@ class Vessel(_MultiPortVessel):
     (top head), ``relief`` (top) and ``drain`` (low point). A single
     inlet is also ``inlet`` and a single outlet ``outlet``; otherwise
     use ``in_1``, ``out_1``, ... or :attr:`inlets` and :attr:`outlets`.
+
+    The shell is drawn to the size it is given: ``width`` and ``height``
+    are the drawn box, supports and wall parts included, and the heads,
+    the supports and the wall parts keep their own size while the
+    straight shell takes the rest. With no size given, the shell is
+    drawn long enough for each family of nozzles to sit on its wall
+    clear of the supports.
 
     Parameters
     ----------
@@ -2803,6 +3063,9 @@ class Funnel(Unit):
 class Furnace(Unit):
     """Fired heater or furnace: a stream heated by burning fuel.
 
+    ``"default"`` draws a fired heater with its coil and stack,
+    ``"general"`` the ISO 10628-2 furnace (item 4.3) and
+    ``"combustion_chamber"`` a chamber making hot gas (item 4.5).
     Parameters are those of :class:`Unit`.
     """
 
@@ -2881,6 +3144,8 @@ class _VariantPorted(Unit):
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
     """
+
+    _VARIANT_BUILDS = True
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -4075,9 +4340,9 @@ class Evaporator(Unit):
         from pandid.render.symbols import default_registry
 
         overlays = tuple(getattr(self, "overlays", ()) or ())
-        walls, ports, scale = _drawn_walls(self, overlays)
+        _, parts, ports, scale = _drawn_parts(self, overlays)
         return _kept_on_walls(
-            self, default_registry.composed(self.kind, self.variant, overlays + walls, ports), scale)
+            self, default_registry.composed(self.kind, self.variant, parts, ports), scale)
 
 
 #: Default thickener rake: the cross-beam stirrer (ISO 10628-2 28.4).
@@ -4462,6 +4727,7 @@ class Reactor(Unit):
             ("duty", "inlet", "energy"),
         ],
     }
+    _VARIANT_BUILDS = True
 
     # Bodies that get an agitator by default.
     _STIRRED = ("default", "jacketed")
@@ -4665,6 +4931,7 @@ class Separator(Unit):
         "permanent_magnet": _OVER_AND_UNDER,
         "electromagnetic": _OVER_AND_UNDER,
     }
+    _VARIANT_BUILDS = True
     # Variant -> {port: artwork anchor}, where the artwork renames one.
     _VARIANT_ANCHORS = {
         "cyclone": {"overflow": "vapor", "underflow": "liquid"},

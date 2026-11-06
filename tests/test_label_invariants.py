@@ -16,6 +16,8 @@ from pandid.render.svg import _along, _crosses, _ink, _SIGNAL_KINDS, UPRIGHT_ENC
 from test_golden import SCENARIOS
 
 TOL = 0.01
+# A leader is written to a tenth, so its end may sit this far off an unrounded line.
+WRITTEN = math.hypot(0.05, 0.05)
 
 _RECT = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" '
@@ -249,8 +251,8 @@ def test_a_leader_lands_on_the_line_it_names(sheets, name):
             continue
         end = label.leader[1]
         landed = min(_gap((end[0], end[1], end[0], end[1]), seg) for seg in segs[label.name])
-        if landed > TOL:
-            wrong.append(f"{label.name}'s leader stops {landed:.1f} short of its line")
+        if landed > WRITTEN:
+            wrong.append(f"{label.name}'s leader stops {landed:.2f} short of its line")
         if not label.head:
             wrong.append(f"{label.name}'s leader carries no arrowhead")
     assert not wrong, f"{name}: " + "; ".join(wrong)

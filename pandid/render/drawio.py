@@ -6,9 +6,13 @@ edges between their ports.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import math
+import re
+import urllib.parse
+import zlib
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 from xml.sax.saxutils import escape
@@ -32,7 +36,7 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                stream_numbers, stream_polyline, tap_lines, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, default_registry, fail_marking,
-                                   wears_arrowhead)
+                                   overlay_boxes, wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
@@ -40,6 +44,7 @@ from pandid.validate import Issue
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
+    from pandid.render.symbols import Symbol
 
 _INK = _BODY_INK
 
@@ -235,6 +240,65 @@ class _Fit(NamedTuple):
         return self.scale * v
 
 
+def drawio_stencil(svg: str, width: float, height: float,
+                   offset: "tuple[float, float]" = (0.0, 0.0)) -> str:
+    """Return a draw.io inline stencil drawing an artwork's outlines.
+
+    The artwork's paths, of ``M``, ``L``, ``A`` and ``Z`` commands in
+    absolute coordinates, and its rectangles become the stencil's own
+    geometry, so draw.io draws them as placed rather than stretching a
+    library shape.
+
+    Parameters
+    ----------
+    svg : str
+        Artwork.
+    width, height : float
+        The stencil's box.
+    offset : tuple[float, float], default=(0.0, 0.0)
+        Where the artwork's origin falls in the box.
+
+    Returns
+    -------
+    str
+        A ``stencil(...)`` shape name for a cell's style.
+    """
+    dx, dy = offset
+    out = []
+    for tag, attrs in re.findall(r"<(path|rect)\b([^>]*?)/?>", svg):
+        a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
+        if tag == "rect":
+            out.append(f'<rect x="{fmt(float(a["x"]) + dx, 4)}" y="{fmt(float(a["y"]) + dy, 4)}" '
+                       f'w="{fmt(float(a["width"]), 4)}" h="{fmt(float(a["height"]), 4)}"/>')
+        else:
+            steps, tokens = [], a["d"].replace(",", " ").split()
+            i = 0
+            while i < len(tokens):
+                cmd, i = tokens[i], i + 1
+                if cmd == "Z":
+                    steps.append("<close/>")
+                    continue
+                n = 7 if cmd == "A" else 2
+                v = [float(t) for t in tokens[i:i + n]]
+                i += n
+                x, y = fmt(v[-2] + dx, 4), fmt(v[-1] + dy, 4)
+                if cmd == "A":
+                    steps.append(f'<arc rx="{fmt(v[0], 4)}" ry="{fmt(v[1], 4)}" '
+                                 f'x-axis-rotation="{fmt(v[2], 4)}" '
+                                 f'large-arc-flag="{int(v[3])}" sweep-flag="{int(v[4])}" '
+                                 f'x="{x}" y="{y}"/>')
+                else:
+                    steps.append(f'<{"move" if cmd == "M" else "line"} x="{x}" y="{y}"/>')
+            out.append(f"<path>{''.join(steps)}</path>")
+        out.append("<stroke/>" if a.get("fill", "none") == "none" else "<fillstroke/>")
+    xml = (f'<shape w="{fmt(width, 4)}" h="{fmt(height, 4)}" aspect="variable" '
+           f'strokewidth="inherit"><foreground>{"".join(out)}</foreground></shape>')
+    # draw.io reads a stencil as raw-deflated, base64'd encodeURIComponent text.
+    packer = zlib.compressobj(9, zlib.DEFLATED, -15)
+    data = urllib.parse.quote(xml, safe="-_.!~*'()").encode("ascii")
+    return f"stencil({base64.b64encode(packer.compress(data) + packer.flush()).decode('ascii')})"
+
+
 class _Piece(NamedTuple):
     """A draw.io built-in shape placed inside a stand-in's cell.
 
@@ -411,6 +475,10 @@ _APPROXIMATIONS = {
         None, "the propeller across the casing"),
     ("boiler", "default"): _Approximation(
         None, "the shell's own outline and the dome on its crown"),
+    ("furnace", "general"): _Approximation(
+        None, "the lining inside the walls and the chamfered floor"),
+    ("furnace", "combustion_chamber"): _Approximation(
+        None, "the burner plate and the flame on it"),
     ("stack", "default"): _Approximation(
         None, "the tapered shaft and the foundation flange under it"),
     ("flare", "default"): _Approximation(
@@ -1023,6 +1091,12 @@ class DrawioRenderer:
                     f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                     f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
         stencil = sym.drawio_shape or sym.drawio_body_shape
+        body = self._shell(u)
+        if body is not None:
+            # A shell built to size is drawn as built.
+            shift = (-min([0.0, *(o.x * body.width for o in sym.overlays)]),
+                     -min([0.0, *(o.y * body.height for o in sym.overlays)]))
+            stencil = drawio_stencil(body.svg, sym.width, sym.height, shift)
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
             keys = [f"shape={stencil}", "outlineConnect=0",
@@ -1168,7 +1242,8 @@ class DrawioRenderer:
             '        </mxCell>',
             *inscribed,
             *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
-            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name),
+            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name,
+                                 self._shell(u)),
         ]
 
     def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
@@ -1243,8 +1318,29 @@ class DrawioRenderer:
             out += _rect(f"{cid}-s{i}", px * w, py * h, pw * w, ph * h, style, parent=cid)
         return out
 
+    @staticmethod
+    def _shell(u) -> "Symbol | None":
+        """Return the shell a vessel built to size is drawn on.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+
+        Returns
+        -------
+        Symbol or None
+            The shell, or ``None`` for a unit drawn at its symbol's size.
+        """
+        from pandid.units import _built_to_size, _drawn_parts
+
+        if not _built_to_size(u):
+            return None
+        return _drawn_parts(u, tuple(getattr(u, "overlays", ()) or ()))[0]
+
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
-                       fit: "_Fit", frame: "Frame", name: str) -> list[str]:
+                       fit: "_Fit", frame: "Frame", name: str,
+                       body: "Symbol | None" = None) -> list[str]:
         """Return one child cell per part on a composed body.
 
         Parameters
@@ -1263,6 +1359,9 @@ class DrawioRenderer:
             Unit placement.
         name : str
             Unit name, for findings.
+        body : Symbol, optional
+            The shell the parts are placed on, where it is drawn in
+            place within the cell.
 
         Returns
         -------
@@ -1271,6 +1370,11 @@ class DrawioRenderer:
         """
         if not sym.overlays:
             return []
+        # Each part's box as fractions of the cell.
+        boxes = [(o.x, o.y, o.w, o.h) for o in sym.overlays] if body is None else [
+            (left / sym.width, top / sym.height, (right - left) / sym.width,
+             (bottom - top) / sym.height)
+            for left, top, right, bottom in overlay_boxes(body, sym.overlays)]
         rot = _xform(frame)[0]
         turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
@@ -1291,7 +1395,7 @@ class DrawioRenderer:
                         f"{approx.lost}"))
             if overlay.mirror:
                 keys.append("flipH=1")
-            ox, oy, ow, oh = _placed_rect(frame, overlay.x, overlay.y, overlay.w, overlay.h)
+            ox, oy, ow, oh = _placed_rect(frame, *boxes[i])
             style = ";".join([
                 "html=1", "rounded=0", *keys, *turn,
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",

@@ -1010,7 +1010,7 @@
     <symbol id="sym_conveyor_L200" viewBox="0 0 200.0 20.0" overflow="visible"><ellipse cx="10" cy="10" rx="10" ry="10" fill="none" stroke="#111" stroke-width="2"/><ellipse cx="190" cy="10" rx="10" ry="10" fill="none" stroke="#111" stroke-width="2"/><path d="M 10 0 L 190 0 M 10 20 L 190 20" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_evaporator_falling_film_s100x200" viewBox="0 0 80.0 160.0" overflow="visible"><path d="M 0 12 A 40 12 0 0 1 80 12 L 80 148 A 40 12 0 0 1 0 148 Z" fill="white" stroke="#111" stroke-width="1.6"/><path d="M 0 60 L 80 60 M 0 130 L 80 130" fill="none" stroke="#111" stroke-width="0.8"/><path d="M 16 60 L 16 130 M 28 60 L 28 130 M 40 60 L 40 130 M 52 60 L 52 130 M 64 60 L 64 130" fill="none" stroke="#111" stroke-width="0.8"/><path d="M 8 52 L 72 52 M 24 52 L 24 57 M 40 52 L 40 57 M 56 52 L 56 57" fill="none" stroke="#111" stroke-width="0.8"/></symbol>
     <symbol id="sym_filter_rotary_s140x80" viewBox="0 0 140 80" overflow="visible"><rect x="0" y="0" width="140" height="80" fill="white" stroke="#111" stroke-width="2"/><path d="M 36.4 25.2 A 61.6 17.6 0 0 1 103.6 25.2" fill="none" stroke="#111" stroke-width="2"/><path d="M 0 64 L 140 64 M 0 16 L 140 16" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 4"/><ellipse cx="70" cy="40" rx="42" ry="12" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 4"/></symbol>
-    <symbol id="sym_furnace_s100x120" viewBox="0 0 100 120" overflow="visible"><path d="M 31.25 0 L 68.75 0 L 68.75 41.818182 L 87.5 53.939394 L 87.5 120 L 75 120 L 75 108.484848 L 25 108.484848 L 25 120 L 12.5 120 L 12.5 53.939394 L 31.25 41.818182 Z" fill="white" stroke="#111" stroke-width="2"/><path d="M 31.25 41.818182 L 68.75 41.818182 M 12.5 53.939394 L 87.5 53.939394 M 12.5 108.484848 L 87.5 108.484848 M 0 66.060606 L 68.75 66.060606 L 31.25 96.363636 L 100 96.363636" fill="none" stroke="#111" stroke-width="2"/></symbol>
+    <symbol id="sym_furnace_combustion_chamber" viewBox="0 0 100.0 80.0" overflow="visible"><rect x="0" y="0" width="100" height="80" fill="white" stroke="#111" stroke-width="2"/><path d="M 0 70 L 100 70 M 20 70 L 50 20 L 80 70 M 35 70 L 50 45 L 65 70" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_kiln_fluidized_bed_s120x200" viewBox="0 0 90.0 150.0" overflow="visible"><path d="M 0 12 A 45 12 0 0 1 90 12 L 90 110 L 60 150 L 30 150 L 0 110 Z" fill="white" stroke="#111" stroke-width="1.5"/><line x1="0" y1="110" x2="90" y2="110" fill="none" stroke="#111" stroke-width="0.75" stroke-dasharray="20,10"/></symbol>
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_reactor_cdef8c078_s85x180" viewBox="0 0 85 180" overflow="visible"><path d="M 0 53.650949 A 42.5 10.244518 0 0 1 42.5 43.406431 A 42.5 10.244518 0 0 1 85 53.650949 L 85 169.755482 A 42.5 10.244518 0 0 1 42.5 180 A 42.5 10.244518 0 0 1 0 169.755482 Z" fill="white" stroke="#111" stroke-width="1.999941"/><line x1="42.5" y1="28.229383" x2="42.5" y2="147.21768" fill="none" stroke="black" stroke-width="1.000001"/><rect x="22.1" y="117.470606" width="40.8" height="29.747074" fill="none" stroke="black" stroke-width="1.000001"/><path d="M 32.3 117.470606 L 32.3 147.21768 M 52.7 117.470606 L 52.7 147.21768" fill="none" stroke="black" stroke-width="1.000001"/><ellipse cx="42.500055" cy="14.114678" rx="14.166676" ry="14.114678" fill="none" stroke="black" stroke-width="0.999999"/><path d="M 37.187551 21.172017 L 37.187551 7.057339 L 42.500055 14.114678 L 47.812558 7.057339 L 47.812558 21.172017" fill="none" stroke="black" stroke-width="0.999999"/></symbol>
@@ -1032,12 +1032,12 @@
     <text x="2121.8199999999997" y="1496.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Hydrate Wash Water</text>
     <text x="2121.8199999999997" y="1508.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-902</text>
     <use href="#sym_conveyor_L200" x="2210" y="1840" width="200.0" height="20.0" />
-    <use href="#sym_furnace_s100x120" x="2260" y="1993.94" width="100" height="120" />
-    <polygon points="2047.98,1990.0 2145.0,1990.0 2160.0,2000.0 2145.0,2010.0 2047.98,2010.0" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="2096.4900000000002" y="2000.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Combustion Air</text>
-    <polygon points="2100.0,2217.0 2165.0,2217.0 2180.0,2230.0 2165.0,2243.0 2100.0,2243.0" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="2132.5" y="2226.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Fuel Gas</text>
-    <text x="2132.5" y="2238.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-905</text>
+    <use href="#sym_furnace_combustion_chamber" x="2530" y="2076.67" width="100.0" height="80.0" />
+    <polygon points="2187.98,2106.666666666667 2285.0,2106.666666666667 2300.0,2116.666666666667 2285.0,2126.666666666667 2187.98,2126.666666666667" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="2236.4900000000002" y="2116.666666666667" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Combustion Air</text>
+    <polygon points="2220.0,2217.0 2285.0,2217.0 2300.0,2230.0 2285.0,2243.0 2220.0,2243.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="2252.5" y="2226.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Fuel Gas</text>
+    <text x="2252.5" y="2238.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-905</text>
     <use href="#sym_kiln_fluidized_bed_s120x200" x="2520" y="1796.67" width="120" height="200" />
     <use href="#sym_separator_cyclone_s90x140" x="2790" y="1706" width="90" height="140" />
     <use href="#sym_tee" x="2829" y="1924" width="12.0" height="12.0" transform="translate(0, 3860) scale(1, -1)" />
@@ -1086,9 +1086,9 @@
     <path d="M 1650.0,2097.5 L 1820.0,2097.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1600.0,1942.5 L 1600.0,1830 L 1700.0,1830.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1600.0,2142.5 L 1600.0,2220 L 1800.0,2220.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 2160.0,2000.0 L 2235.0,2000.0 L 2235.0,2060.0 L 2260.0,2060.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 2180.0,2230.0 L 2310.0,2230 L 2310.0,2102.539393939394" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 2360.0,2090.3030303030305 L 2580.0,2090.3030303030305 L 2580.0,1996.6666666666667" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 2300.0,2116.666666666667 L 2530.0,2116.666666666667" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 2300.0,2230.0 L 2580.0,2230 L 2580.0,2156.666666666667" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 2580.0,2076.666666666667 L 2580.0,1996.6666666666667" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2640.0,1930.0 L 2829.0,1930.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 2580.0,1796.6666666666667 L 2580.0,1720.0 L 2790.0,1720.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 2835.0,1706.0 L 2835.0,1680 L 2960.0,1680.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -1130,12 +1130,12 @@
     <text x="1600.0" y="1886.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1600.0, 1886.2)">S-947</text>
     <rect x="1683.7" y="2213.5" width="32.7" height="13.0" fill="white" />
     <text x="1700.0" y="2220.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-948</text>
-    <rect x="2181.2" y="1993.5" width="32.7" height="13.0" fill="white" />
-    <text x="2197.5" y="2000.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-949</text>
-    <rect x="2228.7" y="2223.5" width="32.7" height="13.0" fill="white" />
-    <text x="2245.0" y="2230.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-950</text>
-    <rect x="2453.7" y="2083.8" width="32.7" height="13.0" fill="white" />
-    <text x="2470.0" y="2090.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-951</text>
+    <rect x="2398.7" y="2110.2" width="32.7" height="13.0" fill="white" />
+    <text x="2415.0" y="2116.7" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-949</text>
+    <rect x="2423.7" y="2223.5" width="32.7" height="13.0" fill="white" />
+    <text x="2440.0" y="2230.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-950</text>
+    <rect x="2573.5" y="2020.3" width="13.0" height="32.7" fill="white" />
+    <text x="2580.0" y="2036.7" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 2580.0, 2036.7)">S-951</text>
     <rect x="2718.2" y="1923.5" width="32.7" height="13.0" fill="white" />
     <text x="2734.5" y="1930.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-952</text>
     <rect x="2668.7" y="1713.5" width="32.7" height="13.0" fill="white" />
@@ -1160,8 +1160,8 @@
     <text x="2196.0" y="1650.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">F-902</text>
     <rect x="2285.7" y="1867.5" width="48.7" height="15.0" fill="white" />
     <text x="2310.0" y="1875.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-902</text>
-    <rect x="2286.0" y="1971.9" width="48.0" height="15.0" fill="white" />
-    <text x="2310.0" y="1983.939393939394" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">FH-901</text>
+    <rect x="2640.0" y="2109.2" width="48.0" height="15.0" fill="white" />
+    <text x="2640.0" y="2116.666666666667" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">FH-901</text>
     <rect x="2525.7" y="1774.7" width="48.7" height="15.0" fill="white" />
     <text x="2550.0" y="1786.6666666666667" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">CA-901</text>
     <rect x="2890.0" y="1768.5" width="48.7" height="15.0" fill="white" />

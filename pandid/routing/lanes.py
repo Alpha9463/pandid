@@ -247,6 +247,29 @@ def _lanes(group: list[_Lateral]) -> dict[int, float] | None:
     return {i: lo + (s + 1) * pitch for i, s in slot.items()}
 
 
+def _parts(group: list[_Lateral]) -> list[list[_Lateral]]:
+    """Return a group split into laterals that share free stretches.
+
+    Parameters
+    ----------
+    group : list[_Lateral]
+        Laterals that meet, in sheet order.
+
+    Returns
+    -------
+    list[list[_Lateral]]
+        Groups joined where two laterals' stretches overlap, each in
+        sheet order.
+    """
+    parts: list[list[_Lateral]] = []
+    for a in group:
+        joined = [p for p in parts if any(max(lo, l2) < min(hi, h2) for b in p
+                                          for lo, hi in a.free for l2, h2 in b.free)]
+        parts = [p for p in parts if all(p is not j for j in joined)]
+        parts.append([b for j in joined for b in j] + [a])
+    return sorted(parts, key=lambda p: group.index(p[0]))
+
+
 def _score(fs: "Flowsheet") -> tuple[Counter[str], set[int]]:
     """Return what the sheet is judged by after routing.
 
@@ -299,7 +322,9 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
     """Re-lay each group of laterals that cross, touch or wind.
 
     A group is also re-laid where a balloon it carries taps off its
-    line. A group's new routes are kept only if no crossing, bend,
+    line. A group that shares no stretch wide enough for its lanes is
+    tried as the runs of its laterals whose stretches overlap, each on
+    its own. A group's new routes are kept only if no crossing, bend,
     finding or clash grows in number, no tap leaves its line, and one of
     them falls.
 
@@ -342,13 +367,18 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
         merged = [other for g in joined for other in g] + [lateral]
         groups = [g for g in groups if all(g is not j for j in joined)] + [merged]
     before, changed = None, False
-    for group in groups:
+    while groups:
+        group = groups.pop(0)
         if (not any(id(a.stream) in adrift for a in group)
                 and not _tangled([stream_polyline(a.stream) for a in group])):
             continue
         group.sort(key=lambda a: fs.streams.index(a.stream))
         lanes = _lanes(group)
         if lanes is None:
+            # Try each run of laterals that share free stretches alone.
+            parts = _parts(group)
+            if len(parts) > 1:
+                groups[:0] = parts
             continue
         before = before or _score(fs)
         old = [a.stream.route for a in group]
