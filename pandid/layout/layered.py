@@ -285,7 +285,8 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     ``fs._far_branches`` records whether one is left where it is. With
     ``fs._level_flags`` set, each stack :func:`_level` finds moves to
     level its pipe from a flag; ``fs._flags_off`` records whether one is
-    left where it is.
+    left where it is. With ``fs._upright_stations`` set, neighbours in a
+    column keep the upright pipe a link between them needs.
 
     Parameters
     ----------
@@ -326,17 +327,21 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     _row_pins(layers)
     _face_tees(fs, layers, segs)
     _rank(layers)
-    _straighten(layers, segs, {})
+    rises: dict[frozenset[_Node], float] = {}
+    for a, b, link in edges if fs._upright_stations else []:
+        rises[frozenset((a, b))] = max(rises.get(frozenset((a, b)), 0.0), link.rise)
+    _straighten(layers, segs, {}, rises)
     held = _row_order(layers)
     fs._rows_out = bool(held)
     if held and fs._order_rows:
-        _straighten(layers, segs, held)
+        _straighten(layers, segs, held, rises)
     spanned = _keep_out(layers, pkg)
     framed = {n: n.y for k, layer in layers.items() for n in layer if k in spanned}
     if framed:
         # Level the other layers' pipes to the packages and the nodes moved.
-        _straighten(layers, segs, {**framed, **{n: n.y for n in held if fs._order_rows}})
-    fs._flags_off = _level(layers, segs, {**held, **framed}, fs._level_flags)
+        _straighten(layers, segs, {**framed, **{n: n.y for n in held if fs._order_rows}},
+                    rises)
+    fs._flags_off = _level(layers, segs, {**held, **framed}, fs._level_flags, rises)
     # Each package's stacks and the width its tag and reference take.
     texts = [([n for n in pkg if pkg[n] == p and n.members], text_width(fs.packages[p]))
              for p in sorted(set(pkg.values()))]
@@ -1158,7 +1163,8 @@ def _lanes(segs: list[_Seg]) -> dict[int, int]:
 
 
 def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
-                held: dict[_Node, float]) -> None:
+                held: dict[_Node, float],
+                rises: dict[frozenset[_Node], float]) -> None:
     """Set each stack's top to level its pipes, keeping layer order.
 
     Parameters
@@ -1169,6 +1175,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
         Pipe steps between adjacent layers.
     held : dict[_Node, float]
         Top to keep each of these stacks at, unless a ``y`` pin sets it.
+    rises : dict[frozenset[_Node], float]
+        Least clear height between two neighbours a pipe joins.
     """
     lead = {"N": LEAD, "S": -LEAD}
     near: dict[_Node, list[tuple[_Node, float, float, float, float, float]]] = {}
@@ -1208,7 +1216,7 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
         y = 0.0
         for k, n in enumerate(layer):
             n.y = y
-            y += n.h + (_gap(n, layer[k + 1]) if k + 1 < len(layer) else 0.0)
+            y += n.h + (_gap(n, layer[k + 1], rises) if k + 1 < len(layer) else 0.0)
         for n in layer:
             n.y = pinned.get(n, n.y - y / 2)
 
@@ -1228,7 +1236,7 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
             t = [(other.y + theirs - mine + up - down, w)
                  for other, theirs, mine, up, down, w in near.get(n, [])]
             targets.append(t or [(n.y, 1e-3)])
-        tops = _isotonic(targets, [n.h + _gap(n, b) for n, b in zip(layer, layer[1:])])
+        tops = _isotonic(targets, [n.h + _gap(n, b, rises) for n, b in zip(layer, layer[1:])])
         for n, y in zip(layer, tops):
             n.y = y
 
@@ -1239,7 +1247,7 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
 
 
 def _level(layers: dict[int, list[_Node]], segs: list[_Seg], held: dict[_Node, float],
-           move: bool) -> bool:
+           move: bool, rises: dict[frozenset[_Node], float]) -> bool:
     """Find each stack whose side-to-side pipe from a flag is not level.
 
     Only a stack that can move to level the pipe, keeping its gaps in
@@ -1256,6 +1264,8 @@ def _level(layers: dict[int, list[_Node]], segs: list[_Seg], held: dict[_Node, f
         Stacks kept at a top.
     move : bool
         Move each such stack to level its pipe.
+    rises : dict[frozenset[_Node], float]
+        Least clear height between two neighbours a pipe joins.
 
     Returns
     -------
@@ -1291,8 +1301,10 @@ def _level(layers: dict[int, list[_Node]], segs: list[_Seg], held: dict[_Node, f
             k = layer.index(own)
             above, below = layer[k - 1] if k else None, layer[k + 1] if k + 1 < len(layer) else None
             if (abs(dy) < 1e-6
-                    or above is not None and own.y + dy < above.y + above.h + _gap(above, own) - 1e-6
-                    or below is not None and own.y + dy + own.h + _gap(own, below) > below.y + 1e-6):
+                    or above is not None
+                    and own.y + dy < above.y + above.h + _gap(above, own, rises) - 1e-6
+                    or below is not None
+                    and own.y + dy + own.h + _gap(own, below, rises) > below.y + 1e-6):
                 continue
             if not move:
                 off = True
@@ -1353,7 +1365,7 @@ def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, floa
         bottom = max(n.y + n.h + n.pad.south for n in nodes)
 
 
-def _gap(upper: _Node, lower: _Node) -> float:
+def _gap(upper: _Node, lower: _Node, rises: dict[frozenset[_Node], float]) -> float:
     """Return the clear height between two neighbours in a layer.
 
     Parameters
@@ -1362,15 +1374,18 @@ def _gap(upper: _Node, lower: _Node) -> float:
         Upper neighbour.
     lower : _Node
         Lower neighbour.
+    rises : dict[frozenset[_Node], float]
+        Least clear height between two neighbours a pipe joins.
 
     Returns
     -------
     float
-        ``LANE`` or ``ROW_GAP``, plus the balloon room between them.
+        ``LANE`` or ``ROW_GAP``, or the rise between them if more, plus
+        the balloon room between them.
     """
     flags = all(u.kind in ("feed", "product") for u in (*upper.members, *lower.members))
     gap = LANE if flags else ROW_GAP  # dummies and flags only
-    return gap + upper.pad.south + lower.pad.north
+    return max(gap, rises.get(frozenset((upper, lower)), 0.0)) + upper.pad.south + lower.pad.north
 
 
 def _isotonic(targets: list[list[tuple[float, float]]], steps: list[float]) -> list[float]:

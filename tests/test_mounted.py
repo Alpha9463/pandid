@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from pandid import ControlValve, Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
+from pandid import (
+    ControlValve,
+    Feed,
+    Flowsheet,
+    GravitySeparator,
+    Product,
+    Reactor,
+    Valve,
+    ValveStation,
+)
 from _quality import measure_final
 from pandid.portgeom import port_point
 
@@ -546,7 +555,7 @@ def test_a_relayout_inside_the_exit_clear_trial_keeps_the_exit_clear(
     from pandid.routing.visibility import MARGIN
 
     # Every layout finds a flag's line to level, so each settle lays out again.
-    monkeypatch.setattr(layered, "_level", lambda layers, segs, held, move: not move)
+    monkeypatch.setattr(layered, "_level", lambda layers, segs, held, move, rises: not move)
     fs, valve = _cooling(140, (520, 160), "E")
     fs.route()
 
@@ -626,3 +635,134 @@ def test_a_valve_is_not_set_on_a_pinned_balloon_main_draws_clear_of() -> None:
 
     fs.route()
     assert not any(issue.code == "unit-overlap" for issue in fs.validate())
+
+
+def _upright_at(station: ValveStation) -> float:
+    """Return the x of a station whose run is drawn down one line."""
+    branch = (station.bypass, station.upstream_drain, station.downstream_drain)
+    points = []
+    for unit in station.members:
+        if unit not in branch:
+            assert unit.frame is not None
+            points += [port_point(unit, unit.frame, name) for name in ("inlet", "outlet")]
+    assert all(x == pytest.approx(points[0][0]) for x, _ in points)
+    assert [y for _, y in points] == sorted(y for _, y in points)
+    return points[0][0]
+
+
+def test_a_station_between_row_pinned_vessels_stands_on_its_upright_leg() -> None:
+    """Check that a station between stacked vessels is turned onto an upright leg with room."""
+    from pandid import Vessel
+
+    fs = Flowsheet("Station between rows")
+    upper = fs.add(Vessel("V-1")).pin(row=1, col=1)
+    lower = fs.add(Vessel("V-2")).pin(row=2, col=1)
+    station = fs.add_valve_station("FV-101", on=fs.connect(upper.outlet, lower.inlet))
+
+    fs.route()
+    _upright_at(station)
+    assert not fs.validate()
+    assert _clean(fs)
+
+
+def test_a_station_on_a_stacked_drop_stands_on_it() -> None:
+    """Check that a station on a pipe joining stacked nozzles is drawn upright with room."""
+    from pandid import HeatExchanger
+
+    fs = Flowsheet("Station on a drop")
+    upper = fs.add(HeatExchanger("E-1"))
+    lower = fs.add(HeatExchanger("E-2"))
+    station = fs.add_valve_station("FV-101", on=fs.connect(upper.shell_out, lower.shell_in))
+
+    fs.route()
+    assert upper.frame is not None and lower.frame is not None
+    top = port_point(upper, upper.frame, "shell_out")
+    assert top[0] == pytest.approx(port_point(lower, lower.frame, "shell_in")[0])
+    assert _upright_at(station) == pytest.approx(top[0])
+    assert not fs.validate()
+    assert _clean(fs)
+    bypass, valve = station.bypass, station.control
+    assert bypass is not None and bypass.frame is not None and valve.frame is not None
+    assert valve.frame.label_pos == ("left" if bypass.frame.cx > top[0] else "right")
+
+
+def test_a_station_set_part_way_down_a_drop_gets_room_where_it_is_wanted() -> None:
+    """Check that a station set at=0.25 on a drop, with a tap below it, is drawn with room."""
+    from pandid import HeatExchanger
+
+    fs = Flowsheet("Station part way down a drop")
+    upper = fs.add(HeatExchanger("E-1"))
+    lower = fs.add(HeatExchanger("E-2"))
+    line = fs.connect(upper.shell_out, lower.shell_in)
+    station = fs.add_valve_station("FV-101", on=line, at=0.25)
+    fs.add_instrument("PI", 201, sensing=line, at=0.5)
+
+    fs.route()
+    assert upper.frame is not None
+    assert _upright_at(station) == pytest.approx(port_point(upper, upper.frame, "shell_out")[0])
+    assert not fs.validate()
+
+
+def test_an_angle_valve_is_set_at_its_lines_corner() -> None:
+    """Check that the line turns through an angle valve with no bend of its own."""
+    from pandid import Vessel
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import real_bends
+
+    fs = Flowsheet("Angle valve")
+    feed = fs.add(Feed("F")).pin(row=1, col=1)
+    drum = fs.add(Vessel("V-2")).pin(row=2, col=2)
+    valve = fs.add(Valve("HV-1", variant="angle"), on=fs.connect(feed.outlet, drum.inlet))
+
+    fs.route()
+    inlet, outlet = valve.inlet.stream, valve.outlet.stream
+    assert inlet is not None and outlet is not None
+    assert real_bends(stream_polyline(inlet)) + real_bends(stream_polyline(outlet)) <= 1
+    assert _clean(fs)
+
+
+def test_valves_either_side_of_an_angle_valve_keep_their_order() -> None:
+    """Check that valves before and after a cornered angle valve stay on their own legs."""
+    from pandid import Vessel
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import real_bends
+
+    fs = Flowsheet("Angle valve between valves")
+    feed = fs.add(Feed("F")).pin(row=1, col=1)
+    drum = fs.add(Vessel("V-2")).pin(row=2, col=2)
+    line = fs.connect(feed.outlet, drum.inlet)
+    first = fs.add(Valve("HV-0"), on=line, at=0.2)
+    angle = fs.add(Valve("HV-1", variant="angle"), on=line, at=0.5)
+    last = fs.add(Valve("HV-2"), on=line, at=0.8)
+
+    fs.route()
+    assert first.frame is not None and angle.frame is not None and last.frame is not None
+    inlet = port_point(angle, angle.frame, "inlet")
+    outlet = port_point(angle, angle.frame, "outlet")
+    assert port_point(first, first.frame, "outlet")[1] == pytest.approx(inlet[1])
+    assert port_point(last, last.frame, "inlet")[0] == pytest.approx(outlet[0])
+    paths = [stream_polyline(s) for s in fs.streams]
+    assert sum(map(real_bends, paths)) <= 1
+    assert _clean(fs)
+
+
+def test_an_angle_valve_off_a_package_turns_its_corner_outside_the_frame() -> None:
+    """Check that an angle valve on a line leaving a package is set at a corner off its frame."""
+    from pandid import Pump, Vessel
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import real_bends
+
+    fs = Flowsheet("Angle valve off a package")
+    feed = fs.add(Feed("F")).pin(row=1, col=1)
+    pump = fs.add(Pump("P-1")).pin(row=1, col=2)
+    drum = fs.add(Vessel("V-2")).pin(row=2, col=3)
+    fs.connect(feed.outlet, pump.suction)
+    valve = fs.add(Valve("HV-1", variant="angle"), on=fs.connect(pump.discharge, drum.inlet))
+    fs.package("PK-1", [pump])
+
+    fs.route()
+    inlet, outlet = valve.inlet.stream, valve.outlet.stream
+    assert inlet is not None and outlet is not None
+    assert real_bends(stream_polyline(inlet)) + real_bends(stream_polyline(outlet)) <= 1
+    assert not [issue for issue in fs.validate() if issue.code == "package-encloses"]
+    assert _clean(fs)
