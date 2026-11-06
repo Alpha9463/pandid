@@ -27,6 +27,7 @@ from pandid.render.drawio import (
     HOP_DROPPED,
     _hops,
     _PART_APPROXIMATIONS,
+    _tag_pass,
     DrawioRenderer,
     OWN_OUTLINE,
 )
@@ -41,6 +42,7 @@ from pandid.render.svg import (
     drawing_bounds,
     impulse_tap,
     pneumatic_marks,
+    sheet_connections,
     stream_hops,
     stream_polyline,
     tap_lines,
@@ -987,8 +989,7 @@ def _drawio_edge_label(points, geometry) -> tuple[float, float]:
 
 def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, rendered_gallery):
     """Match exported line-number positions to the sheet."""
-    from pandid.render.drawio import _tag_pass
-    from pandid.render.svg import sheet_connections, stream_numbers
+    from pandid.render.svg import stream_numbers
 
     for stem in LINE_NUMBER_SHEETS:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
@@ -1357,10 +1358,19 @@ def _drawio_root(document: str) -> ET.Element:
     return root
 
 
+def _labels(fs, kwargs) -> list:
+    """Return the boxes of the tags and letters the export draws beside units."""
+    joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
+    return _tag_pass(fs, joints, kwargs.get("jump_direction", "vertical")).plates
+
+
 def _drawio_furniture(fs, kwargs):
     """Build furniture with the export options used by the gallery."""
     return DrawioRenderer()._furniture(
-        fs, _page(kwargs.get("page_size")), bool(kwargs.get("show_stream_table", False))
+        fs,
+        _page(kwargs.get("page_size")),
+        bool(kwargs.get("show_stream_table", False)),
+        labels=_labels(fs, kwargs),
     )
 
 
@@ -1707,7 +1717,7 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
     fs.annotations.extend([left, right])
     fs.layout()
 
-    box = drawing_bounds(fs)
+    box = drawing_bounds(fs, _labels(fs, {}))
     placed, _frame, _free = F.dock(
         [(a, a.align, *F.measure_annotation(a)) for a in fs.annotations], box
     )
@@ -1922,7 +1932,8 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
     page, pw, ph = _page_states(fs, **kwargs)
 
     sheet = _page(page_size)
-    _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet, border=border)
+    labels = _labels(fs, {})
+    _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet, border=border, labels=labels)
     if sheet is not None:
         # Paged: the page is the paper, anchored at the model origin.
         assert page == "1"
@@ -1936,7 +1947,7 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
     assert (pw, ph) == pytest.approx((ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN), abs=0.01)
 
     # The page holds the drawing and its frame.
-    dx0, dy0, dx1, dy1 = drawing_bounds(fs)
+    dx0, dy0, dx1, dy1 = drawing_bounds(fs, labels)
     fx, fy, fw, fh = frame
     for x0, y0, x1, y1 in ((dx0, dy0, dx1, dy1), (fx, fy, fx + fw, fy + fh)):
         assert ox <= x0 and oy <= y0
@@ -1949,7 +1960,9 @@ def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border)
     from pandid.render import furniture as F
 
     _page_attr, pw, ph = _page_states(sample, border=border, check=False)
-    _furniture, frame, _fit = DrawioRenderer()._furniture(sample, None, border=border)
+    _furniture, frame, _fit = DrawioRenderer()._furniture(
+        sample, None, border=border, labels=_labels(sample, {})
+    )
     ox, oy, _ow, _oh = F.sheet_rect(*frame)
     ox, oy = ox - F.OUTER_MARGIN, oy - F.OUTER_MARGIN
 
