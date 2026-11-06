@@ -514,6 +514,58 @@ def _tapped_runs(inst: "Instrument") -> tuple[Box, ...]:
                  for axis, fixed, lo, hi in segments)
 
 
+def _leader_runs(inst: "Instrument") -> tuple[Box, ...]:
+    """Return the runs of the tap line drawn to the balloon a balloon hangs from.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    tuple[Box, ...]
+        Each run as a flat box; ``()`` if its host draws no tap line.
+    """
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = inst.flowsheet
+    for host, tap, centre in tap_lines(fs) if fs is not None else ():
+        if host is inst.host:
+            points = tap_route(host, tap, centre)
+            return tuple((min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+                         for a, b in zip(points, points[1:]))
+    return ()
+
+
+def on_leader(fs: "Flowsheet") -> bool:
+    """Return whether a balloon is drawn across the tap line of its host.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    bool
+        True if a balloon hung from a balloon covers that balloon's tap
+        line.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    for host, tap, centre in tap_lines(fs):
+        points = tap_route(host, tap, centre)
+        for u in fs.units:
+            if getattr(u, "host", None) is host and u.frame is not None and any(
+                    segment_crosses_box(a, b, unit_box(u, u.frame))
+                    for a, b in zip(points, points[1:])):
+                return True
+    return False
+
+
 def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
@@ -552,10 +604,14 @@ def place_attached(fs: "Flowsheet") -> bool:
             w, h = resolve_size(inst)
             runs = _tapped_runs(inst) if fs._keep_clear else ()
             fs._kept_clear = fs._kept_clear or bool(runs)
+            clearance = fs._keep_clear
+            if fs._off_leaders:
+                runs += _leader_runs(inst)
+                clearance = max(clearance, TOUCHING)
             distance, angle = _clear_standoff(
                 inst, (tx, ty), ref, w, h,
                 obstacles + keepouts if mounted else obstacles,
-                [] if mounted else keepouts, runs, fs._keep_clear)
+                [] if mounted else keepouts, runs, clearance)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis.
