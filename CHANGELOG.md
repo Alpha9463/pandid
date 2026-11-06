@@ -142,6 +142,9 @@ These are removed in 0.4.0.
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- A valve station put with `on=` on a line between stacked units is turned to
+  run up or down the line, with room kept for it between the units, instead of
+  being drawn over the unit above.
 
 ## [0.2.0] - 2026-11-05
 

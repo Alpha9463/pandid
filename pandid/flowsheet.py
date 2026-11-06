@@ -666,6 +666,12 @@ class Flowsheet:
         # the last layout drew any such lateral.
         self._fan_out = False
         self._fannable = False
+        # Whether layout may stand a valve station on an upright leg, with
+        # its room budgeted between the units it joins, and whether the
+        # last layout left any station on a pipe with an upright leg
+        # without clear room.
+        self._upright_stations = False
+        self._crowded_station = False
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -2285,7 +2291,7 @@ class Flowsheet:
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
-        self._fannable = False
+        self._fannable = self._crowded_station = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2319,7 +2325,11 @@ class Flowsheet:
         again with each such line turned beside the splitter or mixer and
         its valves and fittings next to the unit at its other end, kept
         only if no crossing, bend, fallback, finding, clash or tap off its
-        line grows. Where the last layout drew a valve's signal exit
+        line grows. Where the last layout left a valve station on a pipe
+        with an upright leg without clear room, the sheet is laid out and
+        routed again with each station free to stand on an upright leg,
+        its room kept between the units it joins, kept on the same terms.
+        Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
         Where the drawing then holds a separated route that crosses lines
@@ -2637,7 +2647,8 @@ class Flowsheet:
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
                         self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out, self._tees_away, self._fannable))
+                        self._rows_out, self._tees_away, self._fannable,
+                        self._crowded_station))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2649,7 +2660,8 @@ class Flowsheet:
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out, self._tees_away, self._fannable) = _copied(state)
+         self._rows_out, self._tees_away, self._fannable,
+         self._crowded_station) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2802,13 +2814,18 @@ class Flowsheet:
             finally:
                 self._recheck = False
 
-        def fanned() -> None:
-            """Lay out with the furniture on each lateral off a splitter or
-            into a mixer next to the unit at its other end, and settle;
-            put the sheet back if a crossing, bend, fallback, finding or
-            clash grows, or a tap leaves its line."""
+        def laid_out_with(flag: str) -> None:
+            """Lay out with a layout flag set, and settle; put the sheet
+            back if a crossing, bend, fallback, finding or clash grows, or
+            a tap leaves its line.
+
+            Parameters
+            ----------
+            flag : str
+                Name of the flag attribute set for the layout.
+            """
             before, off, drawn = _score(self)[0], _taps_off(self), self._state()
-            self._fan_out = True
+            setattr(self, flag, True)
             try:
                 self.layout(self._engine)
                 settle_best()
@@ -2817,7 +2834,7 @@ class Flowsheet:
             except Exception:
                 kept = False
             finally:
-                self._fan_out = False
+                setattr(self, flag, False)
             if not kept:
                 self._put_state(drawn)
 
@@ -2844,7 +2861,9 @@ class Flowsheet:
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
         if tries and self._fannable:
-            fanned()
+            laid_out_with("_fan_out")
+        if tries and self._crowded_station:
+            laid_out_with("_upright_stations")
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False

@@ -283,22 +283,25 @@ def _chain_width(run: MountedRun) -> float:
     return max(width, _room(run) - END_ROOM)
 
 
-def _column_room(run: MountedRun) -> float:
-    """Return the upright pipe length a run's devices need.
+def _column_room(run: MountedRun, upright: bool = False) -> float:
+    """Return the upright pipe length a run's furniture needs.
 
     Parameters
     ----------
     run : MountedRun
         Furnished pipe.
+    upright : bool, default=False
+        Whether a station may stand on an upright leg.
 
     Returns
     -------
     float
-        Length along an upright pipe, or 0 if the run carries a station.
+        Length along an upright pipe, or 0 if the run carries a station
+        and ``upright`` is not set.
     """
     from pandid.stations import StationAssembly
 
-    if any(isinstance(element, StationAssembly) for element in run.elements):
+    if not upright and any(isinstance(element, StationAssembly) for element in run.elements):
         return 0.0
     lengths = [_level_length(element) for element in run.elements]
     return (sum(lengths) + ALONG * (len(lengths) - 1) + NOZZLE_END + END
@@ -535,7 +538,7 @@ def _main_width(assembly: StationAssembly) -> float:
     return sum(resolve_size(unit)[0] for unit in main) + assembly.gap * (len(main) - 1)
 
 
-def _length(element: Element, leg: Leg) -> float:
+def _length(element: Element, leg: Leg, upright: bool = False) -> float:
     """Return the room an element takes along a leg.
 
     Parameters
@@ -544,6 +547,8 @@ def _length(element: Element, leg: Leg) -> float:
         Element to measure.
     leg : Leg
         Leg it sits on.
+    upright : bool, default=False
+        Whether a station may stand on an upright leg.
 
     Returns
     -------
@@ -553,7 +558,7 @@ def _length(element: Element, leg: Leg) -> float:
     from pandid.stations import StationAssembly
 
     if isinstance(element, StationAssembly):
-        return _main_width(element) if _level(leg) else float("inf")
+        return _main_width(element) if upright or _level(leg) else float("inf")
     frame = _device_frame(element, (0.0, 0.0), leg)
     level = _level(leg)
     (ax, ay), (bx, by) = (port_point(element, frame, name) for name in ("inlet", "outlet"))
@@ -585,8 +590,48 @@ def _level_length(element: Element) -> float:
     return height if abs(by - ay) > abs(bx - ax) else width
 
 
-def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
-    """Return frames centring an element a distance along a leg.
+def _turned(assembly: StationAssembly, point: Point, down: bool,
+            flip: bool) -> dict[Unit, Frame]:
+    """Return a station's frames turned to run up or down through a point.
+
+    The station is laid out level, flowing west if ``flip`` is set,
+    else east, and turned a quarter about its main run's middle.
+
+    Parameters
+    ----------
+    assembly : StationAssembly
+        Station to lay out.
+    point : Point
+        Middle of the main run.
+    down : bool
+        Whether flow runs down.
+    flip : bool
+        Lay the station out flowing west before turning it.
+
+    Returns
+    -------
+    dict[Unit, Frame]
+        Frame of each member.
+    """
+    from pandid.layout.station import _station_frames
+
+    width = _main_width(assembly)
+    turn = 90 if down != flip else 270
+    sign = 1 if turn == 90 else -1
+    frames = {}
+    for unit, frame in _station_frames(assembly, -width / 2, 0.0, flip).items():
+        cx, cy = -sign * frame.cy, sign * frame.cx
+        frames[unit] = replace(frame, x=point[0] + cx - frame.h / 2,
+                               y=point[1] + cy - frame.w / 2, w=frame.h, h=frame.w,
+                               orientation=(int(frame.orientation) + turn) % 360)
+    return frames
+
+
+def _frames_at(element: Element, centre: float, leg: Leg) -> list[dict[Unit, Frame]]:
+    """Return ways to centre an element a distance along a leg.
+
+    A station on an upright leg is turned to run along it, with its
+    bypass on either side.
 
     Parameters
     ----------
@@ -599,8 +644,8 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
 
     Returns
     -------
-    dict[Unit, Frame]
-        Frame of each unit the element draws.
+    list[dict[Unit, Frame]]
+        Frame of each unit the element draws, for each way, best first.
     """
     from pandid.layout.station import _station_frames
     from pandid.stations import StationAssembly
@@ -610,9 +655,11 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
     t = centre / total if total else 0.5
     point = (ax + t * (bx - ax), ay + t * (by - ay))
     if isinstance(element, StationAssembly):
-        width = _length(element, leg)
-        return _station_frames(element, point[0] - width / 2, point[1], bx < ax)
-    return {element: _device_frame(element, point, leg)}
+        if not _level(leg):
+            return [_turned(element, point, by > ay, flip) for flip in (False, True)]
+        width = _main_width(element)
+        return [_station_frames(element, point[0] - width / 2, point[1], bx < ax)]
+    return [{element: _device_frame(element, point, leg)}]
 
 
 def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
@@ -664,6 +711,48 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
                and max(a[1], b[1]) >= top and bottom >= min(a[1], b[1]) for a, b in lines):
             return False
     return True
+
+
+def _bound(frames: dict[Unit, Frame]) -> Box:
+    """Return the box around every frame.
+
+    Parameters
+    ----------
+    frames : dict[Unit, Frame]
+        Frames to bound.
+
+    Returns
+    -------
+    Box
+        Left, top, right and bottom.
+    """
+    drawn = [unit_box(unit, frame) for unit, frame in frames.items()]
+    return (min(b[0] for b in drawn), min(b[1] for b in drawn),
+            max(b[2] for b in drawn), max(b[3] for b in drawn))
+
+
+def _ground(assembly: StationAssembly, frames: dict[Unit, Frame]) -> list[Box]:
+    """Return the box of each member of a station and of its bypass loop.
+
+    Parameters
+    ----------
+    assembly : StationAssembly
+        Station.
+    frames : dict[Unit, Frame]
+        Frame of each member.
+
+    Returns
+    -------
+    list[Box]
+        One box per member, then the box around the bypass valve and
+        the tees it joins, if any.
+    """
+    station = assembly.station
+    boxes = [unit_box(unit, frame) for unit, frame in frames.items()]
+    if station.bypass is not None:
+        loop = (station.tees[0], station.bypass, station.tees[-1])
+        boxes.append(_bound({unit: frames[unit] for unit in loop}))
+    return boxes
 
 
 def _signal_exits(frames: dict[Unit, Frame]) -> list[Box]:
@@ -878,7 +967,8 @@ def _room(run: MountedRun) -> float:
                default=0.0)
 
 
-def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[int]]:
+def _assign(run: MountedRun, legs: list[Leg], wanted: list[float],
+            upright: bool = False) -> list[list[int]]:
     """Return ways to put elements on legs, best first.
 
     Single legs that hold the whole chain come first, level before
@@ -894,6 +984,8 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
         Pipe legs in flow order.
     wanted : list[float]
         Wanted centre distance of each element.
+    upright : bool, default=False
+        Whether a station may stand on an upright leg.
 
     Returns
     -------
@@ -902,7 +994,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     """
     room = [path_length(leg) - sum(_margins(index, len(legs))) + ALONG
             for index, leg in enumerate(legs)]
-    need = [[_length(element, leg) + ALONG for leg in legs] for element in run.elements]
+    need = [[_length(element, leg, upright) + ALONG for leg in legs] for element in run.elements]
     starts = [0.0, *accumulate(map(path_length, legs))]
     middle = sum(wanted) / len(wanted)
 
@@ -1050,7 +1142,7 @@ def _fanned(run: MountedRun, legs: list[Leg]) -> tuple[list[Leg], list[float]] |
 
 def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
              zones: list[Box], pipes: list[list[Point]], exit_gap: float = 0.0,
-             fan: bool = False) -> bool:
+             fan: bool = False, upright: bool = False) -> bool:
     """Set a pipe's elements on its routed polyline.
 
     With no route, one straight leg from the source nozzle along the
@@ -1073,12 +1165,16 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         Clearance each element's signal exits keep from other units.
     fan : bool, default=False
         Set a header lateral as :func:`_fanned` turns and packs it.
+    upright : bool, default=False
+        Let a station stand on an upright leg.
 
     Returns
     -------
     bool
         True if every element found clear room.
     """
+    from pandid.stations import StationAssembly
+
     source, dest = run.source.owner, run.dest.owner
     assert source.frame is not None and dest.frame is not None
     legs: list[Leg] = list(zip(points, points[1:]))
@@ -1125,7 +1221,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
             leg, size, level = legs[index], path_length(legs[index]), _level(legs[index])
             head, tail = _margins(index, len(legs))
             group = [i for i, a in enumerate(assigned) if a == index]
-            lengths = [min(_length(run.elements[i], leg), size) for i in group]
+            lengths = [min(_length(run.elements[i], leg, upright), size) for i in group]
             if strict and sum(lengths) + ALONG * (len(group) - 1) + head + tail > size:
                 return None
             centres = _centres([want[i] - starts[index] for i in group], lengths, size, head, tail)
@@ -1134,37 +1230,42 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                 low = max(length / 2 + head, floor + length / 2)
                 high = size - length / 2 - tail
                 chosen = None
+                element = run.elements[i]
+                # A station turned upright also keeps clear of the end units.
+                turned = element if isinstance(element, StationAssembly) and not level else None
+                ends = [unit_box(end, end.frame) for end in (source, dest)]
                 # Search the whole leg, nearest spot first.
                 reach = int(size / NUDGE_STEP) + 1
                 for step in sorted(range(-reach, reach + 1), key=abs):
                     at = centre + step * NUDGE_STEP
                     if not low - 1e-6 <= at <= high + 1e-6:
                         continue
-                    frames = _frames_at(run.elements[i], at, leg)
-                    if _clear(frames, others, level, mine, pipes, (source, dest), exit_gap):
-                        chosen = (at, frames)
+                    chosen = next(((at, frames) for frames in _frames_at(element, at, leg)
+                                   if _clear(frames, others, level, mine, pipes, (source, dest),
+                                             exit_gap)
+                                   and (turned is None or not any(
+                                       boxes_overlap(box, end, GAP)
+                                       for box in _ground(turned, frames) for end in ends))),
+                                  None)
+                    if chosen is not None:
                         break
                 if chosen is None:
                     if strict:
                         return None
                     at = min(max(centre, low), max(low, high)) if high >= low else size / 2
-                    chosen = (at, _frames_at(run.elements[i], at, leg))
-                drawn = [unit_box(unit, frame) for unit, frame in chosen[1].items()]
-                mine.append((min(b[0] for b in drawn), min(b[1] for b in drawn),
-                             max(b[2] for b in drawn), max(b[3] for b in drawn)))
+                    chosen = (at, _frames_at(element, at, leg)[0])
+                mine.append(_bound(chosen[1]))
                 placed.append(chosen[1])
                 floor = chosen[0] + length / 2 + ALONG
         return placed
 
-    plans = _assign(run, legs, want)
+    plans = _assign(run, legs, want, upright)
     placed = next((p for p in (attempt(plan, True) for plan in plans) if p is not None), None)
     roomy = placed is not None
     for frames in placed if placed is not None else attempt(plans[0], False) or []:
         _commit(frames, obstacles)
         if len(frames) > 1:
-            drawn = [unit_box(unit, frame) for unit, frame in frames.items()]
-            zones.append((min(b[0] for b in drawn), min(b[1] for b in drawn),
-                          max(b[2] for b in drawn), max(b[3] for b in drawn)))
+            zones.append(_bound(frames))
     return roomy
 
 
@@ -1180,6 +1281,10 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     ``fs._exit_tight`` records whether any comes closer. With
     ``fs._fan_out`` set, each header lateral is set as :func:`_fanned`
     turns and packs it; ``fs._fannable`` records whether any pipe is one.
+    With ``fs._upright_stations`` set, a station may stand on an upright
+    leg, its room budgeted between the units it joins;
+    ``fs._crowded_station`` records whether any station on a pipe with
+    an upright leg found no clear room.
 
     Parameters
     ----------
@@ -1190,6 +1295,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     """
     from pandid.layout.layered import Link, place_equipment
     from pandid.layout.station import place_stations
+    from pandid.stations import StationAssembly
 
     members = {unit for run in runs for element in run.elements for unit in _members(element)}
     retained = [unit for unit in process_units(fs) if unit not in members]
@@ -1201,7 +1307,8 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
           if id(s) not in inside and s.source.owner in shown and s.dest.owner in shown
           and s.source.owner is not s.dest.owner),
         *(Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
-               _chain_width(run), _column_room(run), fs._fan_out and _off_header(run))
+               _chain_width(run), _column_room(run, fs._upright_stations),
+               fs._fan_out and _off_header(run))
           for run in runs)])
     for unit in members:
         placed = slot(unit)
@@ -1217,8 +1324,14 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     obstacles = list(retained)
     zones: list[Box] = pinned_balloons(fs, balloon_pads(fs)) if fs._pin_balloons else []
     exit_gap = MARGIN if fs._exit_clear else 0.0
+    crowded = False
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
-        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap, fs._fan_out)
+        roomy = _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap,
+                         fs._fan_out, fs._upright_stations)
+        crowded = crowded or (
+            not roomy and any(not _level(leg) for leg in zip(routes[i], routes[i][1:]))
+            and any(isinstance(element, StationAssembly) for element in runs[i].elements))
+    fs._crowded_station = crowded
     # Note a signal exit drawn within MARGIN of another unit.
     fs._exit_tight = any(boxes_overlap(box, unit_box(other, other.frame), MARGIN)
                          for unit in members if unit.frame is not None

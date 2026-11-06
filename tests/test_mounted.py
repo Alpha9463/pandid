@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from pandid import ControlValve, Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
+from pandid import (
+    ControlValve,
+    Feed,
+    Flowsheet,
+    GravitySeparator,
+    Product,
+    Reactor,
+    Valve,
+    ValveStation,
+)
 from _quality import measure_final
 from pandid.portgeom import port_point
 
@@ -594,3 +603,49 @@ def test_a_valve_is_not_set_on_a_pinned_balloon_main_draws_clear_of() -> None:
 
     fs.route()
     assert not any(issue.code == "unit-overlap" for issue in fs.validate())
+
+
+def _upright_at(station: ValveStation) -> float:
+    """Return the x of a station whose run is drawn down one line."""
+    branch = (station.bypass, station.upstream_drain, station.downstream_drain)
+    points = []
+    for unit in station.members:
+        if unit not in branch:
+            assert unit.frame is not None
+            points += [port_point(unit, unit.frame, name) for name in ("inlet", "outlet")]
+    assert all(x == pytest.approx(points[0][0]) for x, _ in points)
+    assert [y for _, y in points] == sorted(y for _, y in points)
+    return points[0][0]
+
+
+def test_a_station_between_row_pinned_vessels_stands_on_its_upright_leg() -> None:
+    """Check that a station between stacked vessels is turned onto an upright leg with room."""
+    from pandid import Vessel
+
+    fs = Flowsheet("Station between rows")
+    upper = fs.add(Vessel("V-1")).pin(row=1, col=1)
+    lower = fs.add(Vessel("V-2")).pin(row=2, col=1)
+    station = fs.add_valve_station("FV-101", on=fs.connect(upper.outlet, lower.inlet))
+
+    fs.route()
+    _upright_at(station)
+    assert not fs.validate()
+    assert _clean(fs)
+
+
+def test_a_station_on_a_stacked_drop_stands_on_it() -> None:
+    """Check that a station on a pipe joining stacked nozzles is drawn upright with room."""
+    from pandid import HeatExchanger
+
+    fs = Flowsheet("Station on a drop")
+    upper = fs.add(HeatExchanger("E-1"))
+    lower = fs.add(HeatExchanger("E-2"))
+    station = fs.add_valve_station("FV-101", on=fs.connect(upper.shell_out, lower.shell_in))
+
+    fs.route()
+    assert upper.frame is not None and lower.frame is not None
+    top = port_point(upper, upper.frame, "shell_out")
+    assert top[0] == pytest.approx(port_point(lower, lower.frame, "shell_in")[0])
+    assert _upright_at(station) == pytest.approx(top[0])
+    assert not fs.validate()
+    assert _clean(fs)
