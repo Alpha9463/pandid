@@ -77,6 +77,8 @@ def test_a_stream_with_no_components_is_numbered_as_before():
         ),
         ({}, {"size": 150, "service": "P", "spec": "A1A"}, "150-P-1001-A1A"),
         ({"line_number_start": 100}, {"size": '4"', "service": "P", "spec": "A1A"}, '4"-P-100-A1A'),
+        ({}, {"sequence": 2740}, "2740"),
+        ({"line_numbering_scheme": "{service}-{sequence}"}, {"sequence": "2740"}, "2740"),
     ],
     ids=[
         "unset-leading-components",
@@ -89,6 +91,8 @@ def test_a_stream_with_no_components_is_numbered_as_before():
         "format-spec",
         "numeric-components",
         "line-number-start",
+        "sequence-alone",
+        "sequence-alone-in-a-custom-scheme",
     ],
 )
 def test_a_scheme_writes_the_components_it_names(
@@ -139,6 +143,56 @@ def test_a_sequence_set_after_connecting_is_kept():
     s.sequence = "2740"
     fs.renumber_streams()
     assert s.name == '6"-P-2740-A1A'
+
+
+_FIELDS: dict[str, Any] = {"size": '6"', "service": "P", "spec": "A1A"}
+
+
+@pytest.mark.parametrize(
+    ("legs", "name"),
+    [
+        ([{"sequence": "1001"}, _FIELDS], '6"-P-1001-A1A'),
+        ([{"sequence": "2740"}, _FIELDS], '6"-P-2740-A1A'),
+        ([_FIELDS, {"sequence": "2740"}], '6"-P-2740-A1A'),
+        ([{"sequence": "2740"}, {}], "2740"),
+    ],
+    ids=["sequence-first", "another-sequence-first", "sequence-last", "sequence-only"],
+)
+def test_a_sequence_on_any_segment_numbers_the_line_with_its_fields(
+    legs: list[dict[str, Any]], name: str
+):
+    """Check that a run's stated sequence joins the fields another segment states."""
+    fs = Flowsheet("t")
+    feed, hv, prod = fs.add(U.Feed("F")), fs.add(U.Valve("HV-1")), fs.add(U.Product("P"))
+    fs.connect(feed.outlet, hv.inlet, **legs[0])
+    fs.connect(hv.outlet, prod.inlet, **legs[1])
+    fs.to_svg(diagram="p&id")
+    assert [s.name for s in fs.streams] == [name, name]
+    assert [i.code for i in fs.validate(diagram="p&id") if i.code == "line-field-undrawn"] == []
+
+
+@pytest.mark.parametrize(
+    ("components", "name"),
+    [({"sequence": 0}, "0"), ({"size": 0}, "0-1001"), ({"service": 0, "spec": 0}, "0-1001-0")],
+    ids=["sequence", "size", "service-and-spec"],
+)
+def test_a_zero_is_a_stated_line_number_field(components: dict[str, Any], name: str):
+    """Check that a field set to 0 is drawn in the line number like any other value."""
+    fs = Flowsheet("t")
+    s = fs.connect(fs.add(U.Feed("F")).outlet, fs.add(U.Product("P")).inlet, **components)
+    fs.to_svg(diagram="p&id")
+    assert s.name == name
+    assert fs.validate(diagram="p&id") == []
+
+
+def test_a_zero_service_names_an_energy_line_s_carrier():
+    """Check that service=0 on an energy line counts as its carrier on a PFD."""
+    fs = Flowsheet("t")
+    cooler, heater = fs.add(U.Cooler("E-2")), fs.add(U.Heater("E-1"))
+    duty = fs.connect(cooler.utility_out, heater.utility_in, service=0)
+    fs.to_svg()
+    assert duty.name == "0-1001"
+    assert [i.code for i in fs.validate() if i.code == "energy-carrier-missing"] == []
 
 
 # --- inline groups and spec breaks --------------------------------------------
@@ -243,12 +297,13 @@ def test_a_scheme_naming_something_that_is_not_a_component_says_so():
     assert "'schedule'" in str(raised.value)
 
 
-def test_components_the_scheme_never_uses_are_not_silently_dropped():
+@pytest.mark.parametrize("components", [{"spec": "A1A"}, {"sequence": "2740"}])
+def test_components_the_scheme_never_uses_are_not_silently_dropped(components: dict[str, Any]):
     fs = Flowsheet("t", line_numbering_scheme="{size}-{service}")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
     with pytest.raises(ValueError, match="line number would be empty"):
-        fs.connect(feed.outlet, prod.inlet, spec="A1A")
+        fs.connect(feed.outlet, prod.inlet, **components)
 
 
 def test_line_components_is_deprecated(same_file: Callable[[str], str]) -> None:

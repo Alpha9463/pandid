@@ -11,9 +11,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pandid._checks import check_real, suggest
 from pandid.deprecation import Deprecation
+from pandid.package import Package
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.streams import Stream
     from pandid.units import Unit
     from pandid.validate import Issue
 
@@ -408,10 +410,10 @@ class StreamLabelOptions:
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "centrifuge", "column", "compressor", "conveyor",
     "cooler", "cooling_tower", "crusher", "crushing_machine", "crystallizer",
-    "dryer", "ejector", "elevator", "evaporator", "feeder", "filter", "flare",
-    "flotation_cell", "furnace", "heater", "hex", "kiln", "kneader", "mill",
-    "pump", "reactor", "screening_device", "separator", "stack", "tank",
-    "thickener", "turbine", "vessel",
+    "deaerator", "dryer", "ejector", "elevator", "evaporator", "feeder", "filter",
+    "flare", "flotation_cell", "furnace", "heater", "hex", "kiln", "kneader",
+    "mill", "mixer_settler", "pump", "reactor", "screening_device", "separator",
+    "silo", "stack", "tank", "thickener", "turbine", "vessel",
 })
 
 # Equipment-table description of a kind whose name is not its title.
@@ -427,6 +429,12 @@ _KIND_LABELS = {
     "tee": "Pipe Tee",
 }
 
+# Equipment-table description of a drawing its kind's title misnames.
+_VARIANT_LABELS = {
+    ("furnace", "general"): "Furnace",
+    ("furnace", "combustion_chamber"): "Combustion Chamber",
+}
+
 
 #: Deprecation of the drawn box's old name.
 _EQUIPMENT_LIST = Deprecation(
@@ -437,7 +445,9 @@ _EQUIPMENT_LIST = Deprecation(
 
 
 def _scheduled_units(fs):
-    """Return the units an equipment table lists by default.
+    """Return the units and packages an equipment table lists by default.
+
+    A package comes where its first unit would, followed by its units.
 
     Parameters
     ----------
@@ -446,26 +456,39 @@ def _scheduled_units(fs):
 
     Returns
     -------
-    list[Unit]
-        Units of a major equipment kind, in sheet order.
+    list[Unit or Package]
+        Units of a major equipment kind and packages, in sheet order.
     """
-    return [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
+    out = []
+    for u in fs.units:
+        pkg = next((p for p in fs.packages if u in p.units), None)
+        if pkg is None:
+            if u.kind in _MAJOR_EQUIPMENT:
+                out.append(u)
+        elif not any(x is pkg for x in out):
+            out.append(pkg)
+            out += [m for m in fs.units if m in pkg.units and m.kind in _MAJOR_EQUIPMENT]
+    return out
 
 
 def _described(unit):
-    """Return a unit's equipment-table description.
+    """Return a unit's or package's equipment-table description.
 
     Parameters
     ----------
-    unit : Unit
-        Unit to describe.
+    unit : Unit or Package
+        Item to describe.
 
     Returns
     -------
     str
-        The stated description, else the kind's name.
+        The stated description, else the drawing's or the kind's
+        name, or ``"Package Unit"`` for a package.
     """
+    if isinstance(unit, Package):
+        return str(unit.description) or "Package Unit"
     return (getattr(unit, "description", "")
+            or _VARIANT_LABELS.get((unit.kind, unit.variant))
             or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
 
 
@@ -488,7 +511,8 @@ def equipment_table(fs, *, title="EQUIPMENT LIST", align="top-right",
     margin : float, default=0.0
         Inset from the frame.
     include : Sequence[str], optional
-        Unit names to list, in order, instead of the major equipment.
+        Unit and package names to list, in order, instead of the major
+        equipment.
     width : float, optional
         Box width.
 
@@ -509,7 +533,7 @@ def equipment_table(fs, *, title="EQUIPMENT LIST", align="top-right",
     if include is None:
         chosen = _scheduled_units(fs)
     else:
-        by_name = {u.name: u for u in fs.units}
+        by_name = {u.name: u for u in (*fs.units, *fs.packages)}
         missing = [tag for tag in include if tag not in by_name]
         if missing:
             hints = [f"{tag!r}{suggest(tag, by_name)}" for tag in missing]
@@ -726,15 +750,51 @@ def _line(fs: "Flowsheet", flags: "list[Unit]") -> _Line:
     -------
     tuple
         Line number, service and size, each ``None`` when unstated,
-        and all ``None`` unless exactly one stream ends at the flags. A
-        stream number the sheet assigned is not a line number.
+        and all ``None`` unless exactly one stream ends at the flags.
+        The service is read from the segment at the flags, else from
+        the first segment of the line that states it; the size, as
+        :func:`_size_at` finds it. A stream number the sheet assigned
+        is not a line number.
     """
-    runs = [s for s in fs.streams if s.source.owner in flags or s.dest.owner in flags]
-    if len(runs) != 1:
+    at = [s for s in fs.streams if s.source.owner in flags or s.dest.owner in flags]
+    if len(at) != 1:
         return (None, None, None)
-    (s,) = runs
-    return (s.name if s.has_line_number or not s.auto_named else None,
-            _drawn_text(s.service) or None, _drawn_text(s.size) or None)
+    run = fs._named_runs().get(at[0].name, at)
+    service = next((s.service for s in (*at, *run) if s.service is not None), None)
+    return (at[0].name if any(s.has_line_number or not s.auto_named for s in run) else None,
+            _drawn_text(service) or None, _drawn_text(_size_at(flags, at[0], run)) or None)
+
+
+def _size_at(flags: "list[Unit]", segment: "Stream", run: "list[Stream]") -> "str | float | None":
+    """Return the size stated nearest a connector's flags on its line.
+
+    Walk the line away from the flags to the first segment that states
+    a size; a reducer ends the walk.
+
+    Parameters
+    ----------
+    flags : list[Unit]
+        Flags drawn for one connector.
+    segment : Stream
+        The one stream that ends at the flags.
+    run : list[Stream]
+        Segments of its line.
+
+    Returns
+    -------
+    str, float or None
+        The size, or ``None`` when no segment this side of a reducer
+        states one.
+    """
+    upstream = segment.dest.owner in flags
+    here: "Stream | None" = segment
+    for _ in run:
+        if here is None or here.size is not None:
+            break
+        unit = here.source.owner if upstream else here.dest.owner
+        port = None if unit.kind == "reducer" else unit.ports.get("inlet" if upstream else "outlet")
+        here = next((s for s in run if port is not None and s is port.stream), None)
+    return None if here is None else here.size
 
 
 def _connectors(fs: "Flowsheet") -> "dict[tuple[str, str, str], tuple[list[Unit], _Line]]":

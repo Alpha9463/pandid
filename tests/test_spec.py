@@ -90,6 +90,14 @@ def test_unit_fields():
     assert valve.new_line_number is True
 
 
+def test_a_flag_too_short_to_letter_is_refused_where_the_spec_sizes_it():
+    """Check that a spec flag too short to letter is refused with the height that fits."""
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(_spec(units=[{"kind": "Feed", "name": "Air", "height": 20}]))
+    assert "'Air'" in str(excinfo.value)
+    assert "give height=42 or more" in str(excinfo.value)
+
+
 def test_reference_on_equipment_is_refused():
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
@@ -1647,3 +1655,40 @@ def test_an_ion_exchangers_regenerant_round_trips():
     assert back.port("regenerant_in").stream is not None
     assert back.port("spent_regenerant").stream is not None
     assert rebuilt.to_dict() == spec
+
+
+def _counted_classes() -> list[tuple[type, str, int]]:
+    """Return each exported class whose constructor defaults a count to other than 1."""
+    import inspect
+
+    import pandid
+
+    found = []
+    for name in pandid.__all__:
+        cls = getattr(pandid, name)
+        if not (isinstance(cls, type) and issubclass(cls, units.Unit)):
+            continue
+        for keyword in ("n_feeds", "n_draws", "n_inlets", "n_outlets"):
+            parameter = inspect.signature(cls).parameters.get(keyword)
+            if parameter is not None and parameter.default not in (1, inspect.Parameter.empty):
+                found.append((cls, keyword, parameter.default))
+    return found
+
+
+_COUNTED = _counted_classes()
+
+
+@pytest.mark.parametrize(
+    ("cls", "keyword", "default"),
+    _COUNTED,
+    ids=[f"{cls.__name__}-{keyword}" for cls, keyword, _ in _COUNTED],
+)
+def test_a_count_of_one_round_trips_where_the_default_is_not_one(cls, keyword, default):
+    """Check that a count of one, and the class's own default, survive a round trip."""
+    assert any(counted.__name__ == "ExtractionColumn" for counted, _, _ in _COUNTED)
+    for count in (1, default):
+        fs = Flowsheet("counts")
+        original = fs.add(cls("X-1", **{keyword: count}))
+        reopened = Flowsheet.from_dict(fs.to_dict()).units[0]
+        assert list(reopened.ports) == list(original.ports), f"{keyword}={count}"
+        assert getattr(reopened, "feed_stages", None) == getattr(original, "feed_stages", None)

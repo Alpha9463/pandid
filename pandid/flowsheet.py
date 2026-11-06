@@ -6,6 +6,7 @@ A flowsheet also lays out, routes, validates and renders its drawing.
 from __future__ import annotations
 import copy
 from contextlib import contextmanager
+from dataclasses import replace
 from math import isfinite
 from numbers import Integral
 from pathlib import Path
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from pandid.components import Component
     from pandid.document import TitleBlock
     from pandid.loops import ControlLoop, Loop
+    from pandid.package import Package
     from pandid.ports import Port
     from pandid.stations import ValveStation
     from pandid.units import Instrument, Unit
@@ -213,12 +215,69 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
         pending = ""
     line_number = "".join(out) + pending
     if not line_number:
+        unused = _unused_fields(scheme, stream)
+        wider = scheme + "".join(f"-{{{f}}}" for f in unused)
         raise ValueError(
-            f"stream {stream.name!r} carries line-number components that "
+            f"the line from {stream.source.owner.name} to {stream.dest.owner.name} "
+            f"states {', '.join(f'{f}={v!r}' for f, v in unused.items())}, which "
             f"line_numbering_scheme {scheme!r} never uses, so its line number would be "
-            f"empty; name the components you set, or set the ones the scheme names"
+            f"empty. Add {'it' if len(unused) == 1 else 'them'} to the scheme, keeping "
+            f"its other arguments: Flowsheet(..., line_numbering_scheme={wider!r})"
         )
     return line_number
+
+
+def _numbered(run: "list[Stream]") -> "Stream | None":
+    """Return the stream a run's line number is formed from.
+
+    The first segment that states a field other than the sequence
+    carries the number, with the first sequence the author set on any
+    segment; a run that states only a sequence is numbered by the first
+    segment that states it.
+
+    Parameters
+    ----------
+    run : list[Stream]
+        Segments of one line, in sheet order.
+
+    Returns
+    -------
+    Stream or None
+        The carrier, a copy of it holding the run's sequence, or
+        ``None`` when the run states no line-number field.
+    """
+    carrier = next((s for s in run if any(getattr(s, f) not in (None, "") for f in _LINE_FIELDS)),
+                   None)
+    sequenced = next((s for s in run if s.sequence not in (None, "", s._auto_sequence)), None)
+    if carrier is None or sequenced is None:
+        return carrier if carrier is not None else sequenced
+    if carrier.sequence not in (None, "", carrier._auto_sequence):
+        return carrier
+    return replace(carrier, sequence=sequenced.sequence)
+
+
+def _unused_fields(scheme: str, stream: Stream) -> "dict[str, str | float]":
+    """Return the line-number fields the author set that a scheme omits.
+
+    An automatic sequence is not one the author set. An empty scheme
+    omits every field.
+
+    Parameters
+    ----------
+    scheme : str
+        Format string over the line-number components.
+    stream : Stream
+        Stream to check.
+
+    Returns
+    -------
+    dict[str, str | float]
+        Value per omitted field, in :data:`LINE_NUMBER_FIELDS` order.
+    """
+    named = {name for _, name, _, _ in Formatter().parse(scheme)}
+    return {f: v for f in LINE_NUMBER_FIELDS
+            if f not in named and (v := getattr(stream, f)) not in (None, "")
+            and not (f == "sequence" and v == stream._auto_sequence)}
 
 
 def _format_stream_name(scheme: "str | Callable[[int], str]", number: int) -> str:
@@ -511,6 +570,24 @@ def _copied(state: tuple) -> tuple:
 
     return (geometry(state[0]), geometry(state[1]), *state[2:])
 
+def _beats(new: tuple, old: tuple) -> bool:
+    """Return whether one routed drawing's score beats another's.
+
+    Parameters
+    ----------
+    new, old : tuple
+        What :func:`~pandid.routing.lanes._score` returned.
+
+    Returns
+    -------
+    bool
+        True if no flaw or tap off its line grows and a flaw falls.
+    """
+    return (new[1] <= old[1]
+            and not any(n > old[0][k] for k, n in new[0].items())
+            and any(n > new[0][k] for k, n in old[0].items()))
+
+
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
 
@@ -547,6 +624,8 @@ class Flowsheet:
         Registered chemical species.
     loops : list[Loop]
         Declared control loops, in declaration order.
+    packages : list[Package]
+        Package units, in declaration order.
     warnings : list[Issue]
         Warnings from the last render.
     route_converged : bool
@@ -606,6 +685,7 @@ class Flowsheet:
         self.streams: list[Stream] = []
         self.components: list = []
         self.loops: list["Loop"] = []
+        self.packages: list["Package"] = []
         self.warnings: list = []
         # Diagram type of the last render; validate() defaults to it.
         self._drawn_as: str | None = None
@@ -638,6 +718,24 @@ class Flowsheet:
         # the last layout drew any such lateral.
         self._fan_out = False
         self._fannable = False
+        # Whether layout ends each run of units off a feed flag just before
+        # the far unit it feeds, and whether the last layout left one far.
+        self._near_branches = False
+        self._far_branches = False
+        # Whether layout moves each unit to level its pipe from a flag that
+        # the flag cannot level, and whether the last layout left one off.
+        self._level_flags = False
+        self._flags_off = False
+        # Whether layout may stand a valve station on an upright leg, with
+        # its room budgeted between the units it joins, and whether the
+        # last layout left any station on a pipe with an upright leg
+        # without clear room.
+        self._upright_stations = False
+        self._crowded_station = False
+        # Whether layout sets each angle valve at a corner of its line, and
+        # whether the last layout drew any angle valve it could set so.
+        self._corner_valves = False
+        self._angle_valves = False
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -647,6 +745,9 @@ class Flowsheet:
         # Whether a balloon hung from a balloon keeps off that balloon's
         # tap line.
         self._off_leaders = False
+        # Whether a route that finds no path is drawn round the units in
+        # its way where it can.
+        self._clear_fallback = False
         # Whether the router routes again each stream whose separated route
         # crosses lines its search did not price, and whether the routes
         # drawn hold such a route.
@@ -666,8 +767,13 @@ class Flowsheet:
         self._widened = False
         self._relaned = False
         # Whether layout may move a counted block, tank or vessel
-        # connection off its declared face.
+        # connection off its declared face, and onto a symbol's family
+        # faces, which route() tries; main's drawing, held where route()
+        # kept a family-face drawing; and whether route() is running.
         self._family_faces = True
+        self._added_faces = False
+        self._main: tuple | None = None
+        self._in_route = False
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -923,12 +1029,16 @@ class Flowsheet:
         ------
         ValueError
             If the unit is already on a sheet, or its name is taken by a
-            unit it may not repeat.
+            package or by a unit it may not repeat.
         """
         if unit in self.units:
             raise ValueError(
                 f"{unit!r} is already on this flowsheet"
             )
+        if any(p.name == unit.name for p in self.packages):
+            raise ValueError(
+                f"{unit.name!r} already tags package {unit.name} on this flowsheet, and "
+                f"a tag names one item. Give the unit a tag of its own")
         clash = next((u for u in self.units if u.name == unit.name), None)
         if clash is not None and not unit.repeats(clash):
             raise ValueError(
@@ -1828,6 +1938,83 @@ class Flowsheet:
         self.components.append(component)
         return component
 
+    def package(self, name: str, units: "Sequence[Unit]", *, description: str = "",
+                reference: str = "") -> "Package":
+        """Draw units as one package unit, such as a vendor skid.
+
+        The package is drawn as a dash-dot frame round its units, its
+        tag outside the upper-left corner and ``reference`` inside the
+        lower-left corner (ISO 15519-1 7.3). Layout keeps its units
+        together and other units out of the frame. The equipment list
+        gives it a row above its units::
+
+            skid = fs.package("PK-301", [p301a, p301b, f301],
+                              description="Dosing Package",
+                              reference="VENDOR DWG 4711")
+
+        Parameters
+        ----------
+        name : str
+            Package tag.
+        units : Sequence[Unit]
+            Units on this sheet that the package holds.
+        description : str, default=""
+            Equipment-list description.
+        reference : str, default=""
+            Document the frame refers to, such as a vendor drawing.
+
+        Returns
+        -------
+        Package
+            The package.
+
+        Raises
+        ------
+        TypeError
+            If ``name`` is not text or an item of ``units`` is not a
+            unit.
+        ValueError
+            If ``name`` is blank or names a unit or package on this
+            sheet, or ``units`` is empty, repeats a unit, or holds a
+            unit not on this sheet or in another package.
+        """
+        from pandid.package import Package
+        from pandid.units import Unit
+
+        if not isinstance(name, str):
+            raise TypeError(f"a package tag is text, such as 'PK-301', got {name!r}")
+        if not name.strip():
+            raise ValueError("a package needs a tag, such as fs.package('PK-301', [...])")
+        taken = next((x for x in (*self.units, *self.packages) if x.name == name), None)
+        if taken is not None:
+            raise ValueError(
+                f"{name!r} already tags {taken!r} on this flowsheet, and a tag names one "
+                f"item. Give the package a tag of its own: fs.package('PK-...', [...])")
+        members = list(units)
+        if not members:
+            raise ValueError(
+                f"package {name} holds no units. List the units its frame encloses: "
+                f"fs.package({name!r}, [p301a, p301b, ...])")
+        for u in members:
+            if not isinstance(u, Unit):
+                raise TypeError(
+                    f"package {name} lists {u!r}, which is not a unit. List the units "
+                    f"fs.add() returned: fs.package({name!r}, [p301a, p301b, ...])")
+            if u.flowsheet is not self:
+                raise ValueError(f"package {name} lists {u.name}, which is not on this "
+                                 f"flowsheet. Add it first: fs.add({u.name})")
+            if members.count(u) > 1:
+                raise ValueError(f"package {name} lists {u.name} twice; list it once")
+            other = next((p for p in self.packages if u in p.units), None)
+            if other is not None:
+                raise ValueError(
+                    f"{u.name} is already in package {other.name}, and a unit is drawn "
+                    f"inside one frame. Take it out of one of the two fs.package() calls")
+        pkg = Package(name, tuple(members), description, reference)
+        self.packages.append(pkg)
+        self._invalidate_layout()
+        return pkg
+
     def connect(self, src: "Port | Unit", dst: "Port | Unit", *,
                 kind: str | None = None,
                 name: str | None = None, draw_as_recycle: bool = False,
@@ -2195,10 +2382,11 @@ class Flowsheet:
     def equipment_list(self) -> list[dict]:
         """Return the equipment list: one row per tagged equipment item.
 
-        The rows are the units
-        :func:`pandid.document.equipment_table` lists by default. Every
-        row has the keys ``tag``, ``description`` (the table's text),
-        ``class`` (the unit's class name) and ``variant``.
+        The rows are the units and packages
+        :func:`pandid.document.equipment_table` lists by default; a
+        package's row comes before its units' rows. Every row has the
+        keys ``tag``, ``description`` (the table's text), ``class``
+        (the class name) and ``variant`` (``None`` for a package).
 
         Returns
         -------
@@ -2208,7 +2396,7 @@ class Flowsheet:
         from pandid.document import _described, _scheduled_units
 
         return [{"tag": u.name, "description": _described(u),
-                 "class": type(u).__name__, "variant": u.variant}
+                 "class": type(u).__name__, "variant": getattr(u, "variant", None)}
                 for u in _scheduled_units(self)]
 
     def instrument_index(self) -> list[dict]:
@@ -2255,12 +2443,15 @@ class Flowsheet:
         """
         from pandid.layout import default_layout_engine
 
+        if not self._in_route:
+            self._put_main()
         self._put_unkept()
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
-        self._fannable = False
+        self._fannable = self._far_branches = self._flags_off = False
+        self._crowded_station = self._angle_valves = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2289,12 +2480,29 @@ class Flowsheet:
         line along a unit or across an arrowhead, the sheet is routed again
         pricing both, with each unfaced balloon on equipment on a free face,
         kept only if no tap leaves its line and no finding or clash grows.
+        Where a run of units off a feed flag, each with one line in and one
+        out, ends more than a column before the unit it feeds, the sheet is
+        laid out and routed again with each such run ending just before
+        that unit, kept only if no crossing, bend, fallback, finding, clash
+        or tap off its line grows; the layouts after it keep the runs there.
+        Each time the sheet is settled, where a flag's line to a unit is not
+        level and moving the unit, none of whose other lines is level, would
+        level it, the sheet is laid out and routed again with each such unit
+        moved, kept only if no crossing, bend, fallback, finding, clash or
+        tap off its line grows.
         Where a line from a splitter or into a mixer carries valves or
         fittings set with no ``at=``, the sheet is laid out and routed
         again with each such line turned beside the splitter or mixer and
         its valves and fittings next to the unit at its other end, kept
         only if no crossing, bend, fallback, finding, clash or tap off its
-        line grows. Where the last layout drew a valve's signal exit
+        line grows. Where the last layout left a valve station on a pipe
+        with an upright leg without clear room, the sheet is laid out and
+        routed again with each station free to stand on an upright leg,
+        its room kept between the units it joins, kept on the same terms.
+        Where a line carries an angle valve, the sheet is laid out and
+        routed again with the valve set at a corner of the line, inlet on
+        one leg and outlet on the other, kept on the same terms.
+        Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
         Where the drawing then holds a separated route that crosses lines
@@ -2335,7 +2543,59 @@ class Flowsheet:
         where that does not settle, again from the sheet with its automatic
         routes cleared, each kept only if no tap leaves its line and no
         finding or clash grows. Where one is kept, the next route() or
-        layout() starts from the drawing before them.
+        layout() starts from the drawing before them. Then, where a line
+        that found no path runs through a unit, the sheet is routed again
+        with each such line drawn round the units in its way where a clear
+        route exists, kept only if no tap leaves its line and no finding,
+        clash, crossing or fallback route grows.
+
+        With the default router, where a symbol offers a connected port
+        family faces, the sheet is then laid out again from where all of
+        that started, with family faces as well, and drawn in full only if
+        a move takes one. That drawing is kept only if it beats the first;
+        either way the next route() or layout() starts from the first.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.routing import DefaultRouter
+        from pandid.routing.lanes import _score
+
+        self._put_main()
+        tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
+        start = self._drawing() if tries and self._offers_family_faces() else None
+        outer, self._in_route = self._in_route, True
+        try:
+            self._route_drawing(router)
+            if start is None:
+                return
+            mains, judged = self._drawing(), _score(self)
+            self._put_drawing(start)
+            self._family_faces = self._added_faces = self._layout_stale = True
+            # Lay out first, to route only where a family face is taken.
+            self.layout(self._engine)
+            if self._moved_family(added=True):
+                self._put_drawing(start)
+                self._family_faces = self._added_faces = self._layout_stale = True
+                self._route_drawing(router)
+                if _beats(_score(self), judged):
+                    self._main = mains
+                    return
+            self._put_drawing(mains)
+        finally:
+            self._in_route = outer
+
+    def _route_drawing(self, router=None) -> None:
+        """Route the sheet as the face switches stand.
 
         Parameters
         ----------
@@ -2371,6 +2631,71 @@ class Flowsheet:
             unkept = self._state()
             if self._keep_further_off(router or DefaultRouter()):
                 self._unkept = unkept
+            self._route_round_units(router or DefaultRouter())
+
+    def _route_round_units(self, router) -> bool:
+        """Route the sheet again where a route that found no path runs
+        through a unit, with each such route drawn round the units in its
+        way where a clear route exists, kept only if no tap leaves its line
+        and no finding, clash, crossing or fallback route grows.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+
+        Returns
+        -------
+        bool
+            Whether the new routes are kept.
+        """
+        from pandid.layout.conflicts import analyze_conflicts
+        from pandid.layout.control import _taps_off
+
+        fallbacks = {i for i, s in enumerate(self.streams)
+                     if s.route is not None and s.route.used_fallback and not s.route.manual}
+        through = {c.streams[0] for c in analyze_conflicts(self)
+                   if c.kind in ("route-crosses-unit", "blocked-exit")} & fallbacks
+        if not through:
+            return False
+        before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
+        # Hold every other automatic route as drawn while those are routed.
+        held = [s.route for i, s in enumerate(self.streams)
+                if s.route is not None and not s.route.manual and i not in through]
+        for route in held:
+            route.manual = True
+        self._clear_fallback = True
+        try:
+            router.route(self)
+            routed = True
+        except Exception:
+            routed = False
+        finally:
+            self._clear_fallback = False
+            for route in held:
+                route.manual = False
+        kept = routed and _taps_off(self) <= off and not any(
+            n > before[k] for k, n in self._counted_flaws().items())
+        if not kept:
+            self._put_geometry(drawn, keep_manual=False)
+        return kept
+
+    def _counted_flaws(self) -> Counter[str]:
+        """Count findings and clashes, crossings and fallback routes.
+
+        Returns
+        -------
+        Counter[str]
+            What :func:`~pandid.layout.control._flaws` counts, plus
+            ``crossing`` and ``fallback`` conflicts.
+        """
+        from pandid.layout.conflicts import analyze_conflicts
+        from pandid.layout.control import _flaws
+
+        flaws = _flaws(self)
+        flaws.update(c.kind for c in analyze_conflicts(self)
+                     if c.kind in ("crossing", "fallback"))
+        return flaws
 
     def _put_unkept(self) -> None:
         """Put back the state held from before balloons were kept further off.
@@ -2445,7 +2770,7 @@ class Flowsheet:
 
     def _route_faces(self, router=None) -> None:
         """Route the sheet, with counted connections moved where that draws
-        better.
+        better, or, in a family-face trial, as laid out.
 
         Parameters
         ----------
@@ -2459,29 +2784,107 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
-        from pandid.portgeom import family_faces
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
-        from pandid.units import _FaceFamilies
 
+        if self._added_faces:
+            # A family-face trial is judged against main's whole drawing.
+            self._route_lanes(router)
+            return
         if not self._family_faces:
             self._family_faces = self._layout_stale = True
         self._route_lanes(router)
         if (self._laying_out or not (router is None or type(router) is DefaultRouter)
-                or not any(isinstance(u, _FaceFamilies) and family_faces(u, u.frame)
-                           for u in self.units)):
+                or not self._moved_family(added=False)):
             return
         kept, judged = self._state(), _score(self)
         plain_state = self._plain_state, self._plain_stale
         self._family_faces, self._layout_stale = False, True
         self._route_lanes(router)
-        plain = _score(self)
-        if (judged[1] <= plain[1]
-                and not any(n > plain[0][k] for k, n in judged[0].items())
-                and any(n > judged[0][k] for k, n in plain[0].items())):
+        if _beats(judged, _score(self)):
             self._family_faces = True
             self._put_state(kept)
             self._plain_state, self._plain_stale = plain_state
+
+    def _moved_family(self, added: bool) -> bool:
+        """Return whether layout moved a family port.
+
+        Parameters
+        ----------
+        added : bool
+            Count only moves onto a symbol's family faces.
+
+        Returns
+        -------
+        bool
+            True if such a move is drawn.
+        """
+        from pandid.portgeom import family_faces
+        from pandid.units import _FaceFamilies
+
+        for u in self.units:
+            faces = family_faces(u, u.frame) if isinstance(u, _FaceFamilies) else None
+            if faces and (not added or any(face not in u._offered(name, added=False)
+                                           for name, face in faces.items())):
+                return True
+        return False
+
+    def _offers_family_faces(self) -> bool:
+        """Return whether a symbol offers a connected port family faces.
+
+        Returns
+        -------
+        bool
+            True if some unit's symbol offers one to a port no author
+            statement fixes.
+        """
+        from pandid.units import _FaceFamilies
+
+        return any(
+            isinstance(u, _FaceFamilies)
+            and any(len(u._offered(name)) > len(u._offered(name, added=False))
+                    for name in u._faces
+                    if u.ports[name].stream is not None and name not in u._stated)
+            for u in self.units)
+
+    def _drawing(self) -> tuple:
+        """Return the sheet as drawn, with all route() starts from.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_drawing`.
+        """
+        return (self._state(), self._plain_state, self._plain_stale, self._stacked,
+                self._unkept, self._layout_stale, self._route_stale, self._family_faces,
+                self._added_faces, list(self.unplaced_instruments))
+
+    def _put_drawing(self, drawing: tuple) -> None:
+        """Put back what :meth:`_drawing` returned.
+
+        Parameters
+        ----------
+        drawing : tuple
+            What :meth:`_drawing` returned.
+        """
+        (state, self._plain_state, self._plain_stale, self._stacked, self._unkept,
+         layout_stale, route_stale, self._family_faces, self._added_faces,
+         unplaced) = drawing
+        self._put_state(state)
+        self._layout_stale, self._route_stale = layout_stale, route_stale
+        self.unplaced_instruments = list(unplaced)
+
+    def _put_main(self) -> None:
+        """Put back main's drawing held behind a family-face drawing.
+
+        Whether the layout and routes are stale is kept as it stands.
+        """
+        held, self._main = self._main, None
+        if held is not None:
+            stale = self._layout_stale, self._route_stale
+            self._put_drawing(held)
+            self._layout_stale = self._layout_stale or stale[0]
+            self._route_stale = self._route_stale or stale[1]
 
     def _route_lanes(self, router=None) -> None:
         """Route the sheet, with lanes and grown faces where they draw no
@@ -2569,31 +2972,16 @@ class Flowsheet:
         bool
             Whether the new drawing is kept.
         """
-        from pandid.layout.conflicts import analyze_conflicts
-        from pandid.layout.control import _flaws, _taps_off
+        from pandid.layout.control import _taps_off
 
-        def count() -> Counter[str]:
-            """Count findings and clashes, crossings and fallback routes.
-
-            Returns
-            -------
-            Counter[str]
-                What :func:`_flaws` counts, plus ``crossing`` and
-                ``fallback`` conflicts.
-            """
-            flaws = _flaws(self)
-            flaws.update(c.kind for c in analyze_conflicts(self)
-                         if c.kind in ("crossing", "fallback"))
-            return flaws
-
-        before, off, drawn = count(), _taps_off(self), self._state()
+        before, off, drawn = self._counted_flaws(), _taps_off(self), self._state()
         self._split_stacks, self._order_rows, self._face_tees = split, order, tees
         self._routing = True
         try:
             self.layout(self._engine)
             self._route_once(router)
             kept = _taps_off(self) <= off and not any(
-                n > before[k] for k, n in count().items())
+                n > before[k] for k, n in self._counted_flaws().items())
         except Exception:
             kept = False
         finally:
@@ -2611,8 +2999,13 @@ class Flowsheet:
             State for :meth:`_put_state`.
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._off_leaders,
-                        self._exit_tight, self._mounted_layout, self._widened,
-                        self._stack_spans, self._rows_out, self._tees_away, self._fannable))
+                        self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
+                        self._rows_out, self._tees_away, self._fannable,
+                        self._far_branches, self._flags_off,
+                        tuple((u, u._stock_face) for u in self.units
+                              if hasattr(u, "_stock_face")),
+                        self._lanes, self._relaned, self._crowded_station,
+                        self._angle_valves))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2623,8 +3016,12 @@ class Flowsheet:
             What :meth:`_state` returned.
         """
         (geometry, self._unhung, self._free_faces, self._off_leaders,
-         self._exit_tight, self._mounted_layout, self._widened,
-         self._stack_spans, self._rows_out, self._tees_away, self._fannable) = _copied(state)
+         self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
+         self._rows_out, self._tees_away, self._fannable, self._far_branches,
+         self._flags_off, stock, self._lanes, self._relaned,
+         self._crowded_station, self._angle_valves) = _copied(state)
+        for u, flag in stock:
+            u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2763,11 +3160,15 @@ class Flowsheet:
                 self._priced = False
 
         def settle_best() -> None:
-            """Settle the sheet, then priced where it draws a touch."""
+            """Settle the sheet, then priced where it draws a touch, then
+            laid out with each flag's line levelled where one is off."""
             settle()
             touch = {"route-along-unit", "route-crosses-near-nozzle"}
             if tries and any(i.code in touch for i in geometry_issues(self)):
                 keep_if_better(priced, _flaws(self))
+            if tries and self._flags_off:
+                relaid_if_better("_level_flags")
+                self._flags_off = False
 
         def rechecked() -> None:
             """Settle the sheet again, routing again each stream whose
@@ -2778,13 +3179,24 @@ class Flowsheet:
             finally:
                 self._recheck = False
 
-        def fanned() -> None:
-            """Lay out with the furniture on each lateral off a splitter or
-            into a mixer next to the unit at its other end, and settle;
-            put the sheet back if a crossing, bend, fallback, finding or
-            clash grows, or a tap leaves its line."""
+        def relaid_if_better(switch: str) -> bool:
+            """Lay out with a layout switch on, and settle; put the sheet
+            back if a crossing, bend, fallback, finding or clash grows, or
+            a tap leaves its line.
+
+            Parameters
+            ----------
+            switch : str
+                Name of the flowsheet attribute that turns the layout
+                change on.
+
+            Returns
+            -------
+            bool
+                Whether the new drawing is kept.
+            """
             before, off, drawn = _score(self)[0], _taps_off(self), self._state()
-            self._fan_out = True
+            setattr(self, switch, True)
             try:
                 self.layout(self._engine)
                 settle_best()
@@ -2793,18 +3205,19 @@ class Flowsheet:
             except Exception:
                 kept = False
             finally:
-                self._fan_out = False
+                setattr(self, switch, False)
             if not kept:
                 self._put_state(drawn)
+            return kept
 
         def relaid() -> None:
             """Lay out with every signal exit a lane clear, and settle."""
             self._exit_clear = True
             try:
                 self.layout(self._engine)
+                settle_best()
             finally:
                 self._exit_clear = False
-            settle_best()
 
         def off_leaders() -> None:
             """Settle the sheet with each balloon hung from a balloon kept
@@ -2825,24 +3238,34 @@ class Flowsheet:
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
-        if tries and self._fannable:
-            fanned()
-        if tries and self._exit_tight:
-            keep_if_better(relaid, _flaws(self))
-            self._exit_tight = False
-        if tries and pinned_balloons(self, {}):
-            flaws = _flaws(self)
-            if flaws["unit-overlap"]:
-                # Keep only a drawing with fewer overlaps.
-                flaws["unit-overlap"] -= 1
-                keep_if_better(repinned, flaws)
-        if tries and self._undercharged:
-            keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
-        if tries and on_leader(self):
-            score = _score(self)[0]
-            # Keep only a drawing with fewer tap lines through units.
-            score["tap-through-unit"] -= 1
-            keep_if_better(off_leaders, score, lambda fs: _score(fs)[0])
+        # Lay out the rest of this pass with each kept branch near.
+        self._near_branches = bool(tries and self._far_branches
+                                   and relaid_if_better("_near_branches"))
+        try:
+            if tries and self._fannable:
+                relaid_if_better("_fan_out")
+            if tries and self._crowded_station:
+                relaid_if_better("_upright_stations")
+            if tries and self._angle_valves:
+                relaid_if_better("_corner_valves")
+            if tries and self._exit_tight:
+                keep_if_better(relaid, _flaws(self))
+                self._exit_tight = False
+            if tries and pinned_balloons(self, {}):
+                flaws = _flaws(self)
+                if flaws["unit-overlap"]:
+                    # Keep only a drawing with fewer overlaps.
+                    flaws["unit-overlap"] -= 1
+                    keep_if_better(repinned, flaws)
+            if tries and self._undercharged:
+                keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
+            if tries and on_leader(self):
+                score = _score(self)[0]
+                # Keep only a drawing with fewer tap lines through units.
+                score["tap-through-unit"] -= 1
+                keep_if_better(off_leaders, score, lambda fs: _score(fs)[0])
+        finally:
+            self._near_branches = False
         self._route_stale = False
 
     def _geometry(self) -> tuple:
@@ -3180,7 +3603,7 @@ class Flowsheet:
             # An explicit name on any segment names its whole group.
             name = next((s.name for s in group if not s.auto_named), None)
             if name is None:
-                carrier = next((s for s in group if s.has_line_number), None)
+                carrier = _numbered(group)
                 name = (_format_line_number(self.line_numbering_scheme, carrier)
                         if carrier is not None else
                         _format_stream_name(self.stream_naming_scheme, number))

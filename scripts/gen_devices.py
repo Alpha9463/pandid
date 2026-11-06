@@ -104,6 +104,21 @@ DEVICES = {
     ("evaporator", "climbing_film"): ("ClimbingFilmEvaporator", """Climbing-film evaporator: liquor fed into the foot of the tubes."""),
     ("evaporator", "plate"): ("PlateEvaporator", """Plate evaporator: a plate pack in place of a tube bundle."""),
 
+    # --- Furnaces -----------------------------------------------------
+    ("furnace", "combustion_chamber"): ("CombustionChamber", """Combustion chamber: fuel burned to make hot gas for another unit.
+
+    ``inlet`` takes the combustion air on the west wall, ``fuel`` enters
+    the burner from below and ``outlet`` sends the hot gas out of the
+    top. ISO 10628-2 item 4.5 X8106.
+"""),
+
+    # --- Silos -------------------------------------------------------
+    ("silo", "bunker"): ("Bunker", """Bunker: an open bin for bulk solids over a conical bottom.
+
+    ISO 10628-2 item 1.8, 2064. Solids enter over the west wall at
+    ``feed`` and leave the cone at ``discharge``.
+"""),
+
     # --- Kilns and calciners ------------------------------------------
     ("kiln", "default"): ("RotaryKiln", """Rotary kiln: a sloping, turning shell fired down its length."""),
     ("kiln", "fluidized_bed"): ("FluidizedBedCalciner", """Fluidised-bed calciner: solids held up in the firing gas.
@@ -365,8 +380,7 @@ PORT_OVERRIDES = {
 # (kind, variant) -> why this drawing gets no class.
 STAYS_ON_BASE = {
     ("block", "default"): "Block's own drawing",
-    ("blower", "default"): "Blower's own drawing",
-    ("blower", "general"): "ISO item 17.1: the general fan, no casing type drawn",
+    ("blower", "general"): "Blower's own drawing (ISO item 17.1, the general fan)",
     ("boiler", "default"): "Boiler's own drawing",
     ("conveyor", "default"): "Conveyor's own drawing",
     ("cooler", "default"): "Cooler's own drawing",
@@ -409,8 +423,11 @@ STAYS_ON_BASE = {
     ("evaporator", "default"):
         "the general row: two tubesheets around a boxed element, no element chosen",
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",
+    ("silo", "default"): "Silo's own drawing (ISO item 1.9 X2062, the closed silo)",
     ("crystallizer", "default"): "Crystallizer's own drawing (the draft-tube baffle body)",
     ("flotation_cell", "default"): "FlotationCell's own drawing (the mechanical cell)",
+    ("mixer_settler", "default"): "MixerSettler's own drawing",
+    ("deaerator", "default"): "Deaerator's own drawing",
     ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
     ("fitting", "rotary_mixer"): "body style: a rotating mixing element in the run",
     ("fitting", "mixing_path"): "body style: three mixing elements in series in the run",
@@ -421,6 +438,7 @@ STAYS_ON_BASE = {
     ("flare", "default"): "Flare's own drawing",
     ("funnel", "default"): "Funnel's own drawing",
     ("furnace", "default"): "Furnace's own drawing",
+    ("furnace", "general"): "ISO item 4.3: the general furnace, no tubes drawn",
     ("heater", "default"): "Heater's own drawing",
     ("mixer", "default"): "Mixer's own drawing",
     ("separator", "default"): "Separator's own drawing (the flash drum)",

@@ -697,6 +697,25 @@ def test_group_4_matches_the_rows_it_claims():
     assert flare.iso_reg == "2591"
 
 
+def test_the_furnace_and_combustion_chamber_match_their_group_4_rows():
+    """Check items 4.3 and 4.5 against their rows, at ten units to the module."""
+    furnace = default_registry.get("furnace", "general")
+    assert (furnace.width, furnace.height) == (80.0, 80.0)
+    assert "M 0 0 L 80 0 L 80 60 L 60 80 L 20 80 L 0 60 Z" in furnace.svg
+    assert "M 15 0 L 15 55 L 25 65 L 55 65 L 65 55 L 65 0" in furnace.svg
+    assert furnace.ports == {"inlet": (0.0, 40.0), "outlet": (80.0, 40.0), "fuel": (40.0, 80.0)}
+    assert furnace.iso_reg == "2533"
+
+    chamber = default_registry.get("furnace", "combustion_chamber")
+    assert (chamber.width, chamber.height) == (100.0, 80.0)
+    assert 'width="100" height="80"' in chamber.svg
+    # The burner plate a module up, and the flame 6 M and 3 M across.
+    assert "M 0 70 L 100 70 M 20 70 L 50 20 L 80 70 M 35 70 L 50 45 L 65 70" in chamber.svg
+    # Row 4.5's three ticks: air from the west, hot gas up, fuel from below.
+    assert chamber.ports == {"inlet": (0.0, 40.0), "outlet": (50.0, 0.0), "fuel": (50.0, 80.0)}
+    assert chamber.iso_reg == "X8106"
+
+
 @pytest.mark.parametrize(
     "variant, reg, needle",
     [
@@ -1029,11 +1048,16 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "centrifuge/pusher": "X8038",
     "centrifuge/skimmer": "X8039",
     # ISO 10628-2 group 4, STEAM GENERATORS, FURNACES, RECOOLING DEVICE.
+    # Group 1, VESSELS AND TANKS.
+    "silo/bunker": "2064",
+    "silo/default": "X2062",
     "boiler/default": "2532",
-    # Group 17, BLOWERS, FANS.
-    "blower/general": "X8164",
+    "furnace/general": "2533",
+    "furnace/combustion_chamber": "X8106",
     "stack/default": "2041",
     "flare/default": "2591",
+    # Group 17, BLOWERS, FANS.
+    "blower/general": "X8164",
     # Group 10, DRIER.
     "dryer/general": "C0046",
     "dryer/shelf": "X8083",
@@ -1173,6 +1197,7 @@ _COMPOSING = [
         units.Thickener,
         units.Crystallizer,
         units.FlotationCell,
+        units.MixerSettler,
         units.Column,
         units.Reactor,
     )

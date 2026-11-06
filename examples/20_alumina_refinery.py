@@ -12,6 +12,7 @@ at a ``Feed`` with the same name and stream number, each flag's
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
+    CombustionChamber,
     Conveyor,
     Cooler,
     Cyclone,
@@ -20,7 +21,6 @@ from pandid import (
     FilterPress,
     Flowsheet,
     FluidizedBedCalciner,
-    Furnace,
     JacketedReactor,
     JawCrusher,
     Mill,
@@ -421,8 +421,8 @@ def precipitation():
                                    description="Washed Hydrate Conveyor"))
     hydrate_belt.nozzle("feed", "N")
     # FH-901 burns the fuel; its hot gas enters the calciner's ``air``.
-    combustion = fs.add(Furnace("FH-901", width=100, height=120,
-                                description="Calciner Combustion Chamber"))
+    combustion = fs.add(CombustionChamber(
+        "FH-901", description="Calciner Combustion Chamber"))
     air = fs.add(Feed("Combustion Air"))
     fuel = fs.add(Feed("Fuel Gas", reference="PCD-905"))
     # ``CA-901.fuel`` is left unpiped.
@@ -482,10 +482,11 @@ def precipitation():
     product_tee.pin(port="inlet",
                     x=pinned_x(product_cyclone, "underflow") - TEE_W / 2,
                     y=pinned_y(calciner, "product"), mirrored="y")
-    combustion.pin(port="inlet", x=2260, y=2060)
-    air.pin(port="outlet", x=2160, y=2000)
-    fuel.pin(port="outlet", x=2180, y=2230)
-    combustion_gas_y = pinned_y(combustion, "outlet")
+    # Under the windbox, so the hot gas rises straight into it.
+    combustion.pin(port="outlet", x=pinned_x(calciner, "air"),
+                   y=pinned_y(calciner, "air") + 80)
+    air.pin(port="outlet", x=2300, y=pinned_y(combustion, "inlet"))
+    fuel.pin(port="outlet", x=2300, y=2230)
     offgas.pin(port="inlet", x=2960, y=1680)
     alumina.pin(port="inlet", x=2980, y=pinned_y(calciner, "product"))
 
@@ -563,9 +564,7 @@ def precipitation():
     fs.connect(air.outlet, combustion.inlet, name="S-949")
     fs.connect(fuel.outlet, combustion.fuel, name="S-950").via(
         [(pinned_x(combustion, "fuel"), 2230)])
-    # Into the windbox from below.
-    fs.connect(combustion.outlet, calciner.air, name="S-951").via(
-        [(pinned_x(calciner, "air"), combustion_gas_y)])
+    fs.connect(combustion.outlet, calciner.air, name="S-951")
     fs.connect(calciner.product, product_tee.inlet, name="S-952")
     fs.connect(calciner.offgas, product_cyclone.feed, name="S-953")
     fs.connect(product_cyclone.port("overflow"), offgas.inlet,

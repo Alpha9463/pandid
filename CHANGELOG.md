@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fs.package("PK-301", [p301a, p301b, f301], description="Dosing Package",
+  reference="VENDOR DWG 4711")` draws a package unit as a dash-dot boundary
+  frame round its units, tagged outside its upper-left corner, and lists it in
+  the equipment list above them. Layout keeps other units out of the frame, and
+  `validate()` reports `package-encloses` for one drawn inside it.
+- `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
+  so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
+  and says how to clear it: an `at=` for a valve alone on its line, the `at=`
+  bounds that keep the line's order where other items share it, or the end or
+  neighbour to move where pinned ends leave no room.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
@@ -26,8 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
   (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
   rotor on its shaft, or `None`.
+- `CombustionChamber` draws a chamber burning fuel to hot gas: air at `inlet`,
+  `fuel` from below and the gas out of `outlet`. `Furnace(variant="general")`
+  draws the ISO 10628-2 furnace.
 - `CentrifugalFan` and `AxialFan` draw those fans, and
   `Blower(variant="general")` draws the ISO 10628-2 fan.
+- `Silo` draws the closed silo of ISO 10628-2 and `Bunker` its open bunker,
+  each with a conical bottom: solids enter at `feed` and leave at `discharge`,
+  and a silo vents through its roof at `vent`.
+- `MixerSettler` draws one solvent-extraction stage with `light_in`,
+  `heavy_in`, `light_out` and `heavy_out`. `ExtractionColumn` is a sieve-tray
+  column whose two feeds enter its top and bottom stages.
+- `Deaerator` draws a storage drum with its deaerating column on top: `feed`
+  and `vent` on the column, `steam` into the drum and `outlet` from its floor.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -35,9 +56,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-through-support` when a line enters a vessel through
+  its legs, brackets or ring. Leave the vessel's `height` unset, or give a
+  larger one, so its shell grows clear.
+- `validate()` warns `line-field-undrawn` when a line-number field set in
+  `connect()` is not drawn: `name=` replaces the line number,
+  `line_numbering_scheme` leaves the field out, or the field is stated past a
+  valve or tee that carries another segment's number on. It names the fix.
+- A flat-floored `Tank` draws off from either wall as well as the floor, and an
+  upright `Vessel` takes its inlet on either wall or the top head and its outlet
+  on either wall: `Tank("TK-1").nozzle("outlet", "E")`. A counted one moves
+  there toward its peer where that draws fewer bends.
 
 ### Changed
 
+- `Blower()` draws the ISO 10628-2 fan instead of a compressor.
 - `connect()` no longer needs `kind=` for a signal line: a line to a valve
   with a diaphragm actuator, or none drawn, is pneumatic and any other is
   electric. `add_control_loop()` infers its output line the same way, so a
@@ -46,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A counted `Block`, `Tank` or `Vessel` connection, as in `inputs=2`, moves to
   the face toward its peer where that draws fewer bends; a list such as
   `inputs=["W", "N"]` keeps every face as given, even on a single inlet.
+- A `Vessel` is drawn to the size it is given rather than stretched to it:
+  `width` and `height` are the drawn box, the heads, supports, manholes and
+  sockets keep their own size, and the straight shell takes the rest. With no
+  size given, the shell grows until its inlets and outlets clear the supports.
 - `render()` lays out and checks a sheet faster, most of all when units are
   pinned by a nozzle.
 
@@ -64,6 +101,15 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
+  the train is drawn in the column beside that unit, where that adds no
+  crossing, bend or finding, instead of at the sheet's left edge.
+- A unit moves up or down to meet a feed or product flag held under another
+  unit in its column, so the line between them runs straight, where that adds
+  no crossing, bend or finding.
+- Lines that cross on their way into a mixer are laid on lanes even where they
+  share their stretch of the gap with only some of the lines beside them, so the
+  last two pumps of a header of tees no longer cross into the mixer.
 - The equipment list and `fs.equipment_list()` include centrifuges and
   crushing machines.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,
@@ -116,12 +162,38 @@ These are removed in 0.4.0.
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
 - `line.color` and `line.dasharray` set after `on=` has split the line style
   the whole line, including the pipework of a valve station on it.
+- A sequence set in `connect()` is drawn in the line number when another
+  segment of the line states the other fields, and alone when none does:
+  `fs.connect(..., sequence="2740")` draws `2740` instead of `S1`.
 - A valve's actuator sits on the body's centre line, so a balloon added with
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- A `Feed` or `Product` too short to letter, such as `Feed("Air", height=20)`,
+  is refused with the height that fits, `height=42`, or `height=48` with a
+  `reference`, instead of failing `nozzle-off-body` when drawn.
+- Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
+  as its pennant is drawn, not of the blank paper above and below it, so a
+  sheet with a flag at its top or bottom is framed tighter.
+- Where neither side of a symbol has room for both codes of a pair, such as
+  `annotate(high="TAH", low="TAL")`, one is written on each side instead of
+  over a line.
+- `route()` ends the run a line leaves a nozzle on clear of every other unit,
+  so a signal line between two balloons no longer cuts through a third
+  standing between them.
+- Where `route()` finds no path for a line and draws it through a unit, it
+  draws it round the units in its way along a clear lane where that draws no
+  worse; otherwise `validate()` reports `route-crosses-unit` as before.
+- A valve station put with `on=` on a line between stacked units is turned to
+  run up or down the line, with room kept for it between the units, instead of
+  being drawn over the unit above.
+- A sheet fitted to its drawing reaches past a tag drawn beside a unit at its
+  edge, so `label_pos="right"` on the last unit no longer cuts its tag off.
+- An angle valve put on a line with `on=`, such as
+  `fs.add(Valve("HV-1", variant="angle"), on=line)`, is set at a corner of the
+  line, so the line turns through the valve instead of bending to leave it.
 - A balloon hung on another balloon, such as `fs.add_instrument("LIC", 101,
   near=lt)` on a pinned `LT`, is no longer drawn across that balloon's tap line.
 

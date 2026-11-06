@@ -6,13 +6,18 @@ edges between their ports.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import math
+import re
+import urllib.parse
+import zlib
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 from xml.sax.saxutils import escape
 
+from pandid.package import frame as package_frame
 from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
@@ -24,15 +29,15 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
-                               NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
-                               label_findings,
+                               NUMBER_TYPE, PACKAGE_DASH, boundary_flag, diagram_plan,
+                               enclosure_shape, label_findings, package_labels,
                                draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
                                quadrant_labels,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, default_registry, fail_marking,
-                                   wears_arrowhead)
+                                   overlay_boxes, wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
@@ -40,6 +45,7 @@ from pandid.validate import Issue
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
+    from pandid.render.symbols import Symbol
 
 _INK = _BODY_INK
 
@@ -235,6 +241,84 @@ class _Fit(NamedTuple):
         return self.scale * v
 
 
+def drawio_stencil(svg: str, width: float, height: float,
+                   offset: "tuple[float, float]" = (0.0, 0.0), scale: float = 1.0) -> str:
+    """Return a draw.io inline stencil drawing an artwork's outlines.
+
+    The artwork's paths, of ``M``, ``L``, ``A`` and ``Z`` commands in
+    absolute coordinates, and its rectangles, circles and lines become
+    the stencil's own geometry, so draw.io draws them as placed rather
+    than stretching a library shape. An element drawn thinner than the
+    artwork's widest stroke gets its own fixed width.
+
+    Parameters
+    ----------
+    svg : str
+        Artwork.
+    width, height : float
+        The stencil's box.
+    offset : tuple[float, float], default=(0.0, 0.0)
+        Where the artwork's origin falls in the box.
+    scale : float, default=1.0
+        Drawn width of a stroke one unit wide.
+
+    Returns
+    -------
+    str
+        A ``stencil(...)`` shape name for a cell's style.
+    """
+    dx, dy = offset
+    base = max((float(w) for w in re.findall(r'stroke-width="([\d.]+)"', svg)), default=1.0)
+    out, drawn = [], base
+    for tag, attrs in re.findall(r"<(path|rect|circle|line)\b([^>]*?)/?>", svg):
+        a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
+        stroke = float(a.get("stroke-width", base))
+        if stroke != drawn:
+            # A fixed width, not scaled with the stencil's box.
+            out.append(f'<strokewidth width="{fmt(stroke * scale, 4)}" fixed="1"/>')
+            drawn = stroke
+        if tag == "rect":
+            out.append(f'<rect x="{fmt(float(a["x"]) + dx, 4)}" y="{fmt(float(a["y"]) + dy, 4)}" '
+                       f'w="{fmt(float(a["width"]), 4)}" h="{fmt(float(a["height"]), 4)}"/>')
+        elif tag == "circle":
+            r = float(a["r"])
+            out.append(f'<ellipse x="{fmt(float(a["cx"]) - r + dx, 4)}" '
+                       f'y="{fmt(float(a["cy"]) - r + dy, 4)}" '
+                       f'w="{fmt(2 * r, 4)}" h="{fmt(2 * r, 4)}"/>')
+        elif tag == "line":
+            out.append(f'<path><move x="{fmt(float(a["x1"]) + dx, 4)}" '
+                       f'y="{fmt(float(a["y1"]) + dy, 4)}"/>'
+                       f'<line x="{fmt(float(a["x2"]) + dx, 4)}" '
+                       f'y="{fmt(float(a["y2"]) + dy, 4)}"/></path>')
+        else:
+            steps, tokens = [], a["d"].replace(",", " ").split()
+            i = 0
+            while i < len(tokens):
+                cmd, i = tokens[i], i + 1
+                if cmd == "Z":
+                    steps.append("<close/>")
+                    continue
+                n = 7 if cmd == "A" else 2
+                v = [float(t) for t in tokens[i:i + n]]
+                i += n
+                x, y = fmt(v[-2] + dx, 4), fmt(v[-1] + dy, 4)
+                if cmd == "A":
+                    steps.append(f'<arc rx="{fmt(v[0], 4)}" ry="{fmt(v[1], 4)}" '
+                                 f'x-axis-rotation="{fmt(v[2], 4)}" '
+                                 f'large-arc-flag="{int(v[3])}" sweep-flag="{int(v[4])}" '
+                                 f'x="{x}" y="{y}"/>')
+                else:
+                    steps.append(f'<{"move" if cmd == "M" else "line"} x="{x}" y="{y}"/>')
+            out.append(f"<path>{''.join(steps)}</path>")
+        out.append("<stroke/>" if a.get("fill", "none") == "none" else "<fillstroke/>")
+    xml = (f'<shape w="{fmt(width, 4)}" h="{fmt(height, 4)}" aspect="variable" '
+           f'strokewidth="inherit"><foreground>{"".join(out)}</foreground></shape>')
+    # draw.io reads a stencil as raw-deflated, base64'd encodeURIComponent text.
+    packer = zlib.compressobj(9, zlib.DEFLATED, -15)
+    data = urllib.parse.quote(xml, safe="-_.!~*'()").encode("ascii")
+    return f"stencil({base64.b64encode(packer.compress(data) + packer.flush()).decode('ascii')})"
+
+
 class _Piece(NamedTuple):
     """A draw.io built-in shape placed inside a stand-in's cell.
 
@@ -307,6 +391,15 @@ HOP_DROPPED = "drawio-hop-dropped"
 
 _BALLOON_FILL = "#ffffff"
 
+#: Drawings exported as an inline stencil of their own outline.
+OWN_OUTLINE = frozenset({
+    ("silo", "default"), ("silo", "bunker"), ("mixer_settler", "default"),
+    ("deaerator", "default"),
+    ("crystallizer", "default"), ("flotation_cell", "default"),
+    ("blower", "general"), ("blower", "centrifugal"), ("blower", "axial"),
+    ("furnace", "general"), ("furnace", "combustion_chamber"),
+})
+
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
 _APPROXIMATIONS = {
@@ -369,10 +462,6 @@ _APPROXIMATIONS = {
         None, "the dished heads and the long tube bundle"),
     ("evaporator", "plate"): _Approximation(
         None, "the dished heads and the plate pack between them"),
-    ("crystallizer", "default"): _Approximation(
-        None, "the dished head, the cone and leg, the draft tube and the baffle"),
-    ("flotation_cell", "default"): _Approximation(
-        None, "the open tank, the launder outside its lip, the air standpipe and the froth"),
     ("kiln", "default"): _Approximation(
         None, "the shell's fall from feed end to discharge, its riding rings and its drive"),
     ("kiln", "fluidized_bed"): _Approximation(
@@ -403,12 +492,6 @@ _APPROXIMATIONS = {
         None, "the belt, its two pulleys and the loading and discharge chutes"),
     ("elevator", "z_form"): _Approximation(
         None, "the Z-shaped casing, the belt's three runs and its four pulleys"),
-    ("blower", "general"): _Approximation(
-        None, "the two chords converging on the discharge and the impeller"),
-    ("blower", "centrifugal"): _Approximation(
-        None, "the scroll casing, its outlet and the eye"),
-    ("blower", "axial"): _Approximation(
-        None, "the propeller across the casing"),
     ("boiler", "default"): _Approximation(
         None, "the shell's own outline and the dome on its crown"),
     ("stack", "default"): _Approximation(
@@ -808,6 +891,7 @@ class DrawioRenderer:
                                                 kind)
         body.extend(self._border(frame, border))
         body.extend(furniture)
+        body.extend(self._packages(fs, fit))
         # Then equipment, runs, taps and balloons.
         joints = sheet_connections(diagram, connections)
         tags = _tag_pass(fs, joints, jump_direction)
@@ -914,6 +998,49 @@ class DrawioRenderer:
         ]) + "\n"
 
     # ------------------------------------------------------ units
+
+    @staticmethod
+    def _packages(fs, fit: "_Fit") -> list[str]:
+        """Return each package's boundary frame as an unfilled cell.
+
+        The tag is the cell's label, above its upper-left corner; the
+        reference is a child text cell inside its lower-left corner.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
+        """
+        size = fit.length(_TAG_TYPE)
+        out: list[str] = []
+        for n, pkg in enumerate(fs.packages):
+            box = package_frame(pkg)
+            assert box is not None
+            x0, y0, x1, y1 = fit.box(box)
+            style = ";".join([
+                "rounded=0", "html=1", f"fillColor={_NO_FILL}", f"strokeColor={_LINE_INK}",
+                f"strokeWidth={fit.length(LineWeight.DETAIL.width):g}", *_dash(PACKAGE_DASH),
+                "labelPosition=center", "verticalLabelPosition=top", "align=left",
+                "verticalAlign=bottom", "spacing=0", f"spacingBottom={fit.length(4):g}",
+                f"fontSize={size:g}", f"fontColor={_LINE_INK}", "connectable=0"]) + ";"
+            out += _rect(f"pk{n}", x0, y0, x1 - x0, y1 - y0, style, _html_text(pkg.name))
+            for item in package_labels(pkg, box)[1:]:
+                text = item[5]
+                w = F.text_width(text, size) + 2 * _TEXT_INSET
+                h = _line_box(size) + 2 * _TEXT_INSET
+                lx, ly = fit.at(item[0], item[1])
+                out += _rect(f"pk{n}-ref", lx - x0 - _TEXT_INSET, ly - y0 - h + _TEXT_INSET, w, h,
+                             "text;html=1;strokeColor=none;fillColor=none;align=left;"
+                             f"verticalAlign=bottom;fontSize={size:g};fontColor={_LINE_INK};",
+                             _html_text(text), parent=f"pk{n}")
+        return out
 
     @staticmethod
     def _id(index: int) -> str:
@@ -1023,6 +1150,16 @@ class DrawioRenderer:
                     f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                     f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
         stencil = sym.drawio_shape or sym.drawio_body_shape
+        body = self._shell(u)
+        if body is None and not stencil and (u.kind, u.variant) in OWN_OUTLINE:
+            body = default_registry.get(u.kind, u.variant)
+        if body is not None:
+            # A shell built to size, or a drawing exported as its own
+            # outline, is drawn as built; its parts are child cells.
+            shift = (-min([0.0, *(o.x * body.width for o in sym.overlays)]),
+                     -min([0.0, *(o.y * body.height for o in sym.overlays)]))
+            stencil = drawio_stencil(body.svg, sym.width, sym.height, shift,
+                                     fit.length(1.0))
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
             keys = [f"shape={stencil}", "outlineConnect=0",
@@ -1082,7 +1219,7 @@ class DrawioRenderer:
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
                           "align=center",
                           _drawn_type(_TAG_TYPE, fit, lines=len(parts),
-                                      box=self._cell_box(u))], (0.0, 0.0)
+                                      box=unit_box(u, u.frame))], (0.0, 0.0)
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
@@ -1092,7 +1229,7 @@ class DrawioRenderer:
             # Centred inside the flag, capped to fit it.
             return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE["center"] + [
                 _drawn_type(_TAG_TYPE, fit, lines=len(lines),
-                            box=self._cell_box(u))], (0.0, 0.0)
+                            box=unit_box(u, u.frame))], (0.0, 0.0)
         if closed_marking(u, default_registry) == "NC":
             lines.append("NC")
         letters = fail_marking(u)
@@ -1101,7 +1238,7 @@ class DrawioRenderer:
         side, dx, dy, near = tags.at.get(id(u), (
             (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0, None))
         offset = (fit.length(dx), fit.length(dy))
-        x0, _y0, x1, _y1 = fit.box(self._cell_box(u))
+        x0, _y0, x1, _y1 = fit.box(unit_box(u, u.frame))
         one_line = len(lines) == 1 and not (
             wraps and F.text_width(lines[0], fit.length(_TAG_TYPE)) > x1 - x0 - 2 * _TEXT_INSET)
         if near is not None and one_line:
@@ -1114,24 +1251,6 @@ class DrawioRenderer:
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
         ) + [_drawn_type(_TAG_TYPE, fit)], offset
-
-    @staticmethod
-    def _cell_box(u) -> "tuple[float, float, float, float]":
-        """Return the cell box for a unit.
-
-        Parameters
-        ----------
-        u : Unit
-            Placed unit; an off-page flag uses its pennant box.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            ``(x0, y0, x1, y1)``.
-        """
-        if u.kind in ("feed", "product"):
-            return boundary_flag(u, u.frame).box
-        return unit_box(u, u.frame)
 
     def _vertex(self, u, index: int, fit: "_Fit", tags: "_Tags") -> list[str]:
         """Return one unit as a draw.io vertex and its child cells.
@@ -1160,7 +1279,7 @@ class DrawioRenderer:
                 f"{u.name} has no draw.io stencil and is exported as a stand-in, "
                 f"which loses {approx.lost}"))
         self._report_reshape(u, sym, approx)
-        x0, y0, x1, y1 = fit.box(self._cell_box(u))
+        x0, y0, x1, y1 = fit.box(unit_box(u, u.frame))
         placement, _, _ = self._placement(u, sym)
         shape = self._shape(u, sym, fit)
         text, label_keys, (dx, dy) = self._label(u, fit, tags, "whiteSpace=wrap" in shape)
@@ -1186,7 +1305,8 @@ class DrawioRenderer:
             '        </mxCell>',
             *inscribed,
             *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
-            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name),
+            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name,
+                                 self._shell(u)),
         ]
 
     def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
@@ -1203,7 +1323,7 @@ class DrawioRenderer:
         """
         if approx is None or sym.stretchable:
             return
-        x0, y0, x1, y1 = self._cell_box(u)
+        x0, y0, x1, y1 = unit_box(u, u.frame)
         w, h = x1 - x0, y1 - y0
         # The symbol's box as placed, turn included.
         _px, _py, bw, bh = symbol_to_box(0.0, 0.0, sym.width, sym.height, *_xform(u.frame))
@@ -1261,8 +1381,29 @@ class DrawioRenderer:
             out += _rect(f"{cid}-s{i}", px * w, py * h, pw * w, ph * h, style, parent=cid)
         return out
 
+    @staticmethod
+    def _shell(u) -> "Symbol | None":
+        """Return the shell a vessel built to size is drawn on.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+
+        Returns
+        -------
+        Symbol or None
+            The shell, or ``None`` for a unit drawn at its symbol's size.
+        """
+        from pandid.units import _built_to_size, _drawn_parts
+
+        if not _built_to_size(u):
+            return None
+        return _drawn_parts(u, tuple(getattr(u, "overlays", ()) or ()))[0]
+
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
-                       fit: "_Fit", frame: "Frame", name: str) -> list[str]:
+                       fit: "_Fit", frame: "Frame", name: str,
+                       body: "Symbol | None" = None) -> list[str]:
         """Return one child cell per part on a composed body.
 
         Parameters
@@ -1281,6 +1422,9 @@ class DrawioRenderer:
             Unit placement.
         name : str
             Unit name, for findings.
+        body : Symbol, optional
+            The shell the parts are placed on, where it is drawn in
+            place within the cell.
 
         Returns
         -------
@@ -1289,6 +1433,11 @@ class DrawioRenderer:
         """
         if not sym.overlays:
             return []
+        # Each part's box as fractions of the cell.
+        boxes = [(o.x, o.y, o.w, o.h) for o in sym.overlays] if body is None else [
+            (left / sym.width, top / sym.height, (right - left) / sym.width,
+             (bottom - top) / sym.height)
+            for left, top, right, bottom in overlay_boxes(body, sym.overlays)]
         rot = _xform(frame)[0]
         turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
@@ -1309,7 +1458,7 @@ class DrawioRenderer:
                         f"{approx.lost}"))
             if overlay.mirror:
                 keys.append("flipH=1")
-            ox, oy, ow, oh = _placed_rect(frame, overlay.x, overlay.y, overlay.w, overlay.h)
+            ox, oy, ow, oh = _placed_rect(frame, *boxes[i])
             style = ";".join([
                 "html=1", "rounded=0", *keys, *turn,
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
@@ -1340,7 +1489,7 @@ class DrawioRenderer:
             Fractions of the cell box.
         """
         px, py = point
-        x0, y0, x1, y1 = self._cell_box(u)
+        x0, y0, x1, y1 = unit_box(u, u.frame)
         w, h = x1 - x0, y1 - y0
         fx = (px - x0) / w if w else 0.5
         fy = (py - y0) / h if h else 0.5
@@ -1366,7 +1515,7 @@ class DrawioRenderer:
         """
         if u.kind == "tee":
             # Every leg of a tee runs to its centre.
-            x0, y0, x1, y1 = self._cell_box(u)
+            x0, y0, x1, y1 = unit_box(u, u.frame)
             return self._fraction(u, sym, ((x0 + x1) / 2, (y0 + y1) / 2))
         return self._fraction(u, sym, port_point(u, u.frame, port_name))
 

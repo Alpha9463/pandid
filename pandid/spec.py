@@ -37,6 +37,10 @@ The format::
       - {variable: L, number: 101}
       - {variable: F}                # takes the next number
 
+    packages:
+      - {name: PK-301, units: [P-301A, P-301B, F-301],
+         description: Dosing Package, reference: VENDOR DWG 4711}
+
     instruments:
       - {type: LIC, number: 101, display: central,
          near: LT-101, face: S, offset: 115, port_faces: {sig_out: W}}
@@ -640,8 +644,8 @@ _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
     "line_numbering_scheme", "line_number_start", "loop_number_start",
     "valve_station_tag_scheme", "auto_faces", "components", "units", "loops",
-    "instruments", "streams", "stations", "stream_table_sections", "stream_table",
-    "stream_labels", "title_block", "annotations",
+    "instruments", "streams", "stations", "packages", "stream_table_sections",
+    "stream_table", "stream_labels", "title_block", "annotations",
 }
 # Sheet settings: Flowsheet keyword and spec key, default, reader.
 _SHEET_SETTINGS: tuple[tuple[str, Any, Callable[[Any, str], Any]], ...] = (
@@ -674,6 +678,7 @@ _BALLOON_KEYS = ({"balloon_of"} | _INSTRUMENT_KEYS) - {"type", "number", *_ANCHO
 # quadrants: key -> ISO quadrant letter; keys match Instrument.annotate.
 _QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
+_PACKAGE_KEYS = {"name", "units", "description", "reference"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
     "color", "dasharray", "ends", "inline_at", "logical_to",
@@ -812,6 +817,9 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
 
     for inst, entry, where_i in pending:
         _attach_instrument(fs, inst, entry, where_i)
+
+    for i, entry in enumerate(_sequence(data.get("packages", []), "packages")):
+        _read_package(fs, entry, f"packages[{i}]")
 
     sections = []
     for i, entry in enumerate(_sequence(data.get("stream_table_sections", []),
@@ -1105,6 +1113,39 @@ def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
     with _blame(where):
         return fs.add_loop(_text(data["variable"], f"{where}.variable"), number)
+
+
+def _read_package(fs: Flowsheet, entry: Any, where: str) -> None:
+    """Read one ``packages:`` entry and add the package.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    entry : Any
+        The ``packages:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If ``name`` or ``units`` is missing, a field is invalid, or the
+        package is refused.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, _PACKAGE_KEYS, where)
+    for key in ("name", "units"):
+        if key not in data:
+            raise SpecError(f"{where} needs {key!r}: a package is its tag and the units "
+                            f"inside its frame, e.g. {{name: PK-301, units: [P-301A, F-301]}}")
+    names = _sequence(data["units"], f"{where}.units")
+    units = [_find_unit(fs, _text(n, f"{where}.units[{k}]"), f"{where}.units[{k}]")
+             for k, n in enumerate(names)]
+    with _blame(where):
+        fs.package(_text(data["name"], f"{where}.name"), units,
+                   description=_drawn(data.get("description"), f"{where}.description"),
+                   reference=_drawn(data.get("reference"), f"{where}.reference"))
 
 
 def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
@@ -1983,6 +2024,11 @@ def to_dict(fs: Flowsheet) -> dict:
     if fs._station_assemblies:
         spec["stations"] = [_write_station_assembly(fs, assembly)
                             for assembly in fs._station_assemblies]
+    if fs.packages:
+        spec["packages"] = [{"name": p.name, "units": [u.name for u in p.units],
+                             **{key: getattr(p, key) for key in ("description", "reference")
+                                if getattr(p, key)}}
+                            for p in fs.packages]
     if fs.stream_table_sections:
         spec["stream_table_sections"] = [list(sec) for sec in fs.stream_table_sections]
     table = {f.name: getattr(fs.stream_table, f.name)
@@ -2145,6 +2191,24 @@ def _write_connection_faces(unit, entry: dict[str, Any],
         entry["port_order"] = port_order
 
 
+def _default_count(unit: Unit, keyword: str) -> int:
+    """Return the count a unit's own class builds when ``keyword`` is unset.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit being written.
+    keyword : str
+        Count keyword, such as ``"n_feeds"``.
+
+    Returns
+    -------
+    int
+        The constructor's default for ``keyword``.
+    """
+    return inspect.signature(type(unit)).parameters[keyword].default
+
+
 def _write_unit(unit: Unit) -> dict[str, Any]:
     """Write one ``units:`` entry.
 
@@ -2177,9 +2241,8 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         for key, places in (("manholes", unit.manholes), ("sockets", unit.sockets)):
             if places:
                 entry[key] = [list(place) for place in places]
-    # One feed is the default.
     if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _KIND_OWNERS["n_feeds"])
-            and len(getattr(unit, "feeds")) > 1):
+            and len(getattr(unit, "feeds")) != _default_count(unit, "n_feeds")):
         entry["n_feeds"] = len(getattr(unit, "feeds"))
     if isinstance(unit, unit_types.Block):
         _write_connection_faces(unit, entry)
@@ -2192,7 +2255,7 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     elif isinstance(unit, unit_types.Column):
         if unit.feed_stages is not None:
             entry["feed_stages"] = list(unit.feed_stages)
-        if len(unit.draws) > 0:
+        if len(unit.draws) != _default_count(unit, "n_draws"):
             entry["n_draws"] = len(unit.draws)
         if unit.draw_stages is not None:
             entry["draw_stages"] = list(unit.draw_stages)
