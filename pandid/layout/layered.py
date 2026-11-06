@@ -16,6 +16,7 @@ from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import Pad, balloon_pads, pinned_balloons
 from pandid.layout.stages import slot
+from pandid.package import MARGIN as PACKAGE_MARGIN
 from pandid.portgeom import COMPASS, pinned_x, pinned_y, port_faces, resolve_port, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
 
@@ -44,6 +45,8 @@ SWEEPS = 12
 BAND_WIDTH = 3200.0
 #: Clear height between bands.
 BAND_GAP = 160.0
+#: Least clear height between a package's stacks and any other stack.
+PACKAGE_GAP = ROW_GAP + 2 * PACKAGE_MARGIN
 
 #: Stacking pipe end faces ``(source, dest)`` -> whether dest is above.
 _STACK: dict[tuple[str | None, str | None], bool] = {("N", "S"): True, ("S", "N"): False}
@@ -289,7 +292,8 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     """
     if not units:
         return
-    nodes, node_of, stacked, fs._stack_spans = _stacks(units, links, fs._split_stacks)
+    group = {u: i for i, p in enumerate(fs.packages) for u in p.units}
+    nodes, node_of, stacked, fs._stack_spans = _stacks(units, links, fs._split_stacks, group)
     edges = [(node_of[link.source.owner], node_of[link.dest.owner], link) for link in links
              if node_of[link.source.owner] is not node_of[link.dest.owner]]
     kept = {id(link) for _, _, link in _layers(nodes, edges)}
@@ -302,10 +306,16 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
                     and want in port_faces(port.owner, port.name, slot(port.owner))):
                 node.faces[id(port)] = want
     _rank(layers)
+    # Each package's stacks, and the dummies of pipes inside it.
+    pkg = {n: group[n.members[0]] for n in nodes if n.members[0] in group}
+    for seg in segs:
+        inside = group.get(seg.link.source.owner)
+        if inside is not None and group.get(seg.link.dest.owner) == inside:
+            pkg.update((n, inside) for n in (seg.left, seg.right) if not n.members)
     pads = balloon_pads(fs)
     for node in nodes:
         _shape(node, stacked, pads)
-    _order(layers, segs)
+    _order(layers, segs, pkg)
     _row_pins(layers)
     _face_tees(fs, layers, segs)
     _rank(layers)
@@ -314,12 +324,17 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     fs._rows_out = bool(held)
     if held and fs._order_rows:
         _straighten(layers, segs, held)
+    spanned = _keep_out(layers, pkg)
+    if spanned:
+        # Level the other layers' pipes to the packages and the nodes moved.
+        _straighten(layers, segs, {n: n.y for k, layer in layers.items() for n in layer
+                                   if k in spanned or (fs._order_rows and n in held)})
     xs = _columns(layers, segs, fs._lanes)
     plain = _columns(layers, segs, False)
     fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
     if not any(u._pin is not None and (u._pin.x is not None or u._pin.y is not None)
                for u in units):
-        _fold(layers, segs, xs)
+        _fold(layers, segs, xs, pkg)
     pinned_y = any(u._pin is not None and u._pin.y is not None for u in units)
     lift = 0.0 if pinned_y else MARGIN - min(
         n.y - n.pad.north for layer in layers.values() for n in layer if n.members)
@@ -432,9 +447,12 @@ def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]
         placed.append(u)
 
 
-def _stacks(units: list[Unit], links: list[Link], split: bool
+def _stacks(units: list[Unit], links: list[Link], split: bool, packed: dict[Unit, int]
             ) -> tuple[list[_Node], dict[Unit, _Node], list[tuple[Unit, Unit, Link]], bool]:
     """Group units joined by a top-to-bottom pipe into stacks.
+
+    Two units stack only if they are in the same package or neither is
+    in one.
 
     Parameters
     ----------
@@ -445,6 +463,8 @@ def _stacks(units: list[Unit], links: list[Link], split: bool
     split : bool
         Leave two units unstacked where another unit in their column is
         pinned to a row between theirs.
+    packed : dict[Unit, int]
+        Package index of each unit in a package.
 
     Returns
     -------
@@ -484,7 +504,7 @@ def _stacks(units: list[Unit], links: list[Link], split: bool
     for link in links:
         a, b = link.source.owner, link.dest.owner
         up = _STACK.get((_face(link.source), _face(link.dest)))
-        if up is None or link.recycle or find(a) is find(b):
+        if up is None or link.recycle or find(a) is find(b) or packed.get(a) != packed.get(b):
             continue
         upper, lower = (b, a) if up else (a, b)
         top, bottom = find(upper), find(lower)
@@ -710,11 +730,12 @@ def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: l
     return dict(sorted(layers.items())), segs
 
 
-def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
+def _order(layers: dict[int, list[_Node]], segs: list[_Seg], pkg: dict[_Node, int]) -> None:
     """Order each layer to reduce pipe crossings.
 
     Barycentre sweeps keep the order with the fewest crossings, adjacent
     swaps remove more, then each flag moves beside the nozzle it serves.
+    Each package's nodes stay together in every layer.
 
     Parameters
     ----------
@@ -722,6 +743,8 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         Stacks and dummies in each layer, in order.
     segs : list[_Seg]
         Pipe steps between adjacent layers.
+    pkg : dict[_Node, int]
+        Package index of each node in a package.
     """
     pos: dict[_Node, float] = {}
 
@@ -752,6 +775,8 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         return sum(1 for i, (a, b) in enumerate(pairs) for c, d in pairs[i + 1:]
                    if (a - c) * (b - d) < 0)
 
+    for layer in layers.values():
+        _group(layer, pkg)
     index()
     keys = list(layers)
     best, kept = sum(map(crossings, keys)), {k: list(v) for k, v in layers.items()}
@@ -766,6 +791,7 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
                 elif not down and (_flag(s.lport) or not _flag(s.rport)):
                     near.setdefault(s.left, []).append(pos[s.right] + b)
             layers[k].sort(key=lambda n: sum(near[n]) / len(near[n]) if n in near else pos[n] + 0.5)
+            _group(layers[k], pkg)
             pos.update((n, float(i)) for i, n in enumerate(layers[k]))
         count = sum(map(crossings, keys))
         if count < best:
@@ -780,7 +806,7 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
                 before = crossings(k - 1) + crossings(k)
                 one, two = layer[i], layer[i + 1]
                 layer[i], layer[i + 1], pos[one], pos[two] = two, one, pos[two], pos[one]
-                if crossings(k - 1) + crossings(k) < before:
+                if crossings(k - 1) + crossings(k) < before and _together(layer, pkg):
                     swapped = True
                 else:
                     layer[i], layer[i + 1], pos[one], pos[two] = one, two, pos[two], pos[one]
@@ -794,6 +820,96 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             peer[s.right] = pos[s.left] + a
     for k in keys:
         layers[k].sort(key=lambda n: peer.get(n, pos[n]))
+        _group(layers[k], pkg)
+
+
+def _group(layer: list[_Node], pkg: dict[_Node, int]) -> None:
+    """Move each package's nodes in a layer up to its first, in order.
+
+    Parameters
+    ----------
+    layer : list[_Node]
+        Stacks and dummies of one layer, in order; sorted in place.
+    pkg : dict[_Node, int]
+        Package index of each node in a package.
+    """
+    first: dict[int, int] = {}
+    for i, n in enumerate(layer):
+        if n in pkg:
+            first.setdefault(pkg[n], i)
+    if first:
+        rank = {n: (first[pkg[n]] if n in pkg else i, i) for i, n in enumerate(layer)}
+        layer.sort(key=rank.__getitem__)
+
+
+def _together(layer: list[_Node], pkg: dict[_Node, int]) -> bool:
+    """Return whether each package's nodes in a layer are adjacent.
+
+    Parameters
+    ----------
+    layer : list[_Node]
+        Stacks and dummies of one layer, in order.
+    pkg : dict[_Node, int]
+        Package index of each node in a package.
+
+    Returns
+    -------
+    bool
+        True if no package's nodes have another node between them.
+    """
+    runs = [p for p, _ in groupby(pkg.get(n) for n in layer) if p is not None]
+    return len(runs) == len(set(runs))
+
+
+def _keep_out(layers: dict[int, list[_Node]], pkg: dict[_Node, int]) -> set[int]:
+    """Move nodes out of the height of each package they are not in.
+
+    A package's height runs from its highest node top to its lowest
+    node bottom, balloon room included. In the layers from its first to
+    its last, the nodes above its own move up together, and the nodes
+    below move down together, until each clears that height by
+    :data:`PACKAGE_GAP`. In a layer it has no node in, a node goes the
+    way its centre lies. Passes repeat while a node moves.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order, set in height.
+    pkg : dict[_Node, int]
+        Package index of each node in a package.
+
+    Returns
+    -------
+    set[int]
+        The layers some package spans.
+    """
+    spans = {p: range(min(n.layer for n in pkg if pkg[n] == p),
+                      max(n.layer for n in pkg if pkg[n] == p) + 1) for p in set(pkg.values())}
+    for _ in range(SWEEPS if pkg else 0):
+        moved = False
+        for p in sorted(spans):
+            mine = [n for n in pkg if pkg[n] == p]
+            top = min(n.y - n.pad.north for n in mine)
+            bottom = max(n.y + n.h + n.pad.south for n in mine)
+            above: list[_Node] = []
+            below: list[_Node] = []
+            for k in spans[p]:
+                layer = layers.get(k, [])
+                at = [i for i, n in enumerate(layer) if pkg.get(n) == p]
+                lo, hi = ((at[0], at[-1] + 1) if at else
+                          (sum(n.y + n.h / 2 < (top + bottom) / 2 for n in layer),) * 2)
+                above += layer[:lo]
+                below += layer[hi:]
+            rise = max((n.y + n.h + n.pad.south + PACKAGE_GAP - top for n in above), default=0.0)
+            drop = max((bottom + PACKAGE_GAP + n.pad.north - n.y for n in below), default=0.0)
+            for nodes, dy in ((above, -rise), (below, drop)):
+                if abs(dy) > 1e-6:
+                    moved = True
+                    for n in nodes:
+                        n.y += dy
+        if not moved:
+            break
+    return {k for span in spans.values() for k in span}
 
 
 def _face_tees(fs: Flowsheet, layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
@@ -1061,11 +1177,14 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
             solve(layers[k])
 
 
-def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, float]) -> None:
+def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, float],
+          pkg: dict[_Node, int]) -> None:
     """Fold a drawing wider than :data:`BAND_WIDTH` into bands.
 
     A band ends at the layer in its second half that the fewest pipe
-    steps leave, the latest on a tie.
+    steps leave, the latest on a tie. No band ends inside a package;
+    failing such a layer, it ends at the last layer that fits, else
+    the first after.
 
     Parameters
     ----------
@@ -1075,20 +1194,27 @@ def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, floa
         Pipe steps between adjacent layers.
     xs : dict[_Node, float]
         Left edge of each node, updated in place.
+    pkg : dict[_Node, int]
+        Package index of each node in a package.
     """
     keys = sorted(layers)
     left = {k: min(xs[n] - n.pad.west for n in layers[k]) for k in keys}
     right = {k: max(xs[n] + n.w + n.pad.east for n in layers[k]) for k in keys}
     leaving = Counter(s.left.layer for s in segs)
+    # Layers a band may not end at, as that would split a package.
+    spans = [[n.layer for n in pkg if pkg[n] == p] for p in set(pkg.values())]
+    inside = {k for span in spans for k in range(min(span), max(span))}
     bands, start = [], 0
     while True:
         last = max([i for i in range(start, len(keys))
                     if right[keys[i]] - left[keys[start]] <= BAND_WIDTH], default=start)
-        if last == len(keys) - 1:
+        free = [i for i in range(start, len(keys) - 1) if keys[i] not in inside]
+        ends = ([i for i in free if start + (last - start) // 2 <= i <= last]
+                or [i for i in free if i <= last][-1:] or free[:1])
+        if last == len(keys) - 1 or not ends:
             bands.append(keys[start:])
             break
-        cut = min(range(start + (last - start) // 2, last + 1),
-                  key=lambda i: (leaving[keys[i]], -i))
+        cut = min(ends, key=lambda i: (leaving[keys[i]], -i))
         bands.append(keys[start:cut + 1])
         start = cut + 1
     bottom = None
