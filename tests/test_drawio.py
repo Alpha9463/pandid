@@ -459,11 +459,12 @@ def test_a_flag_is_drawn_across_its_own_box():
             flag = fs.add(cls("X", reference=reference))
             flag.pin(x=137.5, y=42.25, mirrored=mirrored)
             fs.layout()
+            assert flag.frame is not None
             bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
-            ux0, uy0, ux1, uy1 = unit_box(flag, flag.frame)
+            ux0, _, ux1, _ = unit_box(flag, flag.frame)
             assert (bx0, bx1) == pytest.approx((ux0, ux1), abs=1e-9)
-            # Keep vertical insets within the flag box.
-            assert uy0 < by0 < by1 < uy1
+            # Keep vertical insets within the flag's frame.
+            assert flag.frame.y < by0 < by1 < flag.frame.y + flag.frame.h
 
 
 def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
@@ -479,13 +480,13 @@ def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
         flag.pin(x=100, y=50, mirrored=mirrored, port=None)
         fs.layout()
 
-        ux0, uy0, ux1, uy1 = unit_box(flag, flag.frame)
-        assert (uy1 - uy0) == pytest.approx(120.0)
+        assert flag.frame is not None
+        assert flag.frame.h == pytest.approx(120.0)
 
         bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
         # The pennant is inset a fixed amount from the placed height.
         assert (by1 - by0) == pytest.approx(120.0 - 2 * 15)
-        assert uy0 < by0 < by1 < uy1
+        assert flag.frame.y < by0 < by1 < flag.frame.y + flag.frame.h
 
         port_name = next(iter(flag.ports))
         _, py = port_point(flag, flag.frame, port_name)
@@ -1101,6 +1102,7 @@ def test_a_letter_code_is_exported_clear_of_a_flange_mark():
         "a_flange_and_a_line",
         "a_fixed_tag",
         "another_balloon",
+        "a_line_and_a_balloon",
         "a_closed_valve",
         "a_pneumatic_line",
         "a_stacked_tag",

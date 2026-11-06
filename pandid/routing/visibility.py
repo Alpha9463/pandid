@@ -465,6 +465,9 @@ class VisibilityGraph:
     ) -> Tuple[float, float] | None:
         """Return the furthest stub node clear of other units' bodies.
 
+        Neither the stub nor its node may touch another unit's body,
+        edges included.
+
         Parameters
         ----------
         anchor : tuple[float, float]
@@ -496,8 +499,11 @@ class VisibilityGraph:
             candidate = (coordinate, anchor[1]) if axis == 0 else (anchor[0], coordinate)
             if not self.edges.get(candidate):
                 continue
+            cx, cy = candidate
             if any(
-                other is not owner and body.intersects_segment(*anchor, *candidate)
+                other is not owner and (body.intersects_segment(*anchor, *candidate)
+                                        or (body.x_min <= cx <= body.x_max
+                                            and body.y_min <= cy <= body.y_max))
                 for other, body in self.body_obstacles
             ):
                 continue
