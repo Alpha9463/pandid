@@ -1197,6 +1197,7 @@ _COMPOSING = [
         units.Thickener,
         units.Crystallizer,
         units.FlotationCell,
+        units.MixerSettler,
         units.Column,
         units.Reactor,
     )
