@@ -210,7 +210,55 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return None
     face = free_face(inst) or inst.face
     (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
-    return (px, py), (-ny, nx)
+    fs = inst.flowsheet
+    moved = nozzle_tap(inst) if fs is not None and fs._clear_taps else None
+    return (moved or (px, py)), (-ny, nx)
+
+
+def nozzle_tap(inst: "Instrument") -> Point | None:
+    """Return where a tap on a nozzle a line leaves from moves to, if any.
+
+    A balloon drawn from a face the author named taps the face's middle.
+    Where a line leaves a nozzle there, the tap slides one nozzle pitch
+    along the face, if that stays on the straight wall the symbol declares
+    there (:func:`~pandid.portgeom.face_wall`) and off the face's other
+    connected nozzles: to the side with more room, else toward the
+    balloon.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    Point or None
+        The moved tap point, or None if the tap stays.
+    """
+    from pandid.portgeom import face_point, face_wall, port_point
+    from pandid.render.symbols import MIN_NOZZLE_PITCH
+    from pandid.streams import Stream
+
+    host = inst.host
+    if (isinstance(host, Stream) or host is None or host.frame is None
+            or not inst._face_stated or inst.relation == "near"):
+        return None
+    face = inst.face or "E"
+    point, (nx, ny) = face_point(host, host.frame, face)
+    nozzles = [port_point(host, host.frame, name)
+               for name, port in host.ports.items() if port.stream is not None]
+    wall = face_wall(host, host.frame, face)
+    if wall is None or not any(math.dist(point, n) < 0.5 for n in nozzles):
+        return None
+    along = 1 if face in ("W", "E") else 0
+    f = inst.frame
+    lean = 0.0 if f is None else (f.cx - point[0]) * -ny + (f.cy - point[1]) * nx
+    sides = [(point[0] - sign * ny * MIN_NOZZLE_PITCH, point[1] + sign * nx * MIN_NOZZLE_PITCH)
+             for sign in (1, -1)]
+    room = [(min(MIN_NOZZLE_PITCH, *(math.dist(q, n) for n in nozzles)), sign * lean, q)
+            for sign, q in zip((1, -1), sides) if wall[0] <= q[along] <= wall[1]]
+    best = max(room, default=None)
+    return best[2] if best is not None and best[0] >= 0.5 else None
 
 
 def free_face(inst: "Instrument") -> str | None:
@@ -514,6 +562,58 @@ def _tapped_runs(inst: "Instrument") -> tuple[Box, ...]:
                  for axis, fixed, lo, hi in segments)
 
 
+def _leader_runs(inst: "Instrument") -> tuple[Box, ...]:
+    """Return the runs of the tap line drawn to the balloon a balloon hangs from.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    tuple[Box, ...]
+        Each run as a flat box; ``()`` if its host draws no tap line.
+    """
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = inst.flowsheet
+    for host, tap, centre in tap_lines(fs) if fs is not None else ():
+        if host is inst.host:
+            points = tap_route(host, tap, centre)
+            return tuple((min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+                         for a, b in zip(points, points[1:]))
+    return ()
+
+
+def on_leader(fs: "Flowsheet") -> bool:
+    """Return whether a balloon is drawn across the tap line of its host.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    bool
+        True if a balloon hung from a balloon covers that balloon's tap
+        line.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    for host, tap, centre in tap_lines(fs):
+        points = tap_route(host, tap, centre)
+        for u in fs.units:
+            if getattr(u, "host", None) is host and u.frame is not None and any(
+                    segment_crosses_box(a, b, unit_box(u, u.frame))
+                    for a, b in zip(points, points[1:])):
+                return True
+    return False
+
+
 def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
@@ -552,10 +652,14 @@ def place_attached(fs: "Flowsheet") -> bool:
             w, h = resolve_size(inst)
             runs = _tapped_runs(inst) if fs._keep_clear else ()
             fs._kept_clear = fs._kept_clear or bool(runs)
+            clearance = fs._keep_clear
+            if fs._off_leaders:
+                runs += _leader_runs(inst)
+                clearance = max(clearance, TOUCHING)
             distance, angle = _clear_standoff(
                 inst, (tx, ty), ref, w, h,
                 obstacles + keepouts if mounted else obstacles,
-                [] if mounted else keepouts, runs, fs._keep_clear)
+                [] if mounted else keepouts, runs, clearance)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis.

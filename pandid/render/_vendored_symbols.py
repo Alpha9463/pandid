@@ -276,7 +276,7 @@ def register_vendored(registry):
         ports={'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reflux_in': (100.0, 35.0), 'boilup_in': (100.0, 175.0), 'condenser_duty': (100.0, 65.0), 'reboiler_duty': (100.0, 145.0)},
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'), PortSeries('draw_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='draw'),),
+        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed', also=(PortSeries('feed_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='feed'),)), PortSeries('draw_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='draw', also=(PortSeries('draw_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='draw'),)),),
     ), 'default')
 
     registry.register('column', Symbol(
@@ -285,7 +285,7 @@ def register_vendored(registry):
         ports={'distillate': (31.0, 0.0), 'bottoms': (31.0, 200.0), 'reflux_in': (62.0, 35.0), 'boilup_in': (62.0, 175.0), 'condenser_duty': (62.0, 65.0), 'reboiler_duty': (62.0, 145.0)},
         drawio_shape='mxgraph.pid.vessels.tower_with_packing',
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'), PortSeries('draw_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='draw'),),
+        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed', also=(PortSeries('feed_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='feed'),)), PortSeries('draw_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='draw', also=(PortSeries('draw_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='draw'),)),),
     ), 'packed')
 
     registry.register('reactor', Symbol(
@@ -295,7 +295,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         gravity_fixed=True,
         port_faces={'outlet': {'S': (31.0, 100.0), 'E': (62.0, 82.5), 'W': (0.0, 82.5)}},
-        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.32, at=50.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.32, at=50.0, singular='feed', also=(PortSeries('feed_', 'N', pitch=16.0, extent=0.0, at=10.0, singular='feed', inset=2.0),)),),
     ), 'default')
 
     registry.register('reactor', Symbol(
@@ -304,7 +304,7 @@ def register_vendored(registry):
         ports={'outlet': (26.0, 95.38), 'jacket_in': (52.0, 72.7), 'jacket_out': (52.0, 22.7), 'vent': (46.0, 10.0)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.34, at=47.69, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=16.0, extent=0.34, at=47.69, singular='feed', also=(PortSeries('feed_', 'N', pitch=16.0, extent=0.0, at=8.0, singular='feed', inset=4.35),)),),
     ), 'jacketed')
 
     registry.register('separator', Symbol(
@@ -313,7 +313,7 @@ def register_vendored(registry):
         ports={'vapor': (31.0, 0.0), 'liquid': (31.0, 100.0)},
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=50.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=50.0, singular='feed', also=(PortSeries('feed_', 'E', pitch=20.0, extent=0.5, at=50.0, singular='feed'),)),),
     ), 'default')
 
     registry.register('separator', Symbol(
@@ -322,7 +322,7 @@ def register_vendored(registry):
         ports={'vapor': (25.0, 0.0), 'liquid': (25.0, 95.38)},
         drawio_shape='mxgraph.pid.vessels.knock-out_drum',
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.52, at=55.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.52, at=55.0, singular='feed', also=(PortSeries('feed_', 'E', pitch=20.0, extent=0.2, at=70.0, singular='feed', inset=11.0),)),),
     ), 'knockout')
 
     registry.register('tank', Symbol(

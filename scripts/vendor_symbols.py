@@ -715,6 +715,28 @@ BANDS = {
 }
 
 
+# Further faces a port series may take, as ``{port: [(face, at, extent,
+# inset)]}`` in finished coordinates, each emitted in its series' ``also``
+# with its pitch. A column's feeds and draws take the opposite wall at their
+# stage height, inside the stretch between the condenser and reboiler duty
+# nozzles; an upright drum's feeds take its east wall. A stirred reactor's
+# feed takes the top head on the side away from the vent, clear of the drive
+# and shaft, where it meets the head's ink; it takes one there.
+SERIES_FACES = {
+    ("column", "default"): {"feed": [("E", 105.0, 0.35, 0.0)],
+                            "draw": [("W", 105.0, 0.35, 0.0)]},
+    ("column", "packed"): {"feed": [("E", 105.0, 0.35, 0.0)],
+                           "draw": [("W", 105.0, 0.35, 0.0)]},
+    # An arrowhead's width short of the motor.
+    ("reactor", "default"): {"feed": [("N", 10.0, 0.0, 2.0)]},
+    ("reactor", "jacketed"): {"feed": [("N", 8.0, 0.0, 4.35)]},
+    ("separator", "default"): {"feed": [("E", 50.0, 0.5, 0.0)]},
+    # The level gauge stands off the east wall down to 52.7, so the east feeds
+    # sit below it on the shell, eleven inside the box.
+    ("separator", "knockout"): {"feed": [("E", 70.0, 0.2, 11.0)]},
+}
+
+
 # Further faces a tank's or vessel's inlet or outlet family may take, as
 # ``{role: {face: (x, y)}}`` in finished coordinates; emitted as
 # ``Symbol.family_faces``. A lone port's menu leaves them out. A flat-floored
@@ -997,7 +1019,8 @@ def render() -> str:
         )
     # Refuse a table entry for a symbol KIND_MAP does not draw.
     tables = {"CLOSED_SHAPES": CLOSED_SHAPES, "GRAVITY_FIXED": GRAVITY_FIXED,
-              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES}
+              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES,
+              "SERIES_FACES": SERIES_FACES}
     for table_name, table in tables.items():
         orphans = sorted(key for key in table if key not in KIND_MAP)
         if orphans:
@@ -1108,10 +1131,24 @@ def render() -> str:
             # A family is named after the port it replaces: one member keeps
             # that name, and only a second one numbers them.
             if series:
+                further = SERIES_FACES.get((kind, variant), {})
+
+                def also(p, pitch):
+                    """Return the ``also=`` of a series' declaration, or nothing."""
+                    if p not in further:
+                        return ""
+                    faces = "".join(
+                        f"PortSeries({p + '_'!r}, {face!r}, pitch={round(pitch, PLACES)}, "
+                        f"extent={extent}, at={at}, singular={p!r}"
+                        + (f", inset={inset}" if inset else "") + "),"
+                        for face, at, extent, inset in further[p])
+                    return f", also=({faces})"
+
                 declared = ", ".join(
                     f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, PLACES)}, "
                     f"extent={extent}, at={round(at, PLACES)}, singular={p!r}"
-                    + (f", align={_ALIGN_NAMES[align]})" if align != CENTRED else ")")
+                    + (f", align={_ALIGN_NAMES[align]}" if align != CENTRED else "")
+                    + also(p, pitch) + ")"
                     for p, (edge, at, pitch, extent, align) in series.items()
                 )
                 lines.append(f"        port_series=({declared},),")
