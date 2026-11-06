@@ -1053,11 +1053,12 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
             if s.kind != "energy":
                 continue
             given = not s.auto_named
-            if s.service and (str(s.service) in s.name if given else numbered):
+            named_service = s.service not in (None, "")
+            if named_service and (str(s.service) in s.name if given else numbered):
                 continue
             # Keep every value the author gave; suggest one only for service.
-            carrier = str(s.service) if s.service else "LP steam"
-            keys = [] if s.service else [f"service={carrier!r}"]
+            carrier = str(s.service) if named_service else "LP steam"
+            keys = [] if named_service else [f"service={carrier!r}"]
             if given:
                 # A given name is drawn in place of the line number.
                 keys.append(f"name={f'{s.name} {carrier}'!r}")
@@ -1076,13 +1077,13 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                 f"{' and '.join(fixes)}"))
 
     # --- a line-number field the line's label leaves out ---
-    from pandid.flowsheet import _format_line_number, _unused_fields
+    from pandid.flowsheet import _format_line_number, _numbered, _unused_fields
 
     scheme = fs.line_numbering_scheme
     for name, segments in runs.items():
         given = not all(s.auto_named for s in segments)
         # The segment a line number is formed from.
-        origin = next((s for s in segments if s.has_line_number), None)
+        origin = _numbered(segments)
         if not given and (callable(scheme) or origin is None):
             continue
         # Every field the author set, by field and value.
@@ -1097,39 +1098,56 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                    if (text not in name if given else (f, text) not in carried or f in omitted)]
         if not undrawn:
             continue
-        # The line number the scheme, widened by the omitted fields, would draw.
+        # The line number the scheme, widened by the omitted fields, would
+        # draw on the line without a name.
         widened = scheme if callable(scheme) else scheme + "".join(f"-{{{f}}}" for f in omitted)
         try:
-            label = _format_line_number(widened, origin) if origin is not None else ""
+            label = (_format_line_number(widened, replace(origin, name="", auto_named=True))
+                     if origin is not None else "")
         except Exception:  # a scheme that cannot number this line
             label = ""
-        numbered = set(authored) <= carried and all(text in label for _, text in authored)
+        # The line numbers the other lines draw, renumbered by a widened scheme.
+        elsewhere = set()
+        for other, rest in runs.items():
+            first = next((s for s in rest if s.has_line_number), None)
+            if other != name:
+                elsewhere.add(_format_line_number(widened, first)
+                          if omitted and first is not None and all(s.auto_named for s in rest)
+                          else other)
+        numbered = (set(authored) <= carried and all(text in label for _, text in authored)
+                    and label not in elsewhere)
         it = "it" if len(undrawn) == 1 else "them"
         extra = [str(v) for (_, text), v in authored.items() if text not in name]
         them = "it" if len(extra) == 1 else "them"
-        named = f"name={' '.join([name, *extra])!r}"
+        written = " ".join([name, *extra])
+        free = written not in runs
         fields = _and([f"{{{f}}}" for f in omitted])
         call = f": Flowsheet(..., line_numbering_scheme={widened!r})" if omitted else ""
+        fixes = []
         if given:
-            fix = f"Write {them} into the name: {named}"
+            if free:
+                fixes.append(f"write {them} into the name: name={written!r}")
             if numbered:
                 add = f" and add {fields} to line_numbering_scheme" if omitted else ""
-                fix += f", or drop name={name!r}{add} so its line number draws {it}{call}"
+                fixes.append(f"drop name={name!r}{add} so its line number draws {it}{call}")
             source = "the name given to connect()"
         elif numbered:
-            fix = f"Add {fields} to the scheme, keeping its other arguments{call}"
+            fixes.append(f"add {fields} to the scheme, keeping its other arguments{call}")
             source = f"line_numbering_scheme {scheme!r}"
         else:
             assert origin is not None
-            fix = (f"Set new_line_number = True on the valve, fitting or tee where a "
-                   f"new line number starts, or name the line with {them} in one of its "
-                   f"connect() calls: {named}")
+            fixes.append("set new_line_number = True on the valve, fitting or tee where a "
+                         "new line number starts")
+            if free:
+                fixes.append(f"name the line with {them} in one of its connect() calls: "
+                             f"name={written!r}")
             source = (f"its line number, formed from the segment from "
                       f"{origin.source.owner.name} to {origin.dest.owner.name},")
+        fix = ", or ".join(fixes)
         warnings.append(Issue(
             "warning", "line-field-undrawn",
             f"{name} states {_and([f'{f}={v!r}' for f, v in undrawn])}, "
-            f"which {source} does not draw. {fix}"))
+            f"which {source} does not draw." + (f" {fix[:1].upper()}{fix[1:]}" if fix else "")))
 
     return errors + warnings
 
@@ -1151,8 +1169,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     """
     from pandid.inline import _INLINE_KINDS
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import (drawn_box, is_anchored, pin_intent, port_faces,
-                                 port_point, resolve_port)
+    from pandid.portgeom import (is_anchored, pin_intent, port_faces, port_point,
+                                 resolve_port, unit_box)
     from pandid.render.svg import crossings, stream_polyline
     from pandid.routing.metrics import path_length
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
@@ -1275,7 +1293,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             # Soft: a line through a support.
             warnings += _support_crossings(u)
 
-        boxes = [(u, drawn_box(u, u.frame)) for u in placed]
+        boxes = [(u, unit_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
@@ -1425,7 +1443,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
-            ends = [(u, name, drawn_box(u, u.frame), end.face) if is_anchored(u, name) else None
+            ends = [(u, name, unit_box(u, u.frame), end.face) if is_anchored(u, name) else None
                     for u, name, end in ((src_u, s.source.name, src), (dst_u, s.dest.name, dst))]
             pierced = _pierced_end(path, ends) if len(path) > 1 else None
             if pierced is not None:

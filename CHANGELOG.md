@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draws the ISO 10628-2 furnace.
 - `CentrifugalFan` and `AxialFan` draw those fans, and
   `Blower(variant="general")` draws the ISO 10628-2 fan.
+- `Silo` draws the closed silo of ISO 10628-2 and `Bunker` its open bunker,
+  each with a conical bottom: solids enter at `feed` and leave at `discharge`,
+  and a silo vents through its roof at `vent`.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -83,6 +86,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
+  the train is drawn in the column beside that unit, where that adds no
+  crossing, bend or finding, instead of at the sheet's left edge.
 - Lines that cross on their way into a mixer are laid on lanes even where they
   share their stretch of the gap with only some of the lines beside them, so the
   last two pumps of a header of tees no longer cross into the mixer.
@@ -138,12 +144,27 @@ These are removed in 0.4.0.
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
 - `line.color` and `line.dasharray` set after `on=` has split the line style
   the whole line, including the pipework of a valve station on it.
+- A sequence set in `connect()` is drawn in the line number when another
+  segment of the line states the other fields, and alone when none does:
+  `fs.connect(..., sequence="2740")` draws `2740` instead of `S1`.
 - A valve's actuator sits on the body's centre line, so a balloon added with
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- A `Feed` or `Product` too short to letter, such as `Feed("Air", height=20)`,
+  is refused with the height that fits, `height=42`, or `height=48` with a
+  `reference`, instead of failing `nozzle-off-body` when drawn.
+- Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
+  as its pennant is drawn, not of the blank paper above and below it, so a
+  sheet with a flag at its top or bottom is framed tighter.
+- Where neither side of a symbol has room for both codes of a pair, such as
+  `annotate(high="TAH", low="TAL")`, one is written on each side instead of
+  over a line.
+- `route()` ends the run a line leaves a nozzle on clear of every other unit,
+  so a signal line between two balloons no longer cuts through a third
+  standing between them.
 
 ## [0.2.0] - 2026-11-05
 

@@ -54,7 +54,7 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
         # ``feed_1`` is the charge nozzle ``__init__`` adds.
         table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table} | {"feed_1"}
-    elif cls is units.Filter:
+    elif cls in (units.Filter, units.Silo):
         table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}
     elif cls is units.Valve:

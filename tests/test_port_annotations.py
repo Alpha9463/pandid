@@ -258,6 +258,7 @@ def test_only_these_classes_supersede_a_declaration():
         "ImpactSeparator": ["liquid", "vapor"],
         "MagneticSeparator": ["liquid", "vapor"],
         "AirCooledExchanger": ["shell_in", "shell_out"],
+        "Bunker": ["vent"],
         "PlateExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "SpiralExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "ThinFilmEvaporator": ["shell_in", "shell_out", "tube_in", "tube_out"],

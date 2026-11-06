@@ -48,7 +48,7 @@ def _compute_offsets(
     v_offsets: dict[tuple[int, int], float] = {}
 
     from pandid.layout.conflicts import segment_crosses_box
-    from pandid.portgeom import drawn_box, unit_box
+    from pandid.portgeom import unit_box
 
     for s in streams:
         if not s.route or not s.route.waypoints:
@@ -163,7 +163,7 @@ def _compute_offsets(
         list[tuple[int, tuple[float, float, float, float]]]
             ``(id(unit), box)`` for each unit with a frame.
         """
-        return [(id(u), drawn_box(u, u.frame)) for u in units if u.frame is not None]
+        return [(id(u), unit_box(u, u.frame)) for u in units if u.frame is not None]
 
     def blocked(run, track):
         """Return whether a run on a track, or a leg it stretches, enters a unit.

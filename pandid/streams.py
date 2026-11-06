@@ -242,10 +242,12 @@ class Stream:
         Returns
         -------
         bool
-            Whether ``size``, ``schedule``, ``service``, ``spec`` or
-            ``insulation`` is set.
+            Whether ``size``, ``schedule``, ``service``, ``spec``,
+            ``insulation`` or a ``sequence`` the author set is set.
         """
-        return any((self.size, self.schedule, self.service, self.spec, self.insulation))
+        return (any(v not in (None, "") for v in (self.size, self.schedule, self.service,
+                                                  self.spec, self.insulation))
+                or self.sequence not in (None, "", self._auto_sequence))
 
     @property
     def at_boundary(self) -> bool:
