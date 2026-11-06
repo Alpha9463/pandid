@@ -202,8 +202,9 @@ These are removed in 0.4.0.
 - A balloon attached with `face=` to a face whose middle a line leaves from taps
   the face beside that nozzle, so its tap line no longer runs along the pipe.
 - Notes, legends, the title block and the stream table dock clear of every tag
-  and of the `NC` and fail-position letters beside a unit, so the `FC` under a
-  valve with `fail="closed"` is no longer written over the notes.
+  and of the `NC` and fail-position letters beside a unit, and a fitted sheet
+  reaches past them, so the `FC` under a valve with `fail="closed"` is no longer
+  written over the notes.
 
 ## [0.2.0] - 2026-11-05
 
