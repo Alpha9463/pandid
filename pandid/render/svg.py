@@ -2891,7 +2891,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """Place each unit's tag and its ``NC`` and fail-position letters.
 
     The labels keep clear of the drawn lines, the symbols, the flange
-    marks, the quadrant codes and the package frames.
+    marks, the quadrant codes, the package frames and each other.
 
     Parameters
     ----------
@@ -2915,25 +2915,105 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
-    out = []
-    for u in fs.units:
-        f = u.frame
-        if f is None or u.kind in ("feed", "product", "instrument"):
-            continue
-        x, y, w, h = f.x, f.y, f.w, f.h
-        tag = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols) if u.tag else None
-        tag_box = None if tag is None else _unit_label_box(tag)
-        items = [] if tag is None else [tag]
-        # NC marking (ISO 15519-1 11.4.5).
-        if closed_marking(u, default_registry) == "NC":
-            items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
-        # Fail position (ISA-5.1 Table 5.4.4).
-        letters = fail_marking(u)
-        if letters:
-            items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
-                                                ink, symbols))
-        out.append((u, tag, items))
-    return out
+
+    from pandid.render.drawio import label_box
+
+    def drawn(u, tag, items) -> "tuple[list, list]":
+        """Return a unit's label boxes as the sheet and draw.io draw them.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit the labels belong to.
+        tag : tuple or None
+            Its tag item.
+        items : list
+            Its label items.
+
+        Returns
+        -------
+        tuple[list, list]
+            The sheet's halos, then draw.io's boxes.
+        """
+        halos = [b for b in map(_unit_label_box, items) if b is not None]
+        block = label_box(u, tag, items)
+        return halos, halos if block is None else [block]
+
+    def cost(u, boxes, others) -> "list[int]":
+        """Return what boxes erase, then the other labels they cover.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit the boxes belong to.
+        boxes : list
+            Its label boxes.
+        others : list
+            Other units' label boxes.
+
+        Returns
+        -------
+        list[int]
+            Symbols, impulse lines, pipes and labels.
+        """
+        obstacles = [_obstacle(b) for v, b in symbols if v is not u]
+        return [sum(n) for n in zip((0, 0, 0, 0), *(
+            (*_erases(b, ink, obstacles), sum(1 for o in others if boxes_overlap(b, o)))
+            for b in boxes))]
+
+    def worse(u, now, was, others) -> bool:
+        """Return whether new labels erase or cover more of anything.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit the labels belong to.
+        now, was : tuple[list, list]
+            Its new and old boxes from ``drawn``.
+        others : list
+            Other units' boxes from ``drawn``.
+
+        Returns
+        -------
+        bool
+            True if either drawing is worse in any count.
+        """
+        for k in (0, 1):
+            rest = [b for o in others for b in o[k]]
+            if any(a > b for a, b in zip(cost(u, now[k], rest), cost(u, was[k], rest))):
+                return True
+        return False
+
+    placed: dict = {}
+    shown: dict = {}
+    # Place each unit's labels alone, then again off the others as they
+    # stand, keeping the first placement if the second is worse in either
+    # drawing.
+    for alone in (True, False):
+        for u in fs.units:
+            f = u.frame
+            if f is None or u.kind in ("feed", "product", "instrument"):
+                continue
+            x, y, w, h = f.x, f.y, f.w, f.h
+            others = [o for k, o in shown.items() if k != id(u)]
+            labels = None if alone else [b for o in others for b in o[0]]
+            tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels)
+                   if u.tag else None)
+            tag_box = None if tag is None else _unit_label_box(tag)
+            items = [] if tag is None else [tag]
+            # NC marking (ISO 15519-1 11.4.5).
+            if closed_marking(u, default_registry) == "NC":
+                items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
+            # Fail position (ISA-5.1 Table 5.4.4).
+            letters = fail_marking(u)
+            if letters:
+                items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
+                                                    ink, symbols))
+            now = drawn(u, tag, items)
+            if alone or not worse(u, now, shown[id(u)], others):
+                placed[id(u)] = (u, tag, items)
+                shown[id(u)] = now
+    return list(placed.values())
 
 
 def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
@@ -4111,12 +4191,17 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=()):
+    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None):
         """Return the equipment tag item, moved clear of drawn ink.
 
-        The tag slides along its side, then tries other free sides. The
-        first placement that erases nothing wins, else the least
-        damaging. A side set on the unit or symbol is kept.
+        The tag slides up to half the face along its side, then along
+        the other free sides. The first placement that erases nothing
+        wins, else the least damaging. A side set on the unit or symbol
+        is kept.
+
+        Given ``labels``, the tag then also tries every side, free sides
+        first, sliding until its near end reaches the corner, and takes
+        the spot that erases least, then covers fewest labels.
 
         Parameters
         ----------
@@ -4132,13 +4217,15 @@ class SvgRenderer:
             Drawn lines.
         symbols : sequence of tuple, optional
             ``(unit, box)`` for every symbol and owner-less mark.
+        labels : sequence of tuple, optional
+            Halo boxes of other labels.
 
         Returns
         -------
         tuple
             Label item.
         """
-        from pandid.layout.labels import free_label_sides
+        from pandid.layout.labels import LABEL_SIDES, free_label_sides
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)
@@ -4156,8 +4243,8 @@ class SvgRenderer:
 
         clear = (0, 0, 0)
         best, damage = item, _erases(box, near, others)
-        sides = [item[4]] + [s for s in free_label_sides(u) if s != item[4]]
-        for side in sides:
+        free = [item[4]] + [s for s in free_label_sides(u) if s != item[4]]
+        for side in free:
             if damage == clear:
                 break
             lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
@@ -4169,6 +4256,43 @@ class SvgRenderer:
                 if cost < damage:
                     best, damage = spot, cost
                     if damage == clear:
+                        break
+        if labels is None:
+            return best
+        covered = [b for b in labels if boxes_overlap(b, window)]
+
+        def score(spot) -> "tuple[int, int, int, int]":
+            """Return what a spot erases, then the labels it covers.
+
+            Parameters
+            ----------
+            spot : tuple
+                Label item.
+
+            Returns
+            -------
+            tuple[int, int, int, int]
+                Symbols, impulse lines, pipes and labels.
+            """
+            halo = _unit_label_box(spot)
+            assert halo is not None
+            return (*_erases(halo, near, others),
+                    sum(1 for b in covered if boxes_overlap(halo, b)))
+
+        least = score(best)
+        for side in free + [s for s in LABEL_SIDES if s not in free]:
+            if least == (0, 0, 0, 0):
+                break
+            lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
+            edgewise = side in ("left", "right")
+            face, along = ((u_height, box[3] - box[1]) if edgewise
+                           else (u_width, box[2] - box[0]))
+            for sx, sy in _slide(lx, ly, (face + along) / 2, edgewise):
+                spot = (sx, sy, anchor, baseline, side, tag)
+                cost = score(spot)
+                if cost < least:
+                    best, least = spot, cost
+                    if least == (0, 0, 0, 0):
                         break
         return best
 

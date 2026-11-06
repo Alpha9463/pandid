@@ -440,3 +440,93 @@ def test_the_corpus_has_letter_codes_to_check(drawn):
     assert counted["03_control_loop"] == 2, counted
     assert counted["10_ethanol_pid"] == 6, counted
     assert counted["13_tank_farm"] == 5, counted
+
+
+def _tag_halo(svg: str, tag: str) -> "tuple[float, float, float, float]":
+    """Return the halo drawn behind one tag."""
+    m = re.search(_HALO.pattern + rf"\s*<text[^>]*>{re.escape(tag)}<", svg)
+    assert m is not None, f"no halo behind {tag}"
+    x, y, w, h = (float(v) for v in m.groups())
+    return (x, y, x + w, y + h)
+
+
+def test_a_tag_boxed_in_by_balloons_takes_a_nozzle_side_clear_of_them():
+    """Check that a tag whose free sides are under balloons is drawn clear of them."""
+    fs = Flowsheet("boxed in")
+    feed = fs.add(U.Feed("F"))
+    pump = fs.add(U.Pump("P-1")).pin(x=300, y=200)
+    prod = fs.add(U.Product("P"))
+    suction = fs.connect(feed.outlet, pump.suction)
+    discharge = fs.connect(pump.discharge, prod.inlet)
+    above = fs.add_instrument("PI", 1, sensing=suction).pin(x=313, y=150)
+    below = fs.add_instrument("PI", 2, sensing=discharge).pin(x=313, y=272)
+    halo = _tag_halo(fs.to_svg(), "P-1")
+    for balloon in (above, below):
+        assert balloon.frame is not None
+        assert not overlaps(halo, _inked(unit_box(balloon, balloon.frame))), balloon.tag
+
+
+def test_a_tag_keeps_off_the_tag_of_the_valve_beside_it():
+    """Check that two valves close on one line write their tags apart."""
+    fs = Flowsheet("close valves")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    first = fs.add(U.Valve("HV-101")).pin(port="inlet", x=200, y=200)
+    second = fs.add(U.Valve("HV-102")).pin(port="inlet", x=240, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    fs.connect(feed.outlet, first.inlet)
+    fs.connect(first.outlet, second.inlet)
+    fs.connect(second.outlet, prod.inlet)
+    svg = fs.to_svg()
+    assert not overlaps(_tag_halo(svg, "HV-101"), _tag_halo(svg, "HV-102"))
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_halo_lands_on_another_halo(drawn, name):
+    """Check that no two label halos overlap."""
+    halos = drawn[name].halos
+    struck = [
+        f"({a[0]:.0f}, {a[1]:.0f}) and ({b[0]:.0f}, {b[1]:.0f})"
+        for i, a in enumerate(halos)
+        for b in halos[i + 1 :]
+        if overlaps(a, b)
+    ]
+    assert not struck, f"{name}: halos overlap at " + "; ".join(struck)
+
+
+def test_a_tag_moved_off_a_label_erases_no_line():
+    """Check that tags kept off each other on a crowded bank erase no line."""
+    from test_instruments import _valved_bank
+
+    fs, _loops = _valved_bank(100)
+    svg = fs.to_svg(diagram="p&id")
+    tags = [u.tag for u in fs.units if u.kind not in ("feed", "product", "instrument")]
+    erased = [
+        f"{tag} on {line.kind} at ({line.box[0]:.0f}, {line.box[1]:.0f})"
+        for tag in tags
+        for line in _ink(fs, "vertical")
+        if overlaps(_tag_halo(svg, tag), line.box)
+    ]
+    assert not erased, "; ".join(erased)
+
+
+def test_a_tag_moved_off_a_tag_clips_no_symbol():
+    """Check that tags on two close trains of valves keep off every symbol."""
+    fs = Flowsheet("two trains")
+    for row, y in ((0, 200), (1, 235)):
+        before = fs.add(U.Feed(f"F{row}")).pin(port="outlet", x=100, y=y).outlet
+        for i, x in enumerate((200, 240, 280)):
+            valve = fs.add(U.Valve(f"HV-1{row}{i}")).pin(port="inlet", x=x, y=y)
+            fs.connect(before, valve.inlet)
+            before = valve.outlet
+        fs.connect(before, fs.add(U.Product(f"P{row}")).pin(port="inlet", x=500, y=y).inlet)
+    svg = fs.to_svg()
+    valves = [u for u in fs.units if u.kind == "valve"]
+    clipped = [
+        f"{tag.tag} over {u.tag}"
+        for tag in valves
+        for u in valves
+        if u is not tag
+        and u.frame is not None
+        and overlaps(_tag_halo(svg, tag.tag), _inked(unit_box(u, u.frame)))
+    ]
+    assert not clipped, "; ".join(clipped)
