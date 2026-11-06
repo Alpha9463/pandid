@@ -2973,7 +2973,7 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
 
 
 def _valved_bank(
-    first_tag: int, controller_face: str | None = None
+    first_tag: int, controller_face: str | None = None, controller_on_line: bool = False
 ) -> tuple[Flowsheet, list[ControlLoop]]:
     """Route three pumps in parallel, each with a flow loop on its valved suction line."""
     from pandid.devices import ControlValve
@@ -2995,6 +2995,10 @@ def _valved_bank(
         )
         for i, (line, valve) in enumerate(pairs)
     ]
+    for loop in loops if controller_on_line else ():
+        host = loop.transmitter.host
+        assert host is not None
+        loop.controller.attach(host, at=0.5, offset=45, relation="near")
     fs.route()
     return fs, loops
 
@@ -3125,3 +3129,14 @@ def test_a_controller_on_a_stated_face_is_not_hung_beside_its_valve():
     fs, loops = _valved_bank(10, controller_face="E")
 
     assert [list(_beside_valve(fs, loop.controller)) for loop in loops] == [[], [], []]
+
+
+def test_a_bank_with_controllers_near_the_measured_line_routes():
+    """Route a bank whose controllers hang near the line their transmitters measure.
+
+    route() completes and leaves each controller on its line.
+    """
+    fs, loops = _valved_bank(10, controller_on_line=True)
+
+    assert [loop.controller.host for loop in loops] == [loop.transmitter.host for loop in loops]
+    assert all(loop.controller.frame is not None for loop in loops)

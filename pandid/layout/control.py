@@ -148,7 +148,8 @@ def _beside_valve(fs: "Flowsheet", inst: "Unit") -> "Iterator[tuple[float, float
     A balloon placed near the balloon it hangs from, with no face
     stated and no pin, that drives one valve as :func:`_driven` finds
     it, may stand where :func:`_actuator_spots` puts it, clear of every
-    other unit, nozzle strip, drawn line and tag.
+    other unit, nozzle strip, drawn line and tag. A balloon placed near
+    a line or a process unit stays where it is.
 
     Parameters
     ----------
@@ -167,7 +168,8 @@ def _beside_valve(fs: "Flowsheet", inst: "Unit") -> "Iterator[tuple[float, float
     from pandid.portgeom import unit_box
     from pandid.units import Instrument
 
-    if (not isinstance(inst, Instrument) or inst.relation != "near" or inst._face_stated
+    if (not isinstance(inst, Instrument) or inst.relation != "near"
+            or not isinstance(inst.host, Instrument) or inst._face_stated
             or inst.pin_ is not None or inst.frame is None):
         return
     valve = _driven(fs, inst)
