@@ -87,3 +87,11 @@ def gapped_kind():
     )
     yield Gapped
     default_registry._symbols.pop((Gapped.kind, "default"), None)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Keep the tests that share a module fixture on one xdist worker."""
+    for item in items:
+        defs = getattr(item, "_fixtureinfo").name2fixturedefs.values()
+        if any(d[-1].scope == "module" for d in defs):
+            item.add_marker(pytest.mark.xdist_group(item.module.__name__))
