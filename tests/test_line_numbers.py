@@ -145,6 +145,32 @@ def test_a_sequence_set_after_connecting_is_kept():
     assert s.name == '6"-P-2740-A1A'
 
 
+_FIELDS: dict[str, Any] = {"size": '6"', "service": "P", "spec": "A1A"}
+
+
+@pytest.mark.parametrize(
+    ("legs", "name"),
+    [
+        ([{"sequence": "1001"}, _FIELDS], '6"-P-1001-A1A'),
+        ([{"sequence": "2740"}, _FIELDS], '6"-P-2740-A1A'),
+        ([_FIELDS, {"sequence": "2740"}], '6"-P-2740-A1A'),
+        ([{"sequence": "2740"}, {}], "2740"),
+    ],
+    ids=["sequence-first", "another-sequence-first", "sequence-last", "sequence-only"],
+)
+def test_a_sequence_on_any_segment_numbers_the_line_with_its_fields(
+    legs: list[dict[str, Any]], name: str
+):
+    """Check that a run's stated sequence joins the fields another segment states."""
+    fs = Flowsheet("t")
+    feed, hv, prod = fs.add(U.Feed("F")), fs.add(U.Valve("HV-1")), fs.add(U.Product("P"))
+    fs.connect(feed.outlet, hv.inlet, **legs[0])
+    fs.connect(hv.outlet, prod.inlet, **legs[1])
+    fs.to_svg(diagram="p&id")
+    assert [s.name for s in fs.streams] == [name, name]
+    assert [i.code for i in fs.validate(diagram="p&id") if i.code == "line-field-undrawn"] == []
+
+
 # --- inline groups and spec breaks --------------------------------------------
 
 
