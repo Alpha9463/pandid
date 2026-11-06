@@ -2596,19 +2596,17 @@ class Flowsheet:
         are then tried again for the balloons still so placed, judged the
         same way, each also kept where it takes a line out of a unit at the
         price :func:`~pandid.layout.control._out_of_unit` allows.
-        Neither step turns or moves a balloon at an end of a ``via()``
-        line, nor, to hang a controller, its transmitter. Where any of
-        these is kept, the next route() or layout() starts from the drawing
-        before them, unless the author has stated a pin, ``via()`` route or
-        note position since; then it starts from the drawing shown. A
-        controller hung beside its valve then stays there where a
-        ``via()`` line meets it or its transmitter; any other is kept there
-        only if the sheet so drawn passes the hang's terms against the
-        sheet drawn without it. Then, where a line that found no path runs
-        through a unit, the sheet is routed again with each such line drawn
-        round the units in its way where a clear route exists, kept only if
-        no tap leaves its line and no finding, clash, crossing or fallback
-        route grows.
+        Where any of these is kept, the next route() or layout() starts
+        from the drawing before them, unless the author has stated a pin,
+        ``via()`` route or note position since; then it starts from the
+        drawing shown. A controller hung beside its valve then stays there
+        where a ``via()`` line meets it or its transmitter; any other is
+        kept there only if the sheet so drawn passes the hang's terms
+        against the sheet drawn without it. Then, where a line that found
+        no path runs through a unit, the sheet is routed again with each
+        such line drawn round the units in its way where a clear route
+        exists, kept only if no tap leaves its line and no finding, clash,
+        crossing or fallback route grows.
 
         With the default router, where a symbol offers a connected port
         family faces, the sheet is then laid out again from where all of
@@ -2876,7 +2874,7 @@ class Flowsheet:
 
         kept = False
         for trade in (False, True):
-            for unit in [u for u in blocked_exits(self) if not _by_hand([u])]:
+            for unit in blocked_exits(self):
                 before, off, drawn = self._judged(False), _taps_off(self), self._geometry()
                 frame = unit.frame
                 assert frame is not None
@@ -2887,8 +2885,7 @@ class Flowsheet:
                                               tags=False) or kept
             for unit in blocked_exits(self):
                 host = getattr(unit, "host", None)
-                if (not isinstance(unit, Instrument) or not isinstance(host, Unit)
-                        or _by_hand([unit, host])):
+                if not isinstance(unit, Instrument) or not isinstance(host, Unit):
                     continue
                 for x, y, standoff in list(_beside_valve(self, unit)):
                     before, off, drawn = self._judged(), _taps_off(self), self._geometry()
