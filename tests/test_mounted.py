@@ -499,19 +499,10 @@ def test_an_actuator_exit_keeps_off_a_units_side() -> None:
     assert _clear({valve: valve.frame}, [vessel], True, [], [], (), MARGIN)
 
 
-@pytest.mark.parametrize(
-    ("drum_height", "cooler_at", "near_nozzle", "face"),
-    [
-        (140, (500, 160), 1, "E"),
-        (100, (420, 240), 2, "E"),
-        (80, (420, 140), 1, "E"),
-        (140, (400, 120), 3, None),
-    ],
-)
-def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows(
-    drum_height: float, cooler_at: tuple[float, float], near_nozzle: int, face: str | None
-) -> None:
-    """Check that no line crosses a unit, nor more arrowheads than main draws."""
+def _cooling(
+    drum_height: float, cooler_at: tuple[float, float], face: str | None
+) -> tuple[Flowsheet, ControlValve]:
+    """Build a drum drained through a level valve and a pump to a cooler."""
     from pandid import Pump, ShellAndTubeExchanger, Vessel
 
     fs = Flowsheet("Cooling")
@@ -529,10 +520,51 @@ def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows(
     fs.connect(cws.outlet, cooler.shell_in)
     fs.connect(cooler.shell_out, cwr.inlet)
     fs.add_control_loop("L", 101, measuring=drum, acting_on=valve, face=face)
+    return fs, valve
+
+
+@pytest.mark.parametrize(
+    ("drum_height", "cooler_at", "near_nozzle", "face"),
+    [
+        (140, (500, 160), 1, "E"),
+        (100, (420, 240), 2, "E"),
+        (80, (420, 140), 1, "E"),
+        (140, (400, 120), 3, None),
+    ],
+)
+def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows(
+    drum_height: float, cooler_at: tuple[float, float], near_nozzle: int, face: str | None
+) -> None:
+    """Check that no line crosses a unit, nor more arrowheads than main draws."""
+    fs, _ = _cooling(drum_height, cooler_at, face)
     fs.to_svg(diagram="p&id")
     codes = [i.code for i in fs.validate(diagram="p&id")]
     assert "route-crosses-unit" not in codes
     assert codes.count("route-crosses-near-nozzle") <= near_nozzle
+
+
+def test_a_relayout_inside_the_exit_clear_trial_keeps_the_exit_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check that a sheet laid out again inside the exit-clear trial keeps the exit clear."""
+    from pandid.layout import layered
+    from pandid.layout.conflicts import boxes_overlap
+    from pandid.layout.mounted import _signal_exits
+    from pandid.layout.stages import process_units
+    from pandid.portgeom import unit_box
+    from pandid.routing.visibility import MARGIN
+
+    # Every layout finds a flag's line to level, so each settle lays out again.
+    monkeypatch.setattr(layered, "_level", lambda layers, segs, held, move: not move)
+    fs, valve = _cooling(140, (520, 160), "E")
+    fs.route()
+
+    assert valve.frame is not None
+    exits = _signal_exits({valve: valve.frame})
+    assert exits
+    for unit in process_units(fs):
+        if unit is not valve and unit.frame is not None:
+            assert not any(boxes_overlap(box, unit_box(unit, unit.frame), MARGIN) for box in exits)
 
 
 def test_an_eccentric_reducer_is_set_on_its_pipe() -> None:
