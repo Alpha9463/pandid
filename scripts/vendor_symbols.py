@@ -716,6 +716,19 @@ BANDS = {
 }
 
 
+# Further faces a tank's or vessel's inlet or outlet family may take, as
+# ``{role: {face: (x, y)}}`` in finished coordinates; emitted as
+# ``Symbol.family_faces``. A lone port's menu leaves them out. A flat-floored
+# tank draws off low on either wall, beside the fill; a hopper bottom keeps
+# its apex. Vessels are built to size; see ``pandid.render.symbols._shell``.
+FAMILY_FACES = {
+    ("tank", "default"): {"outlet": {"W": (0.0, 85.0), "E": (100.0, 85.0)}},
+    ("tank", "conical"): {"outlet": {"W": (0.0, 80.0), "E": (100.0, 80.0)}},
+    ("tank", "floating_roof"): {"outlet": {"W": (0.0, 60.0), "E": (100.0, 60.0)}},
+    ("tank", "gas_holder"): {"inlet": {"E": (70.0, 45.0)}, "outlet": {"W": (0.0, 45.0)}},
+}
+
+
 # ISO 10628-2 registration numbers for vendored drawings checked against
 # Table 2 (see ``Symbol.iso_reg``).
 ISO_REG = {
@@ -985,7 +998,7 @@ def render() -> str:
         )
     # Refuse a table entry for a symbol KIND_MAP does not draw.
     tables = {"CLOSED_SHAPES": CLOSED_SHAPES, "GRAVITY_FIXED": GRAVITY_FIXED,
-              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS}
+              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES}
     for table_name, table in tables.items():
         orphans = sorted(key for key in table if key not in KIND_MAP)
         if orphans:
@@ -1091,6 +1104,8 @@ def render() -> str:
             # See BANDS; the closed drawing shares the open one's body.
             if (kind, variant) in BANDS:
                 lines.append(f"        bands={BANDS[(kind, variant)]!r},")
+            if (kind, variant) in FAMILY_FACES:
+                lines.append(f"        family_faces={FAMILY_FACES[(kind, variant)]!r},")
             # A family is named after the port it replaces: one member keeps
             # that name, and only a second one numbers them.
             if series:

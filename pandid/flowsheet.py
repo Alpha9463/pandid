@@ -569,6 +569,24 @@ def _copied(state: tuple) -> tuple:
 
     return (geometry(state[0]), geometry(state[1]), *state[2:])
 
+def _beats(new: tuple, old: tuple) -> bool:
+    """Return whether one routed drawing's score beats another's.
+
+    Parameters
+    ----------
+    new, old : tuple
+        What :func:`~pandid.routing.lanes._score` returned.
+
+    Returns
+    -------
+    bool
+        True if no flaw or tap off its line grows and a flaw falls.
+    """
+    return (new[1] <= old[1]
+            and not any(n > old[0][k] for k, n in new[0].items())
+            and any(n > new[0][k] for k, n in old[0].items()))
+
+
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
 
@@ -732,8 +750,13 @@ class Flowsheet:
         self._widened = False
         self._relaned = False
         # Whether layout may move a counted block, tank or vessel
-        # connection off its declared face.
+        # connection off its declared face, and onto a symbol's family
+        # faces, which route() tries; main's drawing, held where route()
+        # kept a family-face drawing; and whether route() is running.
         self._family_faces = True
+        self._added_faces = False
+        self._main: tuple | None = None
+        self._in_route = False
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -2321,6 +2344,8 @@ class Flowsheet:
         """
         from pandid.layout import default_layout_engine
 
+        if not self._in_route:
+            self._put_main()
         self._put_unkept()
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
@@ -2416,6 +2441,54 @@ class Flowsheet:
         with each such line drawn round the units in its way where a clear
         route exists, kept only if no tap leaves its line and no finding,
         clash, crossing or fallback route grows.
+
+        With the default router, where a symbol offers a connected port
+        family faces, the sheet is then laid out again from where all of
+        that started, with family faces as well, and drawn in full only if
+        a move takes one. That drawing is kept only if it beats the first;
+        either way the next route() or layout() starts from the first.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.routing import DefaultRouter
+        from pandid.routing.lanes import _score
+
+        self._put_main()
+        tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
+        start = self._drawing() if tries and self._offers_family_faces() else None
+        outer, self._in_route = self._in_route, True
+        try:
+            self._route_drawing(router)
+            if start is None:
+                return
+            mains, judged = self._drawing(), _score(self)
+            self._put_drawing(start)
+            self._family_faces = self._added_faces = self._layout_stale = True
+            # Lay out first, to route only where a family face is taken.
+            self.layout(self._engine)
+            if self._moved_family(added=True):
+                self._put_drawing(start)
+                self._family_faces = self._added_faces = self._layout_stale = True
+                self._route_drawing(router)
+                if _beats(_score(self), judged):
+                    self._main = mains
+                    return
+            self._put_drawing(mains)
+        finally:
+            self._in_route = outer
+
+    def _route_drawing(self, router=None) -> None:
+        """Route the sheet as the face switches stand.
 
         Parameters
         ----------
@@ -2590,7 +2663,7 @@ class Flowsheet:
 
     def _route_faces(self, router=None) -> None:
         """Route the sheet, with counted connections moved where that draws
-        better.
+        better, or, in a family-face trial, as laid out.
 
         Parameters
         ----------
@@ -2604,29 +2677,107 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
-        from pandid.portgeom import family_faces
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
-        from pandid.units import _FaceFamilies
 
+        if self._added_faces:
+            # A family-face trial is judged against main's whole drawing.
+            self._route_lanes(router)
+            return
         if not self._family_faces:
             self._family_faces = self._layout_stale = True
         self._route_lanes(router)
         if (self._laying_out or not (router is None or type(router) is DefaultRouter)
-                or not any(isinstance(u, _FaceFamilies) and family_faces(u, u.frame)
-                           for u in self.units)):
+                or not self._moved_family(added=False)):
             return
         kept, judged = self._state(), _score(self)
         plain_state = self._plain_state, self._plain_stale
         self._family_faces, self._layout_stale = False, True
         self._route_lanes(router)
-        plain = _score(self)
-        if (judged[1] <= plain[1]
-                and not any(n > plain[0][k] for k, n in judged[0].items())
-                and any(n > judged[0][k] for k, n in plain[0].items())):
+        if _beats(judged, _score(self)):
             self._family_faces = True
             self._put_state(kept)
             self._plain_state, self._plain_stale = plain_state
+
+    def _moved_family(self, added: bool) -> bool:
+        """Return whether layout moved a family port.
+
+        Parameters
+        ----------
+        added : bool
+            Count only moves onto a symbol's family faces.
+
+        Returns
+        -------
+        bool
+            True if such a move is drawn.
+        """
+        from pandid.portgeom import family_faces
+        from pandid.units import _FaceFamilies
+
+        for u in self.units:
+            faces = family_faces(u, u.frame) if isinstance(u, _FaceFamilies) else None
+            if faces and (not added or any(face not in u._offered(name, added=False)
+                                           for name, face in faces.items())):
+                return True
+        return False
+
+    def _offers_family_faces(self) -> bool:
+        """Return whether a symbol offers a connected port family faces.
+
+        Returns
+        -------
+        bool
+            True if some unit's symbol offers one to a port no author
+            statement fixes.
+        """
+        from pandid.units import _FaceFamilies
+
+        return any(
+            isinstance(u, _FaceFamilies)
+            and any(len(u._offered(name)) > len(u._offered(name, added=False))
+                    for name in u._faces
+                    if u.ports[name].stream is not None and name not in u._stated)
+            for u in self.units)
+
+    def _drawing(self) -> tuple:
+        """Return the sheet as drawn, with all route() starts from.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_drawing`.
+        """
+        return (self._state(), self._plain_state, self._plain_stale, self._stacked,
+                self._unkept, self._layout_stale, self._route_stale, self._family_faces,
+                self._added_faces, list(self.unplaced_instruments))
+
+    def _put_drawing(self, drawing: tuple) -> None:
+        """Put back what :meth:`_drawing` returned.
+
+        Parameters
+        ----------
+        drawing : tuple
+            What :meth:`_drawing` returned.
+        """
+        (state, self._plain_state, self._plain_stale, self._stacked, self._unkept,
+         layout_stale, route_stale, self._family_faces, self._added_faces,
+         unplaced) = drawing
+        self._put_state(state)
+        self._layout_stale, self._route_stale = layout_stale, route_stale
+        self.unplaced_instruments = list(unplaced)
+
+    def _put_main(self) -> None:
+        """Put back main's drawing held behind a family-face drawing.
+
+        Whether the layout and routes are stale is kept as it stands.
+        """
+        held, self._main = self._main, None
+        if held is not None:
+            stale = self._layout_stale, self._route_stale
+            self._put_drawing(held)
+            self._layout_stale = self._layout_stale or stale[0]
+            self._route_stale = self._route_stale or stale[1]
 
     def _route_lanes(self, router=None) -> None:
         """Route the sheet, with lanes and grown faces where they draw no
@@ -2743,7 +2894,10 @@ class Flowsheet:
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
                         self._mounted_layout, self._widened, self._stack_spans,
                         self._rows_out, self._tees_away, self._fannable,
-                        self._far_branches, self._flags_off))
+                        self._far_branches, self._flags_off,
+                        tuple((u, u._stock_face) for u in self.units
+                              if hasattr(u, "_stock_face")),
+                        self._lanes, self._relaned))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2755,8 +2909,10 @@ class Flowsheet:
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out, self._tees_away, self._fannable,
-         self._far_branches, self._flags_off) = _copied(state)
+         self._rows_out, self._tees_away, self._fannable, self._far_branches,
+         self._flags_off, stock, self._lanes, self._relaned) = _copied(state)
+        for u, flag in stock:
+            u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 

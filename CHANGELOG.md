@@ -56,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `connect()` is not drawn: `name=` replaces the line number,
   `line_numbering_scheme` leaves the field out, or the field is stated past a
   valve or tee that carries another segment's number on. It names the fix.
+- A flat-floored `Tank` draws off from either wall as well as the floor, and an
+  upright `Vessel` takes its inlet on either wall or the top head and its outlet
+  on either wall: `Tank("TK-1").nozzle("outlet", "E")`. A counted one moves
+  there toward its peer where that draws fewer bends.
 
 ### Changed
 
