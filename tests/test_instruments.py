@@ -3140,3 +3140,57 @@ def test_a_bank_with_controllers_near_the_measured_line_routes():
 
     assert [loop.controller.host for loop in loops] == [loop.transmitter.host for loop in loops]
     assert all(loop.controller.frame is not None for loop in loops)
+
+
+@pytest.mark.parametrize("first_tag", [10, 20, 50, 99])
+def test_a_controller_between_pumps_draws_its_lines_clear_over_repeated_routes(first_tag: int):
+    """Route a bank three times; FT-200's line to FIC-200, between two pumps, stays clear.
+
+    The line takes no fallback path and crosses no unit after each route().
+    """
+    fs, loops = _valved_bank(first_tag)
+    line = loops[0].measurement
+    for again in (False, True, True):
+        if again:
+            fs.route()
+
+        assert line.route is not None and not line.route.used_fallback
+        assert _drawn_wrong(fs, line) == []
+
+
+def test_a_controller_above_a_pump_draws_its_output_clear():
+    """Draw FIC-202's output to FV-1001, past P-1, clear of every unit.
+
+    The line takes no fallback path and crosses no unit.
+    """
+    fs, loops = _valved_bank(999)
+    line = loops[2].output
+
+    assert line.route is not None and not line.route.used_fallback
+    assert _drawn_wrong(fs, line) == []
+
+
+@pytest.mark.parametrize(
+    ("after", "kept"),
+    [
+        ({"route-crosses-unit": 1, "crossing": 6}, True),
+        ({"route-crosses-unit": 1, "crossing": 5, "route-along-unit": 2}, True),
+        ({"route-crosses-unit": 1, "crossing": 6, "route-along-unit": 2}, False),
+        ({"route-crosses-unit": 1, "crossing": 4, "route-crosses-near-nozzle": 1}, False),
+        ({"route-crosses-unit": 3, "crossing": 4}, False),
+    ],
+)
+def test_a_line_leaves_a_unit_for_at_most_two_crossings_or_runs_along_units(
+    after: dict[str, int], kept: bool
+):
+    """Keep a redraw that takes a line out of a unit only at the price allowed.
+
+    Two more crossings or runs along units in all are allowed; any other growth is not.
+    """
+    from collections import Counter
+
+    from pandid.layout.control import _out_of_unit
+
+    before = Counter({"route-crosses-unit": 3, "crossing": 4, "route-along-unit": 1})
+
+    assert _out_of_unit(before, Counter(after)) is kept

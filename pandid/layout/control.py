@@ -32,6 +32,10 @@ REACH = 40
 #: Standoff of a balloon hung off the actuator it drives.
 ACTUATOR_OFFSET = 100.0
 
+#: Line crossings and runs along units, in all, a redraw may add where
+#: it takes a line out of a unit.
+UNIT_TRADE = 2
+
 
 def place_control(fs: "Flowsheet") -> bool:
     """Place balloons and return whether any moved.
@@ -380,6 +384,30 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
     return flaws
+
+
+def _out_of_unit(before: "Counter[str]", after: "Counter[str]") -> bool:
+    """Return whether a redraw takes a line out of a unit at a price kept.
+
+    Parameters
+    ----------
+    before : Counter[str]
+        Counts of the drawing before, as ``Flowsheet._counted_flaws``
+        returns them.
+    after : Counter[str]
+        The same counts after.
+
+    Returns
+    -------
+    bool
+        True if fewer lines cross units, crossings and runs along units
+        grow by at most :data:`UNIT_TRADE` in all, and no other count
+        grows.
+    """
+    traded = ("crossing", "route-along-unit")
+    added = sum(max(0, after[k] - before[k]) for k in traded)
+    return (after["route-crosses-unit"] < before["route-crosses-unit"] and added <= UNIT_TRADE
+            and not any(n > before[k] for k, n in after.items() if k not in traded))
 
 
 def _taps_off(fs: "Flowsheet") -> set[int]:

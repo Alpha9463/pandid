@@ -112,6 +112,9 @@ These are removed in 0.4.0.
   `controller_face=` given, is hung beside the valve it drives, so its lines
   are no longer drawn through a unit, where that adds no crossing or other
   finding.
+- Where no clear side or spot beside its valve takes a balloon's signal line out
+  of a unit for free, `route()` takes it out at a cost of at most two more line
+  crossings or runs along units, and no other finding.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.
