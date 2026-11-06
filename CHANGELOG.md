@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
   so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
-  and suggests an `at=` between its neighbours on the line that clears it.
+  and says how to clear it: an `at=` for a valve alone on its line, the `at=`
+  bounds that keep the line's order where other items share it, or the end or
+  neighbour to move where pinned ends leave no room.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
@@ -166,6 +168,9 @@ These are removed in 0.4.0.
 - `route()` ends the run a line leaves a nozzle on clear of every other unit,
   so a signal line between two balloons no longer cuts through a third
   standing between them.
+- Where `route()` finds no path for a line and draws it through a unit, it
+  draws it round the units in its way along a clear lane where that draws no
+  worse; otherwise `validate()` reports `route-crosses-unit` as before.
 
 ## [0.2.0] - 2026-11-05
 
