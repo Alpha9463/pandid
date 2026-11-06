@@ -235,7 +235,9 @@ A reactor's, column's or separator's feeds and draws move the same way:
 
 A feed or draw on the opposite wall keeps its stage height, which must lie
 between the condenser and reboiler duty nozzles. Fix one with
-`column.nozzle("feed_2", "E")`.
+`column.nozzle("feed_2", "E")`. The table gives the faces of the unit
+upright; `nozzle()` names the face as drawn, so a turned or mirrored unit
+takes the face the reader sees.
 
 Symbols whose function depends on gravity should keep their upright orientation.
 Validation reports `gravity-turned` when one is rotated away from it.
