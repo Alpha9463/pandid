@@ -2915,17 +2915,39 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
+
+    def erased(u, items) -> "list[int]":
+        """Return the symbols, impulse lines and pipes a unit's labels erase.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit the labels belong to.
+        items : list
+            Its label items.
+
+        Returns
+        -------
+        list[int]
+            Totals in :func:`_erases` order.
+        """
+        others = [_obstacle(b) for v, b in symbols if v is not u]
+        return [sum(n) for n in zip((0, 0, 0), *(_erases(b, ink, others)
+                                                 for b in map(_unit_label_box, items)
+                                                 if b is not None))]
+
     placed: dict = {}
-    # Place each unit's labels alone, then again clear of the others as
-    # they stand.
+    # Place each unit's labels alone, then again off the others as they
+    # stand, keeping the first placement if the second erases more of any
+    # ink.
     for alone in (True, False):
         for u in fs.units:
             f = u.frame
             if f is None or u.kind in ("feed", "product", "instrument"):
                 continue
             x, y, w, h = f.x, f.y, f.w, f.h
-            labels = [] if alone else [b for v, _, items in placed.values() if v is not u
-                                       for b in map(_unit_label_box, items) if b is not None]
+            labels = None if alone else [b for v, _, items in placed.values() if v is not u
+                                         for b in map(_unit_label_box, items) if b is not None]
             tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels)
                    if u.tag else None)
             tag_box = None if tag is None else _unit_label_box(tag)
@@ -2937,8 +2959,10 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             letters = fail_marking(u)
             if letters:
                 items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
-                                                    ink, symbols, labels))
-            placed[id(u)] = (u, tag, items)
+                                                    ink, symbols))
+            if alone or all(a <= b for a, b in zip(erased(u, items),
+                                                   erased(u, placed[id(u)][2]))):
+                placed[id(u)] = (u, tag, items)
     return list(placed.values())
 
 
@@ -4117,14 +4141,19 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=()):
+    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None):
         """Return the equipment tag item, moved clear of drawn ink.
 
         The tag slides up to half the face along its side, then along
-        the other free sides. Failing a clear spot, it slides on any side,
-        free sides first, until its near end reaches the corner. The
-        first placement that erases nothing wins, else the least
-        damaging. A side set on the unit or symbol is kept.
+        the other free sides. The first placement that erases nothing
+        wins, else the least damaging. A side set on the unit or symbol
+        is kept.
+
+        Given ``labels``, the tag then also tries every side, free sides
+        first, sliding until its near end reaches the corner. It takes
+        the spot that erases least, then covers fewest labels, among
+        those that erase no more symbols, impulse lines or pipes than
+        the first placement.
 
         Parameters
         ----------
@@ -4152,7 +4181,7 @@ class SvgRenderer:
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)
-        if box is None or not (ink or symbols or labels):
+        if box is None or not (ink or symbols):
             return item
         if getattr(u, "label_pos", None) or default_registry.for_unit(u).label_pos:
             return item
@@ -4163,27 +4192,60 @@ class SvgRenderer:
         # Every other symbol box, grown to its ink.
         others = [_obstacle(b) for v, b in symbols
                   if v is not u and boxes_overlap(_obstacle(b), window)]
-        others += [b for b in labels if boxes_overlap(b, window)]
 
         clear = (0, 0, 0)
         best, damage = item, _erases(box, near, others)
         free = [item[4]] + [s for s in free_label_sides(u) if s != item[4]]
-        for sides, past in ((free, False),
-                            (free + [s for s in LABEL_SIDES if s not in free], True)):
-            for side in sides:
-                if damage == clear:
-                    break
-                lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
-                edgewise = side in ("left", "right")
-                face, along = ((u_height, box[3] - box[1]) if edgewise
-                               else (u_width, box[2] - box[0]))
-                for sx, sy in _slide(lx, ly, (face + along * past) / 2, edgewise):
-                    spot = (sx, sy, anchor, baseline, side, tag)
-                    cost = _erases(_unit_label_box(spot), near, others)
-                    if cost < damage:
-                        best, damage = spot, cost
-                        if damage == clear:
-                            break
+        for side in free:
+            if damage == clear:
+                break
+            lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
+            # Slide at most half the face.
+            edgewise = side in ("left", "right")
+            for sx, sy in _slide(lx, ly, (u_height if edgewise else u_width) / 2, edgewise):
+                spot = (sx, sy, anchor, baseline, side, tag)
+                cost = _erases(_unit_label_box(spot), near, others)
+                if cost < damage:
+                    best, damage = spot, cost
+                    if damage == clear:
+                        break
+        if labels is None:
+            return best
+        covered = [b for b in labels if boxes_overlap(b, window)]
+
+        def score(spot) -> "tuple[int, int, int, int]":
+            """Return what a spot erases, then the labels it covers.
+
+            Parameters
+            ----------
+            spot : tuple
+                Label item.
+
+            Returns
+            -------
+            tuple[int, int, int, int]
+                Symbols, impulse lines, pipes and labels.
+            """
+            halo = _unit_label_box(spot)
+            assert halo is not None
+            return (*_erases(halo, near, others),
+                    sum(1 for b in covered if boxes_overlap(halo, b)))
+
+        least = score(best)
+        for side in free + [s for s in LABEL_SIDES if s not in free]:
+            if least == (0, 0, 0, 0):
+                break
+            lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
+            edgewise = side in ("left", "right")
+            face, along = ((u_height, box[3] - box[1]) if edgewise
+                           else (u_width, box[2] - box[0]))
+            for sx, sy in _slide(lx, ly, (face + along) / 2, edgewise):
+                spot = (sx, sy, anchor, baseline, side, tag)
+                cost = score(spot)
+                if cost < least and all(a <= b for a, b in zip(cost, damage)):
+                    best, least = spot, cost
+                    if least == (0, 0, 0, 0):
+                        break
         return best
 
     def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):
@@ -4219,7 +4281,7 @@ class SvgRenderer:
         return item
 
     def _fail_label_item(self, u, f, x, y, u_width, u_height, letters, tag_box=None,
-                         ink=(), symbols=(), labels=()):
+                         ink=(), symbols=()):
         """Return the fail-position letters beside a control valve.
 
         The letters go below a horizontal valve and right of a vertical
@@ -4242,8 +4304,6 @@ class SvgRenderer:
             Drawn lines.
         symbols : sequence of tuple, optional
             ``(unit, box)`` for every symbol.
-        labels : sequence of tuple, optional
-            Halo boxes of other labels.
 
         Returns
         -------
@@ -4264,7 +4324,7 @@ class SvgRenderer:
                 item = (lx + tag[2] - fail[0] + 6, ly, anchor, baseline, lpos, text)
             else:
                 item = (lx, ly + tag[3] - fail[1] + 4, anchor, baseline, lpos, text)
-        others = [_obstacle(b) for v, b in symbols if v is not u] + list(labels)
+        others = [_obstacle(b) for v, b in symbols if v is not u]
         if tag is not None:
             others.append(tag)
         # Slide at most until the plate's near edge reaches the far end

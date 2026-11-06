@@ -491,3 +491,42 @@ def test_no_halo_lands_on_another_halo(drawn, name):
         if overlaps(a, b)
     ]
     assert not struck, f"{name}: halos overlap at " + "; ".join(struck)
+
+
+def test_a_tag_moved_off_a_label_erases_no_line():
+    """Check that tags kept off each other on a crowded bank erase no line."""
+    from test_instruments import _valved_bank
+
+    fs, _loops = _valved_bank(100)
+    svg = fs.to_svg(diagram="p&id")
+    tags = [u.tag for u in fs.units if u.kind not in ("feed", "product", "instrument")]
+    erased = [
+        f"{tag} on {line.kind} at ({line.box[0]:.0f}, {line.box[1]:.0f})"
+        for tag in tags
+        for line in _ink(fs, "vertical")
+        if overlaps(_tag_halo(svg, tag), line.box)
+    ]
+    assert not erased, "; ".join(erased)
+
+
+def test_a_tag_moved_off_a_tag_clips_no_symbol():
+    """Check that tags on two close trains of valves keep off every symbol."""
+    fs = Flowsheet("two trains")
+    for row, y in ((0, 200), (1, 235)):
+        before = fs.add(U.Feed(f"F{row}")).pin(port="outlet", x=100, y=y).outlet
+        for i, x in enumerate((200, 240, 280)):
+            valve = fs.add(U.Valve(f"HV-1{row}{i}")).pin(port="inlet", x=x, y=y)
+            fs.connect(before, valve.inlet)
+            before = valve.outlet
+        fs.connect(before, fs.add(U.Product(f"P{row}")).pin(port="inlet", x=500, y=y).inlet)
+    svg = fs.to_svg()
+    valves = [u for u in fs.units if u.kind == "valve"]
+    clipped = [
+        f"{tag.tag} over {u.tag}"
+        for tag in valves
+        for u in valves
+        if u is not tag
+        and u.frame is not None
+        and overlaps(_tag_halo(svg, tag.tag), _inked(unit_box(u, u.frame)))
+    ]
+    assert not clipped, "; ".join(clipped)
