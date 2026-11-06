@@ -730,8 +730,9 @@ class Flowsheet:
         # whether the last layout drew any angle valve it could set so.
         self._corner_valves = False
         self._angle_valves = False
-        # Engine the last layout ran.
+        # Engine the last layout ran, and whether it was the default.
         self._engine = None
+        self._auto_laid = False
         # Whether the router prices arrowheads and lanes beside units, and
         # whether an unfaced balloon on equipment may leave its E face.
         self._priced = False
@@ -760,7 +761,8 @@ class Flowsheet:
         # Whether layout may move a counted block, tank or vessel
         # connection off its declared face, and onto a symbol's family
         # faces, which route() tries; main's drawing, held where route()
-        # kept a family-face drawing; and whether route() is running.
+        # kept a family-face or closed-band drawing; and whether route()
+        # is running.
         self._family_faces = True
         self._added_faces = False
         self._main: tuple | None = None
@@ -2432,7 +2434,7 @@ class Flowsheet:
         engine : object or None, optional
             Engine with ``layout(fs)``; ``None`` uses the default.
         """
-        from pandid.layout import default_layout_engine
+        from pandid.layout import ConstraintLayoutEngine, default_layout_engine
 
         if not self._in_route:
             self._put_main()
@@ -2451,6 +2453,7 @@ class Flowsheet:
             engine.layout(self)
         finally:
             self._laying_out = outer
+        self._auto_laid = type(engine) is ConstraintLayoutEngine
         self._layout_stale = False
         self._route_stale = True
 
@@ -2541,6 +2544,18 @@ class Flowsheet:
         a move takes one. That drawing is kept only if it beats the first;
         either way the next route() or layout() starts from the first.
 
+        Last, with the default router and layout engine, each band across
+        the drawing that holds no unit, tag, package frame, balloon
+        standoff, line end or line run along it is closed to the gap
+        layout keeps between neighbours, by moving everything on one side
+        of it inward. A band is closed only from a side where nothing is
+        pinned on its axis, and no line drawn by hand, measured by
+        fractions of its length or from a controller that may hang off
+        its actuator, crosses it. The closed drawing is kept only if no
+        crossing, bend, fallback, finding or clash grows and no tap leaves
+        its line; the next route() or layout() starts from the drawing
+        before it.
+
         Parameters
         ----------
         router : object or None, optional
@@ -2562,23 +2577,49 @@ class Flowsheet:
         outer, self._in_route = self._in_route, True
         try:
             self._route_drawing(router)
-            if start is None:
-                return
-            mains, judged = self._drawing(), _score(self)
-            self._put_drawing(start)
-            self._family_faces = self._added_faces = self._layout_stale = True
-            # Lay out first, to route only where a family face is taken.
-            self.layout(self._engine)
-            if self._moved_family(added=True):
+            if start is not None:
+                mains, judged = self._drawing(), _score(self)
                 self._put_drawing(start)
                 self._family_faces = self._added_faces = self._layout_stale = True
-                self._route_drawing(router)
-                if _beats(_score(self), judged):
+                # Lay out first, to route only where a family face is taken.
+                self.layout(self._engine)
+                kept = False
+                if self._moved_family(added=True):
+                    self._put_drawing(start)
+                    self._family_faces = self._added_faces = self._layout_stale = True
+                    self._route_drawing(router)
+                    kept = _beats(_score(self), judged)
+                if kept:
                     self._main = mains
-                    return
-            self._put_drawing(mains)
+                else:
+                    self._put_drawing(mains)
+            if tries and self._auto_laid:
+                self._close_bands()
         finally:
             self._in_route = outer
+
+    def _close_bands(self) -> None:
+        """Close the empty bands across the drawing, kept only if no
+        crossing, bend, fallback, finding or clash grows and no tap
+        leaves its line.
+
+        Where they are kept, the next route() or layout() starts from
+        the drawing before them.
+        """
+        from pandid.layout.compact import close_bands, empty_bands
+        from pandid.routing.lanes import _score
+
+        cuts = empty_bands(self)
+        if not any(cuts):
+            return
+        drawn, judged = self._drawing(), _score(self)
+        close_bands(self, cuts)
+        new = _score(self)
+        if new[1] <= judged[1] and not any(n > judged[0][k] for k, n in new[0].items()):
+            if self._main is None:
+                self._main = drawn
+        else:
+            self._put_drawing(drawn)
 
     def _route_drawing(self, router=None) -> None:
         """Route the sheet as the face switches stand.
@@ -2861,7 +2902,8 @@ class Flowsheet:
         self.unplaced_instruments = list(unplaced)
 
     def _put_main(self) -> None:
-        """Put back main's drawing held behind a family-face drawing.
+        """Put back main's drawing held behind a family-face or closed-band
+        drawing.
 
         Whether the layout and routes are stale is kept as it stands.
         """
