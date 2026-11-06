@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from itertools import combinations
 from pathlib import Path
@@ -14,6 +15,7 @@ from pandid.layout.control import _grid as control_grid
 from pandid.layout.halo import balloon_pads
 from pandid.layout.layered import BAND_WIDTH, COL_GAP, MARGIN
 from pandid.portgeom import pin_intent, port_faces, port_point, unit_box
+from pandid.render.svg import drawing_bounds
 from pandid.routing.metrics import real_bends
 
 from _layout_cases import build, overlaps
@@ -763,6 +765,25 @@ def test_a_pinned_feed_flag_is_kept_clear_where_it_is_drawn() -> None:
     assert (pump.frame.y, pump.frame.w, pump.frame.h) == (75, 140, 90)
     assert unit_box(feed, feed.frame)[0] < feed.frame.x
     assert _overlapping(fs) == []
+
+
+@pytest.mark.parametrize("reference", ["", "PFD-302"])
+@pytest.mark.parametrize("mirrored", [False, True])
+@pytest.mark.parametrize("cls", [U.Feed, U.Product])
+def test_a_flag_box_is_the_pennant_it_draws(
+    cls: type[U.Feed] | type[U.Product], mirrored: bool, reference: str
+) -> None:
+    """Check that a flag's box, and the drawing around a lone flag, is its drawn pennant."""
+    fs = Flowsheet("flag")
+    flag = fs.add(cls("X", reference=reference)).pin(x=300, y=200, mirrored=mirrored)
+    fs.layout()
+
+    assert flag.frame is not None
+    (points,) = re.findall(r'<polygon points="([^"]+)"', fs.to_svg())
+    xs, ys = zip(*(map(float, point.split(",")) for point in points.split()), strict=True)
+    pennant = (min(xs), min(ys), max(xs), max(ys))
+    assert unit_box(flag, flag.frame) == pennant
+    assert drawing_bounds(fs) == pennant
 
 
 def test_an_x_pinned_unit_and_its_balloon_keep_clear_of_a_pinned_body() -> None:

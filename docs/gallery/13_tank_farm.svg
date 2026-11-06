@@ -195,7 +195,7 @@
     <symbol id="sym_vent_breather" viewBox="0 0 25.0 15.0" overflow="visible"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="20.0" fill="white" stroke="#111" stroke-width="2"/><path d="M 25.0 20.0 L 25.0 30.0 M 0.0 0.0 L 25.0 20.0 L 50.0 0.0 M 0.0 20.0 L 25.0 0.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2"/></g></symbol>
     <symbol id="sym_vessel_60x95_c09c61cc0" viewBox="0 0 60.0 120.0" overflow="visible"><path d="M 0 7.5 A 30 7.5 0 0 1 30 0 A 30 7.5 0 0 1 60 7.5 L 60 87.5 A 30 7.5 0 0 1 30 95 A 30 7.5 0 0 1 0 87.5 Z" fill="white" stroke="#111" stroke-width="2"/><path d="M 8.68 92.7765 L 8.68 120.00005 L 14.88 120.00005 L 14.88 92.7765" fill="none" stroke="black" stroke-width="0.999999"/><path d="M 45.12 92.7765 L 45.12 120.00005 L 51.32 120.00005 L 51.32 92.7765" fill="none" stroke="black" stroke-width="0.999999"/></symbol>
   </defs>
-  <g id="drawing" transform="translate(65.67, 186.3) scale(0.827943)">
+  <g id="drawing" transform="translate(55.57, 175.94) scale(0.839422)">
   <g id="units">
     <use href="#sym_tank_floating_roof_s190x140" x="360" y="215" width="190" height="140" />
     <use href="#sym_tank_s180x150" x="680" y="205" width="180" height="150" />
@@ -311,10 +311,10 @@
     <path d="M 1152.25,484.0 L 1152.25,537.5575" fill="none" stroke="black" stroke-width="1" />
     <line x1="1147.2" y1="505.3" x2="1157.2" y2="511.3" stroke="black" stroke-width="1" />
     <line x1="1147.2" y1="509.3" x2="1157.2" y2="515.3" stroke="black" stroke-width="1" />
-    <rect x="142.7" y="200.0" width="92.7" height="13.0" fill="white" />
-    <text x="189.0" y="206.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">MS-601-200-40-CS</text>
-    <line x1="203.2" y1="200.0" x2="233.2" y2="170.0" stroke="black" stroke-width="1" />
-    <path d="M 233.2,170.0 L 231.0,176.4 L 226.8,172.1 Z" fill="black" />
+    <rect x="142.7" y="140.0" width="92.7" height="13.0" fill="white" />
+    <text x="189.0" y="146.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">MS-601-200-40-CS</text>
+    <line x1="203.2" y1="153.0" x2="220.2" y2="170.0" stroke="black" stroke-width="1" />
+    <path d="M 220.2,170.0 L 213.8,167.9 L 218.0,163.6 Z" fill="black" />
     <rect x="301.4" y="103.5" width="97.1" height="13.0" fill="white" />
     <text x="350.0" y="110.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">ETH-602-150-40-SS</text>
     <rect x="571.1" y="43.5" width="97.7" height="13.0" fill="white" />
