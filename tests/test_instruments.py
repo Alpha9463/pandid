@@ -2702,20 +2702,57 @@ def test_keeping_hung_balloons_further_off_leaves_the_priced_remedy_judged_as_be
     assert "route-along-unit" not in [i.code for i in fs.validate()]
 
 
-def test_routing_a_sheet_whose_balloons_do_not_settle_again_draws_it_the_same() -> None:
-    """Route a sheet of balloon chains that do not settle twice more, to the first drawing."""
+def test_a_second_route_starts_from_the_drawing_before_balloons_were_kept_further_off() -> None:
+    """Settle a second route() as it settles where no balloon was kept further off."""
+    from pandid.layout.control import _taps_off
+
     chains: list[tuple[float, float, float, str, float, float]] = [
         (0.8, 50, 90, "W", 35, 180),
         (0.3, 50, 225, "S", 50, 90),
         (0.2, 40, 135, "N", 100, 90),
     ]
     fs = _chains_by_a_vessel((600, 100), chains, vessel=(220, 200))
+    fs.route()
+
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+
+
+def test_routing_an_unchanged_sheet_again_keeps_a_drawing_it_would_make_worse() -> None:
+    """Route balloon chains by a vessel that do not settle twice more.
+
+    Routing again would draw a tap through a unit, so each route() keeps the first drawing.
+    """
+    chains: list[tuple[float, float, float, str, float, float]] = [
+        (0.5, 60, 180, "S", 50, 270),
+        (0.8, 50, 45, "W", 25, 90),
+    ]
+    fs = _chains_by_a_vessel((600, 200), chains, vessel=(220, 200))
     assert not fs.route_converged
     first = fs.to_svg(check=False)
     for _ in range(2):
         fs.route()
 
         assert fs.to_svg(check=False) == first
+
+
+def test_a_third_route_of_an_unchanged_sheet_draws_as_the_second() -> None:
+    """Route balloon chains by a vessel that each route() would draw better, three times.
+
+    The second route() keeps its better drawing, and the third draws as the second.
+    """
+    chains: list[tuple[float, float, float, str, float, float]] = [
+        (0.7, 35, 270, "S", 100, 180),
+        (0.5, 50, 180, "N", 50, 90),
+    ]
+    fs = _chains_by_a_vessel((500, 200), chains, vessel=(220, 200))
+    first = fs.to_svg(check=False)
+    fs.route()
+    second = fs.to_svg(check=False)
+    fs.route()
+
+    assert second != first
+    assert fs.to_svg(check=False) == second
 
 
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
@@ -3159,21 +3196,6 @@ def test_a_controller_above_a_pump_draws_its_output_clear():
 
     assert line.route is not None and not line.route.used_fallback
     assert _drawn_wrong(fs, line) == []
-
-
-def test_routing_a_bank_again_draws_it_the_same():
-    """Route a routed bank whose balloons never settle twice more.
-
-    Each route() draws the sheet as the first did, with no line through a unit.
-    """
-    fs, _ = _routed_bank(999)
-    assert not fs.route_converged
-    first = fs.to_svg(check=False)
-    for _ in range(2):
-        fs.route()
-
-        assert fs.to_svg(check=False) == first
-        assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
 
 
 @pytest.mark.parametrize(

@@ -801,8 +801,9 @@ class Flowsheet:
         # drawings it holds for the next route() or layout() are put back
         # only while that is unchanged.
         self._stated_then: tuple | None = None
-        # Whether route() last finished with the default router.
-        self._routed = False
+        # Whether route() last finished with the default router, and
+        # whether the next route() of the unchanged sheet keeps that drawing.
+        self._routed = self._final = False
         # The corner and nozzle faces of each balloon a via() line meets,
         # by id(), as the drawing the line was typed against has them.
         self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
@@ -2506,7 +2507,10 @@ class Flowsheet:
 
         Where route() last finished with the default router and nothing
         has changed since, route() with the default router keeps the
-        drawing as it is.
+        drawing as it is if it settled with every tap on its line or was
+        already drawn again; otherwise it draws the sheet again and keeps
+        the new drawing only if no finding, clash, crossing, fallback route
+        or tap off its line grows and one falls.
 
         Attached instruments are placed and the sheet re-routed until
         neither moves, up to
@@ -2647,13 +2651,31 @@ class Flowsheet:
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
 
+        from pandid.layout.control import _taps_off
+
+        def measured() -> tuple:
+            """Return what a drawing of the unchanged sheet is judged by.
+
+            Returns
+            -------
+            tuple
+                What :meth:`_counted_flaws` counts plus ``taps-off``, and
+                the balloons whose tap is off their line.
+            """
+            flaws, off = self._counted_flaws(), _taps_off(self)
+            flaws["taps-off"] = len(off)
+            return flaws, off
+
         tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
+        last = None
         if not self._in_route:
             if (tries and self._routed and self._unedited()
                     and not (self._layout_stale or self._route_stale)
                     and all(u.frame is not None for u in self.units)
                     and all(s.route is not None for s in self.streams)):
-                return
+                if self._final:
+                    return
+                last = self._drawing(), self._main, measured()
             self._routed = False
             self._hold_typed()
         self._put_main()
@@ -2679,7 +2701,13 @@ class Flowsheet:
                     self._put_drawing(mains)
             if tries and self._auto_laid:
                 self._close_bands()
-            self._routed = tries and not outer
+            if last is not None and not _beats(measured(), last[2]):
+                self._put_drawing(last[0])
+                self._main = last[1]
+            if not outer:
+                self._routed = tries
+                self._final = last is not None or (
+                    self.route_converged and not _taps_off(self))
         finally:
             self._in_route = outer
             if not outer:
