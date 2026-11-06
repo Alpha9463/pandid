@@ -555,7 +555,7 @@ def test_a_relayout_inside_the_exit_clear_trial_keeps_the_exit_clear(
     from pandid.routing.visibility import MARGIN
 
     # Every layout finds a flag's line to level, so each settle lays out again.
-    monkeypatch.setattr(layered, "_level", lambda layers, segs, held, move: not move)
+    monkeypatch.setattr(layered, "_level", lambda layers, segs, held, move, rises: not move)
     fs, valve = _cooling(140, (520, 160), "E")
     fs.route()
 
