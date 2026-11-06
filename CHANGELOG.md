@@ -197,6 +197,8 @@ These are removed in 0.4.0.
 - An angle valve put on a line with `on=`, such as
   `fs.add(Valve("HV-1", variant="angle"), on=line)`, is set at a corner of the
   line, so the line turns through the valve instead of bending to leave it.
+- A balloon hung on another balloon, such as `fs.add_instrument("LIC", 101,
+  near=lt)` on a pinned `LT`, is no longer drawn across that balloon's tap line.
 - A balloon attached with `face=` to a face whose middle a line leaves from taps
   the face beside that nozzle, so its tap line no longer runs along the pipe.
 
