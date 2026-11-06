@@ -16,7 +16,7 @@ from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import Pad, balloon_pads, pinned_balloons
 from pandid.layout.stages import slot
-from pandid.package import DEPTH as PACKAGE_DEPTH, MARGIN as PACKAGE_MARGIN
+from pandid.package import DEPTH as PACKAGE_DEPTH, MARGIN as PACKAGE_MARGIN, text_width
 from pandid.portgeom import COMPASS, pinned_x, pinned_y, port_faces, resolve_port, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
 
@@ -337,8 +337,11 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
         # Level the other layers' pipes to the packages and the nodes moved.
         _straighten(layers, segs, {**framed, **{n: n.y for n in held if fs._order_rows}})
     fs._flags_off = _level(layers, segs, {**held, **framed}, fs._level_flags)
-    xs = _columns(layers, segs, fs._lanes)
-    plain = _columns(layers, segs, False)
+    # Each package's stacks and the width its tag and reference take.
+    texts = [([n for n in pkg if pkg[n] == p and n.members], text_width(fs.packages[p]))
+             for p in sorted(set(pkg.values()))]
+    xs = _columns(layers, segs, fs._lanes, texts)
+    plain = _columns(layers, segs, False, texts)
     fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
     if not any(u._pin is not None and (u._pin.x is not None or u._pin.y is not None)
                for u in units):
@@ -1045,9 +1048,13 @@ def _row_order(layers: dict[int, list[_Node]]) -> dict[_Node, float]:
     return {n: y[n] for _, n, _ in rowed} if moved else {}
 
 
-def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
-             widen: bool) -> dict[_Node, float]:
+def _columns(layers: dict[int, list[_Node]], segs: list[_Seg], widen: bool,
+             texts: list[tuple[list[_Node], float]]) -> dict[_Node, float]:
     """Return each node's left edge.
+
+    The layer after a package starts at least :data:`COL_GAP` beyond
+    the margin past the package's text, measured from its leftmost
+    stack's margin.
 
     Parameters
     ----------
@@ -1057,6 +1064,8 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
         Pipe steps between adjacent layers.
     widen : bool
         Widen each gap for the lanes its laterals need.
+    texts : list[tuple[list[_Node], float]]
+        Each package's stacks and the width its text takes.
 
     Returns
     -------
@@ -1077,24 +1086,43 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
                 beside[s.left.layer] = max(beside[s.left.layer], s.link.room)
     for k, lanes in (_lanes(segs) if widen else {}).items():
         room[k] = max(room[k], 2 * MIN_ESCAPE + (lanes + 1) * LANE_PITCH + beside[k])
+    sides: dict[_Node, set[int]] = {}
+    for s in segs:
+        sides.setdefault(s.left, set()).add(1)
+        sides.setdefault(s.right, set()).add(-1)
+
+    def inset(n: _Node, k: int) -> float:
+        """Return a node's left edge less its layer's.
+
+        Parameters
+        ----------
+        n : _Node
+            Node to place.
+        k : int
+            Its layer.
+
+        Returns
+        -------
+        float
+            The node's slack, half of it, or none.
+        """
+        side = sides.get(n, set())
+        # Push a stack toward the side all its pipes leave by.
+        slack = width[k] - n.w
+        return slack if side == {1} else 0.0 if side == {-1} else slack / 2
+
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
         left[k] = x
         # A layer of only pipes takes no room.
         if any(n.members for n in layers.get(k, [])):
             x += width[k] + max(COL_GAP + east[k] + west.get(k + 1, 0.0), room[k])
-    sides: dict[_Node, set[int]] = {}
-    for s in segs:
-        sides.setdefault(s.left, set()).add(1)
-        sides.setdefault(s.right, set()).add(-1)
-    out = {}
-    for k, layer in layers.items():
-        for n in layer:
-            side = sides.get(n, set())
-            # Push a stack toward the side all its pipes leave by.
-            slack = width[k] - n.w
-            out[n] = left[k] + (slack if side == {1} else 0.0 if side == {-1} else slack / 2)
-    return out
+        for nodes, text in texts:
+            if max(n.layer for n in nodes) == k:
+                first = min(n.layer for n in nodes)
+                start = min(left[first] + inset(n, first) for n in nodes if n.layer == first)
+                x = max(x, start - 2 * PACKAGE_MARGIN + text + COL_GAP)
+    return {n: left[k] + inset(n, k) for k, layer in layers.items() for n in layer}
 
 
 def _lanes(segs: list[_Seg]) -> dict[int, int]:

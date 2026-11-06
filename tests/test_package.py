@@ -26,7 +26,7 @@ from pandid.document import equipment_table
 from pandid.layout.conflicts import boxes_overlap
 from pandid.package import DEPTH, MARGIN, boundary, frame
 from pandid.portgeom import unit_box
-from pandid.render.svg import PACKAGE_DASH
+from pandid.render.svg import PACKAGE_DASH, _unit_label_box, package_labels
 from pandid.render.weights import LineWeight
 from pandid.routing import astar
 
@@ -145,6 +145,19 @@ def _column(packaged: bool = True) -> Flowsheet:
     return fs
 
 
+def _long(packaged: bool = True, tag: str = "PK-1") -> Flowsheet:
+    """Build a packaged pump with a long vendor reference, before a filter."""
+    fs = Flowsheet("Long reference")
+    pump = fs.add(Pump("P-1"))
+    filt = fs.add(Filter("F-1"))
+    fs.connect(fs.add(Feed("Feed")).outlet, pump.suction)
+    fs.connect(pump.discharge, filt.inlet)
+    fs.connect(filt.outlet, fs.add(Product("Product")).inlet)
+    if packaged:
+        fs.package(tag, [pump], reference="VENDOR P&ID 12345-AB-CD-00001 REV 01")
+    return fs
+
+
 def _pinned(build: Callable[[bool], Flowsheet]) -> Callable[[bool], Flowsheet]:
     """Return a build that pins every unit where automatic layout drew it."""
 
@@ -160,7 +173,14 @@ def _pinned(build: Callable[[bool], Flowsheet]) -> Callable[[bool], Flowsheet]:
     return pinned
 
 
-SHEETS = {"one": _one, "two": _two, "three": _three, "across": _across, "column": _column}
+SHEETS = {
+    "one": _one,
+    "two": _two,
+    "three": _three,
+    "across": _across,
+    "column": _column,
+    "long": _long,
+}
 
 
 def _inside(fs: Flowsheet) -> list[tuple[str, str]]:
@@ -308,7 +328,8 @@ def test_no_other_unit_is_drawn_inside_a_frame(name, pinned):
 
 
 @pytest.mark.parametrize(
-    ("name", "intruder"), [("one", "E-306"), ("across", "P-201"), ("column", "HV-1")]
+    ("name", "intruder"),
+    [("one", "E-306"), ("across", "P-201"), ("column", "HV-1"), ("long", "F-1")],
 )
 def test_layout_moves_out_a_unit_the_frame_would_take(name, intruder):
     """Check a unit drawn inside the frame on the plain sheet is moved out."""
@@ -346,6 +367,20 @@ def _bypass() -> Flowsheet:
     fs.connect(mix.outlet, fs.add(Product("Out")).inlet)
     fs.package("PK-1", [pump, filt])
     return fs
+
+
+def test_a_long_tag_and_reference_keep_clear_of_the_next_unit():
+    """Check the frame's text, widest above and below, clears the filter."""
+    fs = _long(tag="PK-1 DOSING PACKAGE, VENDOR SUPPLY")
+    fs.to_svg()
+    pkg = fs.packages[0]
+    box = frame(pkg)
+    filt = next(u for u in fs.units if u.name == "F-1")
+    assert box is not None and filt.frame is not None
+    texts = [b for b in map(_unit_label_box, package_labels(pkg, box)) if b is not None]
+    assert len(texts) == 2
+    for text in (box, *texts):
+        assert not boxes_overlap(text, unit_box(filt, filt.frame))
 
 
 def test_a_line_keeps_out_of_a_package_it_does_not_serve(monkeypatch):

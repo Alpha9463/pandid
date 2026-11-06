@@ -75,6 +75,26 @@ class Package:
         return f"Package({self.name!r}, {[u.name for u in self.units]!r})"
 
 
+def text_width(pkg: Package) -> float:
+    """Return the width a package's tag and reference take along its frame.
+
+    Parameters
+    ----------
+    pkg : Package
+        Package being framed.
+
+    Returns
+    -------
+    float
+        The wider of the tag above the frame and the reference inside
+        it, with its insets.
+    """
+    from pandid.portgeom import tag_width
+
+    inside = tag_width(str(pkg.reference)) + 2 * INSET if pkg.reference else 0.0
+    return max(tag_width(pkg.name), inside)
+
+
 def boundary(pkg: Package, boxes: list[Box]) -> Box:
     """Return the boundary frame round some of a package's unit boxes.
 
