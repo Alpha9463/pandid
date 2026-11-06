@@ -2502,3 +2502,54 @@ def test_a_flag_is_measured_by_the_pennant_it_draws():
     assert air.frame is not None and air.frame.y == 175.0
     assert _found(fs, "route-along-unit") == []
     assert len(_found(_run_over_flag(1.5), "route-along-unit")) == 1
+
+
+# --- a valve under the arrowhead into a nozzle --------------------------------
+
+
+def _suction(placed: dict[str, float]) -> Flowsheet:
+    """Build a pump suction carrying valves and strainers at line fractions."""
+    fs = Flowsheet("arrowhead")
+    pump = fs.add(U.Pump("P-1"))
+    line = fs.connect(fs.add(U.Feed("F")).outlet, pump.suction)
+    for name, at in placed.items():
+        kind = U.Valve(name) if name.startswith("HV") else U.Fitting(name, variant="strainer")
+        fs.add(kind, on=line, at=at)
+    fs.connect(pump.discharge, fs.add(U.Product("Out")).inlet)
+    fs.route()
+    return fs
+
+
+def _order(fs: Flowsheet) -> list[str]:
+    """Return the valves and fittings along the suction, in flow order."""
+    return [s.dest.owner.name for s in fs.streams if s.dest.owner.kind in ("valve", "fitting")]
+
+
+@pytest.mark.parametrize(
+    "placed",
+    [{"HV-1": 0.99}, {"HV-1": 0.8}, {"HV-1": 0.7, "ST-1": 0.99}, {"HV-1": 0.5, "ST-1": 0.95}],
+)
+def test_following_the_arrowhead_advice_keeps_the_order_and_clears_it(placed):
+    fs = _suction(placed)
+    (issue,) = _found(fs, "valve-under-arrowhead")
+    assert "P-1.suction" in issue.message
+    call = re.search(r"fs\.add\((\S+), on=S1, at=([0-9.]+)\)", issue.message)
+    assert call is not None, issue.message
+    name, at = call.group(1), float(call.group(2))
+    again = _suction({**placed, name: at})
+    assert _order(again) == _order(fs)
+    assert _found(again, "valve-under-arrowhead") == []
+
+
+def test_a_valve_clear_of_the_arrowhead_is_not_reported():
+    assert _found(_suction({"HV-1": 0.5}), "valve-under-arrowhead") == []
+
+
+def test_no_gallery_sheet_draws_a_valve_under_an_arrowhead(settled_gallery):
+    found = [
+        (name, issue.message)
+        for name, (fs, kwargs) in settled_gallery.items()
+        for issue in fs.validate(**{k: v for k, v in kwargs.items() if k == "diagram"})
+        if issue.code == "valve-under-arrowhead"
+    ]
+    assert found == []

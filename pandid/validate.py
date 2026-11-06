@@ -209,6 +209,84 @@ def _move_cure(u) -> str:
     return f"Move {u.name} clear of it: {_pin_call(u)}"
 
 
+def _arrowhead_cure(u) -> str:
+    """Return advice that sets a device clear of the arrowhead after it.
+
+    The suggested ``at=`` lies between the device's neighbours on its
+    line, so following it keeps the line's order. It leaves the
+    arrowhead and a clearance free on the shortest line layout gives
+    the neighbours, which is the line where the gap is least.
+
+    Parameters
+    ----------
+    u : Unit
+        Valve or fitting drawn under the arrowhead into the nozzle it
+        feeds.
+
+    Returns
+    -------
+    str
+        Advice naming an ``fs.add()`` call with an ``at=``, else the
+        neighbour to move first.
+    """
+    from pandid.inline import position
+    from pandid.layout.mounted import ALONG, NOZZLE_END
+    from pandid.portgeom import port_point
+    from pandid.render.symbols import ARROWHEAD, MIN_HEAD_CLEARANCE
+
+    def length(unit) -> float:
+        """Return a device's length along its line, nozzle to nozzle.
+
+        Parameters
+        ----------
+        unit : Unit or None
+            Device, or None for a line end.
+
+        Returns
+        -------
+        float
+            Length, or 0 for a line end.
+        """
+        if unit is None:
+            return 0.0
+        return math.dist(*(port_point(unit, unit.frame, name) for name in ("inlet", "outlet")))
+
+    entering = u.ports["inlet"].stream
+    line = None if entering is None else entering._logical_root or entering
+    items = [] if line is None else [s.dest.owner for s in line._logical_segments[:-1]]
+    if line is None or u not in items:
+        return (f"Add it on its line with an at= nearer the middle, "
+                f"fs.add({u.name}, on=<line>, at=...), in place of connect()")
+    segments = line._logical_segments
+    k = items.index(u)
+    before = items[k - 1] if k else None
+    after = items[k + 1] if k + 1 < len(items) else None
+    low = position(segments[k - 1]) if k else 0.0
+    high = position(segments[k + 1]) if after is not None else 1.0
+    spread = [items[i] for i in (k - 1, k + 1)
+              if 0 <= i < len(items) and segments[i]._inline_at is None]
+    if low is None or high is None or spread:
+        first = spread[0].name if spread else u.name
+        return (f"Give {_and([v.name for v in spread]) or u.name} an at= on {line.name}, "
+                f"fs.add({first}, on={line.name}, at=...), then set {u.name} further "
+                f"from that end")
+    # Measure the gap after the device on the shortest line that holds
+    # the gap before it; a longer line only widens it.
+    room = ALONG + (length(before) + length(u)) / 2 if before else NOZZLE_END + length(u) / 2
+    ratio = (ARROWHEAD + MIN_HEAD_CLEARANCE + (length(after) + length(u)) / 2) / room
+    best = (high + ratio * low) / (1 + ratio)
+    at = next((a for a in (math.floor(best * 10 ** d) / 10 ** d for d in (2, 3)) if a > low),
+              None)
+    end = f"{after.name} (at={high:g})" if after else f"the end of {line.name}"
+    start = f"{before.name} (at={low:g})" if before else f"the start of {line.name}"
+    if at is None:
+        return (f"No at= between {start} and {end} leaves it clear: move "
+                f"{(before or after or u).name} further from it first")
+    where = f"between {start} and {end}" if before else f"further from {end}"
+    return (f"Set it {where}, clear of the arrowhead: "
+            f"fs.add({u.name}, on={line.name}, at={at:g})")
+
+
 def _is_control_function(letters: str, i: int) -> bool:
     """Return whether ``letters[i]`` is a sequenced control function.
 
@@ -1060,6 +1138,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.portgeom import (is_anchored, pin_intent, port_faces, port_point,
                                  resolve_port, unit_box)
     from pandid.render.svg import crossings, stream_polyline
+    from pandid.routing.metrics import path_length
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
                                        label_span, wears_arrowhead)
@@ -1382,8 +1461,22 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
 
-        # Soft: a crossing within an arrowhead length of either line's nozzle.
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
+
+        # Soft: a valve or fitting under the arrowhead into the nozzle it feeds.
+        for s, line in zip(drawn, lines.values()):
+            u, dest = s.source.owner, s.dest
+            gap = path_length(line)
+            if (not arrows or u.kind not in _INLINE_KINDS or gap >= ARROWHEAD
+                    or not wears_arrowhead(s, default_registry)):
+                continue
+            warnings.append(Issue(
+                "warning", "valve-under-arrowhead",
+                f"{u.name} is drawn {gap:.1f}px from {dest.owner.name}.{dest.name}, so the "
+                f"{ARROWHEAD:.0f}px arrowhead into that nozzle reaches over it. "
+                f"{_arrowhead_cure(u)}"))
+
+        # Soft: a crossing within an arrowhead length of either line's nozzle.
         for n, _, m, x, y, _ in crossings(lines, "vertical"):
             d, k, port = min(((math.dist((x, y), lines[k][i]), k, port)
                               for k in (n, m)
