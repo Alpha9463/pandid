@@ -313,7 +313,8 @@ class DefaultRouter:
             If an end has no frame or anchor; the stream is skipped.
         """
         from pandid.portgeom import COMPASS, resolve_port
-        from pandid.render.svg import package_frame, tap_lines, tap_route
+        from pandid.package import frame as package_frame
+        from pandid.render.svg import tap_lines, tap_route
         from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
         from pandid.routing.astar import (CROSSING_PENALTY, FENCE_PENALTY, TOUCH_PENALTY,

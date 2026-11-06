@@ -1171,7 +1171,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces, port_point,
                                  resolve_port, unit_box)
-    from pandid.render.svg import crossings, package_frame, stream_polyline
+    from pandid.package import frame as package_frame
+    from pandid.render.svg import crossings, stream_polyline
     from pandid.routing.metrics import path_length
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,

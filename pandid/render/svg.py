@@ -11,7 +11,7 @@ from datetime import datetime
 from functools import lru_cache
 
 from pandid.layout.conflicts import boxes_overlap
-from pandid.package import MARGIN as PACKAGE_MARGIN
+from pandid.package import INSET as _PACKAGE_INSET, frame as package_frame
 from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
@@ -52,9 +52,7 @@ _TAP_DASH = "5,4"
 #: the detail weight (ISO 15519-1 6.1, Table 1).
 PACKAGE_DASH = ",".join(f"{k * LineWeight.DETAIL.width:g}" for k in (12, 3, 0.5, 3))
 
-# Inset of a package's reference from its frame's lower-left corner,
-# and rise of its tag above the upper-left corner.
-_PACKAGE_INSET = 5.0
+# Rise of a package's tag above its frame's upper-left corner.
 _PACKAGE_RISE = 4.0
 
 
@@ -2935,41 +2933,6 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
     return (x0, y0, x1, y1)
 
 
-def package_frame(pkg) -> "tuple[float, float, float, float] | None":
-    """Return a package's boundary frame (ISO 15519-1 7.3.1).
-
-    The frame encloses each unit's box and tag, and the reference,
-    with :data:`PACKAGE_MARGIN` to spare.
-
-    Parameters
-    ----------
-    pkg : Package
-        Package to frame.
-
-    Returns
-    -------
-    tuple[float, float, float, float] or None
-        ``(x0, y0, x1, y1)``, or ``None`` if a unit has no frame.
-    """
-    boxes = []
-    for u in pkg.units:
-        f = u.frame
-        if f is None:
-            return None
-        boxes.append(unit_box(u, f))
-        if u.tag and u.kind not in ("feed", "product", "instrument"):
-            tag = _unit_label_box(SvgRenderer()._unit_label_item(u, f, f.x, f.y, f.w, f.h,
-                                                                 u.tag))
-            if tag is not None:
-                boxes.append(tag)
-    x0 = min(b[0] for b in boxes) - PACKAGE_MARGIN
-    x1 = max(b[2] for b in boxes) + PACKAGE_MARGIN
-    if pkg.reference:
-        x1 = max(x1, x0 + tag_width(str(pkg.reference)) + 2 * _PACKAGE_INSET)
-    return (x0, min(b[1] for b in boxes) - PACKAGE_MARGIN,
-            x1, max(b[3] for b in boxes) + PACKAGE_MARGIN)
-
-
 def package_edges(fs) -> "list[tuple[float, float, float, float]]":
     """Return the four sides of each package's frame as boxes.
 
@@ -3004,7 +2967,7 @@ def package_labels(pkg, box) -> list:
     pkg : Package
         Package being drawn.
     box : tuple[float, float, float, float]
-        Its frame from :func:`package_frame`.
+        Its frame from :func:`pandid.package.frame`.
 
     Returns
     -------

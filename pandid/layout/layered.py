@@ -16,7 +16,7 @@ from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import Pad, balloon_pads, pinned_balloons
 from pandid.layout.stages import slot
-from pandid.package import MARGIN as PACKAGE_MARGIN
+from pandid.package import DEPTH as PACKAGE_DEPTH, MARGIN as PACKAGE_MARGIN
 from pandid.portgeom import COMPASS, pinned_x, pinned_y, port_faces, resolve_port, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
 
@@ -45,7 +45,8 @@ SWEEPS = 12
 BAND_WIDTH = 3200.0
 #: Clear height between bands.
 BAND_GAP = 160.0
-#: Least clear height between a package's stacks and any other stack.
+#: Least clear height between a package's stacks and a stack in no
+#: package; a stack in another package keeps its frame's depth more.
 PACKAGE_GAP = ROW_GAP + 2 * PACKAGE_MARGIN
 
 #: Stacking pipe end faces ``(source, dest)`` -> whether dest is above.
@@ -894,8 +895,9 @@ def _keep_out(layers: dict[int, list[_Node]], pkg: dict[_Node, int]) -> set[int]
     node bottom, balloon room included. In the layers from its first to
     its last, the nodes above its own move up together, and the nodes
     below move down together, until each clears that height by
-    :data:`PACKAGE_GAP`. In a layer it has no node in, a node goes the
-    way its centre lies. Passes repeat while a node moves.
+    :data:`PACKAGE_GAP`, and a node of another package by the depth of
+    a frame more. In a layer it has no node in, a node goes the way its
+    centre lies. Passes repeat while a node moves.
 
     Parameters
     ----------
@@ -926,8 +928,9 @@ def _keep_out(layers: dict[int, list[_Node]], pkg: dict[_Node, int]) -> set[int]
                           (sum(n.y + n.h / 2 < (top + bottom) / 2 for n in layer),) * 2)
                 above += layer[:lo]
                 below += layer[hi:]
-            rise = max((n.y + n.h + n.pad.south + PACKAGE_GAP - top for n in above), default=0.0)
-            drop = max((bottom + PACKAGE_GAP + n.pad.north - n.y for n in below), default=0.0)
+            gap = {n: PACKAGE_GAP + (PACKAGE_DEPTH if n in pkg else 0.0) for n in above + below}
+            rise = max((n.y + n.h + n.pad.south + gap[n] - top for n in above), default=0.0)
+            drop = max((bottom + gap[n] + n.pad.north - n.y for n in below), default=0.0)
             for nodes, dy in ((above, -rise), (below, drop)):
                 if abs(dy) > 1e-6:
                     moved = True

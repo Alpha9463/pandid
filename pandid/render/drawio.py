@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 from xml.sax.saxutils import escape
 
+from pandid.package import frame as package_frame
 from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
@@ -29,8 +30,7 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
                                NUMBER_TYPE, PACKAGE_DASH, boundary_flag, diagram_plan,
-                               enclosure_shape, label_findings, package_frame,
-                               package_labels,
+                               enclosure_shape, label_findings, package_labels,
                                draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
                                quadrant_labels,
                                resolve_connections, sheet_connections,

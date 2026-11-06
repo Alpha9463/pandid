@@ -17,13 +17,14 @@ from pandid.inline import _INLINE_KINDS
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import balloon_pads, pinned_balloons
 from pandid.layout.stages import process_streams, process_units, slot
-from pandid.package import MARGIN as PACKAGE_MARGIN
+from pandid.package import MARGIN as PACKAGE_MARGIN, boundary, tag_reach
 from pandid.portgeom import port_point, resolve_size, unit_box
 from pandid.routing.metrics import path_length
 from pandid.routing.visibility import MARGIN
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.package import Package
     from pandid.ports import Port
     from pandid.stations import StationAssembly
     from pandid.streams import Stream
@@ -48,9 +49,6 @@ TAP = 45.0
 
 #: Step, in pixels, of the search along a leg for a clear spot.
 NUDGE_STEP = 5.0
-
-#: Room a tag beside a unit takes, its offset included.
-TAG_ROOM = 25.0
 
 Point = tuple[float, float]
 Leg = tuple[Point, Point]
@@ -1178,28 +1176,26 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     return roomy
 
 
-def _ground(units: tuple[Unit, ...], placed: set[Unit]) -> Box:
-    """Return the ground a package's placed units and tags cover.
+def _ground(pkg: Package, placed: set[Unit]) -> Box:
+    """Return the frame round a package's units placed so far.
 
-    It is their boxes grown by the package margin, and upward and
-    downward by a tag's room too.
+    Each unit counts with room for a tag on either side.
 
     Parameters
     ----------
-    units : tuple[Unit, ...]
-        The package's units.
+    pkg : Package
+        Package with at least one unit in ``placed``.
     placed : set[Unit]
-        Units with frames; at least one of ``units``.
+        Units with frames.
 
     Returns
     -------
     Box
         Left, top, right, bottom.
     """
-    boxes = [unit_box(u, u.frame) for u in units if u in placed and u.frame is not None]
-    rise = PACKAGE_MARGIN + TAG_ROOM
-    return (min(b[0] for b in boxes) - PACKAGE_MARGIN, min(b[1] for b in boxes) - rise,
-            max(b[2] for b in boxes) + PACKAGE_MARGIN, max(b[3] for b in boxes) + rise)
+    boxes = [(unit_box(u, u.frame), tag_reach(u)) for u in pkg.units
+             if u in placed and u.frame is not None]
+    return boundary(pkg, [(b[0] - reach, b[1], b[2] + reach, b[3]) for b, reach in boxes])
 
 
 def _fence(run: MountedRun, group: dict[Unit, int]) -> float:
@@ -1215,11 +1211,11 @@ def _fence(run: MountedRun, group: dict[Unit, int]) -> float:
     Returns
     -------
     float
-        The package margin for each end in a package that holds not
-        every element.
+        The package margin and the reach of a tag beside the end unit,
+        for each end in a package that holds not every element.
     """
     held = [group.get(unit) for element in run.elements for unit in _members(element)]
-    return sum(PACKAGE_MARGIN for port in (run.source, run.dest)
+    return sum(PACKAGE_MARGIN + tag_reach(port.owner) for port in (run.source, run.dest)
                if (p := group.get(port.owner)) is not None and any(h != p for h in held))
 
 
@@ -1274,7 +1270,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     obstacles = list(retained)
     zones: list[Box] = pinned_balloons(fs, balloon_pads(fs)) if fs._pin_balloons else []
     exit_gap = MARGIN if fs._exit_clear else 0.0
-    packages = tuple((set(p.units), _ground(p.units, shown)) for p in fs.packages
+    packages = tuple((set(p.units), _ground(p, shown)) for p in fs.packages
                      if shown.intersection(p.units))
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
         _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap, fs._fan_out,
