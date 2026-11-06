@@ -425,6 +425,24 @@ def _standoff_box(tap: Point, ref: Point, distance: float, angle: float,
     return (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
 
 
+def pinned_axes(fs: "Flowsheet | None") -> tuple[bool, bool]:
+    """Return whether a unit on a sheet is pinned on x, and on y.
+
+    Parameters
+    ----------
+    fs : Flowsheet or None
+        Sheet to read.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        Whether any unit has an ``x`` pin, and whether any has a ``y``
+        pin; both False without a sheet.
+    """
+    pins = [u._pin for u in fs.units if u._pin is not None] if fs is not None else []
+    return any(p.x is not None for p in pins), any(p.y is not None for p in pins)
+
+
 def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                     w: float, h: float,
                     obstacles: list[Box],
@@ -435,7 +453,8 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
 
     A balloon whose requested box straddles its stream tap keeps it. No
     candidate's box, moved to the balloon's pin, may come within
-    ``clearance`` of ``runs`` or reach past the sheet's top or left edge.
+    ``clearance`` of ``runs``, or reach past the sheet's top or left edge
+    on an axis a unit is pinned on.
 
     Parameters
     ----------
@@ -467,6 +486,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
 
     on_a_line = isinstance(inst.host, Stream)
     pin = inst.pin_
+    pinned = pinned_axes(inst.flowsheet)
     angles = _branch_angles(inst.angle)
     asked = (inst.offset, inst.angle)
     fallback, least = asked, None
@@ -484,7 +504,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
             x0 = box[0] if pin is None or pin.x is None else float(pin.x)
             y0 = box[1] if pin is None or pin.y is None else float(pin.y)
             drawn = (x0, y0, x0 + w, y0 + h)
-            off = x0 < 0.0 or y0 < 0.0
+            off = (pinned[0] and x0 < 0.0) or (pinned[1] and y0 < 0.0)
             if not (off or any(_intrusion(box, o, gap) > 0.0 for o in against)
                     or any(_intrusion(drawn, r, clearance) > 0.0 for r in runs)):
                 return distance, angle

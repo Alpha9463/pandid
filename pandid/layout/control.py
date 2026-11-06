@@ -258,7 +258,8 @@ def _actuator_spots(valve: "Unit", w: float, h: float,
 
     The balloon stands :data:`ACTUATOR_OFFSET` out from the actuator,
     square to its face, and steps out and swings as an attached balloon
-    does, at each place on the sheet clear of every blocked box.
+    does, at each place clear of every blocked box and, on an axis a
+    unit is pinned on, of the sheet's top or left edge.
 
     Parameters
     ----------
@@ -277,14 +278,16 @@ def _actuator_spots(valve: "Unit", w: float, h: float,
         Distance and angle for :func:`_actuator_box`, nearest first.
     """
     from pandid.layout.attach import (
-        RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion)
+        RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
+        pinned_axes)
 
+    px, py = pinned_axes(valve.flowsheet)
     for ring in range(STANDOFF_STEPS + 1):
         for angle in _branch_angles(90.0):
             standoff = (ACTUATOR_OFFSET + ring * STANDOFF_STEP, angle)
             box = _actuator_box(valve, standoff, w, h)
-            if box[0] >= 0.0 and box[1] >= 0.0 and not any(
-                    _intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
+            if not ((px and box[0] < 0.0) or (py and box[1] < 0.0) or any(
+                    _intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked)):
                 yield standoff
 
 
@@ -586,17 +589,20 @@ def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     tuple[float, float]
         Top-left corner of the balloon.
     """
+    from pandid.layout.attach import pinned_axes
+
     pin = inst.pin_
     centre = _centroid(fs, inst)
     want = (centre[0] - w / 2.0, centre[1] - h / 2.0)
+    edges = pinned_axes(fs)
     if pin is None:
-        return _nearest_free(want[0], want[1], w, h, taken, True, True)
+        return _nearest_free(want[0], want[1], w, h, taken, True, True, edges)
 
     cols, rows = _grid(fs)
     x = pin.x if pin.x is not None else _lane(cols, pin.col, COL_GAP)
     y = pin.y if pin.y is not None else _lane(rows, pin.row, ROW_GAP)
     return _nearest_free(want[0] if x is None else x, want[1] if y is None else y,
-                         w, h, taken, x is None, y is None)
+                         w, h, taken, x is None, y is None, edges)
 
 
 def _lane(grid: dict[int, tuple[float, float]], index: int | None,
@@ -704,7 +710,8 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
 
 
 def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
-                  free_x: bool, free_y: bool) -> tuple[float, float]:
+                  free_x: bool, free_y: bool,
+                  edges: tuple[bool, bool] = (False, False)) -> tuple[float, float]:
     """Return the first clear corner on rings out from ``(x, y)``.
 
     Parameters
@@ -723,6 +730,9 @@ def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
         Whether the search may move along x.
     free_y : bool
         Whether the search may move along y.
+    edges : tuple[bool, bool], optional
+        Whether the box keeps right of the sheet's left edge, and below
+        its top edge.
 
     Returns
     -------
@@ -736,7 +746,7 @@ def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
             if (dx and not free_x) or (dy and not free_y):
                 continue
             cx, cy = x + dx * STEP, y + dy * STEP
-            if not _hits(cx, cy, w, h, taken):
+            if not _hits(cx, cy, w, h, taken, edges):
                 return cx, cy
     return x, y
 
@@ -763,7 +773,8 @@ def _ring(radius: int) -> list[tuple[int, int]]:
     return out
 
 
-def _hits(x: float, y: float, w: float, h: float, taken: list[_Box]) -> bool:
+def _hits(x: float, y: float, w: float, h: float, taken: list[_Box],
+          edges: tuple[bool, bool] = (False, False)) -> bool:
     """Return whether a box is within the clearance of a drawn box.
 
     Parameters
@@ -778,14 +789,17 @@ def _hits(x: float, y: float, w: float, h: float, taken: list[_Box]) -> bool:
         Box height.
     taken : list[_Box]
         Boxes already drawn.
+    edges : tuple[bool, bool], optional
+        Whether the box keeps right of the sheet's left edge, and below
+        its top edge.
 
     Returns
     -------
     bool
-        True if the box reaches past the sheet's top or left edge, or is
-        too close to any drawn box.
+        True if the box reaches past an edge it keeps to, or is too close
+        to any drawn box.
     """
-    if x < 0.0 or y < 0.0:
+    if (edges[0] and x < 0.0) or (edges[1] and y < 0.0):
         return True
     for x0, y0, x1, y1 in taken:
         if (x < x1 + CLEARANCE and x + w + CLEARANCE > x0
