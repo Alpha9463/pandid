@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 from xml.sax.saxutils import escape
 
+from pandid.package import frame as package_frame
 from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
@@ -28,8 +29,8 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
-                               NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
-                               label_findings,
+                               NUMBER_TYPE, PACKAGE_DASH, boundary_flag, diagram_plan,
+                               enclosure_shape, label_findings, package_labels,
                                draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
                                quadrant_labels,
                                resolve_connections, sheet_connections,
@@ -890,6 +891,7 @@ class DrawioRenderer:
                                                 kind)
         body.extend(self._border(frame, border))
         body.extend(furniture)
+        body.extend(self._packages(fs, fit))
         # Then equipment, runs, taps and balloons.
         joints = sheet_connections(diagram, connections)
         tags = _tag_pass(fs, joints, jump_direction)
@@ -996,6 +998,49 @@ class DrawioRenderer:
         ]) + "\n"
 
     # ------------------------------------------------------ units
+
+    @staticmethod
+    def _packages(fs, fit: "_Fit") -> list[str]:
+        """Return each package's boundary frame as an unfilled cell.
+
+        The tag is the cell's label, above its upper-left corner; the
+        reference is a child text cell inside its lower-left corner.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
+        """
+        size = fit.length(_TAG_TYPE)
+        out: list[str] = []
+        for n, pkg in enumerate(fs.packages):
+            box = package_frame(pkg)
+            assert box is not None
+            x0, y0, x1, y1 = fit.box(box)
+            style = ";".join([
+                "rounded=0", "html=1", f"fillColor={_NO_FILL}", f"strokeColor={_LINE_INK}",
+                f"strokeWidth={fit.length(LineWeight.DETAIL.width):g}", *_dash(PACKAGE_DASH),
+                "labelPosition=center", "verticalLabelPosition=top", "align=left",
+                "verticalAlign=bottom", "spacing=0", f"spacingBottom={fit.length(4):g}",
+                f"fontSize={size:g}", f"fontColor={_LINE_INK}", "connectable=0"]) + ";"
+            out += _rect(f"pk{n}", x0, y0, x1 - x0, y1 - y0, style, _html_text(pkg.name))
+            for item in package_labels(pkg, box)[1:]:
+                text = item[5]
+                w = F.text_width(text, size) + 2 * _TEXT_INSET
+                h = _line_box(size) + 2 * _TEXT_INSET
+                lx, ly = fit.at(item[0], item[1])
+                out += _rect(f"pk{n}-ref", lx - x0 - _TEXT_INSET, ly - y0 - h + _TEXT_INSET, w, h,
+                             "text;html=1;strokeColor=none;fillColor=none;align=left;"
+                             f"verticalAlign=bottom;fontSize={size:g};fontColor={_LINE_INK};",
+                             _html_text(text), parent=f"pk{n}")
+        return out
 
     @staticmethod
     def _id(index: int) -> str:

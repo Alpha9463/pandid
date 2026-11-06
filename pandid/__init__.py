@@ -111,12 +111,13 @@ from pandid.ports import Port
 from pandid.streams import Stream
 from pandid.geometry import Pin, Frame, Route
 from pandid.loops import Loop, ControlLoop
+from pandid.package import Package
 from pandid.stations import ValveStation
 from pandid.validate import Issue
 from pandid.document import TitleBlock, Revision, Annotation, TableBox, Document
 
 __all__ = ["Flowsheet", "Component", "units", "devices", "SpecError", "__version__",
            "Port", "Stream", "Pin", "Frame", "Route",
-           "Loop", "ControlLoop", "ValveStation", "Issue",
+           "Loop", "ControlLoop", "Package", "ValveStation", "Issue",
            "TitleBlock", "Revision", "Annotation", "TableBox", "Document",
            *units.__all__, *devices.__all__]
