@@ -3050,13 +3050,17 @@ def test_a_balloon_turned_clear_stays_clear_over_repeated_routes():
         assert _drawn_wrong(fs, line) == []
 
 
-def _blocked_controller() -> tuple[Flowsheet, Stream]:
-    """Route FT-101 below V-101 to FIC-101, pinned just above it."""
+def _blocked_controller(
+    via: list[tuple[float, float]] | None = None,
+) -> tuple[Flowsheet, Stream]:
+    """Route FT-101 below V-101 to FIC-101, pinned just above it, through ``via`` if given."""
     fs = Flowsheet("blocked controller")
     fs.add(U.Vessel("V-101", width=80, height=60)).pin(x=145, y=155)
     ft = fs.add(U.Instrument("FT-101")).pin(x=163, y=320)
     fic = fs.add(U.Instrument("FIC-101")).pin(x=163, y=100)
     line = fs.connect(ft.sig_out, fic.sig_in, kind="electric")
+    if via is not None:
+        line.via(via)
     fs.route()
     return fs, line
 
@@ -3079,16 +3083,17 @@ def test_a_signal_line_frozen_on_a_turned_nozzle_keeps_its_points():
 def test_a_hand_drawn_line_into_a_blocked_nozzle_keeps_its_face():
     """Route a line drawn by hand into FIC-101's S face, which V-101 blocks.
 
-    The line keeps its points and is square.
+    The line keeps its points and is square after each of two route() calls.
     """
-    fs, line = _blocked_controller()
     points = [(185.0, 295.0), (185.0, 169.0)]
-    line.via(points)
-    fs.route()
+    fs, line = _blocked_controller(points)
+    for again in (False, True):
+        if again:
+            fs.route()
 
-    assert line.route is not None
-    assert line.route.waypoints == points
-    assert [m for m in _drawn_wrong(fs, line) if "slant" in m] == []
+        assert line.route is not None
+        assert line.route.waypoints == points
+        assert [m for m in _drawn_wrong(fs, line) if "slant" in m] == []
 
 
 @pytest.mark.parametrize("first_tag", [10, 20, 50, 99])
@@ -3194,3 +3199,73 @@ def test_a_line_leaves_a_unit_for_at_most_two_crossings_or_runs_along_units(
     before = Counter({"route-crosses-unit": 3, "crossing": 4, "route-along-unit": 1})
 
     assert _out_of_unit(before, Counter(after)) is kept
+
+
+def test_a_line_frozen_from_a_controller_beside_its_valve_keeps_its_points():
+    """Route a bank again after freezing FIC-201's output, drawn from beside FV-11.
+
+    The frozen line keeps its points, is square and crosses no unit.
+    """
+    fs, loops = _valved_bank(10)
+    line = loops[1].output
+    assert line.route is not None
+    points = list(line.route.waypoints)
+    line.via(points)
+    fs.route()
+    fs.to_svg(diagram="p&id")
+
+    assert line.route.waypoints == points
+    assert _drawn_wrong(fs, line) == []
+
+
+def test_a_frozen_line_from_a_controller_beside_its_valve_survives_a_spec_round_trip():
+    """Rebuild a bank from to_dict() after freezing FIC-201's output, and route it.
+
+    The frozen line keeps its points, is square and crosses no unit.
+    """
+    fs, loops = _valved_bank(10)
+    line = loops[1].output
+    assert line.route is not None
+    points = list(line.route.waypoints)
+    line.via(points)
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    rebuilt.route()
+    drawn = next(s for s in rebuilt.streams if s.name == line.name)
+
+    assert drawn.route is not None
+    assert drawn.route.waypoints == points
+    assert _drawn_wrong(rebuilt, drawn) == []
+
+
+def test_a_transmitter_pinned_where_drawn_keeps_the_controller_beside_its_valve():
+    """Pin FT-201 where a bank draws it and route again.
+
+    FIC-201 stays where it was drawn, and its lines stay clear of units.
+    """
+    fs, loops = _valved_bank(10)
+    controller, transmitter = loops[1].controller, loops[1].transmitter
+    drawn = frame_of(controller)
+    transmitter.pin(x=frame_of(transmitter).x, y=frame_of(transmitter).y)
+    fs.route()
+
+    assert (frame_of(controller).x, frame_of(controller).y) == pytest.approx((drawn.x, drawn.y))
+    assert [m for s in (loops[1].measurement, loops[1].output) for m in _drawn_wrong(fs, s)] == []
+
+
+@pytest.mark.parametrize(("at", "offset"), [(0.3, 45.0), (0.5, 70.0)])
+def test_a_transmitter_moved_along_its_line_keeps_the_controller_beside_its_valve(
+    at: float, offset: float
+):
+    """Attach FT-201 at another at= or offset= after its controller was hung beside FV-11.
+
+    FIC-201 stays where it was drawn, and its lines stay clear of units.
+    """
+    fs, loops = _valved_bank(10)
+    controller, transmitter = loops[1].controller, loops[1].transmitter
+    drawn = frame_of(controller)
+    assert transmitter.host is not None
+    transmitter.attach(transmitter.host, at=at, offset=offset)
+    fs.route()
+
+    assert (frame_of(controller).x, frame_of(controller).y) == pytest.approx((drawn.x, drawn.y))
+    assert [m for s in (loops[1].measurement, loops[1].output) for m in _drawn_wrong(fs, s)] == []

@@ -570,6 +570,24 @@ def _copied(state: tuple) -> tuple:
 
     return (geometry(state[0]), geometry(state[1]), *state[2:])
 
+def _by_hand(units: "list[Unit]") -> "list[Stream]":
+    """Return the lines drawn by hand that end at the given units.
+
+    Parameters
+    ----------
+    units : list[Unit]
+        Units to read.
+
+    Returns
+    -------
+    list[Stream]
+        Each line with a ``via()`` route at one of them.
+    """
+    return [port.stream for unit in units for port in unit.ports.values()
+            if port.stream is not None and port.stream.route is not None
+            and port.stream.route.manual]
+
+
 def _beats(new: tuple, old: tuple) -> bool:
     """Return whether one routed drawing's score beats another's.
 
@@ -788,9 +806,14 @@ class Flowsheet:
         self._keep_clear = 0.0
         self._kept_clear = False
         # The state route() left before it placed balloons hung from
-        # balloons further off, which the next route() or layout() starts
-        # from.
+        # balloons further off or moved them clear, with what the author
+        # had stated then, which the next route() or layout() starts from
+        # while the author states nothing new.
         self._unkept: tuple | None = None
+        # Controllers route() hung beside the valve they drive, by id(),
+        # each with its standoff and angle off the actuator and its
+        # attachment then.
+        self._beside: dict[int, tuple[tuple[float, float], tuple]] = {}
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes and moves its chain's room there.
         self._pin_balloons = False
@@ -2557,8 +2580,14 @@ class Flowsheet:
         kept on the same terms. Both are then tried again for the balloons
         still so placed, each also kept where it takes a line out of a unit
         at the price :func:`~pandid.layout.control._out_of_unit` allows.
-        Where any of these is kept, the next route() or layout() starts
-        from the drawing before them. Then, where a line that found no path
+        A balloon at an end of a ``via()`` line is turned or moved only
+        where it is not met cleanly, and kept only where every such line
+        then meets it square and through no unit. Where any of these is
+        kept, the next route() or layout() starts from the drawing before
+        them, unless the author has stated a pin, nozzle face, balloon
+        attachment, ``via()`` route or note position since; then it starts
+        from the drawing shown, and a controller hung beside its valve
+        stays there. Then, where a line that found no path
         runs through a unit, the sheet is routed again with each such line
         drawn round the units in its way where a clear route exists, kept
         only if no tap leaves its line and no finding, clash, crossing or
@@ -2643,7 +2672,7 @@ class Flowsheet:
                 self._stacked = first
             self._stack_spans = self._rows_out = self._tees_away = self._route_stale = False
         if not self._laying_out and (router is None or type(router) is DefaultRouter):
-            unkept = self._state()
+            unkept = self._state(), self._authored()
             if self._keep_further_off(router or DefaultRouter()):
                 self._unkept = unkept
             if self._turn_blocked_exits(router or DefaultRouter()):
@@ -2670,13 +2699,31 @@ class Flowsheet:
         bool
             Whether any balloon's new faces or place are kept.
         """
-        from pandid.layout.control import _beside_valve, _taps_off
+        from pandid.layout.attach import _attachment
+        from pandid.layout.control import _beside_valve, _clean, _taps_off
         from pandid.layout.faces import blocked_exits, select_faces
-        from pandid.units import Unit
+        from pandid.units import Instrument, Unit
+
+        def held(unit: "Unit") -> bool:
+            """Return whether a unit ends lines drawn by hand, all clean.
+
+            Parameters
+            ----------
+            unit : Unit
+                Unit to test.
+
+            Returns
+            -------
+            bool
+                True if a ``via()`` line ends at the unit and every such
+                line is drawn square and through no unit.
+            """
+            drawn = _by_hand([unit])
+            return bool(drawn) and all(_clean(self, s) for s in drawn)
 
         kept = False
         for trade in (False, True):
-            for unit in blocked_exits(self):
+            for unit in [u for u in blocked_exits(self) if not held(u)]:
                 before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
                 frame = unit.frame
                 assert frame is not None
@@ -2686,13 +2733,17 @@ class Flowsheet:
                     kept = self._keep_redrawn(router, [unit], before, off, drawn, trade) or kept
             for unit in blocked_exits(self):
                 host = getattr(unit, "host", None)
-                for x, y in list(_beside_valve(self, unit)):
+                if (not isinstance(unit, Instrument) or not isinstance(host, Unit)
+                        or held(unit) or held(host)):
+                    continue
+                for x, y, standoff in list(_beside_valve(self, unit)):
                     before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
                     frame = unit.frame
-                    assert frame is not None and isinstance(host, Unit)
+                    assert frame is not None
                     frame.x, frame.y = x, y
                     select_faces(self, [unit, host])
                     if self._keep_redrawn(router, [unit, host], before, off, drawn, trade):
+                        self._beside = {**self._beside, id(unit): (standoff, _attachment(unit))}
                         kept = True
                         break
         return kept
@@ -2700,8 +2751,8 @@ class Flowsheet:
     def _keep_redrawn(self, router, units: "list[Unit]", before: Counter[str],
                       off: set[int], drawn: tuple, trade: bool) -> bool:
         """Route the lines at the given units again, and put the drawing
-        back if a tap left its line or a finding, clash, crossing or
-        fallback route grew.
+        back if a tap left its line, a line drawn by hand at them is not
+        clean, or a finding, clash, crossing or fallback route grew.
 
         Parameters
         ----------
@@ -2724,11 +2775,12 @@ class Flowsheet:
         bool
             Whether the new drawing is kept.
         """
-        from pandid.layout.control import _out_of_unit, _taps_off
+        from pandid.layout.control import _clean, _out_of_unit, _taps_off
 
         lines = [port.stream for unit in units for port in unit.ports.values()
                  if port.stream is not None]
-        if self._route_only(router, lines) and _taps_off(self) <= off:
+        if (self._route_only(router, lines) and _taps_off(self) <= off
+                and all(_clean(self, s) for s in _by_hand(units))):
             after = self._counted_flaws()
             if (not any(n > before[k] for k, n in after.items())
                     or (trade and _out_of_unit(before, after))):
@@ -2821,15 +2873,37 @@ class Flowsheet:
         return flaws
 
     def _put_unkept(self) -> None:
-        """Put back the state held from before balloons were kept further off.
+        """Put back the state held from before balloons were kept further off
+        or moved clear, unless the author has stated drawing coordinates or
+        faces since.
 
         Whether the layout is stale is kept as it stands.
         """
         held, self._unkept = self._unkept, None
-        if held is not None:
+        if held is not None and held[1] == self._authored():
             stale = self._layout_stale
-            self._put_state(held)
+            self._put_state(held[0])
             self._layout_stale = stale
+
+    def _authored(self) -> tuple:
+        """Return every drawing coordinate and face the author has stated.
+
+        Returns
+        -------
+        tuple
+            Each unit's pin and the nozzles it places, its nozzle faces
+            and each balloon's attachment, each manual route's waypoints
+            and each placed annotation's position.
+        """
+        from pandid.layout.attach import _attachment
+        from pandid.units import Instrument
+
+        return (tuple((u, copy.copy(u._pin), dict(u._pin_ports), dict(u._port_faces),
+                       _attachment(u) if isinstance(u, Instrument) else None)
+                      for u in self.units),
+                tuple((s, tuple(s.route.waypoints)) for s in self.streams
+                      if s.route is not None and s.route.manual),
+                tuple((a, getattr(a, "position", None)) for a in self.annotations))
 
     def _keep_further_off(self, router) -> bool:
         """Place each balloon hung from a balloon an arrowhead clear of its
@@ -3129,7 +3203,7 @@ class Flowsheet:
                         tuple((u, u._stock_face) for u in self.units
                               if hasattr(u, "_stock_face")),
                         self._lanes, self._relaned, self._crowded_station,
-                        self._angle_valves))
+                        self._angle_valves, self._beside))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -3144,7 +3218,7 @@ class Flowsheet:
          self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
          self._rows_out, self._tees_away, self._fannable, self._far_branches,
          self._flags_off, stock, self._lanes, self._relaned,
-         self._crowded_station, self._angle_valves) = _copied(state)
+         self._crowded_station, self._angle_valves, self._beside) = _copied(state)
         for u, flag in stock:
             u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)

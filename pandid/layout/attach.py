@@ -614,10 +614,30 @@ def on_leader(fs: "Flowsheet") -> bool:
     return False
 
 
+def _attachment(inst: "Instrument") -> tuple:
+    """Return what a balloon's attachment states.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    tuple
+        Its host, ``at``, face, whether the face was stated, ``offset``,
+        ``angle`` and ``relation``.
+    """
+    return (id(inst.host), inst.at, inst.face, inst._face_stated, inst.offset, inst.angle,
+            inst.relation)
+
+
 def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
-    Balloons left unplaced are recorded in ``fs.unplaced_instruments``.
+    A controller route() hung beside the valve it drives stays there
+    while its attachment and that valve are unchanged. Balloons left
+    unplaced are recorded in ``fs.unplaced_instruments``.
 
     Parameters
     ----------
@@ -630,6 +650,7 @@ def place_attached(fs: "Flowsheet") -> bool:
         True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
+    from pandid.layout.control import _actuator_box, _hangs_beside
     from pandid.portgeom import resolve_size, unit_box
 
     moved = False
@@ -656,12 +677,19 @@ def place_attached(fs: "Flowsheet") -> bool:
             if fs._off_leaders:
                 runs += _leader_runs(inst)
                 clearance = max(clearance, TOUCHING)
-            distance, angle = _clear_standoff(
-                inst, (tx, ty), ref, w, h,
-                obstacles + keepouts if mounted else obstacles,
-                [] if mounted else keepouts, runs, clearance)
-            ux, uy = _rotate_ccw(ref[0], ref[1], angle)
-            cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
+            beside = fs._beside.get(id(inst))
+            valve = (_hangs_beside(fs, inst)
+                     if beside is not None and beside[1] == _attachment(inst) else None)
+            if beside is not None and valve is not None:
+                # Stay where route() hung it off the valve it drives.
+                cx, cy, _, _ = _actuator_box(valve, beside[0], w, h)
+            else:
+                distance, angle = _clear_standoff(
+                    inst, (tx, ty), ref, w, h,
+                    obstacles + keepouts if mounted else obstacles,
+                    [] if mounted else keepouts, runs, clearance)
+                ux, uy = _rotate_ccw(ref[0], ref[1], angle)
+                cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis.
             pin = inst.pin_
             if pin is not None:

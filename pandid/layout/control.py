@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from pandid.flowsheet import Flowsheet
+    from pandid.streams import Stream
     from pandid.units import Unit
 
 #: A drawn box, ``(x_min, y_min, x_max, y_max)``.
@@ -94,8 +95,11 @@ def _place_free(fs: "Flowsheet") -> bool:
         w, h = resolve_size(inst)
         crossed = [box for ends, box in segments if inst not in ends]
         valve = _hangable(fs, inst) if fs._may_hang else None
-        hung = (None if valve is None
-                else next(_actuator_spots(valve, w, h, taken + clear + crossed + halos), None))
+        standoff = (None if valve is None
+                    else next(_actuator_spots(valve, w, h, taken + clear + crossed + halos),
+                              None))
+        hung = (None if valve is None or standoff is None
+                else _actuator_box(valve, standoff, w, h)[:2])
         if hung is not None:
             fs._hung.add(id(inst))
         x, y = hung or _spot(fs, inst, w, h, taken)
@@ -146,14 +150,13 @@ def _segments(fs: "Flowsheet") -> list[tuple[tuple[object, ...], _Box]]:
             for ends, points in lines for a, b in zip(points, points[1:])]
 
 
-def _beside_valve(fs: "Flowsheet", inst: "Unit") -> "Iterator[tuple[float, float]]":
-    """Yield the corners of a controller hung off the valve it drives.
+def _beside_valve(fs: "Flowsheet", inst: "Unit"
+                  ) -> "Iterator[tuple[float, float, tuple[float, float]]]":
+    """Yield the places of a controller hung off the valve it drives.
 
-    A balloon placed near the balloon it hangs from, with no face
-    stated and no pin, that drives one valve as :func:`_driven` finds
-    it, may stand where :func:`_actuator_spots` puts it, clear of every
-    other unit, nozzle strip, drawn line and tag. A balloon placed near
-    a line or a process unit stays where it is.
+    A balloon :func:`_hangs_beside` accepts may stand where
+    :func:`_actuator_spots` puts it, clear of every other unit, nozzle
+    strip, drawn line and tag.
 
     Parameters
     ----------
@@ -164,30 +167,84 @@ def _beside_valve(fs: "Flowsheet", inst: "Unit") -> "Iterator[tuple[float, float
 
     Yields
     ------
-    tuple[float, float]
-        Top-left corner, nearest first; none if the balloon does not
-        qualify.
+    tuple[float, float, tuple[float, float]]
+        Top-left corner and the standoff and angle off the actuator,
+        nearest first; none if the balloon does not qualify.
     """
     from pandid.layout.attach import _nozzle_keepouts
     from pandid.portgeom import unit_box
-    from pandid.units import Instrument
 
-    if (not isinstance(inst, Instrument) or inst.relation != "near"
-            or not isinstance(inst.host, Instrument) or inst._face_stated
-            or inst.pin_ is not None or inst.frame is None):
-        return
-    valve = _driven(fs, inst)
-    if valve is None:
+    valve = _hangs_beside(fs, inst)
+    frame = inst.frame
+    if valve is None or frame is None:
         return
     blocked = [unit_box(u, u.frame) for u in fs.units if u is not inst and u.frame is not None]
     blocked += _nozzle_keepouts(fs) + _halos(fs)
     blocked += [box for ends, box in _segments(fs) if inst not in ends]
-    yield from _actuator_spots(valve, inst.frame.w, inst.frame.h, blocked)
+    for standoff in _actuator_spots(valve, frame.w, frame.h, blocked):
+        x0, y0, _, _ = _actuator_box(valve, standoff, frame.w, frame.h)
+        yield x0, y0, standoff
+
+
+def _hangs_beside(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
+    """Return the valve a controller may hang beside, if any.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet the balloon is on.
+    inst : Unit
+        Balloon to test.
+
+    Returns
+    -------
+    Unit or None
+        The valve :func:`_driven` finds for a balloon placed near the
+        balloon it hangs from, with no face stated and no pin; None for
+        any other balloon, such as one placed near a line or a process
+        unit.
+    """
+    from pandid.units import Instrument
+
+    if (not isinstance(inst, Instrument) or inst.relation != "near"
+            or not isinstance(inst.host, Instrument) or inst._face_stated
+            or inst.pin_ is not None):
+        return None
+    return _driven(fs, inst)
+
+
+def _actuator_box(valve: "Unit", standoff: tuple[float, float], w: float,
+                  h: float) -> _Box:
+    """Return the box of a balloon hung off a valve's actuator.
+
+    Parameters
+    ----------
+    valve : Unit
+        Placed valve.
+    standoff : tuple[float, float]
+        Distance from the actuator to the balloon centre, and branch
+        angle from square to the actuator's face, anticlockwise.
+    w : float
+        Balloon width.
+    h : float
+        Balloon height.
+
+    Returns
+    -------
+    _Box
+        Balloon box.
+    """
+    from pandid.layout.attach import _standoff_box
+    from pandid.portgeom import face_point, port_anchor
+
+    ax, ay, face = port_anchor(valve, valve.frame, "actuator")
+    _, (nx, ny) = face_point(valve, valve.frame, face)
+    return _standoff_box((ax, ay), (-ny, nx), standoff[0], standoff[1], w, h)
 
 
 def _actuator_spots(valve: "Unit", w: float, h: float,
                     blocked: list[_Box]) -> "Iterator[tuple[float, float]]":
-    """Yield the corners of a balloon hung off a valve's actuator.
+    """Yield the standoffs of a balloon hung off a valve's actuator.
 
     The balloon stands :data:`ACTUATOR_OFFSET` out from the actuator,
     square to its face, and steps out and swings as an attached balloon
@@ -207,21 +264,17 @@ def _actuator_spots(valve: "Unit", w: float, h: float,
     Yields
     ------
     tuple[float, float]
-        Top-left corner, nearest first.
+        Distance and angle for :func:`_actuator_box`, nearest first.
     """
     from pandid.layout.attach import (
-        RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
-        _standoff_box)
-    from pandid.portgeom import face_point, port_anchor
+        RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion)
 
-    ax, ay, face = port_anchor(valve, valve.frame, "actuator")
-    _, (nx, ny) = face_point(valve, valve.frame, face)
     for ring in range(STANDOFF_STEPS + 1):
         for angle in _branch_angles(90.0):
-            box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
-                                angle, w, h)
+            standoff = (ACTUATOR_OFFSET + ring * STANDOFF_STEP, angle)
+            box = _actuator_box(valve, standoff, w, h)
             if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
-                yield box[0], box[1]
+                yield standoff
 
 
 def _hangable(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
@@ -316,29 +369,8 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
 
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
-    from pandid.portgeom import COMPASS, resolve_port, unit_box
+    from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
-
-    def outward(port, nozzle: tuple[float, float], other: tuple[float, float]) -> bool:
-        """Return whether a segment leaves a nozzle straight out of its face.
-
-        Parameters
-        ----------
-        port : Port
-            Port the segment ends at.
-        nozzle : tuple[float, float]
-            The segment's end at the nozzle.
-        other : tuple[float, float]
-            Its other end.
-
-        Returns
-        -------
-        bool
-            True if the segment runs along the face's outward normal.
-        """
-        nx, ny = COMPASS[resolve_port(port.owner, port.owner.frame, port.name).face]
-        dx, dy = other[0] - nozzle[0], other[1] - nozzle[1]
-        return abs(dx * ny - dy * nx) < 1e-6 and dx * nx + dy * ny >= 0.0
 
     def crosses(points: list, box: _Box) -> bool:
         """Return whether a polyline crosses a box.
@@ -365,14 +397,8 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     drawn = [s for s in fs.streams if s.route is not None]
     lines = [stream_path(s) for s in drawn]
     flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
-    # A line meets its own unit at a nozzle that may sit inside the box,
-    # and leaves it straight out of the nozzle's face.
-    flaws["line-through-unit"] = sum(
-        segment_crosses_box(a, b, box) for s, points in zip(drawn, lines)
-        for k, (a, b) in enumerate(zip(points, points[1:]))
-        for u, box in boxes if getattr(u, "host", None) is not s
-        and not (k == 0 and u is s.source.owner and outward(s.source, a, b))
-        and not (k == len(points) - 2 and u is s.dest.owner and outward(s.dest, b, a)))
+    flaws["line-through-unit"] = sum(_through_units(s, points, boxes)
+                                     for s, points in zip(drawn, lines))
     taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
     for inst, route in taps:
         flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
@@ -384,6 +410,85 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
     return flaws
+
+
+def _through_units(stream: "Stream", points: list, boxes: list) -> int:
+    """Count the segments of a drawn line that cross a unit.
+
+    A line meets its own unit at a nozzle that may sit inside the box,
+    and leaves it straight out of the nozzle's face; a balloon on the
+    line is not crossed.
+
+    Parameters
+    ----------
+    stream : Stream
+        Drawn stream.
+    points : list
+        Its polyline.
+    boxes : list
+        ``(unit, box)`` for every placed unit.
+
+    Returns
+    -------
+    int
+        Segments crossing a unit, once per unit.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import COMPASS, resolve_port
+
+    def outward(port, nozzle: tuple[float, float], other: tuple[float, float]) -> bool:
+        """Return whether a segment leaves a nozzle straight out of its face.
+
+        Parameters
+        ----------
+        port : Port
+            Port the segment ends at.
+        nozzle : tuple[float, float]
+            The segment's end at the nozzle.
+        other : tuple[float, float]
+            Its other end.
+
+        Returns
+        -------
+        bool
+            True if the segment runs along the face's outward normal.
+        """
+        nx, ny = COMPASS[resolve_port(port.owner, port.owner.frame, port.name).face]
+        dx, dy = other[0] - nozzle[0], other[1] - nozzle[1]
+        return abs(dx * ny - dy * nx) < 1e-6 and dx * nx + dy * ny >= 0.0
+
+    last = len(points) - 2
+    return sum(
+        segment_crosses_box(a, b, box) for k, (a, b) in enumerate(zip(points, points[1:]))
+        for u, box in boxes if getattr(u, "host", None) is not stream
+        and not (k == 0 and u is stream.source.owner and outward(stream.source, a, b))
+        and not (k == last and u is stream.dest.owner and outward(stream.dest, b, a)))
+
+
+def _clean(fs: "Flowsheet", stream: "Stream") -> bool:
+    """Return whether a line is drawn square and through no unit.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    stream : Stream
+        Line to test.
+
+    Returns
+    -------
+    bool
+        True if every segment is level or upright and none crosses a
+        unit as :func:`_through_units` counts it.
+    """
+    from pandid.layout.attach import stream_path
+    from pandid.portgeom import unit_box
+
+    points = stream_path(stream)
+    boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    return (all(abs(a[0] - b[0]) < 0.5 or abs(a[1] - b[1]) < 0.5
+                for a, b in zip(points, points[1:]))
+            and not _through_units(stream, points, boxes))
 
 
 def _out_of_unit(before: "Counter[str]", after: "Counter[str]") -> bool:
