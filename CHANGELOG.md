@@ -108,6 +108,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- `route()` called again on a sheet that has not changed keeps the drawing as
+  it is, where it could draw it differently, sometimes with a line through a
+  pump.
 - A balloon whose signal nozzle faces into a unit close by turns its nozzles
   to clear sides, so its lines are no longer drawn through that unit, where
   that adds no crossing or other finding.

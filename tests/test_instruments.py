@@ -2702,20 +2702,20 @@ def test_keeping_hung_balloons_further_off_leaves_the_priced_remedy_judged_as_be
     assert "route-along-unit" not in [i.code for i in fs.validate()]
 
 
-def test_a_second_route_starts_from_the_drawing_before_balloons_were_kept_further_off() -> None:
-    """Settle a second route() as it settles where no balloon was kept further off."""
-    from pandid.layout.control import _taps_off
-
+def test_routing_a_sheet_whose_balloons_do_not_settle_again_draws_it_the_same() -> None:
+    """Route a sheet of balloon chains that do not settle twice more, to the first drawing."""
     chains: list[tuple[float, float, float, str, float, float]] = [
         (0.8, 50, 90, "W", 35, 180),
         (0.3, 50, 225, "S", 50, 90),
         (0.2, 40, 135, "N", 100, 90),
     ]
     fs = _chains_by_a_vessel((600, 100), chains, vessel=(220, 200))
-    fs.route()
+    assert not fs.route_converged
+    first = fs.to_svg(check=False)
+    for _ in range(2):
+        fs.route()
 
-    assert fs.route_converged
-    assert _taps_off(fs) == set()
+        assert fs.to_svg(check=False) == first
 
 
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
@@ -3159,6 +3159,21 @@ def test_a_controller_above_a_pump_draws_its_output_clear():
 
     assert line.route is not None and not line.route.used_fallback
     assert _drawn_wrong(fs, line) == []
+
+
+def test_routing_a_bank_again_draws_it_the_same():
+    """Route a routed bank whose balloons never settle twice more.
+
+    Each route() draws the sheet as the first did, with no line through a unit.
+    """
+    fs, _ = _routed_bank(999)
+    assert not fs.route_converged
+    first = fs.to_svg(check=False)
+    for _ in range(2):
+        fs.route()
+
+        assert fs.to_svg(check=False) == first
+        assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
 
 
 @pytest.mark.parametrize(

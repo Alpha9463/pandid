@@ -801,6 +801,8 @@ class Flowsheet:
         # drawings it holds for the next route() or layout() are put back
         # only while that is unchanged.
         self._stated_then: tuple | None = None
+        # Whether route() last finished with the default router.
+        self._routed = False
         # The corner and nozzle faces of each balloon a via() line meets,
         # by id(), as the drawing the line was typed against has them.
         self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
@@ -2502,6 +2504,10 @@ class Flowsheet:
     def route(self, router=None) -> None:
         """Route every stream, laying out first if needed.
 
+        Where route() last finished with the default router and nothing
+        has changed since, route() with the default router keeps the
+        drawing as it is.
+
         Attached instruments are placed and the sheet re-routed until
         neither moves, up to
         :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES` passes;
@@ -2643,10 +2649,16 @@ class Flowsheet:
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
 
+        tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
         if not self._in_route:
+            if (tries and self._routed and self._unedited()
+                    and not (self._layout_stale or self._route_stale)
+                    and all(u.frame is not None for u in self.units)
+                    and all(s.route is not None for s in self.streams)):
+                return
+            self._routed = False
             self._hold_typed()
         self._put_main()
-        tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
         start = self._drawing() if tries and self._offers_family_faces() else None
         outer, self._in_route = self._in_route, True
         try:
@@ -2669,6 +2681,7 @@ class Flowsheet:
                     self._put_drawing(mains)
             if tries and self._auto_laid:
                 self._close_bands()
+            self._routed = tries and not outer
         finally:
             self._in_route = outer
             if not outer:
