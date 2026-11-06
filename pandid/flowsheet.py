@@ -2550,15 +2550,16 @@ class Flowsheet:
         is clear, with only its lines routed again, each kept only if no
         tap leaves its line and no finding, clash, crossing or fallback
         route grows. Then each such balloon placed near the balloon it
-        hangs from, with no face stated, that drives one valve, is hung
-        off that valve's actuator instead, with its faces and its host's
-        chosen again and only their lines routed again, on the same terms.
-        Where any of these is kept, the next route() or
-        layout() starts from the drawing before them. Then, where a line
-        that found no path runs through a unit, the sheet is routed again
-        with each such line drawn round the units in its way where a clear
-        route exists, kept only if no tap leaves its line and no finding,
-        clash, crossing or fallback route grows.
+        hangs from, with no face or pin stated, that drives one valve, is
+        tried at each spot off that valve's actuator, nearest first, with
+        its faces and its host's chosen again and only their lines routed
+        again, and the first spot kept on the same terms. Where any of
+        these is kept, the next route() or layout() starts from the
+        drawing before them. Then, where a line that found no path runs
+        through a unit, the sheet is routed again with each such line drawn
+        round the units in its way where a clear route exists, kept only if
+        no tap leaves its line and no finding, clash, crossing or fallback
+        route grows.
 
         With the default router, where a symbol offers a connected port
         family faces, the sheet is then laid out again from where all of
