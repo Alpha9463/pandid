@@ -422,3 +422,19 @@ def test_a_balloon_pinned_where_the_closed_sheet_draws_it_moves_nothing() -> Non
 
         assert _boxes(fs) == before
     assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+@pytest.mark.parametrize(
+    ("stem", "name"), [("06_metering_skid", "FI-101"), ("08_line_numbers", "HV-101")]
+)
+def test_a_unit_pinned_where_drawn_moves_nothing_on_later_routes(stem: str, name: str) -> None:
+    """Check that one unit pinned where drawn leaves every unit where it was over two routes."""
+    fs, _ = build_unpinned(stem)
+    fs.route()
+    before = _boxes(fs)
+    unit = _unit(fs, name)
+    unit.pin(x=frame_of(unit).x, y=frame_of(unit).y)
+    for _ in range(2):
+        fs.route()
+
+        assert _boxes(fs) == before
