@@ -3305,12 +3305,12 @@ def test_a_measurement_line_frozen_on_a_bank_keeps_both_balloons_where_drawn():
     line = loops[1].measurement
     assert line.route is not None
     balloons = (loops[1].transmitter, loops[1].controller)
-    drawn = [(frame_of(b).x, frame_of(b).y) for b in balloons]
+    drawn = [v for b in balloons for v in (frame_of(b).x, frame_of(b).y)]
     line.via(list(line.route.waypoints))
     fs.route()
     fs.to_svg(diagram="p&id")
 
-    assert [(frame_of(b).x, frame_of(b).y) for b in balloons] == pytest.approx(drawn)
+    assert [v for b in balloons for v in (frame_of(b).x, frame_of(b).y)] == pytest.approx(drawn)
     assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
 
 
