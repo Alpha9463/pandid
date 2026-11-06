@@ -1649,6 +1649,7 @@ _UNDRAWN: dict[str, tuple[str | None, list[dict[str, Any]], list[str], int]] = {
     ),
     "stated-past-a-valve": (None, [{"size": 6}, {"spec": "A1A"}], ["spec"], 1),
     "changed-past-a-valve": (None, [{"size": 6, "service": "P"}, {"size": 4}], ["size"], 1),
+    "sequence-hidden-by-a-given-name": (None, [{"name": "X-1", "sequence": 2740}], ["sequence"], 2),
 }
 
 
@@ -1761,6 +1762,7 @@ def test_following_the_line_field_advice_keeps_two_lines_apart(taken: str):
         ("{size}", [{"size": 6}]),
         (None, [{"name": "6-P-2001", "size": 6, "service": "P", "sequence": 2001}]),
         (None, [{"size": 6, "service": "P"}, {"size": 6}]),
+        (None, [{"sequence": 2740}]),
     ],
     ids=[
         "no-fields",
@@ -1768,6 +1770,7 @@ def test_following_the_line_field_advice_keeps_two_lines_apart(taken: str):
         "automatic-sequence-left-out",
         "fields-in-a-given-name",
         "repeated-past-a-valve",
+        "sequence-alone",
     ],
 )
 def test_a_line_that_draws_every_field_it_states_is_not_reported(

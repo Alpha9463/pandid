@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draws the ISO 10628-2 furnace.
 - `CentrifugalFan` and `AxialFan` draw those fans, and
   `Blower(variant="general")` draws the ISO 10628-2 fan.
+- `Silo` draws the closed silo of ISO 10628-2 and `Bunker` its open bunker,
+  each with a conical bottom: solids enter at `feed` and leave at `discharge`,
+  and a silo vents through its roof at `vent`.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -142,6 +145,9 @@ These are removed in 0.4.0.
   `Vessel("D-1", variant="dished", inputs=4, supports="bracket")` draws.
 - `line.color` and `line.dasharray` set after `on=` has split the line style
   the whole line, including the pipework of a valve station on it.
+- A sequence set in `connect()` is drawn in the line number when another
+  segment of the line states the other fields, and alone when none does:
+  `fs.connect(..., sequence="2740")` draws `2740` instead of `S1`.
 - A valve's actuator sits on the body's centre line, so a balloon added with
   `near=valve, face="N"` drops its signal line straight onto it. Symbol sizes and
   nozzle positions are no longer rounded to a tenth, so `pinned_x()` and
