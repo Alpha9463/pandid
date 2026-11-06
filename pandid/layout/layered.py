@@ -1093,7 +1093,7 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
 
 def _level(layers: dict[int, list[_Node]], segs: list[_Seg], held: dict[_Node, float],
            move: bool) -> bool:
-    """Find each stack whose level pipe from a flag the flag does not level.
+    """Find each stack whose side-to-side pipe from a flag is not level.
 
     Only a stack that can move to level the pipe, keeping its gaps in
     its layer, with no other pipe level, counts; one held or holding a
