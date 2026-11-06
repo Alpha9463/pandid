@@ -42,6 +42,7 @@ __all__ = [
     "Separator",
     "Thickener",
     "FlotationCell",
+    "Deaerator",
     "Silo",
     "MixerSettler",
     "Crystallizer",
@@ -4626,6 +4627,29 @@ class MixerSettler(Unit):
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
                              lambda name, _body: mixer_settler_overlays(name)))
+
+
+class Deaerator(Unit):
+    """Deaerator: a storage drum with its deaerating column on top.
+
+    ``feed`` and ``vent`` are on the column's crown, ``steam`` enters
+    the drum's west end and ``outlet`` leaves its floor. ``validate``
+    reports a turned deaerator as ``gravity-turned``. Parameters are
+    those of :class:`Unit`.
+    """
+
+    feed: Port
+    vent: Port
+    steam: Port
+    outlet: Port
+
+    kind = "deaerator"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vent", "outlet", "vapor"),
+        ("steam", "inlet", "utility"),
+        ("outlet", "outlet", "liquid"),
+    ]
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:

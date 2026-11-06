@@ -1171,6 +1171,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces, port_point,
                                  resolve_port, unit_box)
+    from pandid.package import frame as package_frame
     from pandid.render.svg import crossings, stream_polyline
     from pandid.routing.metrics import path_length
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
@@ -1339,6 +1340,21 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     a, b = boxes[i][0], boxes[j][0]
                     errors.append(Issue("error", "unit-overlap",
                                         f"{a.name} and {b.name} overlap. {_overlap_cure(a, b)}"))
+
+        # Hard: a unit inside the frame of a package it is not in.
+        for pkg in fs.packages:
+            frame = package_frame(pkg)
+            for u, box in boxes:
+                if frame is None or u in pkg.units or not boxes_overlap(box, frame, -_BODY_TOL):
+                    continue
+                cure = (_move_cure(u) if getattr(u, "host", None) is not None
+                        else f"Otherwise move it out of the frame: {_pin_call(u)}")
+                errors.append(Issue(
+                    "error", "package-encloses",
+                    f"{u.name} is drawn inside the frame of package {pkg.name} but is not "
+                    f"one of its units, so the drawing puts it in the package. If it is "
+                    f"part of {pkg.name}, add {u.name} to the units of "
+                    f"fs.package({pkg.name!r}, [...]). {cure}"))
 
         # Hard: two live connections on one unit landing on one point.
         # Boundary flags are exempt.

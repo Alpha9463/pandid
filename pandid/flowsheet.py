@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from pandid.components import Component
     from pandid.document import TitleBlock
     from pandid.loops import ControlLoop, Loop
+    from pandid.package import Package
     from pandid.ports import Port
     from pandid.stations import ValveStation
     from pandid.units import Instrument, Unit
@@ -623,6 +624,8 @@ class Flowsheet:
         Registered chemical species.
     loops : list[Loop]
         Declared control loops, in declaration order.
+    packages : list[Package]
+        Package units, in declaration order.
     warnings : list[Issue]
         Warnings from the last render.
     route_converged : bool
@@ -682,6 +685,7 @@ class Flowsheet:
         self.streams: list[Stream] = []
         self.components: list = []
         self.loops: list["Loop"] = []
+        self.packages: list["Package"] = []
         self.warnings: list = []
         # Diagram type of the last render; validate() defaults to it.
         self._drawn_as: str | None = None
@@ -1018,12 +1022,16 @@ class Flowsheet:
         ------
         ValueError
             If the unit is already on a sheet, or its name is taken by a
-            unit it may not repeat.
+            package or by a unit it may not repeat.
         """
         if unit in self.units:
             raise ValueError(
                 f"{unit!r} is already on this flowsheet"
             )
+        if any(p.name == unit.name for p in self.packages):
+            raise ValueError(
+                f"{unit.name!r} already tags package {unit.name} on this flowsheet, and "
+                f"a tag names one item. Give the unit a tag of its own")
         clash = next((u for u in self.units if u.name == unit.name), None)
         if clash is not None and not unit.repeats(clash):
             raise ValueError(
@@ -1923,6 +1931,83 @@ class Flowsheet:
         self.components.append(component)
         return component
 
+    def package(self, name: str, units: "Sequence[Unit]", *, description: str = "",
+                reference: str = "") -> "Package":
+        """Draw units as one package unit, such as a vendor skid.
+
+        The package is drawn as a dash-dot frame round its units, its
+        tag outside the upper-left corner and ``reference`` inside the
+        lower-left corner (ISO 15519-1 7.3). Layout keeps its units
+        together and other units out of the frame. The equipment list
+        gives it a row above its units::
+
+            skid = fs.package("PK-301", [p301a, p301b, f301],
+                              description="Dosing Package",
+                              reference="VENDOR DWG 4711")
+
+        Parameters
+        ----------
+        name : str
+            Package tag.
+        units : Sequence[Unit]
+            Units on this sheet that the package holds.
+        description : str, default=""
+            Equipment-list description.
+        reference : str, default=""
+            Document the frame refers to, such as a vendor drawing.
+
+        Returns
+        -------
+        Package
+            The package.
+
+        Raises
+        ------
+        TypeError
+            If ``name`` is not text or an item of ``units`` is not a
+            unit.
+        ValueError
+            If ``name`` is blank or names a unit or package on this
+            sheet, or ``units`` is empty, repeats a unit, or holds a
+            unit not on this sheet or in another package.
+        """
+        from pandid.package import Package
+        from pandid.units import Unit
+
+        if not isinstance(name, str):
+            raise TypeError(f"a package tag is text, such as 'PK-301', got {name!r}")
+        if not name.strip():
+            raise ValueError("a package needs a tag, such as fs.package('PK-301', [...])")
+        taken = next((x for x in (*self.units, *self.packages) if x.name == name), None)
+        if taken is not None:
+            raise ValueError(
+                f"{name!r} already tags {taken!r} on this flowsheet, and a tag names one "
+                f"item. Give the package a tag of its own: fs.package('PK-...', [...])")
+        members = list(units)
+        if not members:
+            raise ValueError(
+                f"package {name} holds no units. List the units its frame encloses: "
+                f"fs.package({name!r}, [p301a, p301b, ...])")
+        for u in members:
+            if not isinstance(u, Unit):
+                raise TypeError(
+                    f"package {name} lists {u!r}, which is not a unit. List the units "
+                    f"fs.add() returned: fs.package({name!r}, [p301a, p301b, ...])")
+            if u.flowsheet is not self:
+                raise ValueError(f"package {name} lists {u.name}, which is not on this "
+                                 f"flowsheet. Add it first: fs.add({u.name})")
+            if members.count(u) > 1:
+                raise ValueError(f"package {name} lists {u.name} twice; list it once")
+            other = next((p for p in self.packages if u in p.units), None)
+            if other is not None:
+                raise ValueError(
+                    f"{u.name} is already in package {other.name}, and a unit is drawn "
+                    f"inside one frame. Take it out of one of the two fs.package() calls")
+        pkg = Package(name, tuple(members), description, reference)
+        self.packages.append(pkg)
+        self._invalidate_layout()
+        return pkg
+
     def connect(self, src: "Port | Unit", dst: "Port | Unit", *,
                 kind: str | None = None,
                 name: str | None = None, draw_as_recycle: bool = False,
@@ -2290,10 +2375,11 @@ class Flowsheet:
     def equipment_list(self) -> list[dict]:
         """Return the equipment list: one row per tagged equipment item.
 
-        The rows are the units
-        :func:`pandid.document.equipment_table` lists by default. Every
-        row has the keys ``tag``, ``description`` (the table's text),
-        ``class`` (the unit's class name) and ``variant``.
+        The rows are the units and packages
+        :func:`pandid.document.equipment_table` lists by default; a
+        package's row comes before its units' rows. Every row has the
+        keys ``tag``, ``description`` (the table's text), ``class``
+        (the class name) and ``variant`` (``None`` for a package).
 
         Returns
         -------
@@ -2303,7 +2389,7 @@ class Flowsheet:
         from pandid.document import _described, _scheduled_units
 
         return [{"tag": u.name, "description": _described(u),
-                 "class": type(u).__name__, "variant": u.variant}
+                 "class": type(u).__name__, "variant": getattr(u, "variant", None)}
                 for u in _scheduled_units(self)]
 
     def instrument_index(self) -> list[dict]:

@@ -375,7 +375,9 @@ class DefaultRouter:
         charged its unpriced crossings, and the sheet separated again.
         Outside layout, and unless the sheet asks for none, laterals that
         cross, share a run or wind are then laid on ordered lanes
-        (:func:`pandid.routing.lanes.relane`).
+        (:func:`pandid.routing.lanes.relane`). Outside layout, a line's
+        search is charged for each run inside the frame of a package it
+        has no end in.
 
         Parameters
         ----------
@@ -395,10 +397,12 @@ class DefaultRouter:
             If an end has no frame or anchor; the stream is skipped.
         """
         from pandid.portgeom import COMPASS, resolve_port
+        from pandid.package import frame as package_frame
         from pandid.render.svg import tap_lines, tap_route
         from pandid.render.symbols import ARROWHEAD
         from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
-        from pandid.routing.astar import CROSSING_PENALTY, TOUCH_PENALTY, CrossingIndex, find_path
+        from pandid.routing.astar import (CROSSING_PENALTY, FENCE_PENALTY, TOUCH_PENALTY,
+                                          CrossingIndex, find_path)
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
@@ -422,6 +426,12 @@ class DefaultRouter:
         for run in hugging:
             edge_penalties[run] += TOUCH_PENALTY
         taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+        # Each package's units and the lane edges inside its frame.
+        fences = [(set(p.units), [(a, b) for a, ends in graph.edges.items() for b in ends
+                                  if box[0] < (a[0] + b[0]) / 2 < box[2]
+                                  and box[1] < (a[1] + b[1]) / 2 < box[3]])
+                  for p in ([] if fs._laying_out else fs.packages)
+                  if (box := package_frame(p)) is not None]
         routed: list["Stream"] = []
         # Ends of each found route's stand-offs.
         escapes: dict[int, tuple[tuple[float, float], tuple[float, float]]] = {}
@@ -532,6 +542,10 @@ class DefaultRouter:
                    if units <= {id(src_u), id(dst_u)}]
             for run in own:
                 edge_penalties[run] -= TOUCH_PENALTY
+            walls = [edge for held, edges in fences
+                     if src_u not in held and dst_u not in held for edge in edges]
+            for edge in walls:
+                edge_penalties[edge] += FENCE_PENALTY
             path = []
             if clear_stubs:
                 path = find_path(
@@ -540,6 +554,8 @@ class DefaultRouter:
                 )
             for run in own:
                 edge_penalties[run] += TOUCH_PENALTY
+            for edge in walls:
+                edge_penalties[edge] -= FENCE_PENALTY
             path_found = bool(path)
 
             if path:
