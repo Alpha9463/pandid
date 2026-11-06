@@ -59,4 +59,4 @@ jobs:
       - name: console script
         run: pandid --help
       - name: pytest
-        run: pytest -q
+        run: pytest -q -n auto --dist loadfile
