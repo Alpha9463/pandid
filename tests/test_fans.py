@@ -41,6 +41,13 @@ def test_the_general_fan_is_row_17_1():
         assert tip in fan.svg
 
 
+def test_a_bare_blower_draws_the_iso_fan():
+    """Check that ``Blower()`` and ``variant="default"`` draw item 17.1."""
+    for blower in (Blower("B-101"), Blower("B-102", variant="default")):
+        assert blower.variant == "general"
+        assert default_registry.for_unit(blower) is default_registry.get("blower", "general")
+
+
 @pytest.mark.parametrize(("cls", "variant"), [(CentrifugalFan, "centrifugal"), (AxialFan, "axial")])
 def test_each_fan_class_draws_its_variant_from_west_to_east(cls, variant):
     """Check that each fan class draws its own variant, suction west and discharge east."""

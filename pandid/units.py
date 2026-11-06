@@ -2740,11 +2740,13 @@ class Tank(_MultiPortVessel):
 class Blower(_FluidMover):
     """Fan or blower.
 
-    ``"general"`` draws ISO 10628-2 item 17.1; ``"centrifugal"`` and
-    ``"axial"`` draw those fans. Parameters are those of :class:`Unit`.
+    ``"general"`` (the default) draws ISO 10628-2 item 17.1;
+    ``"centrifugal"`` and ``"axial"`` draw those fans. Parameters are
+    those of :class:`Unit`.
     """
 
     kind = "blower"
+    VARIANT_ALIASES = {"default": "general"}
 
 
 class Reducer(Unit):

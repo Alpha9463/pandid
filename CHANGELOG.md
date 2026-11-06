@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Blower()` draws the ISO 10628-2 fan instead of a compressor.
 - `connect()` no longer needs `kind=` for a signal line: a line to a valve
   with a diaphragm actuator, or none drawn, is pneumatic and any other is
   electric. `add_control_loop()` infers its output line the same way, so a
