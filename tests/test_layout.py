@@ -270,10 +270,16 @@ def test_a_recycle_into_a_south_face_does_not_drag_its_source_back() -> None:
 
 @pytest.mark.parametrize(
     ("machine", "side"),
-    [(U.Blower, 1), (D.CentrifugalPump, -1), (D.CentrifugalFan, -1), (D.AxialFan, -1)],
+    [
+        (D.RotaryCompressor, 1),
+        (U.Blower, -1),
+        (D.CentrifugalPump, -1),
+        (D.CentrifugalFan, -1),
+        (D.AxialFan, -1),
+    ],
 )
 def test_a_branch_ranks_beside_the_spine_it_joins(
-    machine: type[U.Blower | U.Pump], side: int
+    machine: type[U.Blower | U.Pump | U.Compressor], side: int
 ) -> None:
     """Check that a machine feeding a tower far along the train sits one column from it."""
     fs = Flowsheet("slack")
