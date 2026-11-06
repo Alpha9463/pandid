@@ -2891,7 +2891,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """Place each unit's tag and its ``NC`` and fail-position letters.
 
     The labels keep clear of the drawn lines, the symbols, the flange
-    marks, the quadrant codes and the package frames.
+    marks, the quadrant codes, the package frames and each other.
 
     Parameters
     ----------
@@ -2915,25 +2915,31 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
-    out = []
-    for u in fs.units:
-        f = u.frame
-        if f is None or u.kind in ("feed", "product", "instrument"):
-            continue
-        x, y, w, h = f.x, f.y, f.w, f.h
-        tag = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols) if u.tag else None
-        tag_box = None if tag is None else _unit_label_box(tag)
-        items = [] if tag is None else [tag]
-        # NC marking (ISO 15519-1 11.4.5).
-        if closed_marking(u, default_registry) == "NC":
-            items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
-        # Fail position (ISA-5.1 Table 5.4.4).
-        letters = fail_marking(u)
-        if letters:
-            items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
-                                                ink, symbols))
-        out.append((u, tag, items))
-    return out
+    placed: dict = {}
+    # Place each unit's labels alone, then again clear of the others as
+    # they stand.
+    for alone in (True, False):
+        for u in fs.units:
+            f = u.frame
+            if f is None or u.kind in ("feed", "product", "instrument"):
+                continue
+            x, y, w, h = f.x, f.y, f.w, f.h
+            labels = [] if alone else [b for v, _, items in placed.values() if v is not u
+                                       for b in map(_unit_label_box, items) if b is not None]
+            tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels)
+                   if u.tag else None)
+            tag_box = None if tag is None else _unit_label_box(tag)
+            items = [] if tag is None else [tag]
+            # NC marking (ISO 15519-1 11.4.5).
+            if closed_marking(u, default_registry) == "NC":
+                items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
+            # Fail position (ISA-5.1 Table 5.4.4).
+            letters = fail_marking(u)
+            if letters:
+                items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
+                                                    ink, symbols, labels))
+            placed[id(u)] = (u, tag, items)
+    return list(placed.values())
 
 
 def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
@@ -4111,10 +4117,12 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=()):
+    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=()):
         """Return the equipment tag item, moved clear of drawn ink.
 
-        The tag slides along its side, then tries other free sides. The
+        The tag slides up to half the face along its side, then along
+        the other free sides. Failing a clear spot, it slides on any side,
+        free sides first, until its near end reaches the corner. The
         first placement that erases nothing wins, else the least
         damaging. A side set on the unit or symbol is kept.
 
@@ -4132,17 +4140,19 @@ class SvgRenderer:
             Drawn lines.
         symbols : sequence of tuple, optional
             ``(unit, box)`` for every symbol and owner-less mark.
+        labels : sequence of tuple, optional
+            Halo boxes of other labels.
 
         Returns
         -------
         tuple
             Label item.
         """
-        from pandid.layout.labels import free_label_sides
+        from pandid.layout.labels import LABEL_SIDES, free_label_sides
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)
-        if box is None or not (ink or symbols):
+        if box is None or not (ink or symbols or labels):
             return item
         if getattr(u, "label_pos", None) or default_registry.for_unit(u).label_pos:
             return item
@@ -4153,23 +4163,27 @@ class SvgRenderer:
         # Every other symbol box, grown to its ink.
         others = [_obstacle(b) for v, b in symbols
                   if v is not u and boxes_overlap(_obstacle(b), window)]
+        others += [b for b in labels if boxes_overlap(b, window)]
 
         clear = (0, 0, 0)
         best, damage = item, _erases(box, near, others)
-        sides = [item[4]] + [s for s in free_label_sides(u) if s != item[4]]
-        for side in sides:
-            if damage == clear:
-                break
-            lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
-            # Slide at most half the face.
-            edgewise = side in ("left", "right")
-            for sx, sy in _slide(lx, ly, (u_height if edgewise else u_width) / 2, edgewise):
-                spot = (sx, sy, anchor, baseline, side, tag)
-                cost = _erases(_unit_label_box(spot), near, others)
-                if cost < damage:
-                    best, damage = spot, cost
-                    if damage == clear:
-                        break
+        free = [item[4]] + [s for s in free_label_sides(u) if s != item[4]]
+        for sides, past in ((free, False),
+                            (free + [s for s in LABEL_SIDES if s not in free], True)):
+            for side in sides:
+                if damage == clear:
+                    break
+                lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
+                edgewise = side in ("left", "right")
+                face, along = ((u_height, box[3] - box[1]) if edgewise
+                               else (u_width, box[2] - box[0]))
+                for sx, sy in _slide(lx, ly, (face + along * past) / 2, edgewise):
+                    spot = (sx, sy, anchor, baseline, side, tag)
+                    cost = _erases(_unit_label_box(spot), near, others)
+                    if cost < damage:
+                        best, damage = spot, cost
+                        if damage == clear:
+                            break
         return best
 
     def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):
@@ -4205,7 +4219,7 @@ class SvgRenderer:
         return item
 
     def _fail_label_item(self, u, f, x, y, u_width, u_height, letters, tag_box=None,
-                         ink=(), symbols=()):
+                         ink=(), symbols=(), labels=()):
         """Return the fail-position letters beside a control valve.
 
         The letters go below a horizontal valve and right of a vertical
@@ -4228,6 +4242,8 @@ class SvgRenderer:
             Drawn lines.
         symbols : sequence of tuple, optional
             ``(unit, box)`` for every symbol.
+        labels : sequence of tuple, optional
+            Halo boxes of other labels.
 
         Returns
         -------
@@ -4248,7 +4264,7 @@ class SvgRenderer:
                 item = (lx + tag[2] - fail[0] + 6, ly, anchor, baseline, lpos, text)
             else:
                 item = (lx, ly + tag[3] - fail[1] + 4, anchor, baseline, lpos, text)
-        others = [_obstacle(b) for v, b in symbols if v is not u]
+        others = [_obstacle(b) for v, b in symbols if v is not u] + list(labels)
         if tag is not None:
             others.append(tag)
         # Slide at most until the plate's near edge reaches the far end

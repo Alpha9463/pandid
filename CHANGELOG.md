@@ -211,6 +211,9 @@ These are removed in 0.4.0.
   and of the `NC` and fail-position letters beside a unit, and a fitted sheet
   reaches past them, so the `FC` under a valve with `fail="closed"` is no longer
   written over the notes.
+- An equipment tag is no longer written over another tag, the `NC` or
+  fail-position letters, or a balloon. When every free side is covered, the tag
+  goes beside a nozzle or just past the symbol's corner.
 
 ## [0.2.0] - 2026-11-05
 
