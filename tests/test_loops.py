@@ -651,8 +651,8 @@ def test_the_default_transmitter_hangs_off_a_face_no_line_leaves():
     assert lt.tap == loop.transmitter.tap
     # A stated face is kept, though a line leaves it.
     _, drum, loop = _level_loop(face="E")
-    assert drum.frame is not None
-    assert loop.transmitter.tap == face_point(drum, drum.frame, "E")[0]
+    assert drum.frame is not None and loop.transmitter.tap is not None
+    assert loop.transmitter.tap[0] == face_point(drum, drum.frame, "E")[0][0]
 
 
 def test_the_parts_stay_reachable_and_pinnable():

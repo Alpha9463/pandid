@@ -210,7 +210,55 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return None
     face = free_face(inst) or inst.face
     (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
-    return (px, py), (-ny, nx)
+    fs = inst.flowsheet
+    moved = nozzle_tap(inst) if fs is not None and fs._clear_taps else None
+    return (moved or (px, py)), (-ny, nx)
+
+
+def nozzle_tap(inst: "Instrument") -> Point | None:
+    """Return where a tap on a nozzle a line leaves from moves to, if any.
+
+    A balloon drawn from a face the author named taps the face's middle.
+    Where a line leaves a nozzle there, the tap slides one nozzle pitch
+    along the face, if that stays on the straight wall the symbol declares
+    there (:func:`~pandid.portgeom.face_wall`) and off the face's other
+    connected nozzles: to the side with more room, else toward the
+    balloon.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    Point or None
+        The moved tap point, or None if the tap stays.
+    """
+    from pandid.portgeom import face_point, face_wall, port_point
+    from pandid.render.symbols import MIN_NOZZLE_PITCH
+    from pandid.streams import Stream
+
+    host = inst.host
+    if (isinstance(host, Stream) or host is None or host.frame is None
+            or not inst._face_stated or inst.relation == "near"):
+        return None
+    face = inst.face or "E"
+    point, (nx, ny) = face_point(host, host.frame, face)
+    nozzles = [port_point(host, host.frame, name)
+               for name, port in host.ports.items() if port.stream is not None]
+    wall = face_wall(host, host.frame, face)
+    if wall is None or not any(math.dist(point, n) < 0.5 for n in nozzles):
+        return None
+    along = 1 if face in ("W", "E") else 0
+    f = inst.frame
+    lean = 0.0 if f is None else (f.cx - point[0]) * -ny + (f.cy - point[1]) * nx
+    sides = [(point[0] - sign * ny * MIN_NOZZLE_PITCH, point[1] + sign * nx * MIN_NOZZLE_PITCH)
+             for sign in (1, -1)]
+    room = [(min(MIN_NOZZLE_PITCH, *(math.dist(q, n) for n in nozzles)), sign * lean, q)
+            for sign, q in zip((1, -1), sides) if wall[0] <= q[along] <= wall[1]]
+    best = max(room, default=None)
+    return best[2] if best is not None and best[0] >= 0.5 else None
 
 
 def free_face(inst: "Instrument") -> str | None:
