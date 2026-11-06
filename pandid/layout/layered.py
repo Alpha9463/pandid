@@ -332,11 +332,11 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     if held and fs._order_rows:
         _straighten(layers, segs, held)
     spanned = _keep_out(layers, pkg)
-    kept = {n: n.y for k, layer in layers.items() for n in layer if k in spanned}
-    if kept:
+    framed = {n: n.y for k, layer in layers.items() for n in layer if k in spanned}
+    if framed:
         # Level the other layers' pipes to the packages and the nodes moved.
-        _straighten(layers, segs, {**kept, **{n: n.y for n in held if fs._order_rows}})
-    fs._flags_off = _level(layers, segs, {**held, **kept}, fs._level_flags)
+        _straighten(layers, segs, {**framed, **{n: n.y for n in held if fs._order_rows}})
+    fs._flags_off = _level(layers, segs, {**held, **framed}, fs._level_flags)
     xs = _columns(layers, segs, fs._lanes)
     plain = _columns(layers, segs, False)
     fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
