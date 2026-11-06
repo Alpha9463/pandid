@@ -233,13 +233,6 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.compressors.reciprocating_compressor',
     ), 'reciprocating')
 
-    registry.register('blower', Symbol(
-        svg='<g id="sym_blower"><ellipse cx="50.0" cy="50.0" rx="50.0" ry="50.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 0.0 L 14.5 14.5 M 100.0 0.0 L 85.5 14.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=100.0, height=100.0,
-        ports={'suction': (0.0, 50.0), 'discharge': (50.0, 0.0)},
-        drawio_shape='mxgraph.pid.compressors.compressor',
-    ), 'default')
-
     registry.register('hex', Symbol(
         svg='<g id="sym_hex"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=60.0,

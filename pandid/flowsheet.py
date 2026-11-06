@@ -732,6 +732,10 @@ class Flowsheet:
         # without clear room.
         self._upright_stations = False
         self._crowded_station = False
+        # Whether layout sets each angle valve at a corner of its line, and
+        # whether the last layout drew any angle valve it could set so.
+        self._corner_valves = False
+        self._angle_valves = False
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -2443,7 +2447,8 @@ class Flowsheet:
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
-        self._fannable = self._far_branches = self._flags_off = self._crowded_station = False
+        self._fannable = self._far_branches = self._flags_off = False
+        self._crowded_station = self._angle_valves = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2491,6 +2496,9 @@ class Flowsheet:
         with an upright leg without clear room, the sheet is laid out and
         routed again with each station free to stand on an upright leg,
         its room kept between the units it joins, kept on the same terms.
+        Where a line carries an angle valve, the sheet is laid out and
+        routed again with the valve set at a corner of the line, inlet on
+        one leg and outlet on the other, kept on the same terms.
         Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
@@ -2993,7 +3001,8 @@ class Flowsheet:
                         self._far_branches, self._flags_off,
                         tuple((u, u._stock_face) for u in self.units
                               if hasattr(u, "_stock_face")),
-                        self._lanes, self._relaned, self._crowded_station))
+                        self._lanes, self._relaned, self._crowded_station,
+                        self._angle_valves))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -3007,7 +3016,7 @@ class Flowsheet:
          self._mounted_layout, self._widened, self._stack_spans,
          self._rows_out, self._tees_away, self._fannable, self._far_branches,
          self._flags_off, stock, self._lanes, self._relaned,
-         self._crowded_station) = _copied(state)
+         self._crowded_station, self._angle_valves) = _copied(state)
         for u, flag in stock:
             u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)
@@ -3227,6 +3236,8 @@ class Flowsheet:
                 relaid_if_better("_fan_out")
             if tries and self._crowded_station:
                 relaid_if_better("_upright_stations")
+            if tries and self._angle_valves:
+                relaid_if_better("_corner_valves")
             if tries and self._exit_tight:
                 keep_if_better(relaid, _flaws(self))
                 self._exit_tight = False

@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Blower()` draws the ISO 10628-2 fan instead of a compressor.
 - `connect()` no longer needs `kind=` for a signal line: a line to a valve
   with a diaphragm actuator, or none drawn, is pneumatic and any other is
   electric. `add_control_loop()` infers its output line the same way, so a
@@ -190,6 +191,9 @@ These are removed in 0.4.0.
   being drawn over the unit above.
 - A sheet fitted to its drawing reaches past a tag drawn beside a unit at its
   edge, so `label_pos="right"` on the last unit no longer cuts its tag off.
+- An angle valve put on a line with `on=`, such as
+  `fs.add(Valve("HV-1", variant="angle"), on=line)`, is set at a corner of the
+  line, so the line turns through the valve instead of bending to leave it.
 
 ## [0.2.0] - 2026-11-05
 
