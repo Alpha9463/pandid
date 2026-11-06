@@ -2934,6 +2934,7 @@ def _rounded(segments) -> list:
         lambda: devices.AxialFan("K-2"),
         lambda: units.Furnace("F-1", variant="general"),
         lambda: devices.CombustionChamber("FH-1"),
+        lambda: units.MixerSettler("MS-1"),
     ],
     ids=[
         "silo",
@@ -2945,6 +2946,7 @@ def _rounded(segments) -> list:
         "axial",
         "furnace",
         "combustion_chamber",
+        "mixer_settler",
     ],
 )
 def test_a_drawing_exported_as_its_outline_traces_the_sheets_artwork(build):

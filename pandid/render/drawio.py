@@ -392,7 +392,7 @@ _BALLOON_FILL = "#ffffff"
 
 #: Drawings exported as an inline stencil of their own outline.
 OWN_OUTLINE = frozenset({
-    ("silo", "default"), ("silo", "bunker"),
+    ("silo", "default"), ("silo", "bunker"), ("mixer_settler", "default"),
     ("crystallizer", "default"), ("flotation_cell", "default"),
     ("blower", "general"), ("blower", "centrifugal"), ("blower", "axial"),
     ("furnace", "general"), ("furnace", "combustion_chamber"),

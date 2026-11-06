@@ -43,8 +43,10 @@ __all__ = [
     "Thickener",
     "FlotationCell",
     "Silo",
+    "MixerSettler",
     "Crystallizer",
     "Absorber",
+    "ExtractionColumn",
     "Stripper",
     "DistillationColumn",
     "Column",
@@ -4557,6 +4559,69 @@ class Silo(_VariantPorted):
     }
 
 
+class MixerSettler(Unit):
+    """Mixer-settler: one stage of solvent extraction.
+
+    ``light_in`` and ``heavy_in`` enter the mixer on the west. The
+    dispersion overflows into the settler; the light phase leaves over
+    the weir at ``light_out`` and the heavy phase through the floor at
+    ``heavy_out``. ``validate`` reports a turned mixer-settler as
+    ``gravity-turned``.
+
+    Parameters
+    ----------
+    name : str
+        Tag.
+    variant : str, default="default"
+        Body drawing.
+    agitator : str or None, default="turbine"
+        Agitator in the mixer, one of :class:`Reactor`'s ``agitator``
+        names, or ``None``. Fixed at construction.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
+
+    Attributes
+    ----------
+    agitator : str or None
+        Agitator drawn in the mixer.
+
+    Raises
+    ------
+    ValueError
+        If ``agitator`` is unknown or the variant cannot carry it.
+    """
+
+    light_in: Port
+    heavy_in: Port
+    light_out: Port
+    heavy_out: Port
+
+    kind = "mixer_settler"
+    PORTS = [
+        ("light_in", "inlet", "feed"),
+        ("heavy_in", "inlet", "feed"),
+        ("light_out", "outlet", "liquid"),
+        ("heavy_out", "outlet", "liquid"),
+    ]
+    COMPOSITION = {"agitator": "turbine"}
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator"})
+
+    def __init__(  # numpydoc ignore=GL08
+        self,
+        name: str,
+        variant: str = "default",
+        agitator: str | None = "turbine",
+        **options: Unpack[_UnitOptions],
+    ):
+        super().__init__(name, variant=variant, **options)
+        from pandid.render.iso_parts import mixer_settler_overlays
+
+        self.agitator = agitator
+        _compose_onto(self, ("agitator", agitator,
+                             lambda name, _body: mixer_settler_overlays(name)))
+
+
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
     """Return the feed port names ``feed_1`` to ``feed_n``.
 
@@ -5247,6 +5312,41 @@ class Absorber(Column):
     bottoms: Port
 
     COMPOSITION = {"internals": "packing", "trays": DEFAULT_TRAYS}
+
+
+class ExtractionColumn(Column):
+    """Liquid-liquid extraction column with :class:`Column`'s ports.
+
+    ``internals`` defaults to ``"sieve_tray"`` and ``n_feeds`` to 2. The
+    heavy phase enters ``feed_1`` on the top stage and the light phase
+    ``feed_2`` on the bottom one; the light phase leaves at ``overhead``
+    and the heavy at ``bottoms``. Every argument is :class:`Column`'s::
+
+        ExtractionColumn("C-301", trays=12)
+    """
+
+    overhead: Port
+    bottoms: Port
+
+    COMPOSITION = {"internals": "sieve_tray", "trays": DEFAULT_TRAYS}
+
+    def __init__(  # numpydoc ignore=GL08
+        self,
+        name: str,
+        n_feeds: int = 2,
+        variant: str = "default",
+        internals: str | None = _UNSTATED,
+        trays: int = DEFAULT_TRAYS,
+        feed_stages: list[int | None] | None = None,
+        n_draws: int = 0,
+        draw_stages: list[int | None] | None = None,
+        **options: Unpack[_UnitOptions],
+    ):
+        if feed_stages is None and n_feeds == 2 and internals is not None:
+            feed_stages = [1, trays]
+        super().__init__(name, n_feeds=n_feeds, variant=variant, internals=internals,
+                         trays=trays, feed_stages=feed_stages, n_draws=n_draws,
+                         draw_stages=draw_stages, **options)
 
 
 class Stripper(Column):
