@@ -379,3 +379,46 @@ def test_a_tag_drawn_over_a_placed_table_counts() -> None:
 
     assert _touches_only_labels(fs, box)
     assert covered(fs)
+
+
+@pytest.mark.parametrize(
+    ("stem", "stripped"),
+    [("03_control_loop", False), ("03_control_loop", True), ("07_from_data", True)],
+    ids=["03-as-written", "03-stripped", "07-stripped"],
+)
+def test_route_draws_every_unit_on_the_sheet(stem: str, stripped: bool) -> None:
+    """Check that no unit is drawn at a negative coordinate, and that each pins where drawn."""
+    from _render_cases import gallery
+
+    fs, _ = build_unpinned(stem) if stripped else gallery.flowsheet(stem)
+    fs.route()
+    before = _boxes(fs)
+    assert [u.name for u in fs.units if frame_of(u).x < 0 or frame_of(u).y < 0] == []
+
+    for unit in fs.units:
+        unit.pin(x=frame_of(unit).x, y=frame_of(unit).y, port=None)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+    assert _boxes(fs) == before
+
+
+def _gauged() -> Flowsheet:
+    """Return the chain with a pressure gauge on the pump, past the band layout leaves."""
+    fs = _chain()
+    fs.add_instrument("PI", 102, sensing=_unit(fs, "P-101"), face="N")
+    return fs
+
+
+def test_a_balloon_pinned_where_the_closed_sheet_draws_it_moves_nothing() -> None:
+    """Check that pinning a balloon past a closed band where drawn keeps the band closed."""
+    fs = _gauged()
+    fs.route()
+    before = _boxes(fs)
+    gauge = _unit(fs, "PI-102")
+    gauge.pin(x=frame_of(gauge).x, y=frame_of(gauge).y)
+    for _ in range(2):
+        fs.route()
+
+        assert _boxes(fs) == before
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []

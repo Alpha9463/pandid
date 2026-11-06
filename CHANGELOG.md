@@ -126,6 +126,9 @@ These are removed in 0.4.0.
   both axes.
 - Attached balloons keep off every line drawn with `via()` on each `route()`,
   the first included, so a frozen line stays clear over any number of routes.
+- `pin(x=..., y=...)` at the place a unit or balloon is drawn keeps the drawing
+  as it is, closed rows and columns included, and `route()` draws nothing past
+  the sheet's top or left edge, so any of them can be pinned where drawn.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.

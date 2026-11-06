@@ -435,7 +435,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
 
     A balloon whose requested box straddles its stream tap keeps it. No
     candidate's box, moved to the balloon's pin, may come within
-    ``clearance`` of ``runs``.
+    ``clearance`` of ``runs`` or reach past the sheet's top or left edge.
 
     Parameters
     ----------
@@ -484,11 +484,13 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
             x0 = box[0] if pin is None or pin.x is None else float(pin.x)
             y0 = box[1] if pin is None or pin.y is None else float(pin.y)
             drawn = (x0, y0, x0 + w, y0 + h)
-            if not (any(_intrusion(box, o, gap) > 0.0 for o in against)
+            off = x0 < 0.0 or y0 < 0.0
+            if not (off or any(_intrusion(box, o, gap) > 0.0 for o in against)
                     or any(_intrusion(drawn, r, clearance) > 0.0 for r in runs)):
                 return distance, angle
-            # Rank fallbacks by the overlap validation reports.
-            crowding = sum(_intrusion(box, o, -TOUCHING) for o in obstacles)
+            # Rank fallbacks by the overlap validation reports, any on the
+            # sheet first.
+            crowding = sum(_intrusion(box, o, -TOUCHING) for o in obstacles) + (1e9 if off else 0.0)
             if least is None or crowding < least:
                 fallback, least = (distance, angle), crowding
     return fallback

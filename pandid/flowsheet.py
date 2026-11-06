@@ -2675,30 +2675,32 @@ class Flowsheet:
                 self._stated_then = self._stated()
 
     def _close_bands(self) -> None:
-        """Close the empty bands across the drawing, kept only if no
-        crossing, bend, fallback, finding or clash grows, no tap leaves
-        its line and nothing more is drawn over a placed annotation; then
-        close those with pins on both sides, kept only if the drawing
-        beats the one before on the same terms.
+        """Move a drawing past the sheet's top or left edge onto it, then
+        close the empty bands across it, each kept only if no crossing,
+        bend, fallback, finding or clash grows, no tap leaves its line and
+        nothing more is drawn over a placed annotation; then close those
+        with pins on both sides, kept only if the drawing beats the one
+        before on the same terms.
 
         Where they are kept, the next route() or layout() starts from
         the drawing before them, unless the author has stated drawing
         coordinates since; then it starts from the drawing shown.
         """
-        from pandid.layout.compact import close_bands, covered, empty_bands
+        from pandid.layout.compact import close_bands, covered, empty_bands, onto_sheet
         from pandid.routing.lanes import _score
 
-        # Close what layout left, then slide what lies between pins where
-        # that draws better.
-        for pinned in (False, True):
-            cuts = empty_bands(self, pinned)
+        # Move the drawing onto the sheet, close what layout left, then
+        # slide what lies between pins where that draws better.
+        for find, better in ((onto_sheet, False), (empty_bands, False),
+                             (lambda fs: empty_bands(fs, True), True)):
+            cuts = find(self)
             if not any(cuts):
                 continue
             drawn, judged, notes = self._drawing(), _score(self), covered(self)
             close_bands(self, cuts)
             new = _score(self)
             grew = new[1] > judged[1] or any(n > judged[0][k] for k, n in new[0].items())
-            if grew or not covered(self) <= notes or (pinned and not _beats(new, judged)):
+            if grew or not covered(self) <= notes or (better and not _beats(new, judged)):
                 self._put_drawing(drawn)
                 continue
             if self._main is None:

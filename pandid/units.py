@@ -622,6 +622,7 @@ class Unit:
         Product they place the flag's port unless ``port=None``. On an
         attached Instrument, ``x`` and ``y`` are absolute on their axes,
         and a ``col`` or ``row`` pin is reported as ``pin-not-honored``.
+        A pin the unit is already drawn at leaves the drawing as it is.
 
         Parameters
         ----------
@@ -716,11 +717,50 @@ class Unit:
 
             for port_name, face in self._port_faces.items():
                 self._check_face(port_name, face, port_faces(self, port_name, candidate))
-        self._pin_ports = ports
-        self._pin = candidate
+        if self._drawn_as(candidate, ports, {k: fields[k] for k in fields if k not in ("x", "y")}):
+            # The drawing already honours the pin, so its layout stands.
+            self.__dict__.update(_pin_ports=ports, _pin=candidate)
+        else:
+            self._pin_ports = ports
+            self._pin = candidate
         self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
         self._mirror_stated = self._mirror_stated or mirrored is not _UNCHANGED
         return self
+
+    def _drawn_as(self, pin: Pin, ports: dict[str, str], stated: dict[str, Any]) -> bool:
+        """Return whether the unit is drawn where a pin would put it.
+
+        Parameters
+        ----------
+        pin : Pin
+            Pin to test.
+        ports : dict[str, str]
+            Axis to the port its coordinate places.
+        stated : dict[str, Any]
+            Grid ranks, turn and mirror given with the pin.
+
+        Returns
+        -------
+        bool
+            True if the unit has a frame whose corner, or port, is at
+            each pinned coordinate and which draws each stated rank, turn
+            and mirror.
+        """
+        from pandid.portgeom import port_point
+
+        frame = self.frame
+        if frame is None:
+            return False
+        for k, axis in enumerate(("x", "y")):
+            want = getattr(pin, axis)
+            drawn = (port_point(self, frame, ports[axis])[k] if axis in ports
+                     else getattr(frame, axis))
+            if want is not None and abs(drawn - want) > 1e-9:
+                return False
+        if "orientation" in stated and frame.orientation % 360 != stated["orientation"] % 360:
+            return False
+        return all(getattr(frame, field) == value for field, value in stated.items()
+                   if field != "orientation")
 
     def nozzle(self: _UnitT, port_name: str, face: str) -> _UnitT:
         """Fix the face a port is drawn on.

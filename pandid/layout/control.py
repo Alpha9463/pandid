@@ -258,7 +258,7 @@ def _actuator_spots(valve: "Unit", w: float, h: float,
 
     The balloon stands :data:`ACTUATOR_OFFSET` out from the actuator,
     square to its face, and steps out and swings as an attached balloon
-    does, at each place clear of every blocked box.
+    does, at each place on the sheet clear of every blocked box.
 
     Parameters
     ----------
@@ -283,7 +283,8 @@ def _actuator_spots(valve: "Unit", w: float, h: float,
         for angle in _branch_angles(90.0):
             standoff = (ACTUATOR_OFFSET + ring * STANDOFF_STEP, angle)
             box = _actuator_box(valve, standoff, w, h)
-            if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
+            if box[0] >= 0.0 and box[1] >= 0.0 and not any(
+                    _intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
                 yield standoff
 
 
@@ -781,8 +782,11 @@ def _hits(x: float, y: float, w: float, h: float, taken: list[_Box]) -> bool:
     Returns
     -------
     bool
-        True if the box is too close to any drawn box.
+        True if the box reaches past the sheet's top or left edge, or is
+        too close to any drawn box.
     """
+    if x < 0.0 or y < 0.0:
+        return True
     for x0, y0, x1, y1 in taken:
         if (x < x1 + CLEARANCE and x + w + CLEARANCE > x0
                 and y < y1 + CLEARANCE and y + h + CLEARANCE > y0):
