@@ -2543,7 +2543,11 @@ class Flowsheet:
         stand-off runs into another unit is turned to faces whose stand-off
         is clear, with only its lines routed again, each kept only if no
         tap leaves its line and no finding, clash, crossing or fallback
-        route grows. Where any of these is kept, the next route() or
+        route grows. Then each such balloon placed near the balloon it
+        hangs from, with no face stated, that drives one valve, is hung
+        off that valve's actuator instead, with its faces and its host's
+        chosen again and only their lines routed again, on the same terms.
+        Where any of these is kept, the next route() or
         layout() starts from the drawing before them. Then, where a line
         that found no path runs through a unit, the sheet is routed again
         with each such line drawn round the units in its way where a clear
@@ -2638,9 +2642,10 @@ class Flowsheet:
 
     def _turn_blocked_exits(self, router) -> bool:
         """Turn each balloon with a nozzle whose stand-off is blocked to
-        faces whose stand-off is clear, routing again only its lines, each
-        kept only if no tap leaves its line and no finding, clash, crossing
-        or fallback route grows.
+        faces whose stand-off is clear, then hang each such controller
+        near its transmitter beside the valve it drives, routing again
+        only the lines moved, each kept only if no tap leaves its line and
+        no finding, clash, crossing or fallback route grows.
 
         Parameters
         ----------
@@ -2650,10 +2655,11 @@ class Flowsheet:
         Returns
         -------
         bool
-            Whether any balloon's new faces are kept.
+            Whether any balloon's new faces or place are kept.
         """
-        from pandid.layout.control import _taps_off
+        from pandid.layout.control import _beside_valve, _taps_off
         from pandid.layout.faces import blocked_exits, select_faces
+        from pandid.units import Unit
 
         kept = False
         for unit in blocked_exits(self):
@@ -2662,16 +2668,54 @@ class Flowsheet:
             assert frame is not None
             faces = dict(frame.port_faces)
             select_faces(self, [unit])
-            if frame.port_faces == faces:
-                continue
-            routed = self._route_only(
-                router, [port.stream for port in unit.ports.values() if port.stream is not None])
-            if routed and _taps_off(self) <= off and not any(
-                    n > before[k] for k, n in self._counted_flaws().items()):
-                kept = True
-            else:
-                self._put_geometry(drawn, keep_manual=False)
+            if frame.port_faces != faces:
+                kept = self._keep_redrawn(router, [unit], before, off, drawn) or kept
+        for unit in blocked_exits(self):
+            host = getattr(unit, "host", None)
+            for x, y in list(_beside_valve(self, unit)):
+                before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
+                frame = unit.frame
+                assert frame is not None and isinstance(host, Unit)
+                frame.x, frame.y = x, y
+                select_faces(self, [unit, host])
+                if self._keep_redrawn(router, [unit, host], before, off, drawn):
+                    kept = True
+                    break
         return kept
+
+    def _keep_redrawn(self, router, units: "list[Unit]", before: Counter[str],
+                      off: set[int], drawn: tuple) -> bool:
+        """Route the lines at the given units again, and put the drawing
+        back if a tap left its line or a finding, clash, crossing or
+        fallback route grew.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+        units : list[Unit]
+            Units whose lines are routed again.
+        before : Counter[str]
+            What :meth:`_counted_flaws` returned for the drawing.
+        off : set[int]
+            What :func:`~pandid.layout.control._taps_off` returned for it.
+        drawn : tuple
+            What :meth:`_geometry` returned for it.
+
+        Returns
+        -------
+        bool
+            Whether the new drawing is kept.
+        """
+        from pandid.layout.control import _taps_off
+
+        lines = [port.stream for unit in units for port in unit.ports.values()
+                 if port.stream is not None]
+        if self._route_only(router, lines) and _taps_off(self) <= off and not any(
+                n > before[k] for k, n in self._counted_flaws().items()):
+            return True
+        self._put_geometry(drawn, keep_manual=False)
+        return False
 
     def _route_round_units(self, router) -> bool:
         """Route the sheet again where a route that found no path runs

@@ -104,6 +104,10 @@ These are removed in 0.4.0.
 - A balloon whose signal nozzle faces into a unit close by turns its nozzles
   to clear sides, so its lines are no longer drawn through that unit, where
   that adds no crossing or other finding.
+- A loop's controller with no clear side by its transmitter, and no
+  `controller_face=` given, is hung beside the valve it drives, so its lines
+  are no longer drawn through a unit, where that adds no crossing or other
+  finding.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.

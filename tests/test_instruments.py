@@ -822,7 +822,7 @@ def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
 
 def test_a_controller_driving_no_actuator_is_not_hung():
     """Check that a controller driving a relay rather than the actuator gets no spot."""
-    from pandid.layout.control import _actuator_spot
+    from pandid.layout.control import _hangable
 
     fs, lic, lv = _level_loop()
     ly = fs.add_instrument("LY", 101, near=lv, face="N")
@@ -830,7 +830,7 @@ def test_a_controller_driving_no_actuator_is_not_hung():
     fs.connect(ly.sig_out, lv.actuator, kind="pneumatic")
     fs.route()
 
-    assert _actuator_spot(fs, lic, 44.0, 44.0, []) is None
+    assert _hangable(fs, lic) is None
 
 
 def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():

@@ -9,6 +9,7 @@ from pandid.layout.layered import COL_GAP, ROW_GAP
 
 if TYPE_CHECKING:
     from collections import Counter
+    from collections.abc import Iterator
 
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
@@ -65,11 +66,10 @@ def _place_free(fs: "Flowsheet") -> bool:
         True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
-    from pandid.layout.attach import _nozzle_keepouts, stream_path
+    from pandid.layout.attach import _nozzle_keepouts
     from pandid.layout.faces import select_faces
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
-    from pandid.render.svg import tap_lines, tap_route
 
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
@@ -81,12 +81,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     # Strips a balloon hung off an actuator must clear.
     clear = _nozzle_keepouts(fs, skip=set(pending))
     # Drawn lines it must clear too, each with the units it joins.
-    lines: list[tuple[tuple[object, ...], list[tuple[float, float]]]] = [
-        ((u.host,), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
-    lines += [((s.source.owner, s.dest.owner), stream_path(s))
-              for s in fs.streams if s.route is not None]
-    segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
-                for ends, points in lines for a, b in zip(points, points[1:])]
+    segments = _segments(fs)
     # Tag halos a hung balloon must clear, as the router blocks them.
     halos = _halos(fs) if fs._may_hang else []
     moved = rehung = False
@@ -94,8 +89,9 @@ def _place_free(fs: "Flowsheet") -> bool:
     for inst in pending:
         w, h = resolve_size(inst)
         crossed = [box for ends, box in segments if inst not in ends]
-        hung = (_actuator_spot(fs, inst, w, h, taken + clear + crossed + halos)
-                if fs._may_hang else None)
+        valve = _hangable(fs, inst) if fs._may_hang else None
+        hung = (None if valve is None
+                else next(_actuator_spots(valve, w, h, taken + clear + crossed + halos), None))
         if hung is not None:
             fs._hung.add(id(inst))
         x, y = hung or _spot(fs, inst, w, h, taken)
@@ -122,23 +118,79 @@ def _place_free(fs: "Flowsheet") -> bool:
     return moved
 
 
-def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
-                   blocked: list[_Box]) -> tuple[float, float] | None:
-    """Return the corner of a balloon hung off the one actuator it drives.
-
-    An unpinned balloon that, with its lines, carries no attached
-    balloon, and whose signal lines drive exactly one placed valve's
-    actuator, stands
-    :data:`ACTUATOR_OFFSET` out from that actuator, square to its face.
-    It steps out and swings as an attached balloon does until it clears
-    every blocked box.
+def _segments(fs: "Flowsheet") -> list[tuple[tuple[object, ...], _Box]]:
+    """Return the segments of every drawn line and tap line.
 
     Parameters
     ----------
     fs : Flowsheet
-        Sheet the balloon is on.
+        Routed sheet.
+
+    Returns
+    -------
+    list[tuple[tuple[object, ...], _Box]]
+        Each segment as a box, with the units its line joins.
+    """
+    from pandid.layout.attach import stream_path
+    from pandid.render.svg import tap_lines, tap_route
+
+    lines: list[tuple[tuple[object, ...], list[tuple[float, float]]]] = [
+        ((u.host,), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+    lines += [((s.source.owner, s.dest.owner), stream_path(s))
+              for s in fs.streams if s.route is not None]
+    return [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
+            for ends, points in lines for a, b in zip(points, points[1:])]
+
+
+def _beside_valve(fs: "Flowsheet", inst: "Unit") -> "Iterator[tuple[float, float]]":
+    """Yield the corners of a controller hung off the valve it drives.
+
+    A balloon placed near the balloon it hangs from, with no face
+    stated and no pin, that drives one valve as :func:`_driven` finds
+    it, may stand where :func:`_actuator_spots` puts it, clear of every
+    other unit, nozzle strip, drawn line and tag.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
     inst : Unit
-        Free-standing balloon.
+        Balloon to place.
+
+    Yields
+    ------
+    tuple[float, float]
+        Top-left corner, nearest first; none if the balloon does not
+        qualify.
+    """
+    from pandid.layout.attach import _nozzle_keepouts
+    from pandid.portgeom import unit_box
+    from pandid.units import Instrument
+
+    if (not isinstance(inst, Instrument) or inst.relation != "near" or inst._face_stated
+            or inst.pin_ is not None or inst.frame is None):
+        return
+    valve = _driven(fs, inst)
+    if valve is None:
+        return
+    blocked = [unit_box(u, u.frame) for u in fs.units if u is not inst and u.frame is not None]
+    blocked += _nozzle_keepouts(fs) + _halos(fs)
+    blocked += [box for ends, box in _segments(fs) if inst not in ends]
+    yield from _actuator_spots(valve, inst.frame.w, inst.frame.h, blocked)
+
+
+def _actuator_spots(valve: "Unit", w: float, h: float,
+                    blocked: list[_Box]) -> "Iterator[tuple[float, float]]":
+    """Yield the corners of a balloon hung off a valve's actuator.
+
+    The balloon stands :data:`ACTUATOR_OFFSET` out from the actuator,
+    square to its face, and steps out and swings as an attached balloon
+    does, at each place clear of every blocked box.
+
+    Parameters
+    ----------
+    valve : Unit
+        Placed valve.
     w : float
         Balloon width.
     h : float
@@ -146,20 +198,16 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     blocked : list[_Box]
         Boxes the balloon must clear.
 
-    Returns
-    -------
-    tuple[float, float] or None
-        Top-left corner, or None if the balloon is not hung or no
-        standoff is clear.
+    Yields
+    ------
+    tuple[float, float]
+        Top-left corner, nearest first.
     """
     from pandid.layout.attach import (
         RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
         _standoff_box)
     from pandid.portgeom import face_point, port_anchor
 
-    valve = _hangable(fs, inst)
-    if valve is None:
-        return None
     ax, ay, face = port_anchor(valve, valve.frame, "actuator")
     _, (nx, ny) = face_point(valve, valve.frame, face)
     for ring in range(STANDOFF_STEPS + 1):
@@ -167,8 +215,7 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
             box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
                                 angle, w, h)
             if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
-                return box[0], box[1]
-    return None
+                yield box[0], box[1]
 
 
 def _hangable(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
@@ -184,14 +231,33 @@ def _hangable(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
     Returns
     -------
     Unit or None
-        The one placed valve whose actuator the balloon drives, or None
-        if it is not a free, unpinned control balloon whose lines carry
-        no balloon.
+        The valve :func:`_driven` finds, or None if the balloon is not a
+        free, unpinned control balloon.
     """
     from pandid.layout.stages import is_control
 
     if not is_control(inst) or getattr(inst, "host", None) is not None or inst.pin_ is not None:
         return None
+    return _driven(fs, inst)
+
+
+def _driven(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
+    """Return the one valve a balloon's signal lines drive, if any.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet the balloon is on.
+    inst : Unit
+        Balloon to test.
+
+    Returns
+    -------
+    Unit or None
+        The one placed valve whose actuator the balloon's lines drive,
+        or None if they drive another number or a balloon hangs from the
+        balloon or its lines.
+    """
     wired = [(p, s) for p in inst.ports.values() if (s := p.stream) is not None]
     hosts = {id(inst), *(id(s) for _, s in wired)}
     if any(id(getattr(u, "host", None)) in hosts for u in fs.units):
