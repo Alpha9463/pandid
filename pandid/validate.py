@@ -1037,11 +1037,12 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
             if s.kind != "energy":
                 continue
             given = not s.auto_named
-            if s.service and (str(s.service) in s.name if given else numbered):
+            named_service = s.service not in (None, "")
+            if named_service and (str(s.service) in s.name if given else numbered):
                 continue
             # Keep every value the author gave; suggest one only for service.
-            carrier = str(s.service) if s.service else "LP steam"
-            keys = [] if s.service else [f"service={carrier!r}"]
+            carrier = str(s.service) if named_service else "LP steam"
+            keys = [] if named_service else [f"service={carrier!r}"]
             if given:
                 # A given name is drawn in place of the line number.
                 keys.append(f"name={f'{s.name} {carrier}'!r}")
@@ -1060,13 +1061,13 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                 f"{' and '.join(fixes)}"))
 
     # --- a line-number field the line's label leaves out ---
-    from pandid.flowsheet import _format_line_number, _unused_fields
+    from pandid.flowsheet import _format_line_number, _numbered, _unused_fields
 
     scheme = fs.line_numbering_scheme
     for name, segments in runs.items():
         given = not all(s.auto_named for s in segments)
         # The segment a line number is formed from.
-        origin = next((s for s in segments if s.has_line_number), None)
+        origin = _numbered(segments)
         if not given and (callable(scheme) or origin is None):
             continue
         # Every field the author set, by field and value.
