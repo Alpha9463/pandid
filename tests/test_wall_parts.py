@@ -6,17 +6,18 @@ import re
 import pytest
 
 from pandid import Evaporator, Feed, Flowsheet, Product, Vessel
-from pandid.portgeom import outward_dir, port_point
+from pandid.portgeom import outward_dir, port_point, resolve_size
 from pandid.render.iso_parts import MANHOLE_DEPTH, MANHOLE_SPAN, SOCKET_DEPTH, SOCKET_SPAN
 from pandid.render.symbols import PortSeries, default_registry, overlay_boxes
 from pandid.spec import SpecError, from_dict, to_dict
+from pandid.units import _drawn_parts
 from test_symbol_invariants import GEOM_TOL, _collect_segments, _nearest_distance
 
 
 def _parts(unit):
     """Return each overlay on a unit's drawing with its box and the drawing."""
     sym = unit.symbol()
-    body = default_registry.get(unit.kind, unit.variant)
+    body = _drawn_parts(unit, unit.__dict__.get("overlays", ()))[0]
     return list(zip(sym.overlays, overlay_boxes(body, sym.overlays))), sym, body
 
 
@@ -223,27 +224,27 @@ def test_supports_refuses_a_wall_part_and_points_at_its_keyword():
 
 def test_a_box_too_small_for_its_parts_is_refused():
     """Check that a stated size with no room left for the body is refused."""
-    with pytest.raises(ValueError, match="give a larger width"):
+    with pytest.raises(ValueError, match=r"give width=46 or more"):
         Vessel("D-101", width=20, manholes=[("E", 0.3)], sockets=[("W", 0.6)])
 
 
-def test_a_part_that_crowds_a_nozzle_off_its_wall_is_refused():
-    """Check that a wall part may not leave a family nozzle nearer another edge."""
-    with pytest.raises(ValueError, match="out_1 is drawn on the E wall, which its manholes"):
-        Vessel("D-101", outputs=4, height=40, sockets=[("E", 0.8)])
-
-
-def test_a_squeezed_body_keeps_its_family_on_the_wall_beside_a_wall_part():
-    """Check that a family is spread where the wall part leaves it nearest its face."""
-    sym = Vessel("D-101", width=40, inputs=4, manholes=[("W", 0.8)]).symbol()
-    for name in ("in_1", "in_2", "in_3", "in_4"):
-        assert outward_dir(*sym.ports[name], sym.width, sym.height) == "W", name
-
-
-def test_a_squeezed_body_with_no_room_on_the_wall_for_its_family_is_refused():
-    """Check that a wall part may not leave a family nozzle nearer another edge of the drawing."""
-    with pytest.raises(ValueError, match="in_1 is drawn on the W wall at"):
-        Vessel("D-101", width=34, inputs=4, manholes=[("W", 0.8)])
+@pytest.mark.parametrize(
+    ("build", "face", "names"),
+    [
+        (lambda: Vessel("D-101", width=50, inputs=4, manholes=[("W", 0.8)]), "W", "in_"),
+        (lambda: Vessel("D-101", outputs=4, height=90, sockets=[("E", 0.6)]), "E", "out_"),
+    ],
+    ids=["narrow", "short"],
+)
+def test_a_stated_size_keeps_a_family_on_its_wall_beside_a_wall_part(build, face, names):
+    """Check that a shell built to a stated size keeps every member nearest its face."""
+    vessel = build()
+    sym = vessel.symbol()
+    w, h = resolve_size(vessel)
+    assert (sym.width, sym.height) == (w, h), "the shell is built to the box, not scaled"
+    for i in range(1, 5):
+        x, y = sym.ports[f"{names}{i}"]
+        assert outward_dir(x, y, w, h) == face, f"{names}{i}"
 
 
 @pytest.mark.parametrize(

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import base64
 import html
 import math
 from dataclasses import dataclass
 from decimal import Decimal
 import pathlib
 import re
+import urllib.parse
 import xml.etree.ElementTree as ET
+import zlib
 
 import pytest
 
@@ -42,8 +45,9 @@ from pandid.render.svg import (
     tap_lines,
     tap_route,
 )
-from pandid.render.symbols import _GROUP, Symbol, default_registry, expander
+from pandid.render.symbols import _GROUP, Symbol, default_registry, expander, overlay_boxes
 from pandid.render.weights import LineWeight
+from pandid.units import _drawn_parts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -76,6 +80,26 @@ def _stencil_keys() -> set[str]:
 
 
 STENCIL_KEYS = _stencil_keys()
+
+
+def _inline_stencil(shape: str) -> ET.Element | None:
+    """Return the stencil an inline ``stencil(...)`` shape decodes to."""
+    if not (shape.startswith("stencil(") and shape.endswith(")")):
+        return None
+    packed = base64.b64decode(shape[len("stencil(") : -1])
+    root = ET.fromstring(urllib.parse.unquote(zlib.decompress(packed, -15).decode()))
+    assert root.tag == "shape" and root.find("foreground") is not None, shape
+    return root
+
+
+def _resolves(shape: str | None) -> bool:
+    """Return whether a shape reference names something draw.io draws."""
+    return (
+        shape is None
+        or shape in STENCIL_KEYS
+        or shape in _BUILTIN_SHAPES
+        or _inline_stencil(shape) is not None
+    )
 
 
 def _every_drawing() -> list[tuple[str, str, Symbol]]:
@@ -241,7 +265,7 @@ def test_an_exported_sheet_references_only_shapes_that_resolve(every_symbol_shee
             if key.startswith("shape="):
                 shapes.add(key[len("shape=") :])
     assert shapes, "no shape references at all -- the sheet exported as blank boxes"
-    unresolved = sorted(s for s in shapes if s not in STENCIL_KEYS and s not in _BUILTIN_SHAPES)
+    unresolved = sorted(s for s in shapes if not _resolves(s))
     assert not unresolved, f"unresolvable shape references: {unresolved}"
 
 
@@ -432,11 +456,12 @@ def test_a_flag_is_drawn_across_its_own_box():
             flag = fs.add(cls("X", reference=reference))
             flag.pin(x=137.5, y=42.25, mirrored=mirrored)
             fs.layout()
+            assert flag.frame is not None
             bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
-            ux0, uy0, ux1, uy1 = unit_box(flag, flag.frame)
+            ux0, _, ux1, _ = unit_box(flag, flag.frame)
             assert (bx0, bx1) == pytest.approx((ux0, ux1), abs=1e-9)
-            # Keep vertical insets within the flag box.
-            assert uy0 < by0 < by1 < uy1
+            # Keep vertical insets within the flag's frame.
+            assert flag.frame.y < by0 < by1 < flag.frame.y + flag.frame.h
 
 
 def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
@@ -452,13 +477,13 @@ def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
         flag.pin(x=100, y=50, mirrored=mirrored, port=None)
         fs.layout()
 
-        ux0, uy0, ux1, uy1 = unit_box(flag, flag.frame)
-        assert (uy1 - uy0) == pytest.approx(120.0)
+        assert flag.frame is not None
+        assert flag.frame.h == pytest.approx(120.0)
 
         bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
         # The pennant is inset a fixed amount from the placed height.
         assert (by1 - by0) == pytest.approx(120.0 - 2 * 15)
-        assert uy0 < by0 < by1 < uy1
+        assert flag.frame.y < by0 < by1 < flag.frame.y + flag.frame.h
 
         port_name = next(iter(flag.ports))
         _, py = port_point(flag, flag.frame, port_name)
@@ -1074,6 +1099,7 @@ def test_a_letter_code_is_exported_clear_of_a_flange_mark():
         "a_flange_and_a_line",
         "a_fixed_tag",
         "another_balloon",
+        "a_line_and_a_balloon",
         "a_closed_valve",
         "a_pneumatic_line",
         "a_stacked_tag",
@@ -2191,9 +2217,7 @@ def test_each_representative_export_matches_its_rendered_sheet(settled_gallery, 
         assert float(geometry.get("height")) == pytest.approx(y1 - y0, abs=0.01)
         at[id(u)] = _style(cells[f"u{i}"])
         shape = at[id(u)].get("shape")
-        assert shape is None or shape in STENCIL_KEYS or shape in _BUILTIN_SHAPES, (
-            f"{stem}: {u.name} references {shape!r}, which resolves to nothing"
-        )
+        assert _resolves(shape), f"{stem}: {u.name} references {shape!r}, which resolves to nothing"
 
     for n, s in enumerate(fs.streams):
         drawn = stream_polyline(s)
@@ -2782,10 +2806,17 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
     inner = _GROUP.match(sym.svg).group(2)
     assert inner.count("<g transform=") >= len(sym.overlays)
 
-    for overlay, cell in zip(sym.overlays, children):
+    # A vessel's shell is drawn in place within the cell, its parts round it.
+    shell = _drawn_parts(unit, unit.__dict__["overlays"])[0] if unit.kind == "vessel" else None
+    boxes = [] if shell is None else overlay_boxes(shell, sym.overlays)
+    for i, (overlay, cell) in enumerate(zip(sym.overlays, children)):
         box = cell.find("mxGeometry")
         got = tuple(float(box.get(k)) for k in ("x", "y", "width", "height"))
         want = (overlay.x * w, overlay.y * h, overlay.w * w, overlay.h * h)
+        if boxes:
+            left, top, right, bottom = boxes[i]
+            kx, ky = w / sym.width, h / sym.height
+            want = (left * kx, top * ky, (right - left) * kx, (bottom - top) * ky)
         assert got == pytest.approx(want, abs=0.02), f"{unit.name}: {overlay.group}/{overlay.name}"
         assert _style(cell)["movable"] == "0" and _style(cell)["connectable"] == "0"
 
@@ -2799,7 +2830,10 @@ def test_a_composed_symbol_still_draws_its_body(composed_sheet):
             c for k, c in cells.items() if c.get("value") == unit.name and c.get("vertex") == "1"
         )
         style = _style(cell)
-        if sym.drawio_body_shape:
+        if unit.kind == "vessel":
+            # A vessel's shell is exported as built.
+            assert _inline_stencil(style.get("shape", "")) is not None
+        elif sym.drawio_body_shape:
             assert style.get("shape") == sym.drawio_body_shape
         else:
             key = (unit.kind, getattr(unit, "variant", "default"))

@@ -87,6 +87,9 @@ def main():
     t_regen_out = fs.add(Tee(branch="inlet"))  # the two spent regen legs meet
     t_regen_in = fs.add(Tee())                 # hot regen gas splits to bed A
     t_slip = fs.add(Tee())                     # the regeneration slipstream
+    # Each junction starts the line number stated past it.
+    for tee in (t_wet_in, t_wet_a, t_dry, t_regen_out, t_regen_in, t_slip):
+        tee.new_line_number = True
 
     # --- Placement ----------------------------------------------------
     # Four headers with the beds between them; bed A is mirrored so each

@@ -16,6 +16,8 @@ from pandid.render.svg import _along, _crosses, _ink, _SIGNAL_KINDS, UPRIGHT_ENC
 from test_golden import SCENARIOS
 
 TOL = 0.01
+# A leader is written to a tenth, so its end may sit this far off an unrounded line.
+WRITTEN = math.hypot(0.05, 0.05)
 
 _RECT = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" '
@@ -93,7 +95,8 @@ def _codes_beside_a_flange() -> "tuple[Flowsheet, dict]":
     prod.pin(port="inlet", x=380, y=140)
     riser = fs.connect(feed.outlet, valve.inlet)
     fs.connect(valve.outlet, prod.inlet)
-    fs.add_instrument("PI", 1, sensing=riser, at=0.6).annotate(high="PAH", low="PAL")
+    pi = fs.add_instrument("PI", 1, sensing=riser, at=0.6)
+    pi.annotate(high="PAH", low="PAL").pin(x=101.18, y=117.18)
     return fs, {"diagram": "p&id", "connections": "flanged"}
 
 
@@ -248,8 +251,8 @@ def test_a_leader_lands_on_the_line_it_names(sheets, name):
             continue
         end = label.leader[1]
         landed = min(_gap((end[0], end[1], end[0], end[1]), seg) for seg in segs[label.name])
-        if landed > TOL:
-            wrong.append(f"{label.name}'s leader stops {landed:.1f} short of its line")
+        if landed > WRITTEN:
+            wrong.append(f"{label.name}'s leader stops {landed:.2f} short of its line")
         if not label.head:
             wrong.append(f"{label.name}'s leader carries no arrowhead")
     assert not wrong, f"{name}: " + "; ".join(wrong)
@@ -346,11 +349,11 @@ def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
     assert not under, "not written along its line and not led: " + "; ".join(under)
 
 
-def test_the_p_and_id_needs_exactly_one_leader(sheets):
-    """Check that the P&ID needs exactly one leader."""
+def test_the_p_and_id_needs_exactly_two_leaders(sheets):
+    """Check that the P&ID needs exactly two leaders."""
     _fs, labels = sheets["10_ethanol_pid"]
     led = sorted(lab.name for lab in labels if lab.leader)
-    assert led == ["AE-304-150-80-SS"]
+    assert led == ["AE-304-150-80-SS", "FB-301-200-160-SS"]
 
 
 def test_a_leader_leaves_the_lettering_and_not_the_paper_beside_it(sheets):

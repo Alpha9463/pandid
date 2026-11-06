@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
+  so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
+  and suggests an `at=` between its neighbours on the line that clears it.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
@@ -26,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
   (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
   rotor on its shaft, or `None`.
+- `CombustionChamber` draws a chamber burning fuel to hot gas: air at `inlet`,
+  `fuel` from below and the gas out of `outlet`. `Furnace(variant="general")`
+  draws the ISO 10628-2 furnace.
 - `CentrifugalFan` and `AxialFan` draw those fans, and
   `Blower(variant="general")` draws the ISO 10628-2 fan.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
@@ -35,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-through-support` when a line enters a vessel through
+  its legs, brackets or ring. Leave the vessel's `height` unset, or give a
+  larger one, so its shell grows clear.
+- `validate()` warns `line-field-undrawn` when a line-number field set in
+  `connect()` is not drawn: `name=` replaces the line number,
+  `line_numbering_scheme` leaves the field out, or the field is stated past a
+  valve or tee that carries another segment's number on. It names the fix.
 
 ### Changed
 
@@ -46,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A counted `Block`, `Tank` or `Vessel` connection, as in `inputs=2`, moves to
   the face toward its peer where that draws fewer bends; a list such as
   `inputs=["W", "N"]` keeps every face as given, even on a single inlet.
+- A `Vessel` is drawn to the size it is given rather than stretched to it:
+  `width` and `height` are the drawn box, the heads, supports, manholes and
+  sockets keep their own size, and the straight shell takes the rest. With no
+  size given, the shell grows until its inlets and outlets clear the supports.
 - `render()` lays out and checks a sheet faster, most of all when units are
   pinned by a nozzle.
 
@@ -64,6 +81,12 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
+  the train is drawn in the column beside that unit, where that adds no
+  crossing, bend or finding, instead of at the sheet's left edge.
+- Lines that cross on their way into a mixer are laid on lanes even where they
+  share their stretch of the gap with only some of the lines beside them, so the
+  last two pumps of a header of tees no longer cross into the mixer.
 - The equipment list and `fs.equipment_list()` include centrifuges and
   crushing machines.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,
@@ -122,6 +145,18 @@ These are removed in 0.4.0.
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- A `Feed` or `Product` too short to letter, such as `Feed("Air", height=20)`,
+  is refused with the height that fits, `height=42`, or `height=48` with a
+  `reference`, instead of failing `nozzle-off-body` when drawn.
+- Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
+  as its pennant is drawn, not of the blank paper above and below it, so a
+  sheet with a flag at its top or bottom is framed tighter.
+- Where neither side of a symbol has room for both codes of a pair, such as
+  `annotate(high="TAH", low="TAL")`, one is written on each side instead of
+  over a line.
+- `route()` ends the run a line leaves a nozzle on clear of every other unit,
+  so a signal line between two balloons no longer cuts through a third
+  standing between them.
 - Where `route()` finds no path for a line and draws it through a unit, it
   draws it round the units in its way along a clear lane where that draws no
   worse; otherwise `validate()` reports `route-crosses-unit` as before.
