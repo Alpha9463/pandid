@@ -2570,18 +2570,19 @@ class Flowsheet:
 
         Last, with the default router and layout engine, each band across
         the drawing that holds no unit, tag, package frame, annotation
-        placed by ``position``, balloon standoff, line end or line run
-        along it is closed to the gap layout keeps between neighbours, by
-        moving everything on one side of it inward. A band is closed only
-        from a side where nothing is pinned or placed on its axis, and no
-        line drawn by hand, measured by fractions of its length or from a
-        controller that may hang off its actuator, crosses it. The closed
-        drawing is kept only if no crossing, bend, fallback, finding or
-        clash grows and no tap leaves its line. The next route() or
-        layout() starts from the drawing before it, unless a pin, a
-        ``via()`` or an annotation's ``position`` has changed since; then
-        it starts from the closed drawing those coordinates were read
-        against.
+        placed by ``position``, balloon standoff, line end, line run along
+        it or ``via()`` waypoint is closed to the gap layout keeps between
+        neighbours, by moving everything on one side of it inward but
+        ``via()`` waypoints and placed annotations. A band is closed only
+        from a side where nothing is pinned on its axis, and no line
+        measured by fractions of its length or from a controller that may
+        hang off its actuator crosses it. The closed drawing is kept only
+        if no crossing, bend, fallback, finding or clash grows, no tap
+        leaves its line and nothing more is drawn over a placed
+        annotation. The next route() or layout() starts from the drawing
+        before it, unless a pin, a ``via()`` or an annotation's
+        ``position`` has changed since; then it starts from the closed
+        drawing those coordinates were read against.
 
         Parameters
         ----------
@@ -2627,23 +2628,31 @@ class Flowsheet:
 
     def _close_bands(self) -> None:
         """Close the empty bands across the drawing, kept only if no
-        crossing, bend, fallback, finding or clash grows and no tap
-        leaves its line.
+        crossing, bend, fallback, finding or clash grows, no tap leaves
+        its line and nothing more is drawn over a placed annotation; then
+        close those with pins on both sides, kept only if the drawing
+        beats the one before on the same terms.
 
         Where they are kept, the next route() or layout() starts from
         the drawing before them, unless the author has stated drawing
         coordinates since; then it starts from the drawing shown.
         """
-        from pandid.layout.compact import close_bands, empty_bands
+        from pandid.layout.compact import close_bands, covered, empty_bands
         from pandid.routing.lanes import _score
 
-        cuts = empty_bands(self)
-        if not any(cuts):
-            return
-        drawn, judged = self._drawing(), _score(self)
-        close_bands(self, cuts)
-        new = _score(self)
-        if new[1] <= judged[1] and not any(n > judged[0][k] for k, n in new[0].items()):
+        # Close what layout left, then slide what lies between pins where
+        # that draws better.
+        for pinned in (False, True):
+            cuts = empty_bands(self, pinned)
+            if not any(cuts):
+                continue
+            drawn, judged, notes = self._drawing(), _score(self), covered(self)
+            close_bands(self, cuts)
+            new = _score(self)
+            grew = new[1] > judged[1] or any(n > judged[0][k] for k, n in new[0].items())
+            if grew or covered(self) > notes or (pinned and not _beats(new, judged)):
+                self._put_drawing(drawn)
+                continue
             if self._main is None:
                 self._main = drawn
             self._closed = self._stated()
@@ -2651,8 +2660,6 @@ class Flowsheet:
             # closed; main's drawing holds them.
             self._plain_state = self._stacked = self._unkept = self._unhung = None
             self._plain_stale = False
-        else:
-            self._put_drawing(drawn)
 
     def _stated(self) -> tuple:
         """Return every drawing coordinate the author has stated.

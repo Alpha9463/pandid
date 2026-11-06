@@ -145,6 +145,23 @@ def test_a_line_routed_by_hand_on_the_closed_sheet_keeps_its_ends() -> None:
     assert "route-crosses-unit" not in _codes(fs)
 
 
+def test_a_line_routed_by_hand_between_units_pinned_on_the_closed_sheet_keeps_its_ends() -> None:
+    """Check that a via() and pins on both sides of the closed band, read off the sheet, agree."""
+    fs = _chain()
+    fs.route()
+    before = _boxes(fs)
+    line = fs.streams[1]
+    (a, y), (b, _) = stream_polyline(line)
+    line.via([(a + 30, y), (a + 30, y - 100), (b - 30, y - 100), (b - 30, y)])
+    for name in ("V-101", "V-102"):
+        unit = _unit(fs, name)
+        unit.pin(x=frame_of(unit).x, y=frame_of(unit).y)
+    fs.route()
+
+    assert _boxes(fs) == before
+    assert "route-crosses-unit" not in _codes(fs)
+
+
 @pytest.mark.parametrize("name", ["V-101", "P-101", "V-102", "LT-101", "LIC-101", "suction"])
 def test_a_pin_where_the_closed_sheet_draws_a_unit_moves_nothing(name: str) -> None:
     """Check that pinning one unit or nozzle where the closed sheet draws it changes nothing."""
@@ -164,7 +181,7 @@ def test_a_pin_where_the_closed_sheet_draws_a_unit_moves_nothing(name: str) -> N
 
 
 #: A note's lines.
-NOTE = ["Pump P-101 runs on demand."]
+NOTE = ["Drain"]
 
 
 def _note_box(fs: Flowsheet, x: float, y: float) -> Box:
@@ -189,6 +206,34 @@ def test_closing_a_band_keeps_equipment_off_a_placed_note(
     fs.route()
 
     assert all(_clear(box, note) for box in _boxes(fs).values())
+
+
+def test_closing_a_band_slides_no_unit_under_a_placed_note(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check that a note placed past the band keeps the drum moving in from sliding under it."""
+    drum = _boxes(_open_chain(monkeypatch))["V-102"]
+    width, _ = measure_annotation(notes(NOTE))
+    fs = _chain()
+    note = _note_box(fs, drum[0] - width - 10.0, drum[1])
+    fs.route()
+
+    assert all(_clear(box, note) for box in _boxes(fs).values())
+
+
+def test_a_line_routed_by_hand_on_the_closed_sheet_keeps_its_ends_when_read_back() -> None:
+    """Check that the sheet read back from its spec draws a via() read off the closed sheet the same."""
+    fs = _chain()
+    fs.route()
+    line = fs.streams[1]
+    (a, y), (b, _) = stream_polyline(line)
+    line.via([(a + 30, y), (a + 30, y - 100), (b - 30, y - 100), (b - 30, y)])
+    fs.route()
+    again = Flowsheet.from_dict(fs.to_dict())
+    again.route()
+
+    assert _boxes(again) == _boxes(fs)
+    assert "route-crosses-unit" not in _codes(again)
 
 
 def test_a_note_placed_on_the_closed_sheet_keeps_its_room() -> None:

@@ -1,11 +1,12 @@
 """Close the empty bands across a routed drawing.
 
 A band is a strip across the whole drawing that holds no unit, tag,
-package frame, placed annotation, balloon standoff, line end or line
-run along it. Lines only cross it, so moving everything on one side of
-it inward shortens those lines and changes no route's shape. A line
-whose length places something on it, or something at its end, holds
-all it spans.
+package frame, placed annotation, balloon standoff, line end, line run
+along it or waypoint drawn by hand. Lines only cross it, so moving
+everything on one side of it inward shortens those lines and changes
+no automatic route's shape. A line whose length places something on
+it, or something at its end, holds all it spans. Waypoints drawn by
+hand and placed annotations stay where the author put them.
 """
 
 from __future__ import annotations
@@ -17,11 +18,65 @@ from pandid.layout.layered import COL_GAP, ROW_GAP
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
-#: A band's start and end, the width taken out of it, and whether what
-#: lies beyond it moves rather than what lies before it.
+#: A band's start and end, the width taken out of it (added where
+#: negative), and whether what lies beyond it moves rather than what
+#: lies before it.
 Cut = tuple[float, float, float, bool]
 #: A low and a high coordinate on one axis.
 Span = tuple[float, float]
+
+
+def placed(fs: Flowsheet) -> list[tuple[float, float, float, float]]:
+    """Return the box of each annotation placed by ``position``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Boxes as left, top, right, bottom.
+    """
+    from pandid.document import TableBox
+    from pandid.render import furniture
+
+    out = []
+    for a in fs.annotations:
+        position = getattr(a, "position", None)
+        if position is not None:
+            w, h = (furniture.measure_table(a) if isinstance(a, TableBox)
+                    else furniture.measure_annotation(a))
+            out.append((position[0], position[1], position[0] + w, position[1] + h))
+    return out
+
+
+def covered(fs: Flowsheet) -> int:
+    """Count the units and line runs drawn over a placed annotation.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    int
+        Unit boxes that overlap a placed annotation, plus line runs
+        that enter one.
+    """
+    from pandid.layout.attach import stream_path
+    from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+    from pandid.portgeom import unit_box
+
+    notes = placed(fs)
+    if not notes:
+        return 0
+    boxes = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
+    runs = [(a, b) for path in map(stream_path, fs.streams) for a, b in zip(path, path[1:])]
+    return (sum(boxes_overlap(box, note) for box in boxes for note in notes)
+            + sum(segment_crosses_box(a, b, note) for a, b in runs for note in notes))
 
 
 def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
@@ -38,15 +93,12 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
     -------
     tuple[list[Span], list[Span]]
         Each held ``(low, high)`` span, sorted, and the spans of the
-        units pinned on the axis, of each manual route and of the units
-        it joins, and of each annotation placed by ``position``.
+        units pinned on the axis.
     """
-    from pandid.document import TableBox
     from pandid.layout.attach import is_attached, stream_path
     from pandid.layout.control import _halos, _hangable
     from pandid.package import frame as package_frame
     from pandid.portgeom import unit_box
-    from pandid.render import furniture
     from pandid.render.svg import _unit_label_box, package_labels, tap_route
     from pandid.streams import Stream
 
@@ -83,16 +135,9 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
         held += [(frame[k], frame[k]), (frame[k + 2], frame[k + 2])]
         held += [(b[k], b[k + 2]) for b in map(_unit_label_box, package_labels(pkg, frame))
                  if b is not None]
-    for a in fs.annotations:
-        position = getattr(a, "position", None)
-        if position is not None:
-            size = (furniture.measure_table(a) if isinstance(a, TableBox)
-                    else furniture.measure_annotation(a))
-            held.append((position[k], position[k] + size[k]))
-            fixed.append(held[-1])
-    # A line drawn by hand, set out by fractions of its length, or from
-    # a controller that may hang off the actuator it drives, holds all
-    # it spans.
+    held += [(b[k], b[k + 2]) for b in placed(fs)]
+    # A line set out by fractions of its length, or from a controller
+    # that may hang off the actuator it drives, holds all it spans.
     measured = {id(u.host._logical_root or u.host) for u in fs.units
                 if isinstance(getattr(u, "host", None), Stream)}
     hung = {id(u) for u in fs.units if _hangable(fs, u) is not None}
@@ -101,18 +146,13 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
         if not points:
             continue
         root = s._logical_root or s
-        manual = s.route is not None and s.route.manual
-        if (manual or id(root) in measured or root._logical_segments
+        if (id(root) in measured or root._logical_segments
                 or (id(s.source.owner) in hung and s.dest.name == "actuator")):
             held.append(extent(points))
-        else:
-            held += [(points[0][k], points[0][k]), (points[-1][k], points[-1][k])]
-            held += [extent([a, b]) for a, b in zip(points, points[1:]) if a[1 - k] != b[1 - k]]
-        if manual:
-            fixed.append(extent(points))
-            fixed += [(box[k], box[k + 2]) for box in (unit_box(p.owner, p.owner.frame)
-                                                      for p in (s.source, s.dest)
-                                                      if p.owner.frame is not None)]
+            continue
+        ends = points if s.route is not None and s.route.manual else [points[0], points[-1]]
+        held += [(p[k], p[k]) for p in ends]
+        held += [extent([a, b]) for a, b in zip(points, points[1:]) if a[1 - k] != b[1 - k]]
     # An attached balloon holds all from its tap to its centre.
     for u in fs.units:
         tap = getattr(u, "tap", None)
@@ -121,19 +161,23 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
     return sorted(held), fixed
 
 
-def empty_bands(fs: Flowsheet) -> tuple[list[Cut], list[Cut]]:
+def empty_bands(fs: Flowsheet, pinned: bool = False) -> tuple[list[Cut], list[Cut]]:
     """Return the cuts that close each empty band to the gap layout keeps.
 
     A band is cut to :data:`~pandid.layout.layered.COL_GAP` across the
     sheet and :data:`~pandid.layout.layered.ROW_GAP` down it, by whole
     pixels. What lies beyond it moves where nothing there is pinned on
-    its axis, else what lies before it where nothing there is; a band
-    with pins on both sides is kept.
+    its axis, else what lies before it where nothing there is. A band
+    with pins on both sides is kept, or, with ``pinned``, closed by
+    moving what lies between it and the first pin beyond it, which
+    widens the gap before that pin by as much.
 
     Parameters
     ----------
     fs : Flowsheet
         Routed sheet.
+    pinned : bool, default=False
+        Close only the bands with pins on both sides.
 
     Returns
     -------
@@ -147,16 +191,23 @@ def empty_bands(fs: Flowsheet) -> tuple[list[Cut], list[Cut]]:
         end = held[0][1] if held else 0.0
         for low, high in held[1:]:
             width = float(int(low - end - gap))
-            beyond = any(a >= low for a, _ in fixed)
-            if width > 0.0 and not (beyond and any(b <= end for _, b in fixed)):
+            beyond = [a for a, _ in fixed if a >= low]
+            both = bool(beyond) and any(b <= end for _, b in fixed)
+            if width > 0.0 and not pinned and not both:
                 cuts.append((end, low, width, not beyond))
+            elif width > 0.0 and pinned and both:
+                pin = min(beyond)
+                reach = max((b for a, b in held if low <= a < pin), default=pin)
+                if reach < pin:
+                    cuts += [(end, low, width, True), (reach, pin, -width, True)]
             end = max(end, high)
         out.append(cuts)
     return out[0], out[1]
 
 
 def close_bands(fs: Flowsheet, cuts: tuple[list[Cut], list[Cut]]) -> None:
-    """Move everything on the free side of each cut inward by its width.
+    """Move everything on the free side of each cut in by its width, or out
+    by a negative one.
 
     A point inside a band, which only a line crossing it can hold,
     moves by the same share of the width as of the band.

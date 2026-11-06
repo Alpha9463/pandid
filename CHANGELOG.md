@@ -90,7 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `render()` lays out and checks a sheet faster, most of all when units are
   pinned by a nozzle.
 - `route()` closes empty rows and columns that automatic layout leaves across
-  the sheet, so the drawing takes less paper. Pinned units stay where they are.
+  the sheet, so the drawing takes less paper. Pinned units, `via()` points and
+  notes placed with `position=` stay where they are.
 
 ### Deprecated
 
