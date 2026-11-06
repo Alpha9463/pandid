@@ -2198,6 +2198,11 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _KIND_OWNERS["n_feeds"])
             and len(getattr(unit, "feeds")) != _default_count(unit, "n_feeds")):
         entry["n_feeds"] = len(getattr(unit, "feeds"))
+    if isinstance(unit, unit_types._SeriesFamilies):
+        # A feed or draw nozzle() moved is written as that call.
+        moved = {name: face for name, face in unit._faces.items() if name in unit._stated}
+        if moved:
+            entry["port_faces"] = {**entry.get("port_faces", {}), **moved}
     if isinstance(unit, unit_types.Block):
         _write_connection_faces(unit, entry)
     elif isinstance(unit, (unit_types.Tank, unit_types.Vessel)):

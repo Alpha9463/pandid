@@ -578,3 +578,126 @@ def test_every_route_starts_main_from_mains_own_last_drawing():
         fs.route()
         crossings.append(_score(fs)[0]["crossings"])
     assert crossings == [8, 8, 8]
+
+
+# --- Reactor, column and separator feeds and draws -----------------------------
+
+
+# A default column at (300, 100) is 100 x 200: its feeds and draws sit 105
+# down, at y = 205, and a feed and a draw on one wall at 187.5 and 222.5. A
+# default separator at (300, 300) is 62 x 100: its feed
+# sits at y = 350. A stirred reactor at (300, 300) takes a top-head feed at
+# x = 312.4, clear of the drive.
+@pytest.mark.parametrize(
+    ("unit", "port", "x", "y", "mirrored", "face"),
+    [
+        ("column", "feed_1", 650, 187.5, True, "E"),
+        ("column", "feed_1", 80, 205, False, "W"),
+        ("column", "draw", 80, 222.5, True, "W"),
+        ("column", "draw", 650, 205, False, "E"),
+        ("separator", "feed_1", 650, 350, True, "E"),
+        ("separator", "feed_1", 80, 350, False, "W"),
+        ("reactor", "feed_1", 280, 150, False, "N"),
+    ],
+    ids=[
+        "col-feed-right",
+        "col-feed-left",
+        "col-draw-left",
+        "col-draw-right",
+        "sep-feed-right",
+        "sep-feed-left",
+        "reactor-feed-above",
+    ],
+)
+def test_a_series_member_takes_the_face_toward_its_peer(unit, port, x, y, mirrored, face):
+    """Draw a feed or draw on the face its series offers toward its peer."""
+    fs = Flowsheet("series")
+    if unit == "column":
+        body = fs.add(units.Column("T-1", n_draws=1)).pin(x=300, y=100)
+    elif unit == "separator":
+        body = fs.add(units.Separator("V-1")).pin(x=300, y=300)
+    else:
+        body = fs.add(units.Reactor("R-1")).pin(x=300, y=300)
+    _flag(fs, body, port, x, y, mirrored)
+    fs.route()
+    assert _face(body, port) == face
+
+
+def test_a_reactor_feed_on_the_top_head_keeps_clear_of_the_drive():
+    """Draw a top-head feed beside the motor, its line clear of the drive."""
+    from pandid.render.symbols import default_registry
+
+    fs = Flowsheet("reactor")
+    reactor = fs.add(units.Reactor("R-1").nozzle("feed", "N")).pin(x=300, y=300)
+    fs.layout()
+    assert reactor.frame is not None
+    at = resolve_port(reactor, reactor.frame, "feed")
+    assert at.face == "N"
+    sym = default_registry.for_unit(reactor)
+    motor = next(o for o in sym.overlays if o.name == "motor")
+    drive = resolve_port(reactor, reactor.frame, "drive").point
+    # Left of the motor, and below the box top on the head's ink.
+    assert at.point[0] < reactor.frame.x + motor.x * reactor.frame.w
+    assert at.point[0] < drive[0]
+    assert at.point[1] > reactor.frame.y + 20
+
+
+@pytest.mark.parametrize(
+    ("build", "port", "face", "match"),
+    [
+        (lambda: units.Reactor("R-1"), "feed", "E", "can be piped from W or N"),
+        (
+            lambda: units.Reactor("R-1", n_feeds=2).nozzle("feed_1", "N"),
+            "feed_2",
+            "N",
+            "takes one nozzle",
+        ),
+        (
+            lambda: units.Column("T-1", internals="valve_tray", trays=30, feed_stages=[2]),
+            "feed",
+            "E",
+            "outside the stretch of the E wall",
+        ),
+        (
+            lambda: units.Separator("V-1", variant="horizontal"),
+            "feed",
+            "S",
+            "can be piped from W, N or E",
+        ),
+    ],
+    ids=["reactor-east-wall", "reactor-second-head-feed", "column-stage-off-stretch", "lying-drum"],
+)
+def test_nozzle_refuses_a_face_a_series_cannot_take(build, port, face, match):
+    """Refuse a face a series member's body does not offer it."""
+    unit = build()
+    with pytest.raises(ValueError, match=match):
+        unit.nozzle(port, face)
+
+
+def test_nozzle_moves_a_series_member_and_the_spec_keeps_it():
+    """Write a moved feed under ``port_faces`` and read it back there."""
+    fs = Flowsheet("series")
+    fs.add(units.Reactor("R-1").nozzle("feed", "N"))
+    fs.add(units.Column("T-1", n_draws=1).nozzle("feed", "E").nozzle("draw", "W"))
+    fs.add(units.Separator("V-1").nozzle("feed", "E"))
+    entries = {u["name"]: u for u in to_dict(fs)["units"]}
+    assert entries["R-1"]["port_faces"] == {"feed_1": "N"}
+    assert entries["T-1"]["port_faces"] == {"feed_1": "E", "draw": "W"}
+    read_back = from_dict(to_dict(fs))
+    read = {u.name: u for u in read_back.units}
+    read_back.layout()
+    assert _face(read["R-1"], "feed") == "N"
+    assert (_face(read["T-1"], "feed"), _face(read["T-1"], "draw")) == ("E", "W")
+    assert _face(read["V-1"], "feed") == "E"
+
+
+def test_a_feed_and_a_draw_on_one_column_wall_stay_apart():
+    """Spread a moved feed and the draws on the wall they share."""
+    fs = Flowsheet("column")
+    column = fs.add(units.Column("T-1", n_draws=1).nozzle("feed", "E")).pin(x=300, y=100)
+    fs.layout()
+    assert column.frame is not None
+    feed = resolve_port(column, column.frame, "feed")
+    draw = resolve_port(column, column.frame, "draw")
+    assert (feed.face, draw.face) == ("E", "E")
+    assert abs(feed.point[1] - draw.point[1]) >= 16

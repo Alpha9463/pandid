@@ -2014,13 +2014,8 @@ def _too_small(unit: "Unit", overlays: tuple, faces: "tuple[tuple[str, str], ...
 _FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
 
 
-class _FaceFamilies(Unit):
-    """Base class for units with inlet and outlet families on faces."""
-
-    if TYPE_CHECKING:
-        # Each subclass sets these.
-        inlets: tuple[Port, ...]
-        outlets: tuple[Port, ...]
+class _Families(Unit):
+    """Base class for units whose ports form families on faces."""
 
     # Family port name -> face, in drawn order.
     _faces: dict[str, str]
@@ -2028,26 +2023,6 @@ class _FaceFamilies(Unit):
     # author named by a list or nozzle().
     _listed: frozenset[str]
     _stated: set[str]
-
-    # Error wording: the unit noun, a variable name and a family port.
-    _NOUN, _VAR, _MEMBER = "unit", "v", "inlet or outlet"
-
-    def _record_lists(self, inputs: "int | Sequence[str]",
-                      outputs: "int | Sequence[str]") -> None:
-        """Record which families were declared by a list of faces.
-
-        Parameters
-        ----------
-        inputs, outputs : int or Sequence[str]
-            Count, or one face per port, as declared.
-        """
-        self._listed = frozenset(
-            port.name
-            for family, spec in ((self.inlets, inputs), (self.outlets, outputs))
-            if not isinstance(spec, int)
-            for port in family
-        )
-        self._stated = set(self._listed)
 
     def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return the faces a family port may take, its own face first.
@@ -2098,6 +2073,35 @@ class _FaceFamilies(Unit):
             Artwork with the families placed.
         """
         raise NotImplementedError
+
+
+class _FaceFamilies(_Families):
+    """Base class for units with inlet and outlet families on faces."""
+
+    if TYPE_CHECKING:
+        # Each subclass sets these.
+        inlets: tuple[Port, ...]
+        outlets: tuple[Port, ...]
+
+    # Error wording: the unit noun, a variable name and a family port.
+    _NOUN, _VAR, _MEMBER = "unit", "v", "inlet or outlet"
+
+    def _record_lists(self, inputs: "int | Sequence[str]",
+                      outputs: "int | Sequence[str]") -> None:
+        """Record which families were declared by a list of faces.
+
+        Parameters
+        ----------
+        inputs, outputs : int or Sequence[str]
+            Count, or one face per port, as declared.
+        """
+        self._listed = frozenset(
+            port.name
+            for family, spec in ((self.inlets, inputs), (self.outlets, outputs))
+            if not isinstance(spec, int)
+            for port in family
+        )
+        self._stated = set(self._listed)
 
     @property
     def input_faces(self) -> tuple[str, ...]:
@@ -4733,7 +4737,186 @@ _JACKET_DUTY = Deprecation(
 )
 
 
-class Reactor(Unit):
+_SeriesFamiliesT = TypeVar("_SeriesFamiliesT", bound="_SeriesFamilies")
+
+
+class _SeriesFamilies(_Families):
+    """Base class for units whose feeds and draws are port series.
+
+    Each member starts on its series' face and may move, by
+    :meth:`nozzle` or layout, to a face the series also offers.
+    """
+
+    def _series_symbol(self):
+        """Return the variant's registered symbol, or None.
+
+        Returns
+        -------
+        Symbol or None
+            The symbol, or ``None`` for an unregistered variant.
+        """
+        from pandid.render.symbols import default_registry
+
+        try:
+            return default_registry.get(self.kind, self.variant)
+        except ValueError:
+            return None
+
+    def _init_families(self) -> None:
+        """Put each series member on its series' face."""
+        sym = self._series_symbol()
+        series = sym.port_series if sym is not None else ()
+        self._faces = {name: s.face for name in self.ports for s in series if s.matches(name)}
+        self._listed, self._stated = frozenset(), set()
+
+    def _offered(self, port_name: str, added: bool = True) -> list[str]:
+        """Return the faces a member's series offers, its own face first.
+
+        Parameters
+        ----------
+        port_name : str
+            Series member.
+        added : bool, default=True
+            Include the faces the series also offers.
+
+        Returns
+        -------
+        list[str]
+            Faces on the unit's own axes.
+        """
+        sym = self._series_symbol()
+        series = sym.series_for(port_name) if sym is not None else None
+        faces = [] if series is None else [series.face, *(added and [s.face for s in series.also] or [])]
+        home = self._faces[port_name]
+        return [home, *(face for face in faces if face != home)]
+
+    def _fits(self, faces: dict[str, str], frame: Frame | None) -> bool:
+        """Return whether the members can be drawn on faces.
+
+        A member a stage places on a further face must sit inside the
+        stretch that face's placement spreads over.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Series member to face, in drawn order.
+        frame : Frame or None
+            The unit's placed box; unused.
+
+        Returns
+        -------
+        bool
+            True if the symbol builds and every staged member on a
+            further face is inside its stretch.
+        """
+        return self._misfit(faces) is None
+
+    def _misfit(self, faces: dict[str, str]) -> str | None:
+        """Return why the members cannot be drawn on faces, or None.
+
+        Parameters
+        ----------
+        faces : dict[str, str]
+            Series member to face, in drawn order.
+
+        Returns
+        -------
+        str or None
+            Reason, or None if they can.
+        """
+        try:
+            self.symbol(faces)
+        except ValueError as exc:
+            return str(exc)
+        sym = self._series_symbol()
+        for name, face in faces.items():
+            series = sym.series_for(name) if sym is not None else None
+            pin = self._series_pin(name)
+            if series is None or face == series.face or pin is None:
+                continue
+            placed = series.on(face)
+            assert placed is not None
+            _, lo, hi = placed.reach(sym.width, sym.height)
+            along = sym.height if face in ("W", "E") else sym.width
+            if not lo - 1e-9 <= pin * along <= hi + 1e-9:
+                return (f"{name}'s stage puts it outside the stretch of the {face} wall "
+                        f"clear of the other nozzles there")
+        return None
+
+    def symbol(self, faces: dict[str, str] | None = None) -> "Symbol":
+        """Return the symbol with the series members on faces.
+
+        Parameters
+        ----------
+        faces : dict[str, str], optional
+            Series member to face, in drawn order; the declared faces
+            when omitted.
+
+        Returns
+        -------
+        Symbol
+            The unit's drawing, one series per face where a member is
+            off its series' face.
+        """
+        from pandid.render.symbols import default_registry, series_symbol
+
+        on = self._faces if faces is None else faces
+        overlays = tuple(getattr(self, "overlays", ()) or ())
+        sym = self._series_symbol()
+        if sym is None or all(
+                (series := sym.series_for(name)) is not None and series.face == face
+                for name, face in on.items()):
+            return default_registry.for_unit(self)
+        return series_symbol(self.kind, self.variant, tuple(on.items()), overlays)
+
+    def nozzle(self: _SeriesFamiliesT, port_name: str, face: str) -> _SeriesFamiliesT:
+        """Move a port to a named face.
+
+        A feed or draw moves to any face its series offers. Other ports
+        use :meth:`Unit.nozzle`.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name or alias.
+        face : str
+            Compass face or side name.
+
+        Returns
+        -------
+        _SeriesFamilies
+            This unit.
+
+        Raises
+        ------
+        KeyError
+            If the port does not exist.
+        ValueError
+            If ``face`` is not a face, or the series offers no such
+            face or no room on it for the port.
+        """
+        canonical = self._canonical_port_name(port_name)
+        if canonical not in self._faces:
+            return Unit.nozzle(self, port_name, face)
+        resolved = _block_face(face, self.name)
+        offered = self._offered(canonical)
+        if resolved not in offered:
+            from pandid.portgeom import unreachable_face
+
+            raise unreachable_face(self, canonical, resolved, offered)
+        misfit = self._misfit({**self._faces, canonical: resolved})
+        if misfit is not None:
+            raise ValueError(
+                f"{self.name}: {misfit}. Keep {canonical} on "
+                f"{self._faces[canonical]}, or move it with "
+                f"nozzle({canonical!r}, ...) to another of {', '.join(offered)}")
+        self._faces[canonical] = resolved
+        self._stated.add(canonical)
+        self._invalidate_layout()
+        return self
+
+
+class Reactor(_SeriesFamilies):
     """Reactor: a vessel body with an agitator and internals.
 
     ``Reactor("R-1")`` is a CSTR, ``variant="tubular"`` a PFR,
@@ -4917,6 +5100,7 @@ class Reactor(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
             self.feed = self.feeds[0]
+        self._init_families()
 
     # Hidden from type checkers.
     if not TYPE_CHECKING:
@@ -4949,7 +5133,7 @@ class Reactor(Unit):
             return super().__getattr__(name)
 
 
-class Separator(Unit):
+class Separator(_SeriesFamilies):
     """Flash drum or other separator.
 
     The phase separators (``"default"``, ``"horizontal"``,
@@ -5118,13 +5302,14 @@ class Separator(Unit):
             self.feed = self.feeds[0]
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
+        self._init_families()
 
 
 #: Default drawn tray count (ISO 10628-2 2.6).
 DEFAULT_TRAYS = 8
 
 
-class Column(Unit):
+class Column(_SeriesFamilies):
     """General tower: a shell with feeds, overhead and bottoms.
 
     :class:`DistillationColumn` adds the reflux and reboiler ports,
@@ -5264,6 +5449,7 @@ class Column(Unit):
                 name, internals, trays, draw_stages, draw_names, "draw_stages", "draw"
             ),
         }
+        self._init_families()
 
     def _series_pin(self, port_name: str) -> float | None:
         """Return the shell fraction a stage pins a port to.

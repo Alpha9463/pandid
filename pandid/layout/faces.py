@@ -12,7 +12,7 @@ from pandid.routing.visibility import MIN_ESCAPE
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.ports import Port
-    from pandid.units import Unit, _FaceFamilies
+    from pandid.units import Unit, _Families
 
 
 def select_faces(fs: "Flowsheet") -> None:
@@ -30,7 +30,7 @@ def select_faces(fs: "Flowsheet") -> None:
     """
     from pandid.layout.stages import is_control
     from pandid.portgeom import pin_intent, port_faces
-    from pandid.units import _FaceFamilies
+    from pandid.units import _Families
 
     for unit in fs.units:
         frame = unit.frame
@@ -64,13 +64,13 @@ def select_faces(fs: "Flowsheet") -> None:
                 continue
             frame.port_faces[name] = face
             taken.add(_point(unit, frame, name))
-        if isinstance(unit, _FaceFamilies) and fs._family_faces:
+        if isinstance(unit, _Families) and fs._family_faces:
             members = [name for name in unit._faces
                        if name in live and name not in fixed and name not in menus]
             _choose_family_faces(fs, unit, frame, members)
 
 
-def _choose_family_faces(fs: "Flowsheet", unit: "_FaceFamilies", frame,
+def _choose_family_faces(fs: "Flowsheet", unit: "_Families", frame,
                          members: list[str]) -> None:
     """Move each family port whose move saves its family bends.
 
@@ -83,7 +83,7 @@ def _choose_family_faces(fs: "Flowsheet", unit: "_FaceFamilies", frame,
     ----------
     fs : Flowsheet
         Sheet with placed units.
-    unit : _FaceFamilies
+    unit : _Families
         Block, tank or vessel.
     frame : Frame
         The unit's frame.
