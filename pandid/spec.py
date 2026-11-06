@@ -2175,7 +2175,8 @@ def _write_connection_faces(unit, entry: dict[str, Any],
         elif not (omit_bare_single and len(family) == 1):
             entry[key] = len(family)
     moved = {name: face for name, face in unit._faces.items()
-             if name in unit._stated and name not in unit._listed}
+             if name in unit._stated and name not in unit._listed
+             and name not in unit._port_faces}
     if moved:
         entry["port_faces"] = {**entry.get("port_faces", {}), **moved}
     declared = [port.name for port in (*unit.inlets, *unit.outlets)]

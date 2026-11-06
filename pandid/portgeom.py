@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, NamedTuple
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
 
-    from pandid.units import Unit, _FaceFamilies
+    from pandid.units import Unit, _Families
 
 
 def _sym(unit: "Unit"):
@@ -144,7 +144,50 @@ def drawn_side(face: str, rot: int, mirrored: bool, mirror_y: bool) -> str:
     return outward_dir(bx, by, bw, bh)
 
 
-def family_faces(unit: "_FaceFamilies", placed) -> dict[str, str] | None:
+def own_faces(placed) -> dict[str, str]:
+    """Return the symbol's own face drawn on each face under a placement.
+
+    Parameters
+    ----------
+    placed : Pin, Frame, _Slot or None
+        Placement.
+
+    Returns
+    -------
+    dict[str, str]
+        Drawn face to own face.
+    """
+    rot, mx, my = _xform(placed)
+    return {drawn_side(face, rot, mx, my): face for face in COMPASS_FACES}
+
+
+def stated_faces(unit: "_Families", placed) -> dict[str, str]:
+    """Return a unit's family faces with its ``nozzle()`` faces applied.
+
+    A face ``nozzle()`` names as drawn is turned onto the unit's own
+    axes under the placement; if the faces cannot all be drawn there,
+    the unit's own faces are returned.
+
+    Parameters
+    ----------
+    unit : _Families
+        Unit with port families.
+    placed : Pin, Frame, _Slot or None
+        Placement.
+
+    Returns
+    -------
+    dict[str, str]
+        Port name to face on the unit's own axes, in drawn order.
+    """
+    own = own_faces(placed)
+    stated = {name: own[face] for name, face in unit._port_faces.items()
+              if name in unit._faces and own[face] != unit._faces[name]}
+    faces = {**unit._faces, **stated}
+    return faces if stated and unit._fits(faces, placed) else unit._faces
+
+
+def family_faces(unit: "_Families", placed) -> dict[str, str] | None:
     """Return a unit's family faces with the engine's choices applied.
 
     A lone port its symbol offers a menu of faces is drawn from that
@@ -152,8 +195,8 @@ def family_faces(unit: "_FaceFamilies", placed) -> dict[str, str] | None:
 
     Parameters
     ----------
-    unit : _FaceFamilies
-        Block, tank or vessel.
+    unit : _Families
+        Unit with port families.
     placed : Frame or None
         Placement whose ``port_faces`` holds the choices, as drawn.
 
@@ -166,13 +209,13 @@ def family_faces(unit: "_FaceFamilies", placed) -> dict[str, str] | None:
     chosen = getattr(placed, "port_faces", None)
     if not chosen:
         return None
-    rot, mx, my = _xform(placed)
-    own = {drawn_side(face, rot, mx, my): face for face in COMPASS_FACES}
+    own = own_faces(placed)
+    faces = stated_faces(unit, placed)
     menus = _sym(unit).port_faces
     moved = {name: own[face] for name, face in chosen.items()
              if name in unit._faces and name not in unit._stated
-             and len(menus.get(name, ())) < 2 and own[face] != unit._faces[name]}
-    return {**unit._faces, **moved} if moved else None
+             and len(menus.get(name, ())) < 2 and own[face] != faces[name]}
+    return {**faces, **moved} if moved else None
 
 
 def _placed_sym(unit: "Unit", placed):
@@ -190,13 +233,10 @@ def _placed_sym(unit: "Unit", placed):
     Symbol
         The unit's symbol, with its families on the chosen faces.
     """
-    if getattr(placed, "port_faces", None):
-        from pandid.units import _FaceFamilies
+    from pandid.units import _Families
 
-        if isinstance(unit, _FaceFamilies):
-            faces = family_faces(unit, placed)
-            if faces is not None:
-                return unit.symbol(faces)
+    if isinstance(unit, _Families):
+        return unit.symbol(family_faces(unit, placed) or stated_faces(unit, placed))
     return _sym(unit)
 
 
@@ -257,10 +297,14 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     port_name = unit._canonical_port_name(port_name)
     anchor = unit._symbol_anchor(port_name)
     menu = (getattr(sym, "port_faces", None) or {}).get(anchor)
+    # A series member leaves by its series' face.
+    declared = None
     if menu:
         coords = list(menu.values())
     elif (placed := _series_point(unit, sym, port_name)) is not None:
         coords = [placed]
+        series = sym.series_for(port_name)
+        declared = series.face if series is not None else None
     else:
         # An unanchored port falls back to the symbol's centre.
         coords = [sym.ports.get(anchor, (sym.width / 2, sym.height / 2))]
@@ -272,7 +316,8 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
             face = outward_dir(lx, ly, w, h, unit.kind, anchor, mirrored)
         else:
             (lx, ly), (ox, oy, iw, ih) = _to_box(sym, px, py, w, h, rot, mirrored, mirror_y)
-            face = outward_dir(lx - ox, ly - oy, iw, ih, unit.kind, anchor, mirrored)
+            face = (drawn_side(declared, rot, mirrored, mirror_y) if declared is not None
+                    else outward_dir(lx - ox, ly - oy, iw, ih, unit.kind, anchor, mirrored))
         out.setdefault(face, (lx, ly))
     return out
 
@@ -329,10 +374,10 @@ def _series_point(unit: "Unit", sym, port_name: str
     tuple[float, float] or None
         Point in symbol coordinates, or None if no series places it.
     """
+    port_name = unit._canonical_port_name(port_name)
     series = sym.series_for(port_name) if hasattr(sym, "series_for") else None
     if series is None:
         return None
-    port_name = unit._canonical_port_name(port_name)
     members = unit._series_members(series)
     index = members.get(port_name)
     if index is None:
