@@ -726,6 +726,12 @@ class Flowsheet:
         # the flag cannot level, and whether the last layout left one off.
         self._level_flags = False
         self._flags_off = False
+        # Whether layout may stand a valve station on an upright leg, with
+        # its room budgeted between the units it joins, and whether the
+        # last layout left any station on a pipe with an upright leg
+        # without clear room.
+        self._upright_stations = False
+        self._crowded_station = False
         # Whether layout sets each angle valve at a corner of its line, and
         # whether the last layout drew any angle valve it could set so.
         self._corner_valves = False
@@ -2443,7 +2449,8 @@ class Flowsheet:
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
-        self._fannable = self._far_branches = self._flags_off = self._angle_valves = False
+        self._fannable = self._far_branches = self._flags_off = False
+        self._crowded_station = self._angle_valves = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2488,9 +2495,13 @@ class Flowsheet:
         again with each such line turned beside the splitter or mixer and
         its valves and fittings next to the unit at its other end, kept
         only if no crossing, bend, fallback, finding, clash or tap off its
-        line grows. Where a line carries an angle valve, the sheet is laid
-        out and routed again with the valve set at a corner of the line,
-        inlet on one leg and outlet on the other, kept on the same terms.
+        line grows. Where the last layout left a valve station on a pipe
+        with an upright leg without clear room, the sheet is laid out and
+        routed again with each station free to stand on an upright leg,
+        its room kept between the units it joins, kept on the same terms.
+        Where a line carries an angle valve, the sheet is laid out and
+        routed again with the valve set at a corner of the line, inlet on
+        one leg and outlet on the other, kept on the same terms.
         Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
@@ -2531,7 +2542,11 @@ class Flowsheet:
         placed again an arrowhead clear of the line its chain taps, and,
         where that does not settle, again from the sheet with its automatic
         routes cleared, each kept only if no tap leaves its line and no
-        finding or clash grows. Where one is kept, the next route() or
+        finding or clash grows. Then each balloon with a nozzle whose
+        stand-off runs into another unit is turned to faces whose stand-off
+        is clear, with only its lines routed again, each kept only if no
+        tap leaves its line and no finding, clash, crossing or fallback
+        route grows. Where any of these is kept, the next route() or
         layout() starts from the drawing before them. Then, where a line
         that found no path runs through a unit, the sheet is routed again
         with each such line drawn round the units in its way where a clear
@@ -2658,7 +2673,46 @@ class Flowsheet:
             unkept = self._state()
             if self._keep_further_off(router or DefaultRouter()):
                 self._unkept = unkept
+            if self._turn_blocked_exits(router or DefaultRouter()):
+                self._unkept = unkept
             self._route_round_units(router or DefaultRouter())
+
+    def _turn_blocked_exits(self, router) -> bool:
+        """Turn each balloon with a nozzle whose stand-off is blocked to
+        faces whose stand-off is clear, routing again only its lines, each
+        kept only if no tap leaves its line and no finding, clash, crossing
+        or fallback route grows.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+
+        Returns
+        -------
+        bool
+            Whether any balloon's new faces are kept.
+        """
+        from pandid.layout.control import _taps_off
+        from pandid.layout.faces import blocked_exits, select_faces
+
+        kept = False
+        for unit in blocked_exits(self):
+            before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
+            frame = unit.frame
+            assert frame is not None
+            faces = dict(frame.port_faces)
+            select_faces(self, [unit])
+            if frame.port_faces == faces:
+                continue
+            routed = self._route_only(
+                router, [port.stream for port in unit.ports.values() if port.stream is not None])
+            if routed and _taps_off(self) <= off and not any(
+                    n > before[k] for k, n in self._counted_flaws().items()):
+                kept = True
+            else:
+                self._put_geometry(drawn, keep_manual=False)
+        return kept
 
     def _route_round_units(self, router) -> bool:
         """Route the sheet again where a route that found no path runs
@@ -2686,26 +2740,46 @@ class Flowsheet:
         if not through:
             return False
         before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
-        # Hold every other automatic route as drawn while those are routed.
-        held = [s.route for i, s in enumerate(self.streams)
-                if s.route is not None and not s.route.manual and i not in through]
-        for route in held:
-            route.manual = True
         self._clear_fallback = True
         try:
-            router.route(self)
-            routed = True
-        except Exception:
-            routed = False
+            routed = self._route_only(router, [self.streams[i] for i in through])
         finally:
             self._clear_fallback = False
-            for route in held:
-                route.manual = False
         kept = routed and _taps_off(self) <= off and not any(
             n > before[k] for k, n in self._counted_flaws().items())
         if not kept:
             self._put_geometry(drawn, keep_manual=False)
         return kept
+
+    def _route_only(self, router, streams: "list[Stream]") -> bool:
+        """Route the given streams again, holding every other automatic
+        route as drawn.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+        streams : list[Stream]
+            Streams to route.
+
+        Returns
+        -------
+        bool
+            Whether the router ran without raising.
+        """
+        routed = {id(s) for s in streams}
+        held = [s.route for s in self.streams if s.route is not None
+                and not s.route.manual and id(s) not in routed]
+        for route in held:
+            route.manual = True
+        try:
+            router.route(self)
+            return True
+        except Exception:
+            return False
+        finally:
+            for route in held:
+                route.manual = False
 
     def _counted_flaws(self) -> Counter[str]:
         """Count findings and clashes, crossings and fallback routes.
@@ -3032,7 +3106,8 @@ class Flowsheet:
                         self._far_branches, self._flags_off,
                         tuple((u, u._stock_face) for u in self.units
                               if hasattr(u, "_stock_face")),
-                        self._lanes, self._relaned, self._angle_valves))
+                        self._lanes, self._relaned, self._crowded_station,
+                        self._angle_valves))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -3046,7 +3121,7 @@ class Flowsheet:
          self._mounted_layout, self._widened, self._stack_spans,
          self._rows_out, self._tees_away, self._fannable, self._far_branches,
          self._flags_off, stock, self._lanes, self._relaned,
-         self._angle_valves) = _copied(state)
+         self._crowded_station, self._angle_valves) = _copied(state)
         for u, flag in stock:
             u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)
@@ -3264,6 +3339,8 @@ class Flowsheet:
         try:
             if tries and self._fannable:
                 relaid_if_better("_fan_out")
+            if tries and self._crowded_station:
+                relaid_if_better("_upright_stations")
             if tries and self._angle_valves:
                 relaid_if_better("_corner_valves")
             if tries and self._exit_tight:

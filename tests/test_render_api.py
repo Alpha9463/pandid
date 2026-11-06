@@ -165,6 +165,22 @@ def test_canvas_fits_content_and_is_not_padded_to_page_size():
     assert w < 800 and h < 500
 
 
+def test_a_tag_beside_its_unit_at_the_edge_of_the_sheet_is_drawn_whole():
+    """Check that the sheet reaches past a tag drawn right of the last unit."""
+    from pandid.portgeom import tag_width
+
+    fs = Flowsheet("t")
+    feed = fs.add(U.Feed("F"))
+    drum = fs.add(U.Vessel("VESSEL-10101"))
+    drum.label_pos = "right"
+    fs.connect(feed.outlet, drum.inlet)
+    svg = fs.to_svg()
+    view = re.search(r'viewBox="([-\d.]+) [-\d.]+ ([\d.]+)', svg)
+    tag = re.search(r'<text x="([-\d.]+)"[^>]*text-anchor="start"[^>]*>VESSEL-10101<', svg)
+    assert view is not None and tag is not None
+    assert float(tag[1]) + tag_width("VESSEL-10101") <= float(view[1]) + float(view[2])
+
+
 # --- diagram: a P&ID draws its process lines without arrowheads ----------------
 
 # An arrowhead on a drawn line, and the marker definition it points at.
