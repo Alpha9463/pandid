@@ -1107,6 +1107,31 @@ def flotation_overlays(name: str) -> tuple:
     return (Overlay(28, name, left, 0.0, FLOT_AGITATOR_W / FLOT_W, FLOT_AGITATOR_FOOT / FLOT_H),)
 
 
+def mixer_settler_overlays(name: str) -> tuple:
+    """Return a group-28 agitator hung in a mixer-settler's mixer.
+
+    Parameters
+    ----------
+    name : str
+        Group-28 agitator name.
+
+    Returns
+    -------
+    tuple[Overlay]
+        The agitator.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a registered group-28 part.
+    """
+    from pandid.render.symbols import (
+        MS_AGITATOR_FOOT, MS_AGITATOR_W, MS_H, MS_MIXER_W, MS_W, Overlay)
+    _part(28, name)
+    left = (MS_MIXER_W - MS_AGITATOR_W) / 2 / MS_W
+    return (Overlay(28, name, left, 0.0, MS_AGITATOR_W / MS_W, MS_AGITATOR_FOOT / MS_H),)
+
+
 #: Group-11 crusher and mill body box, in grid modules.
 CRUSHER_MODULES_W, CRUSHER_MODULES_H = 10.0, 6.0
 

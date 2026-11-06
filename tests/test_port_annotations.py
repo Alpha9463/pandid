@@ -120,9 +120,23 @@ def _counted(base):
     } - _built(base)
 
 
+@functools.cache
+def _aliased(base):
+    """Return the annotated names a count of one aliases to its only member."""
+    return {
+        name
+        for keyword in _COUNTS[base]
+        for unit in [base("X-1", **{keyword: 1})]
+        for name in _annotated(base) - set(unit.ports)
+        if isinstance(getattr(unit, name, None), Port)
+    }
+
+
 def _ranged(cls):
-    """Return the nozzles a count adds on the family bases of ``cls``."""
-    return set().union(*(_counted(base) for base in cls.__mro__ if base in _COUNTS))
+    """Return the nozzles, and their one-member aliases, a count adds on the family bases."""
+    return set().union(
+        *(_counted(base) | _aliased(base) for base in cls.__mro__ if base in _COUNTS)
+    )
 
 
 @pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
