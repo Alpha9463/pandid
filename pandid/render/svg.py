@@ -2887,14 +2887,64 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
     return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
 
 
-def drawing_bounds(fs) -> "tuple[float, float, float, float]":
-    """Return the bounding box of every unit box, tag beside a unit, and
-    route waypoint.
+def unit_tags(fs, joints: "str | None", direction: str) -> list:
+    """Place each unit's tag and its ``NC`` and fail-position letters.
+
+    The labels keep clear of the drawn lines, the symbols, the flange
+    marks, the quadrant codes and the package frames.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed flowsheet.
+    joints : str or None
+        Sheet joint default, whose flange marks the labels avoid.
+    direction : str
+        ``jump_direction``.
+
+    Returns
+    -------
+    list[tuple]
+        ``(unit, tag, items)`` for each unit labelled beside its symbol:
+        the tag item or ``None``, and every label item, tag first.
+    """
+    sheet = SvgRenderer()
+    ink = _ink(fs, direction)
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
+                if b is not None]
+    symbols += [(None, b) for b in package_edges(fs)]
+    out = []
+    for u in fs.units:
+        f = u.frame
+        if f is None or u.kind in ("feed", "product", "instrument"):
+            continue
+        x, y, w, h = f.x, f.y, f.w, f.h
+        tag = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols) if u.tag else None
+        tag_box = None if tag is None else _unit_label_box(tag)
+        items = [] if tag is None else [tag]
+        # NC marking (ISO 15519-1 11.4.5).
+        if closed_marking(u, default_registry) == "NC":
+            items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
+        # Fail position (ISA-5.1 Table 5.4.4).
+        letters = fail_marking(u)
+        if letters:
+            items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
+                                                ink, symbols))
+        out.append((u, tag, items))
+    return out
+
+
+def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
+    """Return the box round the units, labels, routes and package frames.
 
     Parameters
     ----------
     fs : Flowsheet
         Laid-out flowsheet.
+    labels : sequence of tuple, optional
+        Boxes ``(x0, y0, x1, y1)`` of the labels drawn beside units.
 
     Returns
     -------
@@ -2906,9 +2956,6 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
     ValueError
         If a unit has no frame.
     """
-    from pandid.portgeom import unit_box
-    from pandid.routing.visibility import _tag_halo
-
     if not fs.units:
         return (0.0, 0.0, 0.0, 0.0)
     x0 = y0 = float("inf")
@@ -2916,14 +2963,9 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
     for u in fs.units:
         if u.frame is None:
             raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-        beside = u.kind != "instrument" and u.frame.label_pos in ("left", "right")
-        halo = _tag_halo(u, u.frame) if beside else None
-        boxes = [unit_box(u, u.frame)]
-        if halo is not None:
-            boxes.append((halo.x_min, halo.y_min, halo.x_max, halo.y_max))
-        for bx0, by0, bx1, by1 in boxes:
-            x0, y0 = min(x0, bx0), min(y0, by0)
-            x1, y1 = max(x1, bx1), max(y1, by1)
+    for bx0, by0, bx1, by1 in (*(unit_box(u, u.frame) for u in fs.units), *labels):
+        x0, y0 = min(x0, bx0), min(y0, by0)
+        x1, y1 = max(x1, bx1), max(y1, by1)
     for s in fs.streams:
         if s.route and s.route.waypoints:
             for px, py in s.route.waypoints:
@@ -3347,7 +3389,7 @@ class DiagramPlan(NamedTuple):
 
 def diagram_plan(fs, sheet: "_Sheet | None", border: str,
                  show_stream_table: bool,
-                 diagram: "str | None" = None) -> DiagramPlan:
+                 diagram: "str | None" = None, labels=()) -> DiagramPlan:
     """Lay out the diagram's sheet and dock its furniture.
 
     Furniture is the annotation boxes, a title strip for a title block
@@ -3365,6 +3407,8 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
         Whether to dock the stream table.
     diagram : str or None, optional
         Diagram type; ``None`` is a PFD.
+    labels : sequence of tuple, optional
+        Boxes ``(x0, y0, x1, y1)`` of the labels drawn beside units.
 
     Returns
     -------
@@ -3378,7 +3422,7 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
     """
     from pandid.document import TableBox, TitleBlock
 
-    bounds = drawing_bounds(fs)
+    bounds = drawing_bounds(fs, labels)
     if not fs.units:  # empty flowsheet: use the nominal page size
         nominal = sheet or _page("A3")
         assert nominal is not None
@@ -3543,8 +3587,11 @@ class SvgRenderer:
         if table_sheet:
             return self._table_sheet(fs, sheet, border, diagram)
 
-        # 1. The sheet: furniture docked round the drawing.
-        plan = diagram_plan(fs, sheet, border, bool(show_stream_table), diagram)
+        # 1. The sheet: furniture docked round the drawing and its tags.
+        tags = [item for _, _, items in unit_tags(fs, joints, jump_direction)
+                for item in items]
+        plan = diagram_plan(fs, sheet, border, bool(show_stream_table), diagram,
+                            [b for b in map(_unit_label_box, tags) if b is not None])
         fit_issues: list[Issue] = []
         # Findings from the label passes.
         self._findings: list[Issue] = []
@@ -3562,14 +3609,12 @@ class SvgRenderer:
         lines.extend(self._defs(fs, arrows))
         unit_labels: list = []
         balloons: list = []
-        ink = _ink(fs, jump_direction)
-        quadrants = quadrant_labels(fs, jump_direction)
         drawing: list[str] = []
         # Opaque plates, for the debug overlay and the codes drawn last.
         plates: "list[tuple[float, float, float, float]]" = []
         drawing.extend(self._draw_packages(fs, unit_labels))
-        drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints,
-                                        quadrants))
+        unit_labels += tags
+        drawing.extend(self._draw_units(fs, balloons))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
                                           plates, joints, crossing_style))
         # Instruments go over the lines.
@@ -3587,7 +3632,7 @@ class SvgRenderer:
         if grid is not None:
             drawing[:0] = _debug.overlay(
                 fs, plan.bounds, grid, 1.0 if plan.fit is None else plan.fit[0],
-                plates=plates, ink=[line.box for line in ink])
+                plates=plates, ink=[line.box for line in _ink(fs, jump_direction)])
 
         if plan.fit is None:
             lines.extend(drawing)
@@ -3818,39 +3863,22 @@ class SvgRenderer:
 
     # --- units --------------------------------------------------------
 
-    def _draw_units(self, fs, label_items, balloons, ink=(), joints=None,
-                    quadrants=()):
-        """Return the ``units`` group and collect tags and balloons.
+    def _draw_units(self, fs, balloons):
+        """Return the ``units`` group and collect balloons.
 
         Parameters
         ----------
         fs : Flowsheet
             Flowsheet being drawn.
-        label_items : list
-            Receives tag, ``NC`` and fail-position label items.
         balloons : list[str]
             Receives instrument SVG.
-        ink : sequence of _Ink, optional
-            Drawn lines for tags to avoid.
-        joints : str, optional
-            Sheet joint default, for flange marks to avoid.
-        quadrants : sequence, optional
-            Quadrant label items for tags to avoid.
 
         Returns
         -------
         list[str]
             SVG lines.
         """
-        from pandid.portgeom import unit_box
-
         lines = ['  <g id="units">']
-        # Every symbol box with its unit, and owner-less marks, for tags
-        # to avoid.
-        symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-        symbols += [(None, b) for b in flange_boxes(fs, joints)]
-        symbols += [(None, b) for b in map(_unit_label_box, quadrants) if b is not None]
-        symbols += [(None, b) for b in package_edges(fs)]
         for u in fs.units:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines
@@ -3888,23 +3916,6 @@ class SvgRenderer:
 
             if u.kind == "instrument":
                 out.extend(self._draw_instrument_tag(u, x, y, u_width, u_height))
-            else:
-                tag_box = None
-                if u.tag:
-                    item = self._tag_item(u, f, x, y, u_width, u_height, u.tag,
-                                          ink, symbols)
-                    tag_box = _unit_label_box(item)
-                    label_items.append(item)
-                # NC marking (ISO 15519-1 11.4.5).
-                if closed_marking(u, default_registry) == "NC":
-                    label_items.append(
-                        self._nc_label_item(u, f, x, y, u_width, u_height, tag_box))
-                # Fail position (ISA-5.1 Table 5.4.4).
-                letters = fail_marking(u)
-                if letters:
-                    label_items.append(
-                        self._fail_label_item(u, f, x, y, u_width, u_height, letters,
-                                              tag_box, ink, symbols))
         lines.append('  </g>')
         return lines
 

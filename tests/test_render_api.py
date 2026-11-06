@@ -181,6 +181,59 @@ def test_a_tag_beside_its_unit_at_the_edge_of_the_sheet_is_drawn_whole():
     assert float(tag[1]) + tag_width("VESSEL-10101") <= float(view[1]) + float(view[2])
 
 
+def _valve_over_notes() -> Flowsheet:
+    """Build a fail-closed valve, tagged below, over notes docked bottom-left."""
+    from pandid import ControlValve
+    from pandid.document import notes
+
+    fs = Flowsheet("t")
+    feed = fs.add(U.Feed("F"))
+    valve = fs.add(ControlValve("CV-503", fail="closed"))
+    valve.label_pos = "bottom"
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    note = "A note long enough to run under the control valve."
+    fs.add_annotation(notes([note], title="GENERAL NOTES", align="bottom-left"))
+    return fs
+
+
+def _clear(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
+    """Return whether two ``(x0, y0, x1, y1)`` boxes do not overlap."""
+    return a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+
+
+def test_docked_notes_clear_the_fail_letters_under_a_valve():
+    """Check that notes dock below the fail letters under a valve's tag."""
+    num = r"([-\d.]+)"
+    box = rf'<rect x="{num}" y="{num}" width="{num}" height="{num}" fill="white"'
+    svg = _valve_over_notes().to_svg()
+    letters = re.search(box + r" />\s*<text[^>]*>FC<", svg)
+    notes = re.search(box + r" stroke[^>]*/>\s*<text[^>]*>GENERAL NOTES<", svg)
+    assert letters is not None and notes is not None
+    x, y, w, h = map(float, letters.groups())
+    nx, ny, nw, nh = map(float, notes.groups())
+    assert _clear((x, y, x + w, y + h), (nx, ny, nx + nw, ny + nh))
+
+
+def test_drawio_docks_notes_clear_of_the_fail_letters_under_a_valve():
+    """Check that draw.io docks notes clear of every tag and fail letter."""
+    import xml.etree.ElementTree as ET
+
+    from pandid.render.drawio import _tag_pass
+
+    fs = _valve_over_notes()
+    root = ET.fromstring(fs.to_drawio())
+    cell = next(c for c in root.iter("mxCell") if c.get("value") == "GENERAL NOTES")
+    geo = cell.find("mxGeometry")
+    assert geo is not None
+    x, y = float(geo.get("x", "0")), float(geo.get("y", "0"))
+    notes = (x, y, x + float(geo.get("width", "0")), y + float(geo.get("height", "0")))
+    plates = _tag_pass(fs, None, "vertical").plates
+    assert plates
+    assert all(_clear(plate, notes) for plate in plates)
+
+
 # --- diagram: a P&ID draws its process lines without arrowheads ----------------
 
 # An arrowhead on a drawn line, and the marker definition it points at.
