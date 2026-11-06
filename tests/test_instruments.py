@@ -7,6 +7,7 @@ from collections.abc import Callable
 import pytest
 
 from pandid import Flowsheet, units as U
+from pandid.loops import ControlLoop
 from pandid.portgeom import port_point
 from pandid.streams import Stream
 
@@ -2943,3 +2944,114 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
             min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
             for (ax, ay), (bx, by) in zip(points, points[1:])
         ), (tt.name, tt.tap, points)
+
+
+def _valved_bank(first_tag: int) -> tuple[Flowsheet, list[ControlLoop]]:
+    """Route three pumps in parallel, each with a flow loop on its valved suction line."""
+    from pandid.devices import ControlValve
+
+    fs = Flowsheet("valved loops")
+    sp = fs.add(U.Splitter("SP", n_outlets=3))
+    mx = fs.add(U.Mixer("MX", n_inlets=3))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    pairs = []
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        line = fs.connect(outlet, pump.suction)
+        fs.connect(pump.discharge, inlet)
+        pairs.append((line, fs.add(ControlValve(f"FV-{first_tag + i}"), on=line, at=0.5)))
+    loops = [
+        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve)
+        for i, (line, valve) in enumerate(pairs)
+    ]
+    fs.route()
+    return fs, loops
+
+
+def _drawn_wrong(fs: Flowsheet, line: Stream) -> list[str]:
+    """Return the findings that draw a line through a unit or on the slant."""
+    codes = ("route-crosses-unit", "route-diagonal")
+    return [
+        i.message
+        for i in fs.validate()
+        if i.code in codes and i.message.startswith(f"stream {line.name} ")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("first_tag", "loop", "signal"),
+    [
+        (10, 2, "output"),
+        (20, 2, "output"),
+        (50, 2, "output"),
+        (99, 2, "output"),
+        (999, 0, "measurement"),
+    ],
+)
+def test_a_balloon_nozzle_facing_a_unit_turns_clear(first_tag: int, loop: int, signal: str):
+    """Draw a bank's signal line clear of units where its balloon's nozzle faced one.
+
+    The line takes no fallback path and crosses no unit.
+    """
+    fs, loops = _valved_bank(first_tag)
+    line = getattr(loops[loop], signal)
+
+    assert line.route is not None and not line.route.used_fallback
+    assert _drawn_wrong(fs, line) == []
+
+
+def test_a_balloon_turned_clear_stays_clear_over_repeated_routes():
+    """Route a bank three times; its turned controller's line stays clear each time.
+
+    The line takes no fallback path and crosses no unit after each route().
+    """
+    fs, loops = _valved_bank(999)
+    line = loops[0].measurement
+    for again in (False, True, True):
+        if again:
+            fs.route()
+
+        assert line.route is not None and not line.route.used_fallback
+        assert _drawn_wrong(fs, line) == []
+
+
+def _blocked_controller() -> tuple[Flowsheet, Stream]:
+    """Route FT-101 below V-101 to FIC-101, pinned just above it."""
+    fs = Flowsheet("blocked controller")
+    fs.add(U.Vessel("V-101", width=80, height=60)).pin(x=145, y=155)
+    ft = fs.add(U.Instrument("FT-101")).pin(x=163, y=320)
+    fic = fs.add(U.Instrument("FIC-101")).pin(x=163, y=100)
+    line = fs.connect(ft.sig_out, fic.sig_in, kind="electric")
+    fs.route()
+    return fs, line
+
+
+def test_a_signal_line_frozen_on_a_turned_nozzle_keeps_its_points():
+    """Route again after freezing the line into a nozzle turned off V-101.
+
+    The frozen line keeps its points, is square and crosses no unit.
+    """
+    fs, line = _blocked_controller()
+    assert line.route is not None
+    points = list(line.route.waypoints)
+    line.via(points)
+    fs.route()
+
+    assert line.route.waypoints == points
+    assert _drawn_wrong(fs, line) == []
+
+
+def test_a_hand_drawn_line_into_a_blocked_nozzle_keeps_its_face():
+    """Route a line drawn by hand into FIC-101's S face, which V-101 blocks.
+
+    The line keeps its points and is square.
+    """
+    fs, line = _blocked_controller()
+    points = [(185.0, 295.0), (185.0, 169.0)]
+    line.via(points)
+    fs.route()
+
+    assert line.route is not None
+    assert line.route.waypoints == points
+    assert [m for m in _drawn_wrong(fs, line) if "slant" in m] == []
