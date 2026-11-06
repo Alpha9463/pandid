@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MixerSettler` draws one solvent-extraction stage with `light_in`,
   `heavy_in`, `light_out` and `heavy_out`. `ExtractionColumn` is a sieve-tray
   column whose two feeds enter its top and bottom stages.
+- `Deaerator` draws a storage drum with its deaerating column on top: `feed`
+  and `vent` on the column, `steam` into the drum and `outlet` from its floor.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.

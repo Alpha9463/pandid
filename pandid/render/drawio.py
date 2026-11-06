@@ -372,7 +372,10 @@ HOP_DROPPED = "drawio-hop-dropped"
 _BALLOON_FILL = "#ffffff"
 
 #: Drawings exported as an inline stencil of their own outline.
-OWN_OUTLINE = frozenset({("silo", "default"), ("silo", "bunker"), ("mixer_settler", "default")})
+OWN_OUTLINE = frozenset({
+    ("silo", "default"), ("silo", "bunker"), ("mixer_settler", "default"),
+    ("deaerator", "default"),
+})
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
