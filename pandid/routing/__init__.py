@@ -9,6 +9,8 @@ from pandid.deprecation import Deprecation
 from pandid.geometry import Route
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from pandid.flowsheet import Flowsheet
     from pandid.routing.astar import CrossingIndex
     from pandid.streams import Stream
@@ -121,11 +123,18 @@ def _fallback_path(
     goal: tuple[float, float],
     obstacles: list,
     crossing_index: "CrossingIndex | None" = None,
+    lanes: "tuple[Sequence[float], Sequence[float]] | None" = None,
 ) -> list[tuple[float, float]]:
-    """Return the L-shaped route drawn when no path is found.
+    """Return the route drawn when no path is found.
 
-    Of the two corner orders, pick the one with fewer segments hitting
-    an obstacle, then fewer recorded-line crossings, then across-first.
+    Of the two L-shaped corner orders, pick the one with fewer segments
+    hitting an obstacle, then fewer recorded-line crossings, then
+    across-first. Given ``lanes``, where that L hits an obstacle, draw
+    instead the route that hits none and keeps :data:`EDGE_TOL` off
+    every obstacle but the ends' own, with the fewest crossings, then
+    bends, then length: an L, or a Z along a lane, from either end's
+    escape node or, where its stub runs into an obstacle, from a lane
+    short of it or halfway to it.
 
     Parameters
     ----------
@@ -141,19 +150,25 @@ def _fallback_path(
         Obstacles whose hits are counted.
     crossing_index : CrossingIndex or None, optional
         Routes already drawn in this pass.
+    lanes : tuple[Sequence[float], Sequence[float]] or None, optional
+        x coordinates of the vertical lanes and y coordinates of the
+        horizontal lanes a route may run along; ``None`` draws the L.
 
     Returns
     -------
     list[tuple[float, float]]
         Route waypoints from ``start`` to ``goal``.
     """
-    def through(corner: tuple[float, float]) -> list[tuple[float, float]]:
-        """Return the route that turns at ``corner``.
+    def through(s: tuple[float, float], g: tuple[float, float],
+                *corners: tuple[float, float]) -> list[tuple[float, float]]:
+        """Return the route between two escape nodes that turns at ``corners``.
 
         Parameters
         ----------
-        corner : tuple[float, float]
-            Turning point between the two escape nodes.
+        s, g : tuple[float, float]
+            Source and destination escape nodes.
+        *corners : tuple[float, float]
+            Turning points between them.
 
         Returns
         -------
@@ -161,7 +176,7 @@ def _fallback_path(
             Route waypoints, consecutive repeats dropped.
         """
         pts = [start]
-        for point in (start_proj, corner, goal_proj, goal):
+        for point in (s, *corners, g, goal):
             if point != pts[-1]:
                 pts.append(point)
         return pts
@@ -190,9 +205,78 @@ def _fallback_path(
         )
         return obstacle_hits, line_hits
 
-    across = through((goal_proj[0], start_proj[1]))
-    down = through((start_proj[0], goal_proj[1]))
-    return down if score(down) < score(across) else across
+    def ends(anchor: tuple[float, float],
+             proj: tuple[float, float]) -> list[tuple[float, float]]:
+        """Return the escape nodes a stub may end at.
+
+        Parameters
+        ----------
+        anchor : tuple[float, float]
+            Port anchor.
+        proj : tuple[float, float]
+            Escape node.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            ``proj``, and where the stub runs into an obstacle, each lane
+            short of it and the point halfway to it.
+        """
+        axis = 0 if anchor[1] == proj[1] else 1
+        sign = 1.0 if proj[axis] > anchor[axis] else -1.0
+        across = anchor[1 - axis]
+        faces = [sign * ((o.x_min, o.x_max) if axis == 0 else (o.y_min, o.y_max))[sign < 0]
+                 - sign * anchor[axis]
+                 for o in obstacles
+                 if ((o.y_min <= across <= o.y_max) if axis == 0
+                     else (o.x_min <= across <= o.x_max))]
+        reach = min((f for f in faces if 0.0 < f <= sign * (proj[axis] - anchor[axis])),
+                    default=None)
+        if reach is None:
+            return [proj]
+        steps = [sign * (c - anchor[axis]) for c in (xs, ys)[axis]] + [reach / 2.0]
+        return [proj] + [(anchor[0] + sign * d, anchor[1]) if axis == 0
+                         else (anchor[0], anchor[1] + sign * d)
+                         for d in steps if 0.0 < d < reach]
+
+    def length(pts: list[tuple[float, float]]) -> float:
+        """Return a route's length.
+
+        Parameters
+        ----------
+        pts : list[tuple[float, float]]
+            Route waypoints.
+
+        Returns
+        -------
+        float
+            Sum of the segments' lengths.
+        """
+        return sum(abs(a[0] - b[0]) + abs(a[1] - b[1]) for a, b in zip(pts, pts[1:]))
+
+    across = through(start_proj, goal_proj, (goal_proj[0], start_proj[1]))
+    down = through(start_proj, goal_proj, (start_proj[0], goal_proj[1]))
+    drawn = down if score(down) < score(across) else across
+    if lanes is None or score(drawn)[0] == 0:
+        return drawn
+    from pandid.routing.visibility import EDGE_TOL, Rect
+
+    xs, ys = lanes
+    routes = []
+    for (sx, sy) in ends(start, start_proj):
+        for (gx, gy) in ends(goal, goal_proj):
+            s, g = (sx, sy), (gx, gy)
+            routes += [through(s, g, (gx, sy)), through(s, g, (sx, gy))]
+            routes += [through(s, g, (x, sy), (x, gy)) for x in xs]
+            routes += [through(s, g, (sx, y), (gx, y)) for y in ys]
+    # Keep an edge tolerance off every obstacle but the ends' own.
+    kept_off = [*obstacles, *(
+        Rect(o.x_min - EDGE_TOL, o.x_max + EDGE_TOL, o.y_min - EDGE_TOL, o.y_max + EDGE_TOL)
+        for o in obstacles
+        if not any(o.x_min <= x <= o.x_max and o.y_min <= y <= o.y_max for x, y in (start, goal)))]
+    clear = [r for r in routes if not any(o.intersects_segment(a[0], a[1], b[0], b[1])
+                                          for a, b in zip(r, r[1:]) for o in kept_off)]
+    return min(clear, key=lambda r: (score(r)[1], len(r), length(r))) if clear else drawn
 
 
 def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, float]], manual: bool) -> None:
@@ -485,7 +569,8 @@ class DefaultRouter:
             else:
                 searched[id(stream)] = (crossing_index, [])
                 path = _fallback_path(
-                    start, start_proj, goal_proj, goal, graph.obstacles, crossing_index
+                    start, start_proj, goal_proj, goal, graph.obstacles, crossing_index,
+                    (graph.xs, graph.ys) if fs._clear_fallback else None,
                 )
 
             # Remove collinear points but keep both escape nodes.

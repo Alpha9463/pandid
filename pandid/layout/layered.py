@@ -282,7 +282,10 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     With ``fs._pin_balloons`` set, units step off each balloon pinned
     on both axes and its chain. With ``fs._near_branches`` set, each
     branch :func:`_layers` finds ends just before the unit it feeds;
-    ``fs._far_branches`` records whether one is left where it is.
+    ``fs._far_branches`` records whether one is left where it is. With
+    ``fs._level_flags`` set, each stack :func:`_level` finds moves to
+    level its pipe from a flag; ``fs._flags_off`` records whether one is
+    left where it is.
 
     Parameters
     ----------
@@ -329,10 +332,11 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     if held and fs._order_rows:
         _straighten(layers, segs, held)
     spanned = _keep_out(layers, pkg)
-    if spanned:
+    kept = {n: n.y for k, layer in layers.items() for n in layer if k in spanned}
+    if kept:
         # Level the other layers' pipes to the packages and the nodes moved.
-        _straighten(layers, segs, {n: n.y for k, layer in layers.items() for n in layer
-                                   if k in spanned or (fs._order_rows and n in held)})
+        _straighten(layers, segs, {**kept, **{n: n.y for n in held if fs._order_rows}})
+    fs._flags_off = _level(layers, segs, {**held, **kept}, fs._level_flags)
     xs = _columns(layers, segs, fs._lanes)
     plain = _columns(layers, segs, False)
     fs._widened = any(xs[n] != plain[n] for n in xs if n.members)
@@ -1204,6 +1208,69 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg],
     for sweep in range(SWEEPS):
         for k in (keys if sweep % 2 == 0 else keys[::-1]):
             solve(layers[k])
+
+
+def _level(layers: dict[int, list[_Node]], segs: list[_Seg], held: dict[_Node, float],
+           move: bool) -> bool:
+    """Find each stack whose side-to-side pipe from a flag is not level.
+
+    Only a stack that can move to level the pipe, keeping its gaps in
+    its layer, with no other pipe level, counts; one held or holding a
+    unit pinned by ``y`` does not.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order, set in height.
+    segs : list[_Seg]
+        Pipe steps between adjacent layers.
+    held : dict[_Node, float]
+        Stacks kept at a top.
+    move : bool
+        Move each such stack to level its pipe.
+
+    Returns
+    -------
+    bool
+        Whether such a stack is left where it is.
+    """
+    def drop(s: _Seg) -> float:
+        """Return how far a pipe step's east nozzle sits below its west one.
+
+        Parameters
+        ----------
+        s : _Seg
+            Pipe step.
+
+        Returns
+        -------
+        float
+            Height of the east nozzle less that of the west one.
+        """
+        return s.right.y + _offset(s.right, s.rport)[1] - s.left.y - _offset(s.left, s.lport)[1]
+
+    off = False
+    for s in segs:
+        for own, mine, theirs, dy in ((s.left, s.lport, s.rport, drop(s)),
+                                      (s.right, s.rport, s.lport, -drop(s))):
+            if (mine is None or _flag(mine) or not _flag(theirs) or own in held
+                    or any(_face(p) not in (None, "E", "W") for p in (mine, theirs))
+                    or any(u._pin is not None and u._pin.y is not None for u in own.members)
+                    or any(abs(drop(t)) < 1e-6 for t in segs
+                           if t is not s and own in (t.left, t.right))):
+                continue
+            layer = layers[own.layer]
+            k = layer.index(own)
+            above, below = layer[k - 1] if k else None, layer[k + 1] if k + 1 < len(layer) else None
+            if (abs(dy) < 1e-6
+                    or above is not None and own.y + dy < above.y + above.h + _gap(above, own) - 1e-6
+                    or below is not None and own.y + dy + own.h + _gap(own, below) > below.y + 1e-6):
+                continue
+            if not move:
+                off = True
+            else:
+                own.y += dy
+    return off
 
 
 def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, float],
