@@ -121,6 +121,9 @@ These are removed in 0.4.0.
 - After `pin()` or `via()` on a routed sheet, the next `route()` starts from the
   drawing shown, so a line drawn by hand to a controller `route()` hung beside
   its valve still meets it there.
+- A balloon at either end of a line frozen with `via()` stays where that line
+  meets it, and no other balloon is placed over it or over a balloon pinned on
+  both axes.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.

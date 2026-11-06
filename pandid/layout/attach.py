@@ -662,7 +662,8 @@ def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
     A balloon held where a ``via()`` line met it stays there, and no
-    other balloon is placed over it. A controller route() hung beside
+    other balloon is placed over it or over a balloon pinned on both
+    axes. A controller route() hung beside
     the valve it drives stays there while its attachment and that valve
     are unchanged. Balloons left unplaced are recorded in
     ``fs.unplaced_instruments``.
@@ -679,6 +680,7 @@ def place_attached(fs: "Flowsheet") -> bool:
     """
     from pandid.geometry import Frame
     from pandid.layout.control import _actuator_box, _hangs_beside
+    from pandid.layout.halo import pinned_balloons
     from pandid.portgeom import resolve_size, unit_box
 
     moved = False
@@ -695,7 +697,7 @@ def place_attached(fs: "Flowsheet") -> bool:
     # Place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     typed = _typed_boxes(fs, pending)
-    obstacles += list(typed.values())
+    obstacles += list(typed.values()) + pinned_balloons(fs, {})
     while pending:
         progressed = False
         for inst in list(pending):

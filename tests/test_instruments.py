@@ -3314,6 +3314,23 @@ def test_a_measurement_line_frozen_on_a_bank_keeps_both_balloons_where_drawn():
     assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
 
 
+@pytest.mark.parametrize("name", ["FT-202", "FIC-202"])
+def test_a_balloon_pinned_where_drawn_keeps_other_balloons_off_it(name: str):
+    """Pin a balloon where a bank draws it, and route again.
+
+    The bank is laid out again, no other balloon is placed over the pinned
+    one, and the P&ID exports.
+    """
+    fs, _ = _valved_bank(999)
+    balloon = next(u for u in fs.units if u.name == name)
+    balloon.pin(x=frame_of(balloon).x, y=frame_of(balloon).y)
+    fs.route()
+    fs.to_svg(diagram="p&id")
+    fs.to_drawio(diagram="p&id")
+
+    assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
+
+
 def test_a_valve_pinned_where_drawn_after_a_hang_routes():
     """Pin FV-100 where a bank with a hung controller draws it, and route again.
 
