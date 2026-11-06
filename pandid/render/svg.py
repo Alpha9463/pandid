@@ -2916,38 +2916,87 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
 
-    def erased(u, items) -> "list[int]":
-        """Return the symbols, impulse lines and pipes a unit's labels erase.
+    from pandid.render.drawio import label_box
+
+    def drawn(u, tag, items) -> "tuple[list, list]":
+        """Return a unit's label boxes as the sheet and draw.io draw them.
 
         Parameters
         ----------
         u : Unit
             Unit the labels belong to.
+        tag : tuple or None
+            Its tag item.
         items : list
             Its label items.
 
         Returns
         -------
-        list[int]
-            Totals in :func:`_erases` order.
+        tuple[list, list]
+            The sheet's halos, then draw.io's boxes.
         """
-        others = [_obstacle(b) for v, b in symbols if v is not u]
-        return [sum(n) for n in zip((0, 0, 0), *(_erases(b, ink, others)
-                                                 for b in map(_unit_label_box, items)
-                                                 if b is not None))]
+        halos = [b for b in map(_unit_label_box, items) if b is not None]
+        block = label_box(u, tag, items)
+        return halos, halos if block is None else [block]
+
+    def cost(u, boxes, others) -> "list[int]":
+        """Return what boxes erase, then the other labels they cover.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit the boxes belong to.
+        boxes : list
+            Its label boxes.
+        others : list
+            Other units' label boxes.
+
+        Returns
+        -------
+        list[int]
+            Symbols, impulse lines, pipes and labels.
+        """
+        obstacles = [_obstacle(b) for v, b in symbols if v is not u]
+        return [sum(n) for n in zip((0, 0, 0, 0), *(
+            (*_erases(b, ink, obstacles), sum(1 for o in others if boxes_overlap(b, o)))
+            for b in boxes))]
+
+    def worse(u, now, was, others) -> bool:
+        """Return whether new labels erase or cover more of anything.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit the labels belong to.
+        now, was : tuple[list, list]
+            Its new and old boxes from ``drawn``.
+        others : list
+            Other units' boxes from ``drawn``.
+
+        Returns
+        -------
+        bool
+            True if either drawing is worse in any count.
+        """
+        for k in (0, 1):
+            rest = [b for o in others for b in o[k]]
+            if any(a > b for a, b in zip(cost(u, now[k], rest), cost(u, was[k], rest))):
+                return True
+        return False
 
     placed: dict = {}
+    shown: dict = {}
     # Place each unit's labels alone, then again off the others as they
-    # stand, keeping the first placement if the second erases more of any
-    # ink.
+    # stand, keeping the first placement if the second is worse in either
+    # drawing.
     for alone in (True, False):
         for u in fs.units:
             f = u.frame
             if f is None or u.kind in ("feed", "product", "instrument"):
                 continue
             x, y, w, h = f.x, f.y, f.w, f.h
-            labels = None if alone else [b for v, _, items in placed.values() if v is not u
-                                         for b in map(_unit_label_box, items) if b is not None]
+            others = [o for k, o in shown.items() if k != id(u)]
+            labels = None if alone else [b for o in others for b in o[0]]
             tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels)
                    if u.tag else None)
             tag_box = None if tag is None else _unit_label_box(tag)
@@ -2960,9 +3009,10 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             if letters:
                 items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
                                                     ink, symbols))
-            if alone or all(a <= b for a, b in zip(erased(u, items),
-                                                   erased(u, placed[id(u)][2]))):
+            now = drawn(u, tag, items)
+            if alone or not worse(u, now, shown[id(u)], others):
                 placed[id(u)] = (u, tag, items)
+                shown[id(u)] = now
     return list(placed.values())
 
 

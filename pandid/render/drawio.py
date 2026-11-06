@@ -673,29 +673,87 @@ def _tag_pass(fs, joints: "str | None", direction: str) -> "_Tags":
     _Tags
         Tag placements and plates.
     """
-    from pandid.render.svg import SvgRenderer, _unit_label_box, unit_tags
+    from pandid.render.svg import _unit_label_box, unit_tags
 
-    sheet = SvgRenderer()
     at: dict = {}
     plates: list = []
     for u, item, items in unit_tags(fs, joints, direction):
         plates += [b for b in map(_unit_label_box, items) if b is not None]
-        f = u.frame
-        if item is None or f is None:
-            continue
-        x, y, w, h = f.x, f.y, f.w, f.h
-        tag_box = _unit_label_box(item)
-        # The side, the offset from its default spot, and the halo's near edge.
-        side = item[4]
-        base = sheet._label_place(side, x, y, w, h)
-        near = None
-        if tag_box is not None:
-            hx0, hy0, hx1, hy1 = tag_box
-            mx, my = (hx0 + hx1 - 2 * x - w) / 2, (hy0 + hy1 - 2 * y - h) / 2
-            near = {"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
-                    "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[side]
-        at[id(u)] = (side, item[0] - base[0], item[1] - base[1], near)
+        if item is not None and u.frame is not None:
+            at[id(u)] = _tag_at(u, item)
     return _Tags(at, plates)
+
+
+def _tag_at(u, tag) -> tuple:
+    """Return where a tag sits against its side, for draw.io.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+    tag : tuple
+        Its tag item.
+
+    Returns
+    -------
+    tuple
+        ``(side, dx, dy, near)``: the offset from the side's spot, and
+        the offset from the middle of the cell's side to the middle of
+        the tag halo's near edge, or ``None`` with no halo.
+    """
+    from pandid.render.svg import SvgRenderer, _unit_label_box
+
+    f = u.frame
+    x, y, w, h = f.x, f.y, f.w, f.h
+    side = tag[4]
+    base = SvgRenderer()._label_place(side, x, y, w, h)
+    halo = _unit_label_box(tag)
+    near = None
+    if halo is not None:
+        hx0, hy0, hx1, hy1 = halo
+        mx, my = (hx0 + hx1 - 2 * x - w) / 2, (hy0 + hy1 - 2 * y - h) / 2
+        near = {"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
+                "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[side]
+    return (side, tag[0] - base[0], tag[1] - base[1], near)
+
+
+def label_box(u, tag, items) -> "tuple[float, float, float, float] | None":
+    """Return the box draw.io writes a unit's tag in, letters stacked under it.
+
+    A tag alone sits on its halo's near edge. With ``NC`` or fail-position
+    letters, draw.io stacks them under the tag on its side, moved as far
+    as the tag moved from that side's spot.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+    tag : tuple or None
+        Its tag item.
+    items : list
+        Its label items, tag first.
+
+    Returns
+    -------
+    tuple[float, float, float, float] or None
+        The box, or ``None`` for no tag or a tag inside its symbol.
+    """
+    if tag is None or u.frame is None:
+        return None
+    side, dx, dy, near = _tag_at(u, tag)
+    if near is None:
+        return None
+    x0, y0, x1, y1 = unit_box(u, u.frame)
+    lw = max(F.text_width(item[5], _TAG_TYPE) for item in items)
+    lh = _LINE_BOX * _TAG_TYPE * len(items)
+    nx, ny = {"top": (0, -1), "bottom": (0, 1), "left": (-1, 0), "right": (1, 0)}[side]
+    gx, gy = _SIDE_LABEL_GAP[side]
+    # shortcut: draw.io keeps this gap full size on a page fitted smaller, so
+    # a stacked block lands up to a unit off; pass the fit in if that matters.
+    ex, ey = near if len(items) == 1 else (dx + gx, dy + gy)
+    cx = (x0 + x1 + nx * (x1 - x0 + lw)) / 2 + ex
+    cy = (y0 + y1 + ny * (y1 - y0 + lh)) / 2 + ey
+    return (cx - lw / 2, cy - lh / 2, cx + lw / 2, cy + lh / 2)
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
