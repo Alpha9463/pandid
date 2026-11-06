@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Silo` draws the closed silo of ISO 10628-2 and `Bunker` its open bunker,
   each with a conical bottom: solids enter at `feed` and leave at `discharge`,
   and a silo vents through its roof at `vent`.
+- `Deaerator` draws a storage drum with its deaerating column on top: `feed`
+  and `vent` on the column, `steam` into the drum and `outlet` from its floor.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.

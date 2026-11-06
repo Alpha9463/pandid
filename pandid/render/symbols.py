@@ -3874,6 +3874,55 @@ _BUNKER = Symbol(
 )
 
 
+# Deaerator: a horizontal storage drum with dished ends, and the
+# deaerating column standing on its crown towards the west end.
+_DA_DRUM_W, _DA_DRUM_H = 160.0, 50.0
+_DA_DRUM_END = 12.0
+_DA_COLUMN_X, _DA_COLUMN_W = 30.0, 40.0
+_DA_COLUMN_H = 60.0
+_DA_CROWN = 8.0
+_DA_H = _DA_COLUMN_H + _DA_DRUM_H
+_DA_FEED_DX = -16.0
+
+
+def _da_crown_y(dx: float) -> float:
+    """Return the column crown's height a distance off its centre line.
+
+    Parameters
+    ----------
+    dx : float
+        Distance from the column's centre line.
+
+    Returns
+    -------
+    float
+        Height of the crown, rounded to four places.
+    """
+    return round(_DA_CROWN * (1 - math.sqrt(1 - (2 * dx / _DA_COLUMN_W) ** 2)), 4)
+
+
+_DEAERATOR = Symbol(
+    svg='<g id="sym_deaerator">'
+        f'<path d="M {_DA_DRUM_END:g} {_DA_COLUMN_H:g} L {_DA_DRUM_W - _DA_DRUM_END:g} {_DA_COLUMN_H:g} '
+        f'A {_DA_DRUM_END:g} {_DA_DRUM_H / 2:g} 0 0 1 {_DA_DRUM_W - _DA_DRUM_END:g} {_DA_H:g} '
+        f'L {_DA_DRUM_END:g} {_DA_H:g} '
+        f'A {_DA_DRUM_END:g} {_DA_DRUM_H / 2:g} 0 0 1 {_DA_DRUM_END:g} {_DA_COLUMN_H:g} Z" {_OUTLINE}/>'
+        f'<path d="M {_DA_COLUMN_X:g} {_DA_COLUMN_H:g} L {_DA_COLUMN_X:g} {_DA_CROWN:g} '
+        f'A {_DA_COLUMN_W / 2:g} {_DA_CROWN:g} 0 0 1 {_DA_COLUMN_X + _DA_COLUMN_W:g} {_DA_CROWN:g} '
+        f'L {_DA_COLUMN_X + _DA_COLUMN_W:g} {_DA_COLUMN_H:g}" {_OUTLINE}/></g>',
+    width=_DA_DRUM_W, height=_DA_H,
+    # Water and vent through the column's crown, steam into the drum's
+    # west end, deaerated water out of the drum's floor.
+    ports={
+        "feed": (_DA_COLUMN_X + _DA_COLUMN_W / 2 + _DA_FEED_DX, _da_crown_y(_DA_FEED_DX)),
+        "vent": (_DA_COLUMN_X + _DA_COLUMN_W / 2, 0.0),
+        "steam": (0.0, _DA_COLUMN_H + _DA_DRUM_H / 2),
+        "outlet": (120.0, _DA_H),
+    },
+    gravity_fixed=True,
+)
+
+
 # Rotary kiln shell: 26 units of fall over 180 of length.
 _KILN_W = 180.0
 _KILN_BORE = 28.0
@@ -4538,6 +4587,7 @@ class SymbolRegistry:
         self._register_flotation_cell()
         self.register("silo", _SILO)
         self.register("silo", _BUNKER, "bunker")
+        self.register("deaerator", _DEAERATOR)
         self._register_kilns()
         self._register_steam_trap()
         self._register_fans()
