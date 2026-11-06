@@ -3313,3 +3313,16 @@ def test_a_measurement_line_frozen_on_a_bank_keeps_both_balloons_where_drawn():
     assert [(frame_of(b).x, frame_of(b).y) for b in balloons] == pytest.approx(drawn)
     assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
 
+
+def test_a_valve_pinned_where_drawn_after_a_hang_routes():
+    """Pin FV-100 where a bank with a hung controller draws it, and route again.
+
+    route() completes and the P&ID exports.
+    """
+    fs, _ = _valved_bank(99)
+    assert fs._beside
+    valve = next(u for u in fs.units if u.name == "FV-100")
+    valve.pin(x=frame_of(valve).x, y=frame_of(valve).y)
+    fs.route()
+    fs.to_svg(diagram="p&id")
+    fs.to_drawio(diagram="p&id")

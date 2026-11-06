@@ -2793,15 +2793,19 @@ class Flowsheet:
         # Keep the rest only where they draw as their hang step requires
         # against the drawing without them.
         start = self._drawing()
-        self._route_stepped(router)
-        hung, counts, off = self._drawing(), self._counted_flaws(), _taps_off(self)
+        try:
+            self._route_stepped(router)
+            hung = self._drawing(), self._counted_flaws(), _taps_off(self)
+        except Exception:
+            hung = None
         self._put_drawing(start)
         self._beside = drawn
         self._route_stepped(router)
         fresh = self._counted_flaws()
-        if off <= _taps_off(self) and (not any(n > fresh[k] for k, n in counts.items())
-                                       or _out_of_unit(fresh, counts)):
-            self._put_drawing(hung)
+        if hung is not None and hung[2] <= _taps_off(self) and (
+                not any(n > fresh[k] for k, n in hung[1].items())
+                or _out_of_unit(fresh, hung[1])):
+            self._put_drawing(hung[0])
 
     def _route_stepped(self, router=None) -> None:
         """Route the sheet, then run the steps that judge each change.
