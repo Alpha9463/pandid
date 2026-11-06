@@ -26,19 +26,20 @@ from pandid.routing.visibility import TAG_CLEAR, Rect, VisibilityGraph, clear_ga
 
 #: Blocker width, height, label side and corner; whether the router recovers
 #: exits; whether the blocker hides the feed's nominal projection from the
-#: graph; and whether the line is drawn as a fallback through the blocker.
+#: graph; whether the line is drawn as a fallback; and whether that runs
+#: through the blocker.
 _BLOCKED_NOZZLES = {
-    "reachable-lane": ((44, 44, "bottom"), (83, 78), True, True, False),
-    "no-recovery": ((44, 44, "bottom"), (83, 78), False, True, True),
-    "sealed-nozzle": ((44, 44, "bottom"), (60, 78), True, True, True),
-    "blocked-stub": ((12, 40, "center"), (68, 80), True, False, True),
+    "reachable-lane": ((44, 44, "bottom"), (83, 78), True, True, False, False),
+    "no-recovery": ((44, 44, "bottom"), (83, 78), False, True, True, False),
+    "sealed-nozzle": ((44, 44, "bottom"), (60, 78), True, True, True, True),
+    "blocked-stub": ((12, 40, "center"), (68, 80), True, False, True, False),
 }
 
 
 @pytest.mark.parametrize("case", list(_BLOCKED_NOZZLES))
 def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(case: str) -> None:
-    """Check that a blocked nozzle stub routes clear or draws a reported fallback."""
-    (width, height, side), corner, recover, hidden, blocked = _BLOCKED_NOZZLES[case]
+    """Check that a blocked nozzle stub routes clear, or falls back round the blocker or reported."""
+    (width, height, side), corner, recover, hidden, fallback, through = _BLOCKED_NOZZLES[case]
     fs = Flowsheet(case)
     feed = fs.add(Feed("F")).pin(x=60, y=100)
     product = fs.add(Product("P")).pin(x=400, y=100)
@@ -53,14 +54,14 @@ def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(ca
         router = DefaultRouter(recover_exits=recover)
     fs.route(router)
 
-    assert stream.route is not None and stream.route.used_fallback is blocked
+    assert stream.route is not None and stream.route.used_fallback is fallback
     assert feed.frame is not None and product.frame is not None and blocker.frame is not None
     assert [(f.x, f.y) for f in (feed.frame, product.frame, blocker.frame)] == [
         (10.0, 75.0),
         (400.0, 75.0),
         corner,
     ]
-    assert any(issue.code == "route-crosses-unit" for issue in fs.validate()) is blocked
+    assert any(issue.code == "route-crosses-unit" for issue in fs.validate()) is through
 
 
 def test_passing_recover_exits_is_deprecated(same_file: Callable[[str], str]) -> None:
@@ -331,6 +332,24 @@ def test_the_fallback_l_is_checked_against_the_obstacles():
     # Draw the across-first order when both legs are blocked.
     on_down = Rect(40.0, 60.0, 90.0, 110.0)
     assert _fallback_path(start, start_proj, goal_proj, goal, [on_across, on_down]) == across
+
+
+def test_the_fallback_runs_a_z_along_a_clear_lane_where_both_ls_are_blocked():
+    """Draw a Z through a clear lane where both L orders hit a box, and keep a clear L."""
+    start, start_proj = (0.0, 0.0), (25.0, 0.0)
+    goal_proj, goal = (100.0, 100.0), (100.0, 125.0)
+    across = [start, start_proj, (100.0, 0.0), goal_proj, goal]
+    on_across, on_down = Rect(40.0, 60.0, -10.0, 10.0), Rect(10.0, 40.0, 90.0, 110.0)
+    blocked = [on_across, on_down]
+
+    # Keep the L where no lane clears, and where no lanes are given.
+    assert _fallback_path(start, start_proj, goal_proj, goal, blocked, lanes=([], [])) == across
+    assert _fallback_path(start, start_proj, goal_proj, goal, blocked, lanes=None) == across
+    # The x=70 lane runs into the box on the across leg; the y=50 lane is clear.
+    z = [start, start_proj, (25.0, 50.0), (100.0, 50.0), goal_proj, goal]
+    assert _fallback_path(start, start_proj, goal_proj, goal, blocked, lanes=([70.0], [50.0])) == z
+    # Keep a clear L over any Z.
+    assert _fallback_path(start, start_proj, goal_proj, goal, [], lanes=([70.0], [50.0])) == across
 
 
 def test_the_fallback_l_also_breaks_an_obstacle_tie_on_a_drawn_crossing():
