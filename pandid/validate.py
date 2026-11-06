@@ -212,10 +212,13 @@ def _move_cure(u) -> str:
 def _arrowhead_cure(u) -> str:
     """Return advice that sets a device clear of the arrowhead after it.
 
-    The suggested ``at=`` lies between the device's neighbours on its
-    line, so following it keeps the line's order. It leaves the
-    arrowhead and a clearance free on the shortest line layout gives
-    the neighbours, which is the line where the gap is least.
+    A device alone on its line gets an ``at=`` that clears the
+    arrowhead: on the shortest line layout would draw, or, between two
+    ends pinned on both axes, on the line as drawn. Where those ends
+    sit too close, the advice names the end to move. A device with
+    other items on its line gets the ``at=`` bounds that keep the
+    line's order, and, between pinned ends with no room inside those
+    bounds, the neighbour to move.
 
     Parameters
     ----------
@@ -226,29 +229,28 @@ def _arrowhead_cure(u) -> str:
     Returns
     -------
     str
-        Advice naming an ``fs.add()`` call with an ``at=``, else the
-        neighbour to move first.
+        Advice naming an ``fs.add()`` call, or the unit to move.
     """
     from pandid.inline import position
     from pandid.layout.mounted import ALONG, NOZZLE_END
-    from pandid.portgeom import port_point
+    from pandid.portgeom import pin_intent, port_point
+    from pandid.render.svg import stream_polyline
     from pandid.render.symbols import ARROWHEAD, MIN_HEAD_CLEARANCE
+    from pandid.routing.metrics import path_length
 
     def length(unit) -> float:
         """Return a device's length along its line, nozzle to nozzle.
 
         Parameters
         ----------
-        unit : Unit or None
-            Device, or None for a line end.
+        unit : Unit
+            Device on the line.
 
         Returns
         -------
         float
-            Length, or 0 for a line end.
+            Length.
         """
-        if unit is None:
-            return 0.0
         return math.dist(*(port_point(unit, unit.frame, name) for name in ("inlet", "outlet")))
 
     entering = u.ports["inlet"].stream
@@ -258,33 +260,47 @@ def _arrowhead_cure(u) -> str:
         return (f"Add it on its line with an at= nearer the middle, "
                 f"fs.add({u.name}, on=<line>, at=...), in place of connect()")
     segments = line._logical_segments
+    source, dest = segments[0].source, segments[-1].dest
+    clear = ARROWHEAD + MIN_HEAD_CLEARANCE + length(u) / 2
+    # Two ends pinned on both axes hold the line at its drawn length.
+    held = all(len(pin_intent(end.owner)) == 2 for end in (source, dest))
+    span = (sum(path_length(stream_polyline(s)) for s in segments)
+            + sum(map(length, items)))
+    if items == [u]:
+        need = NOZZLE_END + length(u) / 2 + clear
+        if held and span < need:
+            return (f"{source.owner.name} and {dest.owner.name} are pinned "
+                    f"{span:.0f}px apart along {line.name}, and {u.name} needs {need:.0f}px "
+                    f"there to clear the arrowhead: pin {dest.owner.name} at least "
+                    f"{need - span:.0f}px further from {source.owner.name} first")
+        # On a free line, layout draws the line no shorter than the room
+        # from its start to the device's centre.
+        at = (1 - clear / span if held
+              else (NOZZLE_END + length(u) / 2) / (NOZZLE_END + length(u) / 2 + clear))
+        return (f"Set it further from {dest.owner.name}.{dest.name}, clear of the "
+                f"arrowhead: fs.add({u.name}, on={line.name}, at={math.floor(at * 100) / 100:g})")
     k = items.index(u)
-    before = items[k - 1] if k else None
-    after = items[k + 1] if k + 1 < len(items) else None
-    low = position(segments[k - 1]) if k else 0.0
-    high = position(segments[k + 1]) if after is not None else 1.0
-    spread = [items[i] for i in (k - 1, k + 1)
-              if 0 <= i < len(items) and segments[i]._inline_at is None]
-    if low is None or high is None or spread:
-        first = spread[0].name if spread else u.name
-        return (f"Give {_and([v.name for v in spread]) or u.name} an at= on {line.name}, "
-                f"fs.add({first}, on={line.name}, at=...), then set {u.name} further "
-                f"from that end")
-    # Measure the gap after the device on the shortest line that holds
-    # the gap before it; a longer line only widens it.
-    room = ALONG + (length(before) + length(u)) / 2 if before else NOZZLE_END + length(u) / 2
-    ratio = (ARROWHEAD + MIN_HEAD_CLEARANCE + (length(after) + length(u)) / 2) / room
-    best = (high + ratio * low) / (1 + ratio)
-    at = next((a for a in (math.floor(best * 10 ** d) / 10 ** d for d in (2, 3)) if a > low),
-              None)
-    end = f"{after.name} (at={high:g})" if after else f"the end of {line.name}"
-    start = f"{before.name} (at={low:g})" if before else f"the start of {line.name}"
-    if at is None:
-        return (f"No at= between {start} and {end} leaves it clear: move "
-                f"{(before or after or u).name} further from it first")
-    where = f"between {start} and {end}" if before else f"further from {end}"
-    return (f"Set it {where}, clear of the arrowhead: "
-            f"fs.add({u.name}, on={line.name}, at={at:g})")
+    stated = [i for i, segment in enumerate(segments[:-1]) if segment._inline_at is not None]
+    below = max((i for i in stated if i < k), default=None)
+    above = min((i for i in stated if i > k), default=None)
+    low = 0.0 if below is None else position(segments[below]) or 0.0
+    high = 1.0 if above is None else position(segments[above]) or 1.0
+    lower = (f"the start of {line.name}" if below is None
+             else f"{items[below].name} (at={low:g})")
+    upper = (f"the {dest.owner.name}.{dest.name} end" if above is None
+             else f"{items[above].name} (at={high:g})")
+    if held:
+        lengths = [length(items[i]) for i in (below, above) if i is not None]
+        room = ((high - low) * span - sum(lengths) / 2
+                - (ALONG if below is not None else NOZZLE_END) - length(u) / 2 - clear)
+        if room < 0:
+            mover = items[below].name if below is not None else dest.owner.name
+            return (f"No at= between {lower} and {upper} leaves {u.name} clear of the "
+                    f"arrowhead on a line pinned at {span:.0f}px: move {mover} further "
+                    f"from {upper if below is not None else source.owner.name} first")
+    return (f"Set it with an at= between {lower} and {upper}, far enough from "
+            f"{items[k + 1].name if k + 1 < len(items) else dest.owner.name} to clear the "
+            f"arrowhead: fs.add({u.name}, on={line.name}, at=...)")
 
 
 def _is_control_function(letters: str, i: int) -> bool:
