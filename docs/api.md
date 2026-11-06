@@ -109,6 +109,10 @@ The names depend on the class and variant. Common patterns are:
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
+- A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
+  `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
+  heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
+  its bottom one.
 - A `Deaerator` uses `feed`, `vent`, `steam` and `outlet`.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.

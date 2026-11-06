@@ -3874,6 +3874,31 @@ _BUNKER = Symbol(
 )
 
 
+# Mixer-settler: a closed box whose west compartment is the mixer. The
+# dispersion overflows the partition into the settler, and the light
+# phase overflows the weir into the launder at the east end.
+MS_W, MS_H = 140.0, 50.0
+#: Mixer partition: position, and the gap it leaves under the lid.
+MS_MIXER_W, _MS_OVERFLOW = 40.0, 12.0
+# Light-phase weir: position, and its height off the floor.
+_MS_WEIR_X, _MS_WEIR_H = 120.0, 30.0
+_MIXER_SETTLER = Symbol(
+    svg='<g id="sym_mixer_settler">'
+        f'<rect x="0" y="0" width="{MS_W:g}" height="{MS_H:g}" {_OUTLINE}/>'
+        f'<path d="M {MS_MIXER_W:g} {_MS_OVERFLOW:g} L {MS_MIXER_W:g} {MS_H:g} '
+        f'M {_MS_WEIR_X:g} {MS_H - _MS_WEIR_H:g} L {_MS_WEIR_X:g} {MS_H:g}" {_INK}/></g>',
+    width=MS_W, height=MS_H,
+    # Both phases into the mixer; the heavy phase out of the settler's
+    # floor, the light phase out of the launder.
+    ports={"light_in": (0.0, 15.0), "heavy_in": (0.0, 35.0),
+           "light_out": (MS_W, 40.0), "heavy_out": (100.0, MS_H)},
+    gravity_fixed=True,
+)
+
+#: Agitator on the mixer's centre line: width, and the depth of its foot.
+MS_AGITATOR_W, MS_AGITATOR_FOOT = 24.0, 42.0
+
+
 # Deaerator: a horizontal storage drum with dished ends, and the
 # deaerating column standing on its crown towards the west end.
 _DA_DRUM_W, _DA_DRUM_H = 160.0, 50.0
@@ -4587,6 +4612,7 @@ class SymbolRegistry:
         self._register_flotation_cell()
         self.register("silo", _SILO)
         self.register("silo", _BUNKER, "bunker")
+        self.register("mixer_settler", _MIXER_SETTLER)
         self.register("deaerator", _DEAERATOR)
         self._register_kilns()
         self._register_steam_trap()

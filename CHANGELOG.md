@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Silo` draws the closed silo of ISO 10628-2 and `Bunker` its open bunker,
   each with a conical bottom: solids enter at `feed` and leave at `discharge`,
   and a silo vents through its roof at `vent`.
+- `MixerSettler` draws one solvent-extraction stage with `light_in`,
+  `heavy_in`, `light_out` and `heavy_out`. `ExtractionColumn` is a sieve-tray
+  column whose two feeds enter its top and bottom stages.
 - `Deaerator` draws a storage drum with its deaerating column on top: `feed`
   and `vent` on the column, `steam` into the drum and `outlet` from its floor.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
@@ -91,6 +94,9 @@ These are removed in 0.4.0.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.
+- A unit moves up or down to meet a feed or product flag held under another
+  unit in its column, so the line between them runs straight, where that adds
+  no crossing, bend or finding.
 - Lines that cross on their way into a mixer are laid on lanes even where they
   share their stretch of the gap with only some of the lines beside them, so the
   last two pumps of a header of tees no longer cross into the mixer.
@@ -167,6 +173,9 @@ These are removed in 0.4.0.
 - `route()` ends the run a line leaves a nozzle on clear of every other unit,
   so a signal line between two balloons no longer cuts through a third
   standing between them.
+- Where `route()` finds no path for a line and draws it through a unit, it
+  draws it round the units in its way along a clear lane where that draws no
+  worse; otherwise `validate()` reports `route-crosses-unit` as before.
 
 ## [0.2.0] - 2026-11-05
 

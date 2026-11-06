@@ -372,7 +372,10 @@ HOP_DROPPED = "drawio-hop-dropped"
 _BALLOON_FILL = "#ffffff"
 
 #: Drawings exported as an inline stencil of their own outline.
-OWN_OUTLINE = frozenset({("silo", "default"), ("silo", "bunker"), ("deaerator", "default")})
+OWN_OUTLINE = frozenset({
+    ("silo", "default"), ("silo", "bunker"), ("mixer_settler", "default"),
+    ("deaerator", "default"),
+})
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
@@ -1095,13 +1098,14 @@ class DrawioRenderer:
                     f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
         stencil = sym.drawio_shape or sym.drawio_body_shape
         body = self._shell(u)
+        if body is None and not stencil and (u.kind, u.variant) in OWN_OUTLINE:
+            body = default_registry.get(u.kind, u.variant)
         if body is not None:
-            # A shell built to size is drawn as built.
+            # A shell built to size, or a drawing exported as its own
+            # outline, is drawn as built; its parts are child cells.
             shift = (-min([0.0, *(o.x * body.width for o in sym.overlays)]),
                      -min([0.0, *(o.y * body.height for o in sym.overlays)]))
             stencil = drawio_stencil(body.svg, sym.width, sym.height, shift)
-        elif not stencil and (u.kind, u.variant) in OWN_OUTLINE:
-            stencil = drawio_stencil(sym.svg, sym.width, sym.height)
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
             keys = [f"shape={stencil}", "outlineConnect=0",
