@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlotationCell` draws a mechanical flotation cell with `feed`, `concentrate`
   (from the froth launder), `tailings` and `air` nozzles. `agitator=` names the
   rotor on its shaft, or `None`.
+- `CombustionChamber` draws a chamber burning fuel to hot gas: air at `inlet`,
+  `fuel` from below and the gas out of `outlet`. `Furnace(variant="general")`
+  draws the ISO 10628-2 furnace.
 - `CentrifugalFan` and `AxialFan` draw those fans, and
   `Blower(variant="general")` draws the ISO 10628-2 fan.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
@@ -35,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warns that none of them is drawn. `validate()` follows the last render, and
   `validate(show_stream_table=True)` or `pandid validate --stream-table` asks
   about a sheet drawn with it.
+- `validate()` warns `line-through-support` when a line enters a vessel through
+  its legs, brackets or ring. Leave the vessel's `height` unset, or give a
+  larger one, so its shell grows clear.
+- `validate()` warns `line-field-undrawn` when a line-number field set in
+  `connect()` is not drawn: `name=` replaces the line number,
+  `line_numbering_scheme` leaves the field out, or the field is stated past a
+  valve or tee that carries another segment's number on. It names the fix.
 - A flat-floored `Tank` draws off from either wall as well as the floor, and an
   upright `Vessel` takes its inlet on either wall or the top head and its outlet
   on either wall: `Tank("TK-1").nozzle("outlet", "E")`. A counted one moves
@@ -50,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A counted `Block`, `Tank` or `Vessel` connection, as in `inputs=2`, moves to
   the face toward its peer where that draws fewer bends; a list such as
   `inputs=["W", "N"]` keeps every face as given, even on a single inlet.
+- A `Vessel` is drawn to the size it is given rather than stretched to it:
+  `width` and `height` are the drawn box, the heads, supports, manholes and
+  sockets keep their own size, and the straight shell takes the rest. With no
+  size given, the shell grows until its inlets and outlets clear the supports.
 - `render()` lays out and checks a sheet faster, most of all when units are
   pinned by a nozzle.
 
@@ -68,6 +82,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- Lines that cross on their way into a mixer are laid on lanes even where they
+  share their stretch of the gap with only some of the lines beside them, so the
+  last two pumps of a header of tees no longer cross into the mixer.
 - The equipment list and `fs.equipment_list()` include centrifuges and
   crushing machines.
 - A `Tee` whose branch serves a unit drawn above the run turns its branch north,

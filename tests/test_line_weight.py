@@ -245,12 +245,17 @@ def test_a_resized_unit_is_drawn_with_the_pen_its_symbol_declares(specimen: str,
     width_factor, height_factor = _BOXES[box]
     symbol = default_registry.get(*(specimen.split("/") + ["default"])[:2])
     flowsheet = Flowsheet("weights")
-    flowsheet.add(
-        _SPECIMENS[specimen](
-            width=symbol.width * width_factor,
-            height=symbol.height * height_factor,
-        )
+    unit = _SPECIMENS[specimen](
+        width=symbol.width * width_factor,
+        height=symbol.height * height_factor,
     )
+    try:
+        default_registry.for_unit(unit)
+    except ValueError as exc:
+        # A shell built to size has no room for its heads.
+        assert "is too small to draw" in str(exc), exc
+        return
+    flowsheet.add(unit)
     check_symbol_weights(flowsheet, flowsheet.to_svg())
 
 
