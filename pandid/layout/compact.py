@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 #: A band's start and end, the width taken out of it, and whether what
 #: lies beyond it moves rather than what lies before it.
 Cut = tuple[float, float, float, bool]
+#: A low and a high coordinate on one axis.
 Span = tuple[float, float]
 
 

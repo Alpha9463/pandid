@@ -74,7 +74,8 @@ def test_route_closes_an_empty_band_and_keeps_every_line_s_turns(
         k: before[k] for k in ("V-101", "LT-101", "LIC-101")
     }
     assert _turns(fs) == _turns(open_)
-    assert _score(fs) == _score(open_)
+    assert _score(fs)[0] == _score(open_)[0]
+    assert not _score(fs)[1]
 
 
 def test_a_pinned_sheet_keeps_its_empty_band(monkeypatch: pytest.MonkeyPatch) -> None:
