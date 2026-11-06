@@ -146,7 +146,7 @@ def pinned(pin: float, along: float,
 
 
 def bandless_face(who: str, face: str, at: float, members: "list[str]",
-                  sym: "Symbol") -> ValueError:
+                  sym: "Symbol", drawn: "dict[str, str] | None" = None) -> ValueError:
     """Return the error for several nozzles on a one-point face.
 
     The cure names only the walled faces every member's role may use.
@@ -163,12 +163,16 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
         Ports placed on the face, ``in_*`` or ``out_*``.
     sym : Symbol
         Symbol the ports are drawn on.
+    drawn : dict[str, str], optional
+        The face each of the symbol's own faces is drawn on; the faces
+        are named as their own when omitted.
 
     Returns
     -------
     ValueError
         The error to raise.
     """
+    drawn = drawn or {f: f for f in ("N", "E", "S", "W")}
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
     # Each member's faces whose band has length.
@@ -176,7 +180,7 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     menus = [[f for f in {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
               if (band := sym.bands.get(f)) is None or band[0] < band[1]]
              for role in roles]
-    offered = [f for f in menus[0] if all(f in menu for menu in menus)]
+    offered = [drawn[f] for f in menus[0] if all(f in menu for menu in menus)]
     cure = (
         "Put them on "
         + " or ".join(filter(None, [", ".join(offered[:-1]), *offered[-1:]]))
@@ -186,7 +190,7 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
         "connection here"
     )
     return ValueError(
-        f"{who}: {named} {verb} on the {face} face, whose artwork meets the box "
+        f"{who}: {named} {verb} on the {drawn[face]} face, whose artwork meets the box "
         f"at the single point {at:g} along it -- a dished head, a cone apex or a "
         f"domed roof. One nozzle sits on that point; a second beside it would be "
         f"drawn in mid-air off the ink. {cure}"
@@ -213,6 +217,14 @@ class PortSeries:
         Name of a lone member, such as a column's ``feed``.
     align : str
         :data:`CENTRED` or :data:`FROM_START`.
+    inset : float
+        Distance of the members in from the face's edge.
+    members : tuple[str, ...]
+        Ports this series places in place of its prefix: one face's
+        share of a family.
+    also : tuple[PortSeries, ...]
+        The family's placements on further faces, which ``nozzle()``
+        and layout may move a member to.
     """
 
     prefix: str
@@ -222,6 +234,9 @@ class PortSeries:
     at: float | None = None
     singular: str | None = None
     align: str = CENTRED
+    inset: float = 0.0
+    members: tuple[str, ...] = ()
+    also: tuple["PortSeries", ...] = ()
 
     def matches(self, port_name: str) -> bool:
         """Return whether ``port_name`` is a member of this series.
@@ -234,11 +249,29 @@ class PortSeries:
         Returns
         -------
         bool
-            True for the singular name or ``prefix`` plus digits.
+            True for a named member, else for the singular name or
+            ``prefix`` plus digits.
         """
+        if self.members:
+            return port_name in self.members
         return port_name == self.singular or (
             port_name.startswith(self.prefix)
             and port_name[len(self.prefix):].isdigit())
+
+    def on(self, face: str) -> "PortSeries | None":
+        """Return this family's placement on a face, or None.
+
+        Parameters
+        ----------
+        face : str
+            Face.
+
+        Returns
+        -------
+        PortSeries or None
+            This series, or the one in :attr:`also` on ``face``.
+        """
+        return next((s for s in (self, *self.also) if s.face == face), None)
 
     def placement(self, index: int, count: int, width: float, height: float,
                   pin: float | None = None,
@@ -269,7 +302,7 @@ class PortSeries:
         else:
             t = spread(index, count, along, self.pitch, self.extent, self.at,
                        self.align, band)
-        return _face_point(self.face, t, 0.0, width, height)
+        return _face_point(self.face, t, self.inset, width, height)
 
     def reach(self, width: float, height: float,
               band: "tuple[float, float] | None" = None
@@ -293,7 +326,8 @@ class PortSeries:
         ends = [spread(i, 2, along, self.extent * along, self.extent, self.at,
                        self.align, band)
                 for i in (0, 1)]
-        fixed = {"W": 0.0, "E": width, "N": 0.0, "S": height}[self.face]
+        fixed = {"W": self.inset, "E": width - self.inset,
+                 "N": self.inset, "S": height - self.inset}[self.face]
         return fixed, min(ends), max(ends)
 
 
@@ -545,10 +579,11 @@ class Symbol:
                     f"{series.prefix!r} series also places; a series is the only "
                     f"authority on where its members go"
                 )
-            if series.face not in ("N", "S", "E", "W"):
+            on = [series.face, *(also.face for also in series.also)]
+            if any(face not in ("N", "S", "E", "W") for face in on) or len(set(on)) < len(on):
                 raise ValueError(
-                    f"{self.symbol_id()}: the {series.prefix!r} series names face "
-                    f"{series.face!r}; expected one of N, S, E, W"
+                    f"{self.symbol_id()}: the {series.prefix!r} series names faces "
+                    f"{on}; expected each of N, S, E, W at most once"
                 )
         for face, span in self.bands.items():
             if face not in ("N", "S", "E", "W"):
@@ -2396,6 +2431,62 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     return replace(base, ports=placed, port_faces=port_faces)
 
 
+@lru_cache(maxsize=None)
+def series_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
+                  overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
+    """Return a symbol with its series members on the faces given.
+
+    The members on one face, in the order given, are one series there,
+    spread about the mean of their families' anchors on it.
+
+    Parameters
+    ----------
+    kind : str
+        Unit kind.
+    variant : str
+        Resolved variant.
+    faces : tuple[tuple[str, str], ...]
+        ``(port_name, face)`` for every member of the symbol's series.
+    overlays : tuple[Overlay, ...], default=()
+        The unit's composed parts.
+
+    Returns
+    -------
+    Symbol
+        The symbol, one series per face.
+
+    Raises
+    ------
+    ValueError
+        If a member's family has no placement on its face, or two
+        members share a face that is one point.
+    """
+    base = default_registry.composed(kind, variant, overlays)
+    by_face: dict[str, list[tuple[str, PortSeries]]] = {}
+    for name, face in faces:
+        series = base.series_for(name)
+        placed = series.on(face) if series is not None else None
+        if placed is None:
+            raise ValueError(f"{kind}/{variant}: {name} has no placement on the {face} face")
+        by_face.setdefault(face, []).append((name, placed))
+    split = []
+    for face, members in by_face.items():
+        placements = [placed for _, placed in members]
+        if len(members) > 1 and any(placed.extent == 0.0 for placed in placements):
+            raise ValueError(
+                f"{kind}/{variant}: {', '.join(name for name, _ in members)} are all on the "
+                f"{face} face, which takes one nozzle")
+        along = base.height if face in ("W", "E") else base.width
+        ats = {along / 2 if placed.at is None else placed.at for placed in placements}
+        at = next(iter(ats)) if len(ats) == 1 else sum(ats) / len(ats)
+        split.append(replace(placements[0], at=at, members=tuple(name for name, _ in members),
+                             also=()))
+    named = {name for name, _ in faces}
+    kept = tuple(series for series in base.port_series
+                 if not any(series.matches(name) for name in named))
+    return replace(base, port_series=(*split, *kept))
+
+
 # Builders of symbols drawn per unit, by (kind, variant). A ``None``
 # variant matches every variant.
 _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
@@ -2838,15 +2929,20 @@ def _shifted_series(series: PortSeries, body: Symbol, ox: float, oy: float,
     Returns
     -------
     PortSeries
-        The series with ``at`` moved and ``extent`` rescaled.
+        The series with ``at`` and ``inset`` moved, ``extent`` rescaled,
+        and its further faces moved alike.
     """
     along, grown = ((body.height, height) if series.face in ("W", "E")
                     else (body.width, width))
     offset = oy if series.face in ("W", "E") else ox
-    if (offset, along) == (0.0, grown):
+    across = {"W": ox, "E": width - ox - body.width, "N": oy,
+              "S": height - oy - body.height}[series.face]
+    also = tuple(_shifted_series(s, body, ox, oy, width, height) for s in series.also)
+    if (offset, along, across) == (0.0, grown, 0.0) and also == series.also:
         return series
     at = (along / 2 if series.at is None else series.at) + offset
-    return replace(series, at=at, extent=series.extent * along / grown)
+    return replace(series, at=at, extent=series.extent * along / grown,
+                   inset=series.inset + across, also=also)
 
 
 def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",

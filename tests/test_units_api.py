@@ -85,7 +85,9 @@ def test_units_all_lists_every_public_unit_class():
         "_Boundary",
         "_NormallyPositioned",
         "_MultiPortVessel",
+        "_Families",
         "_FaceFamilies",
+        "_SeriesFamilies",
         "_FluidMover",
         "_VariantPorted",
     }

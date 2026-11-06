@@ -12,7 +12,7 @@ from pandid.routing.visibility import MIN_ESCAPE
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.ports import Port
-    from pandid.units import Unit, _FaceFamilies
+    from pandid.units import Unit, _Families
 
 
 def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
@@ -33,7 +33,7 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
         unit.
     """
     from pandid.layout.stages import is_control
-    from pandid.units import _FaceFamilies
+    from pandid.units import _Families
 
     for unit in fs.units if units is None else units:
         frame = unit.frame
@@ -63,7 +63,7 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
                 continue
             frame.port_faces[name] = face
             taken.add(_point(unit, frame, name))
-        if isinstance(unit, _FaceFamilies) and fs._family_faces:
+        if isinstance(unit, _Families) and fs._family_faces:
             members = [name for name in unit._faces
                        if name in live and name not in fixed and name not in menus]
             _choose_family_faces(fs, unit, frame, members)
@@ -118,7 +118,7 @@ def _movable(unit: "Unit", frame) -> tuple[list[str], set[str], dict[str, list[s
     return live, fixed, menus
 
 
-def _choose_family_faces(fs: "Flowsheet", unit: "_FaceFamilies", frame,
+def _choose_family_faces(fs: "Flowsheet", unit: "_Families", frame,
                          members: list[str]) -> None:
     """Move each family port whose move saves its family bends.
 
@@ -131,14 +131,14 @@ def _choose_family_faces(fs: "Flowsheet", unit: "_FaceFamilies", frame,
     ----------
     fs : Flowsheet
         Sheet with placed units.
-    unit : _FaceFamilies
+    unit : _Families
         Block, tank or vessel.
     frame : Frame
         The unit's frame.
     members : list[str]
         Connected family ports no author statement fixes.
     """
-    from pandid.portgeom import _xform, drawn_side, family_faces, pin_intent
+    from pandid.portgeom import _xform, drawn_side, family_faces, pin_intent, stated_faces
 
     rot, mx, my = _xform(frame)
     pinned = {port for port, _ in pin_intent(unit).values()}
@@ -151,7 +151,7 @@ def _choose_family_faces(fs: "Flowsheet", unit: "_FaceFamilies", frame,
         target = _reference(unit.ports[name])
         if target is None or name in held:
             continue
-        faces = family_faces(unit, frame) or unit._faces
+        faces = family_faces(unit, frame) or stated_faces(unit, frame)
         # A lone port its menu moved keeps the face it was moved to.
         moved = {frame.port_faces[other] for other in unit._faces
                  if other in frame.port_faces and other not in members}

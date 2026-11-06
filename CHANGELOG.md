@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upright `Vessel` takes its inlet on either wall or the top head and its outlet
   on either wall: `Tank("TK-1").nozzle("outlet", "E")`. A counted one moves
   there toward its peer where that draws fewer bends.
+- A `Reactor` takes a feed on its top head beside the drive, a `Column` its
+  feeds and draws on either wall at their stage height, and an upright
+  `Separator` its feeds on either wall: `Reactor("R-1").nozzle("feed", "N")`.
+  Layout moves one there toward its peer where that draws fewer bends.
 
 ### Changed
 
@@ -199,6 +203,12 @@ These are removed in 0.4.0.
 - An angle valve put on a line with `on=`, such as
   `fs.add(Valve("HV-1", variant="angle"), on=line)`, is set at a corner of the
   line, so the line turns through the valve instead of bending to leave it.
+- `nozzle()` on a `Tank` or `Vessel` inlet or outlet names the face as drawn
+  again, so a turned or mirrored tank draws the nozzle on the face named.
+- A balloon hung on another balloon, such as `fs.add_instrument("LIC", 101,
+  near=lt)` on a pinned `LT`, is no longer drawn across that balloon's tap line.
+- A balloon attached with `face=` to a face whose middle a line leaves from taps
+  the face beside that nozzle, so its tap line no longer runs along the pipe.
 
 ## [0.2.0] - 2026-11-05
 
