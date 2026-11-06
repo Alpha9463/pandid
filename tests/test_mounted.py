@@ -649,3 +649,6 @@ def test_a_station_on_a_stacked_drop_stands_on_it() -> None:
     assert _upright_at(station) == pytest.approx(top[0])
     assert not fs.validate()
     assert _clean(fs)
+    bypass, valve = station.bypass, station.control
+    assert bypass is not None and bypass.frame is not None and valve.frame is not None
+    assert valve.frame.label_pos == ("left" if bypass.frame.cx > top[0] else "right")
