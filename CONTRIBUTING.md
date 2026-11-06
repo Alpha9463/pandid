@@ -27,7 +27,7 @@ at import time installs cleanly and then fails on the first export. Read the
 CI (`.github/workflows/ci.yml`) runs these checks:
 
 ```bash
-python -m pytest -q -n auto         # tests (full-suite CI: Python 3.11 and 3.15)
+python -m pytest -q -n auto --dist loadfile  # tests (full-suite CI: Python 3.11 and 3.15)
 python -m ruff check .              # lint the whole tree
 python -m ruff format --check tests # tests/ must stay ruff-formatted
 python -m mypy pandid               # type check the package
