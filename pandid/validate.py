@@ -1082,39 +1082,56 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                    if (text not in name if given else (f, text) not in carried or f in omitted)]
         if not undrawn:
             continue
-        # The line number the scheme, widened by the omitted fields, would draw.
+        # The line number the scheme, widened by the omitted fields, would
+        # draw on the line without a name.
         widened = scheme if callable(scheme) else scheme + "".join(f"-{{{f}}}" for f in omitted)
         try:
-            label = _format_line_number(widened, origin) if origin is not None else ""
+            label = (_format_line_number(widened, replace(origin, name="", auto_named=True))
+                     if origin is not None else "")
         except Exception:  # a scheme that cannot number this line
             label = ""
-        numbered = set(authored) <= carried and all(text in label for _, text in authored)
+        # The line numbers the other lines draw, renumbered by a widened scheme.
+        elsewhere = set()
+        for other, rest in runs.items():
+            first = next((s for s in rest if s.has_line_number), None)
+            if other != name:
+                elsewhere.add(_format_line_number(widened, first)
+                          if omitted and first is not None and all(s.auto_named for s in rest)
+                          else other)
+        numbered = (set(authored) <= carried and all(text in label for _, text in authored)
+                    and label not in elsewhere)
         it = "it" if len(undrawn) == 1 else "them"
         extra = [str(v) for (_, text), v in authored.items() if text not in name]
         them = "it" if len(extra) == 1 else "them"
-        named = f"name={' '.join([name, *extra])!r}"
+        written = " ".join([name, *extra])
+        free = written not in runs
         fields = _and([f"{{{f}}}" for f in omitted])
         call = f": Flowsheet(..., line_numbering_scheme={widened!r})" if omitted else ""
+        fixes = []
         if given:
-            fix = f"Write {them} into the name: {named}"
+            if free:
+                fixes.append(f"write {them} into the name: name={written!r}")
             if numbered:
                 add = f" and add {fields} to line_numbering_scheme" if omitted else ""
-                fix += f", or drop name={name!r}{add} so its line number draws {it}{call}"
+                fixes.append(f"drop name={name!r}{add} so its line number draws {it}{call}")
             source = "the name given to connect()"
         elif numbered:
-            fix = f"Add {fields} to the scheme, keeping its other arguments{call}"
+            fixes.append(f"add {fields} to the scheme, keeping its other arguments{call}")
             source = f"line_numbering_scheme {scheme!r}"
         else:
             assert origin is not None
-            fix = (f"Set new_line_number = True on the valve, fitting or tee where a "
-                   f"new line number starts, or name the line with {them} in one of its "
-                   f"connect() calls: {named}")
+            fixes.append("set new_line_number = True on the valve, fitting or tee where a "
+                         "new line number starts")
+            if free:
+                fixes.append(f"name the line with {them} in one of its connect() calls: "
+                             f"name={written!r}")
             source = (f"its line number, formed from the segment from "
                       f"{origin.source.owner.name} to {origin.dest.owner.name},")
+        fix = ", or ".join(fixes)
         warnings.append(Issue(
             "warning", "line-field-undrawn",
             f"{name} states {_and([f'{f}={v!r}' for f, v in undrawn])}, "
-            f"which {source} does not draw. {fix}"))
+            f"which {source} does not draw." + (f" {fix[:1].upper()}{fix[1:]}" if fix else "")))
 
     return errors + warnings
 

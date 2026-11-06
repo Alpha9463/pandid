@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draws the ISO 10628-2 furnace.
 - `CentrifugalFan` and `AxialFan` draw those fans, and
   `Blower(variant="general")` draws the ISO 10628-2 fan.
+- `Silo` draws the closed silo of ISO 10628-2 and `Bunker` its open bunker,
+  each with a conical bottom: solids enter at `feed` and leave at `discharge`,
+  and a silo vents through its roof at `vent`.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -81,6 +84,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
+  the train is drawn in the column beside that unit, where that adds no
+  crossing, bend or finding, instead of at the sheet's left edge.
 - Lines that cross on their way into a mixer are laid on lanes even where they
   share their stretch of the gap with only some of the lines beside them, so the
   last two pumps of a header of tees no longer cross into the mixer.

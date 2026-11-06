@@ -108,6 +108,7 @@ The names depend on the class and variant. Common patterns are:
   `agitator=` names the rotor on its shaft, or `None` for none.
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
+- A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.
 - Reactors use `feed`, `outlet`, `vent` and `duty`. A `JacketedReactor` has

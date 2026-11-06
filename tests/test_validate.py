@@ -1599,10 +1599,15 @@ def _advised(
     names = [value for key, value in advice if key == "name"]
     if not names:
         return scheme, [legs]
+    given = next((leg["name"] for leg in legs if "name" in leg), None)
     # Write the fields into the given name, or into a name on the first leg.
     target = next((i for i, leg in enumerate(legs) if "name" in leg), 0)
-    applied = [[{**leg, "name": names[0]} if i == target else leg for i, leg in enumerate(legs)]]
-    if any(leg.get("name") in names for leg in legs):
+    applied = [
+        [{**leg, "name": written} if i == target else leg for i, leg in enumerate(legs)]
+        for written in names
+        if written != given
+    ]
+    if given in names:
         # Drop the given name.
         applied.append([{k: v for k, v in leg.items() if k != "name"} for leg in legs])
     return scheme, applied
@@ -1708,6 +1713,45 @@ def test_following_the_line_field_advice_keeps_an_energy_line_s_carrier(
         labels = _labels(fs, diagram)
         for key, value in fix.items():
             assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+def test_following_the_line_field_advice_under_a_scheme_that_reads_the_name():
+    """Check a drop-name fix is judged by the line number the unnamed line would get."""
+
+    def scheme(s: Stream) -> str:
+        """Write the service only on a line named for unit X."""
+        return f"{s.size}-{s.service}" if s.name.startswith("X") else f"{s.size}"
+
+    legs = [{"name": "X-1", "size": 6, "service": "LPS"}]
+    (found,) = _found(_line(cast(Any, scheme), *legs), "line-field-undrawn")
+    _, applied = _advised(found.message, scheme, legs)
+    for fix in applied:
+        fs = _line(cast(Any, scheme), *fix)
+        labels = _labels(fs)
+        for key, value in fix[0].items():
+            assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+@pytest.mark.parametrize("taken", ["6-P-1002", "X-1 6 P"], ids=["by-drop-name", "by-write-name"])
+def test_following_the_line_field_advice_keeps_two_lines_apart(taken: str):
+    """Check no fix renames a line to the line number another line draws."""
+    legs = [{"name": "X-1", "size": 6, "service": "P"}]
+
+    def sheet(*fix: dict[str, Any]) -> Flowsheet:
+        """Build a line named *taken* and then the line under test."""
+        fs = Flowsheet("line")
+        fs.connect(fs.add(U.Feed("G")).outlet, fs.add(U.Product("Q")).inlet, name=taken)
+        fs.connect(fs.add(U.Feed("F")).outlet, fs.add(U.Product("P")).inlet, **fix[0])
+        return fs
+
+    (found,) = _found(sheet(*legs), "line-field-undrawn")
+    _, applied = _advised(found.message, None, legs)
+    assert len(applied) == 1, found.message
+    for fix in applied:
+        fs = sheet(*fix)
+        fs.renumber_streams()
+        assert fs.streams[0].name != fs.streams[1].name, found.message
+        assert _found(fs, "line-field-undrawn") == [], found.message
 
 
 @pytest.mark.parametrize(
