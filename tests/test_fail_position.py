@@ -106,7 +106,8 @@ def test_every_actuated_variant_takes_one(variant):
 def test_a_valve_retyped_after_it_declared_one_stops_the_sheet():
     """Check that a valve retyped after it declared one stops the sheet."""
     valve = units.Valve("FV-1", variant="control", fail="closed")
-    valve.variant = "gate"
+    with pytest.warns(DeprecationWarning, match="variant"):
+        valve.variant = "gate"
     with pytest.raises(ValueError, match="no actuator"):
         fail_marking(valve)
 

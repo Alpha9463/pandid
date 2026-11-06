@@ -1572,6 +1572,179 @@ def test_following_the_advice_draws_the_carrier_and_keeps_what_was_typed(scheme,
         assert value in str(getattr(duty, key)), f"{key}={value!r} lost: {found.message}"
 
 
+# --- line-field-undrawn -----------------------------------------------------
+
+
+def _line(scheme: str | None, *legs: dict[str, Any]) -> Flowsheet:
+    """Build a line from a feed to a product, one connect() per leg, through valves."""
+    fs = Flowsheet("line") if scheme is None else Flowsheet("line", line_numbering_scheme=scheme)
+    valves = [fs.add(U.Valve(f"HV-{i}")) for i in range(1, len(legs))]
+    units = [fs.add(U.Feed("F")), *valves, fs.add(U.Product("P"))]
+    for (up, down), leg in zip(zip(units, units[1:]), legs):
+        fs.connect(up.port("outlet"), down.port("inlet"), **leg)
+    return fs
+
+
+def _labels(fs: Flowsheet, diagram: str = "pfd") -> str:
+    """Return the text of every label drawn on the sheet."""
+    return " ".join(re.findall(r">([^<]*)</text>", fs.to_svg(diagram=diagram)))
+
+
+def _advised(
+    message: str, scheme: Any, legs: list[dict[str, Any]]
+) -> tuple[Any, list[list[dict[str, Any]]]]:
+    """Return the scheme and the legs of each fix a finding names, applied as written."""
+    advice = [(key, ast.literal_eval(value)) for key, value in _ADVISED.findall(message)]
+    scheme = next((value for key, value in advice if key == "line_numbering_scheme"), scheme)
+    names = [value for key, value in advice if key == "name"]
+    if not names:
+        return scheme, [legs]
+    # Write the fields into the given name, or into a name on the first leg.
+    target = next((i for i, leg in enumerate(legs) if "name" in leg), 0)
+    applied = [[{**leg, "name": names[0]} if i == target else leg for i, leg in enumerate(legs)]]
+    if any(leg.get("name") in names for leg in legs):
+        # Drop the given name.
+        applied.append([{k: v for k, v in leg.items() if k != "name"} for leg in legs])
+    return scheme, applied
+
+
+# Scheme, connect() arguments per leg, the fields the sheet leaves out, and
+# how many fixes the finding offers.
+_UNDRAWN: dict[str, tuple[str | None, list[dict[str, Any]], list[str], int]] = {
+    "hidden-by-a-given-name": (None, [{"name": "X-1", "service": "LPSTEAM"}], ["service"], 2),
+    "hidden-by-a-name-and-left-out-of-the-scheme": (
+        None,
+        [{"name": "X-1", "size": 6, "insulation": "IH"}],
+        ["size", "insulation"],
+        2,
+    ),
+    "left-out-of-the-scheme": (
+        "{size}-{sequence}",
+        [{"size": 6, "service": "P", "spec": "A1A"}],
+        ["service", "spec"],
+        1,
+    ),
+    "left-out-of-the-default-scheme": (
+        None,
+        [{"size": 6, "schedule": 40, "sequence": 2001}],
+        ["schedule"],
+        1,
+    ),
+    "hidden-by-a-name-on-a-line-through-a-valve": (
+        None,
+        [{"name": "X-1", "size": 6, "insulation": "IH"}, {}],
+        ["size", "insulation"],
+        2,
+    ),
+    "hidden-by-a-name-and-stated-past-a-valve": (
+        None,
+        [{"name": "X-1", "size": 6}, {"spec": "A1A"}],
+        ["size", "spec"],
+        1,
+    ),
+    "stated-past-a-valve": (None, [{"size": 6}, {"spec": "A1A"}], ["spec"], 1),
+    "changed-past-a-valve": (None, [{"size": 6, "service": "P"}, {"size": 4}], ["size"], 1),
+}
+
+
+def _keys(legs: list[dict[str, Any]]) -> set[str]:
+    """Return every connect() keyword the legs use."""
+    return {key for leg in legs for key in leg}
+
+
+@pytest.mark.parametrize("diagram", ["pfd", "p&id", "bfd"])
+@pytest.mark.parametrize(
+    ("scheme", "legs", "undrawn", "fixes"), _UNDRAWN.values(), ids=list(_UNDRAWN)
+)
+def test_a_line_number_field_the_sheet_does_not_draw_is_reported(
+    scheme: str | None, legs: list[dict[str, Any]], undrawn: list[str], fixes: int, diagram: str
+) -> None:
+    """Check every field typed into connect() and drawn nowhere is named."""
+    fs = _line(scheme, *legs)
+    (found,) = _found(fs, "line-field-undrawn", diagram=diagram)
+    assert found.severity == "warning"
+    stated = found.message.partition(" which ")[0]
+    assert [key for key in re.findall(r"(\w+)=", stated) if key in _keys(legs)] == undrawn
+
+
+@pytest.mark.parametrize(
+    ("scheme", "legs", "undrawn", "fixes"), _UNDRAWN.values(), ids=list(_UNDRAWN)
+)
+def test_following_the_line_field_advice_draws_every_field(
+    scheme: str | None, legs: list[dict[str, Any]], undrawn: list[str], fixes: int
+) -> None:
+    """Check each fix the finding names, applied as written, draws every typed value."""
+    (found,) = _found(_line(scheme, *legs), "line-field-undrawn")
+    scheme, applied = _advised(found.message, scheme, legs)
+    assert len(applied) == fixes, found.message
+    for fix in applied:
+        fs = _line(scheme, *fix)
+        assert _found(fs, "line-field-undrawn") == [], found.message
+        labels = _labels(fs)
+        for leg in fix:
+            for key, value in leg.items():
+                assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+@pytest.mark.parametrize(
+    ("scheme", "diagram", "fixes"),
+    [("{size}-{sequence}", "pfd", 2), (lambda s: f"{s.size}-{s.sequence}", "p&id", 1)],
+    ids=["pfd-scheme-without-the-service", "callable-scheme-without-the-service"],
+)
+def test_following_the_line_field_advice_keeps_an_energy_line_s_carrier(
+    scheme: Any, diagram: str, fixes: int
+) -> None:
+    """Check each fix for a named energy line, applied as written, still draws its carrier."""
+    legs = [{"name": "Q-LPSTEAM", "size": 6, "service": "LPSTEAM"}]
+    fs, _ = heat_integrated(Flowsheet("heat", line_numbering_scheme=scheme), **legs[0])
+    (found,) = _found(fs, "line-field-undrawn", diagram=diagram)
+    scheme, applied = _advised(found.message, scheme, legs)
+    assert len(applied) == fixes, found.message
+    for (fix,) in applied:
+        fs, _ = heat_integrated(Flowsheet("heat", line_numbering_scheme=scheme), **fix)
+        codes = {i.code for i in fs.validate(diagram=diagram)}
+        assert not codes & {"line-field-undrawn", "energy-carrier-missing"}, found.message
+        labels = _labels(fs, diagram)
+        for key, value in fix.items():
+            assert str(value) in labels, f"{key}={value!r} not drawn: {found.message}"
+
+
+@pytest.mark.parametrize(
+    ("scheme", "legs"),
+    [
+        (None, [{}]),
+        (None, [{"size": 6, "service": "P", "spec": "A1A"}]),
+        ("{size}", [{"size": 6}]),
+        (None, [{"name": "6-P-2001", "size": 6, "service": "P", "sequence": 2001}]),
+        (None, [{"size": 6, "service": "P"}, {"size": 6}]),
+    ],
+    ids=[
+        "no-fields",
+        "every-field-drawn",
+        "automatic-sequence-left-out",
+        "fields-in-a-given-name",
+        "repeated-past-a-valve",
+    ],
+)
+def test_a_line_that_draws_every_field_it_states_is_not_reported(
+    scheme: str | None, legs: list[dict[str, Any]]
+) -> None:
+    """Check a line whose label shows every typed field leaves the finding quiet."""
+    assert _found(_line(scheme, *legs), "line-field-undrawn") == []
+
+
+@pytest.mark.parametrize("diagram", ["pfd", "p&id"])
+def test_an_energy_line_s_hidden_service_is_reported_once(diagram: str) -> None:
+    """Check energy-carrier-missing alone reports a PFD energy line's service."""
+    fs, _ = heat_integrated(name="Q-1", service="LP steam")
+    codes = [
+        i.code
+        for i in fs.validate(diagram=diagram)
+        if i.code.startswith(("energy-carrier", "line-field"))
+    ]
+    assert codes == (["energy-carrier-missing"] if diagram == "pfd" else ["line-field-undrawn"])
+
+
 # --- validate() answers about the sheet that was drawn ------------------------
 
 
@@ -2331,3 +2504,54 @@ def test_a_flag_is_measured_by_the_pennant_it_draws():
     assert air.frame is not None and unit_box(air, air.frame)[1] == 175.0
     assert _found(fs, "route-along-unit") == []
     assert len(_found(_run_over_flag(1.5), "route-along-unit")) == 1
+
+
+# --- a valve under the arrowhead into a nozzle --------------------------------
+
+
+def _suction(placed: dict[str, float]) -> Flowsheet:
+    """Build a pump suction carrying valves and strainers at line fractions."""
+    fs = Flowsheet("arrowhead")
+    pump = fs.add(U.Pump("P-1"))
+    line = fs.connect(fs.add(U.Feed("F")).outlet, pump.suction)
+    for name, at in placed.items():
+        kind = U.Valve(name) if name.startswith("HV") else U.Fitting(name, variant="strainer")
+        fs.add(kind, on=line, at=at)
+    fs.connect(pump.discharge, fs.add(U.Product("Out")).inlet)
+    fs.route()
+    return fs
+
+
+def _order(fs: Flowsheet) -> list[str]:
+    """Return the valves and fittings along the suction, in flow order."""
+    return [s.dest.owner.name for s in fs.streams if s.dest.owner.kind in ("valve", "fitting")]
+
+
+@pytest.mark.parametrize(
+    "placed",
+    [{"HV-1": 0.99}, {"HV-1": 0.8}, {"HV-1": 0.7, "ST-1": 0.99}, {"HV-1": 0.5, "ST-1": 0.95}],
+)
+def test_following_the_arrowhead_advice_keeps_the_order_and_clears_it(placed):
+    fs = _suction(placed)
+    (issue,) = _found(fs, "valve-under-arrowhead")
+    assert "P-1.suction" in issue.message
+    call = re.search(r"fs\.add\((\S+), on=S1, at=([0-9.]+)\)", issue.message)
+    assert call is not None, issue.message
+    name, at = call.group(1), float(call.group(2))
+    again = _suction({**placed, name: at})
+    assert _order(again) == _order(fs)
+    assert _found(again, "valve-under-arrowhead") == []
+
+
+def test_a_valve_clear_of_the_arrowhead_is_not_reported():
+    assert _found(_suction({"HV-1": 0.5}), "valve-under-arrowhead") == []
+
+
+def test_no_gallery_sheet_draws_a_valve_under_an_arrowhead(settled_gallery):
+    found = [
+        (name, issue.message)
+        for name, (fs, kwargs) in settled_gallery.items()
+        for issue in fs.validate(**{k: v for k, v in kwargs.items() if k == "diagram"})
+        if issue.code == "valve-under-arrowhead"
+    ]
+    assert found == []

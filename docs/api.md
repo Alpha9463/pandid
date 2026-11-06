@@ -106,6 +106,8 @@ The names depend on the class and variant. Common patterns are:
   names the stirrer in its draft tube, or `None` for none.
 - A `FlotationCell` uses `feed`, `concentrate`, `tailings` and `air`;
   `agitator=` names the rotor on its shaft, or `None` for none.
+- A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
+  takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.
@@ -250,6 +252,11 @@ Set the line-number fields in `connect()` or on the returned stream. The
 `{service}`, `{sequence}`, `{spec}` and `{insulation}`; a callable can replace
 it. `line_number_start` controls the automatic sequence. This is separate from
 `stream_number_start`, which controls `S1`, `S2`, and so on.
+`validate()` reports `line-field-undrawn` for a field set on a line that its
+label does not draw: a `name=` replaces the line number, the scheme leaves the
+field out, or the field is stated past a valve or tee that carries another
+segment's number on. Set `new_line_number = True` on that valve or tee to start
+a new number there.
 
 ### Stream properties and the table
 
