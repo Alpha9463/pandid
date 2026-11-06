@@ -10,7 +10,6 @@ import pytest
 from pandid import Feed, Flowsheet, Pump, ShellAndTubeExchanger, Tank, Vessel
 from pandid.document import StreamLabelOptions
 from pandid.layout.conflicts import boxes_overlap
-from pandid.render.drawio import _tag_pass
 from pandid.render.furniture import text_width
 from pandid.render.svg import (
     _HALO_DEEP,
@@ -19,6 +18,7 @@ from pandid.render.svg import (
     _LABEL_CODES,
     _shape_hits,
     _shapes_meet,
+    _unit_label_box,
     enclosure_box,
     fillable_enclosures,
     hop_box,
@@ -28,6 +28,7 @@ from pandid.render.svg import (
     sheet_connections,
     stream_hops,
     stream_numbers,
+    unit_tags,
 )
 from pandid.spec import SpecError, from_dict, to_dict
 from _render_cases import copy_settled_case
@@ -63,7 +64,12 @@ def sheet(scheme: "str | Callable[[int], str]" = "S{n}") -> Flowsheet:
 def placed_numbers(fs: Flowsheet, **kwargs) -> list:
     """Return resolved stream-label placements from a rendered flowsheet."""
     joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
-    plates = list(_tag_pass(fs, joints, "vertical").plates)
+    plates = [
+        box
+        for _unit, _tag, items in unit_tags(fs, joints, "vertical")
+        for box in map(_unit_label_box, items)
+        if box is not None
+    ]
     return list(stream_numbers(fs, plates, joints, "vertical"))
 
 

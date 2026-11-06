@@ -2424,6 +2424,38 @@ def test_a_stacked_tag_kept_off_a_label_on_the_sheet_keeps_off_labels_in_draw_io
     assert not struck, struck
 
 
+def test_a_line_number_keeps_off_a_tag_stacked_with_its_letters():
+    """Keep draw.io's line numbers off the block a tag and its fail letters stack in."""
+    fs = Flowsheet("numbered rows")
+    # Each valve's tag, inlet x, normal position and fail position.
+    rows = (
+        (200, [("HV-100", 225, "closed", ""), ("HV-1001", 275, "open", "")]),
+        (250, [("FV-20", 225, "open", "closed"), ("FV-111", 285, "open", "open")]),
+        (300, [("FV-120", 240, "open", "closed"), ("FV-1021", 285, "open", "closed")]),
+    )
+    for row, (y, valves) in enumerate(rows):
+        before = fs.add(units.Feed(f"F{row}")).pin(port="outlet", x=100, y=y).outlet
+        for i, (tag, x, normal, fail) in enumerate(valves):
+            variant = "control" if fail else "default"
+            valve = units.Valve(tag, variant, normal_position=normal, fail=fail)
+            fs.add(valve).pin(port="inlet", x=x, y=y)
+            fs.connect(before, valve.inlet, name=f"50-P-{row}{i}01-CS")
+            before = valve.outlet
+        product = fs.add(units.Product(f"P{row}")).pin(port="inlet", x=700, y=y)
+        fs.connect(before, product.inlet, name=f"50-P-{row}99-CS")
+    fs.route()
+    cells = _drawio_cells_from_document(fs.to_drawio(diagram="p&id"))
+    _symbols, tags, numbers = _drawn_boxes(fs, {"diagram": "p&id"}, cells)
+    struck = [
+        (name, cells[cid].get("value"))
+        for name, box in numbers
+        for cid, tag in tags.items()
+        if overlaps(box, tag)
+    ]
+    assert numbers
+    assert not struck, struck
+
+
 @pytest.mark.parametrize("stem", LEADER_SHEETS, ids=LEADER_SHEETS)
 def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, rendered_gallery, stem):
     """Connect a displaced line number to its stream with a leader."""

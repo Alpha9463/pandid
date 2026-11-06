@@ -650,7 +650,8 @@ class _Tags(NamedTuple):
         spot, and the offset from the middle of the cell's side to the middle
         of the tag halo's near edge, or ``None`` with no halo.
     plates : list
-        Opaque boxes of tags and ``NC``/fail letters.
+        Opaque boxes of tags and ``NC``/fail letters, where the sheet
+        draws them and where draw.io writes them.
     """
     at: dict
     plates: list
@@ -678,7 +679,8 @@ def _tag_pass(fs, joints: "str | None", direction: str) -> "_Tags":
     at: dict = {}
     plates: list = []
     for u, item, items in unit_tags(fs, joints, direction):
-        plates += [b for b in map(_unit_label_box, items) if b is not None]
+        block = label_box(u, item, items)
+        plates += [b for b in (*map(_unit_label_box, items), block) if b is not None]
         if item is not None and u.frame is not None:
             at[id(u)] = _tag_at(u, item)
     return _Tags(at, plates)
