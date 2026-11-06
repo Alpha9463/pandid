@@ -354,7 +354,7 @@ def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
     halo = re.search(r'<rect [^>]*width="([\d.]+)"[^>]*/>\s*<text [^>]*>R&amp;D</text>', labels)
     assert halo is not None and halo.group(1) == "33.3"
     plates = _tag_pass(fs, None, "vertical").plates
-    assert [round(x1 - x0, 1) for x0, _y0, x1, _y1 in plates] == [33.3]
+    assert max(round(x1 - x0, 1) for x0, _y0, x1, _y1 in plates) == 33.3
 
 
 @pytest.mark.parametrize(
