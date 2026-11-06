@@ -2862,9 +2862,9 @@ class Flowsheet:
             self._exit_clear = True
             try:
                 self.layout(self._engine)
+                settle_best()
             finally:
                 self._exit_clear = False
-            settle_best()
 
         def repinned() -> None:
             """Lay out with each balloon pinned on both axes kept clear,
