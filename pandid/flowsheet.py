@@ -2742,14 +2742,16 @@ class Flowsheet:
         bool
             True if the layout and routes are fresh, and what
             :meth:`_stated` returns differs from what it returned when
-            route() last finished only in pins each unit is drawn at.
+            route() last finished only in pins, each new one at the place
+            its unit is drawn.
         """
         then = self._stated_then
         if then is None or self._layout_stale or self._route_stale:
             return False
         pins, *rest = self._stated()
-        return (pins != then[0] and rest == list(then[1:])
-                and all(u._drawn_as(pin, ports, {}) for u, pin, ports in pins))
+        new = [pin for pin in pins if pin not in then[0]]
+        return (bool(new) and rest == list(then[1:])
+                and all(u._drawn_as(pin, ports, {}) for u, pin, ports in new))
 
     def _hold_typed(self) -> None:
         """Hold each unpinned balloon a ``via()`` line meets where the
