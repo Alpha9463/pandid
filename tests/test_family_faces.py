@@ -325,21 +325,21 @@ def test_a_compact_block_with_moved_connections_round_trips():
     assert got.input_faces == ("W", "N", "N", "N")
 
 
-# --- A stated tank or vessel face is on the unit's own side -------------------
+# --- A stated tank or vessel face is as drawn ---------------------------------
 
 
-@pytest.mark.parametrize(("pin", "face"), [({"mirrored": True}, "W"), ({"orientation": 90}, "S")])
-def test_a_moved_tank_inlet_turns_and_mirrors_with_the_tank(pin, face):
-    """Draw a ``nozzle()`` face on the tank's own side after a mirror or turn."""
+@pytest.mark.parametrize("pin", [{"mirrored": True}, {"orientation": 90}])
+def test_a_moved_tank_inlet_keeps_its_face_as_drawn_after_a_mirror_or_turn(pin):
+    """Keep a ``nozzle()`` face as drawn when the tank is later mirrored or turned."""
     fs = Flowsheet("tank")
     tank = fs.add(units.Tank("TK-1", inputs=2)).nozzle("in_2", "E")
     tank.pin(x=300, y=300, **pin)
     fs.layout()
-    assert _face(tank, "in_2") == face
+    assert _face(tank, "in_2") == "E"
 
 
 def test_layout_reads_a_stated_lone_inlet_on_its_stated_face():
-    """Place peers against a listed or moved lone inlet's own face."""
+    """Place peers against a listed or moved lone inlet's stated face."""
     listed = units.Tank("TK-1", inputs=["N"])
     moved = units.Tank("TK-2").nozzle("inlet", "E")
     fs = Flowsheet("tank")
@@ -741,16 +741,20 @@ def test_nozzle_puts_a_series_member_on_the_face_as_drawn(
     build: Callable[[], Unit], own: str, placement: str
 ):
     """Draw a feed on the face nozzle() names, under any turn or mirror."""
-    drawn = _DRAWN[placement][own]
-    fs = Flowsheet("series")
+    _assert_drawn_on(build, "feed", _DRAWN[placement][own], placement)
+
+
+def _assert_drawn_on(build: Callable[[], Unit], port_name: str, drawn: str, placement: str) -> None:
+    """Assert a port nozzle() puts on a face is drawn there, also read back from a spec."""
+    fs = Flowsheet("placed")
     turn, mirror = _PLACEMENTS[placement]
     unit = fs.add(build()).pin(x=300, y=100, orientation=turn, mirrored=mirror)
-    unit.nozzle("feed", drawn)
+    unit.nozzle(port_name, drawn)
     read = from_dict(to_dict(fs))
     for sheet, placed in ((fs, unit), (read, read.units[0])):
         sheet.layout()
         assert placed.frame is not None
-        port = resolve_port(placed, placed.frame, "feed")
+        port = resolve_port(placed, placed.frame, port_name)
         cx = placed.frame.x + placed.frame.w / 2
         cy = placed.frame.y + placed.frame.h / 2
         side = {
@@ -770,3 +774,45 @@ def test_nozzle_on_a_mirrored_column_names_the_face_as_drawn():
     assert column.frame is not None
     port = resolve_port(column, column.frame, "feed")
     assert (port.face, port.point) == ("E", (400.0, 205.0))
+
+
+@pytest.mark.parametrize("placement", list(_DRAWN))
+@pytest.mark.parametrize(
+    ("build", "port_name", "own"),
+    [
+        pytest.param(lambda: units.Tank("TK-1"), "in_1", "W", id="tank-inlet-home"),
+        pytest.param(lambda: units.Tank("TK-1"), "in_1", "E", id="tank-inlet-across"),
+        pytest.param(lambda: units.Tank("TK-1"), "in_1", "N", id="tank-inlet-roof"),
+        pytest.param(lambda: units.Tank("TK-1"), "out_1", "S", id="tank-outlet-home"),
+        pytest.param(lambda: units.Tank("TK-1"), "out_1", "E", id="tank-outlet-wall"),
+        pytest.param(lambda: units.Vessel("V-1"), "in_1", "W", id="vessel-inlet-home"),
+        pytest.param(lambda: units.Vessel("V-1"), "in_1", "E", id="vessel-inlet-across"),
+        pytest.param(lambda: units.Vessel("V-1"), "in_1", "N", id="vessel-inlet-head"),
+        pytest.param(lambda: units.Vessel("V-1"), "out_1", "E", id="vessel-outlet-home"),
+        pytest.param(lambda: units.Vessel("V-1"), "out_1", "W", id="vessel-outlet-across"),
+    ],
+)
+def test_nozzle_puts_a_tank_or_vessel_nozzle_on_the_face_as_drawn(
+    build: Callable[[], Unit], port_name: str, own: str, placement: str
+):
+    """Draw an inlet or outlet on the face nozzle() names, under any turn or mirror."""
+    _assert_drawn_on(build, port_name, _DRAWN[placement][own], placement)
+
+
+@pytest.mark.parametrize(
+    ("build", "point"),
+    [
+        pytest.param(lambda: units.Tank("TK-1"), (400.0, 185.0), id="tank"),
+        pytest.param(lambda: units.Vessel("V-1"), (362.0, 150.0), id="vessel"),
+    ],
+)
+def test_nozzle_on_a_mirrored_tank_or_vessel_names_the_face_as_drawn(
+    build: Callable[[], Unit], point: tuple[float, float]
+):
+    """Put a mirrored tank's or vessel's inlet on the east wall nozzle() names."""
+    fs = Flowsheet("mirrored")
+    unit = fs.add(build()).pin(x=300, y=100, mirrored=True).nozzle("in_1", "E")
+    fs.layout()
+    assert unit.frame is not None
+    port = resolve_port(unit, unit.frame, "in_1")
+    assert (port.face, port.point) == ("E", point)

@@ -146,7 +146,7 @@ def pinned(pin: float, along: float,
 
 
 def bandless_face(who: str, face: str, at: float, members: "list[str]",
-                  sym: "Symbol") -> ValueError:
+                  sym: "Symbol", drawn: "dict[str, str] | None" = None) -> ValueError:
     """Return the error for several nozzles on a one-point face.
 
     The cure names only the walled faces every member's role may use.
@@ -163,12 +163,16 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
         Ports placed on the face, ``in_*`` or ``out_*``.
     sym : Symbol
         Symbol the ports are drawn on.
+    drawn : dict[str, str], optional
+        The face each of the symbol's own faces is drawn on; the faces
+        are named as their own when omitted.
 
     Returns
     -------
     ValueError
         The error to raise.
     """
+    drawn = drawn or {f: f for f in ("N", "E", "S", "W")}
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
     # Each member's faces whose band has length.
@@ -176,7 +180,7 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     menus = [[f for f in {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
               if (band := sym.bands.get(f)) is None or band[0] < band[1]]
              for role in roles]
-    offered = [f for f in menus[0] if all(f in menu for menu in menus)]
+    offered = [drawn[f] for f in menus[0] if all(f in menu for menu in menus)]
     cure = (
         "Put them on "
         + " or ".join(filter(None, [", ".join(offered[:-1]), *offered[-1:]]))
@@ -186,7 +190,7 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
         "connection here"
     )
     return ValueError(
-        f"{who}: {named} {verb} on the {face} face, whose artwork meets the box "
+        f"{who}: {named} {verb} on the {drawn[face]} face, whose artwork meets the box "
         f"at the single point {at:g} along it -- a dished head, a cone apex or a "
         f"domed roof. One nozzle sits on that point; a second beside it would be "
         f"drawn in mid-air off the ink. {cure}"

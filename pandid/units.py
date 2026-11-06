@@ -2322,7 +2322,7 @@ class _MultiPortVessel(_FaceFamilies):
         x, y = sym.ports[role]
         return outward_dir(x, y, sym.width, sym.height)
 
-    def _validate_face(self, role: str, port_name: str, face: str) -> None:
+    def _validate_face(self, role: str, port_name: str, face: str, placed=None) -> None:
         """Check that a family port may be drawn on a face.
 
         Parameters
@@ -2332,32 +2332,35 @@ class _MultiPortVessel(_FaceFamilies):
         port_name : str
             Family port name.
         face : str
-            Compass face.
+            Compass face on the unit's own axes.
+        placed : Pin, Frame or None, optional
+            Placement whose drawn faces a refusal names.
 
         Raises
         ------
         ValueError
             If the artwork offers no such face, or the face has no room.
         """
+        from pandid.portgeom import own_faces, stated_faces, unreachable_face
+
         sym = self._registry_symbol()
         if sym is None:
             # Unknown variant: leave the error to render time.
             return
+        drawn = {own: on for on, own in own_faces(placed).items()}
         options = {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
         if face not in options:
-            from pandid.portgeom import unreachable_face
-
-            raise unreachable_face(self, port_name, face, list(options))
+            raise unreachable_face(self, port_name, drawn[face], [drawn[f] for f in options])
         # Refuse a second port on a zero-length face.
         band = sym.bands.get(face)
         if band is None or band[0] < band[1]:
             return
-        others = [name for name, on in self._faces.items()
+        others = [name for name, on in stated_faces(self, placed).items()
                   if on == face and name != port_name]
         if others:
             from pandid.render.symbols import bandless_face
 
-            raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
+            raise bandless_face(self.name, face, band[0], [*others, port_name], sym, drawn)
 
     def default_input_face(self) -> str:
         """Return the face an inlet uses when none is named.
@@ -2506,9 +2509,10 @@ class _MultiPortVessel(_FaceFamilies):
     def nozzle(self: _MultiPortVesselT, port_name: str, face: str) -> _MultiPortVesselT:
         """Move a port to a named face.
 
-        An inlet or outlet moves to any face the artwork offers for its
-        role. ``vent``, ``relief`` and ``drain`` use
-        :meth:`Unit.nozzle`.
+        The face is as drawn, so a turned or mirrored unit takes the
+        face the reader sees. An inlet or outlet moves to any face the
+        artwork offers for its role. ``vent``, ``relief`` and ``drain``
+        use :meth:`Unit.nozzle`.
 
         Parameters
         ----------
@@ -2530,13 +2534,18 @@ class _MultiPortVessel(_FaceFamilies):
             If ``face`` is not a face, or the artwork offers no such
             face or no room on it for the port.
         """
+        from pandid.portgeom import own_faces
+
         canonical = self._canonical_port_name(port_name)
         if canonical not in self._faces:
             return super().nozzle(port_name, face)
         role = "inlet" if canonical.startswith("in_") else "outlet"
         resolved = _block_face(face, self.name)
-        self._validate_face(role, canonical, resolved)
-        self._faces[canonical] = resolved
+        placed = self.pin_ if self.pin_ is not None else self.frame
+        own = own_faces(placed)[resolved]
+        self._validate_face(role, canonical, own, placed)
+        self._faces[canonical] = own
+        self._port_faces[canonical] = resolved
         self._stated.add(canonical)
         self._invalidate_layout()
         return self

@@ -198,6 +198,8 @@ These are removed in 0.4.0.
 - An angle valve put on a line with `on=`, such as
   `fs.add(Valve("HV-1", variant="angle"), on=line)`, is set at a corner of the
   line, so the line turns through the valve instead of bending to leave it.
+- `nozzle()` on a `Tank` or `Vessel` inlet or outlet names the face as drawn
+  again, so a turned or mirrored tank draws the nozzle on the face named.
 
 ## [0.2.0] - 2026-11-05
 
