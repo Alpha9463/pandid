@@ -37,7 +37,9 @@ def test_a_taller_upright_shell_keeps_its_heads_and_lengthens_its_wall(variant):
         assert taller.ports[name] == pytest.approx(natural.ports[name]), name
     assert taller.ports["drain"][1] == pytest.approx(natural.ports["drain"][1] + 60)
     for face, (lo, hi) in natural.bands.items():
-        assert taller.bands[face] == pytest.approx((lo, hi + 60)), face
+        # The top head's one point stays where it is.
+        want = (lo, hi) if face == "N" else (lo, hi + 60)
+        assert taller.bands[face] == pytest.approx(want), face
 
 
 @pytest.mark.parametrize("variant", LYING)

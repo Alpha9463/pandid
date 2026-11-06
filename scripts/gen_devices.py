@@ -428,6 +428,7 @@ STAYS_ON_BASE = {
     ("crystallizer", "default"): "Crystallizer's own drawing (the draft-tube baffle body)",
     ("flotation_cell", "default"): "FlotationCell's own drawing (the mechanical cell)",
     ("mixer_settler", "default"): "MixerSettler's own drawing",
+    ("deaerator", "default"): "Deaerator's own drawing",
     ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
     ("fitting", "rotary_mixer"): "body style: a rotating mixing element in the run",
     ("fitting", "mixing_path"): "body style: three mixing elements in series in the run",

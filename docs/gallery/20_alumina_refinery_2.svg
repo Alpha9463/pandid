@@ -658,7 +658,7 @@
     <path d="M 90.0,965.0 L 140.0,965.0 L 140.0,1111.1439346323068 L 200.0,1111.1439346323068" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 790.0,1430.0 L 810,1430 L 810,1350.0 L 110.0,1350.0 L 110.0,1130.0 L 200.0,1130.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 770.0,1165.0 L 770.0,1330.0 L 170.0,1330.0 L 170.0,1148.8560653676934 L 200.0,1148.8560653676934" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 235.0,1158.717787554997 L 235.0,1183.717787554997 L 375.0,1183.717787554997 L 375.0,1130.0 L 400.0,1130.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 270.0,1148.8560653676934 L 375.0,1148.8560653676934 L 375.0,1130.0 L 400.0,1130.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 330.0,1250.0 L 406.0,1250 L 406.0,1136.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 412.0,1130.0 L 460.0,1130.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 610.0,1130.0 L 700.0,1130.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -675,8 +675,8 @@
     <text x="460.0" y="1350.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-920</text>
     <rect x="453.7" y="1323.5" width="32.7" height="13.0" fill="white" />
     <text x="470.0" y="1330.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-921</text>
-    <rect x="288.7" y="1177.2" width="32.7" height="13.0" fill="white" />
-    <text x="305.0" y="1183.7" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-922</text>
+    <rect x="306.2" y="1142.4" width="32.7" height="13.0" fill="white" />
+    <text x="322.5" y="1148.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-922</text>
     <rect x="399.5" y="1176.7" width="13.0" height="32.7" fill="white" />
     <text x="406.0" y="1193.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 406.0, 1193.0)">S-923</text>
     <rect x="419.7" y="1113.0" width="32.7" height="13.0" fill="white" />

@@ -172,9 +172,10 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
     # Each member's faces whose band has length.
-    menus = [[f for f in sym.port_faces.get("inlet" if m.startswith("in_") else "outlet", {})
+    roles = ["inlet" if m.startswith("in_") else "outlet" for m in members]
+    menus = [[f for f in {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
               if (band := sym.bands.get(f)) is None or band[0] < band[1]]
-             for m in members]
+             for role in roles]
     offered = [f for f in menus[0] if all(f in menu for menu in menus)]
     cure = (
         "Put them on "
@@ -449,6 +450,9 @@ class Symbol:
         Port families, each on N, S, E or W and apart from ``ports``.
     bands : dict[str, tuple[float, float]]
         Stretch ``(lo, hi)`` a family may use, from each face's start.
+    family_faces : dict[str, dict[str, tuple[float, float]]]
+        Further placements by face of the ``inlet`` and ``outlet``
+        families, left out of a lone port's menu.
     rim : tuple[tuple[float, float], ...]
         Outline of the artwork as a convex polygon, which lines sharing
         a face are drawn to; the box when empty.
@@ -494,6 +498,7 @@ class Symbol:
     faceless_ports: frozenset[str] = frozenset()
     port_series: tuple[PortSeries, ...] = ()
     bands: dict[str, tuple[float, float]] = field(default_factory=dict)
+    family_faces: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     rim: tuple[tuple[float, float], ...] = ()
     label_pos: str | None = None
     id_suffix: str = ""
@@ -559,6 +564,16 @@ class Symbol:
                     f"stretch of a {along:g}-long face measured from its start; a "
                     f"family confined to it would be drawn off the box"
                 )
+        for name, faces in self.family_faces.items():
+            for face, coord in faces.items():
+                lands = outward_dir(coord[0], coord[1], self.width, self.height)
+                if lands != face:
+                    raise ValueError(
+                        f"{self.symbol_id()}: family_faces[{name!r}][{face!r}] at "
+                        f"{coord} is nearest the {lands} edge of the "
+                        f"{self.width}x{self.height} box, so that is the face it "
+                        f"would come out of"
+                    )
         menu: dict[str, dict[str, tuple[float, float]]] = {}
         for name, xy in self.ports.items():
             home = outward_dir(xy[0], xy[1], self.width, self.height)
@@ -1718,6 +1733,10 @@ def _shell(variant: str, w: float, h: float) -> Symbol:
     built = _BUILDERS[variant](w, h)
     art, ports, bands = built[:3]
     faces = built[3] if len(built) > 3 else {}
+    family = _shell_family(variant, w, ports)
+    if "N" in family.get("inlet", {}):
+        x = family["inlet"]["N"][0]
+        bands = {**bands, "N": (x, x)}
     name = f"sym_vessel{'' if variant == 'default' else '_' + variant}"
     return Symbol(
         svg=f'<g id="{name}">{art}</g>',
@@ -1725,11 +1744,63 @@ def _shell(variant: str, w: float, h: float) -> Symbol:
         ports={k: (round(x, 4), round(y, 4)) for k, (x, y) in ports.items()},
         port_faces={role: {face: (round(x, 4), round(y, 4)) for face, (x, y) in menu.items()}
                     for role, menu in faces.items()},
+        family_faces={role: {face: (round(x, 4), round(y, 4)) for face, (x, y) in menu.items()}
+                      for role, menu in family.items()},
         bands={k: (round(lo, 4), round(hi, 4)) for k, (lo, hi) in bands.items()},
         id_suffix="" if (w, h) == VESSEL_SIZES[variant] else f"_{w:g}x{h:g}",
         drawio_shape=_DRAWIO[variant],
         gravity_fixed=True,
     )
+
+
+def _shell_family(variant: str, w: float, ports: dict[str, tuple[float, float]]
+                  ) -> dict[str, dict[str, tuple[float, float]]]:
+    """Return the family faces of a vessel's shell.
+
+    An upright shell's inlet and outlet each take the opposite wall at
+    their own height, and its inlet the top head opposite the relief;
+    the heater takes ``electrical_heating``'s east wall. A dome's take
+    the opposite head. A horizontal drum has none.
+
+    Parameters
+    ----------
+    variant : str
+        Vessel variant.
+    w : float
+        Box width.
+    ports : dict[str, tuple[float, float]]
+        The shell's nozzles.
+
+    Returns
+    -------
+    dict[str, dict[str, tuple[float, float]]]
+        ``"inlet"`` and ``"outlet"`` to their further placements by face.
+    """
+    if variant == "horizontal":
+        return {}
+    # The vent marks an upright shell's axis.
+    axis = w / 2 if variant == "dome" else ports["vent"][0]
+
+    def mirrored(name: str) -> tuple[float, float]:
+        """Return a nozzle mirrored about the shell's axis.
+
+        Parameters
+        ----------
+        name : str
+            Nozzle.
+
+        Returns
+        -------
+        tuple[float, float]
+            Mirrored point.
+        """
+        x, y = ports[name]
+        return 2 * axis - x, y
+
+    inlet = {} if variant == "electrical_heating" else {"E": mirrored("inlet")}
+    if variant != "dome":
+        inlet["N"] = mirrored("relief")
+    return {"inlet": inlet, "outlet": {"W": mirrored("outlet")}}
 
 
 def vessel_shell_fits(variant: str) -> tuple[float, float]:
@@ -2079,8 +2150,8 @@ def _has_wall(variant: str, face: str) -> bool:
     return lo < hi
 
 
-def _groups(faces: tuple[tuple[str, str], ...]) -> dict[tuple[str, str], list[str]]:
-    """Return a tank's or vessel's families, by role and face.
+def _groups(faces: tuple[tuple[str, str], ...]) -> dict[str, list[str]]:
+    """Return a tank's or vessel's family ports, by face.
 
     Parameters
     ----------
@@ -2089,14 +2160,76 @@ def _groups(faces: tuple[tuple[str, str], ...]) -> dict[tuple[str, str], list[st
 
     Returns
     -------
-    dict[tuple[str, str], list[str]]
-        Members of each ``(role, face)`` family, in port order.
+    dict[str, list[str]]
+        Inlets and outlets on each face, in drawn order.
     """
-    groups: dict[tuple[str, str], list[str]] = {}
+    groups: dict[str, list[str]] = {}
     for port_name, face in faces:
-        role = "inlet" if port_name.startswith("in_") else "outlet"
-        groups.setdefault((role, face), []).append(port_name)
+        groups.setdefault(face, []).append(port_name)
     return groups
+
+
+def _role(port_name: str) -> str:
+    """Return the family a tank's or vessel's port belongs to.
+
+    Parameters
+    ----------
+    port_name : str
+        ``in_*`` or ``out_*``.
+
+    Returns
+    -------
+    str
+        ``"inlet"`` or ``"outlet"``.
+    """
+    return "inlet" if port_name.startswith("in_") else "outlet"
+
+
+def _reach(base: Symbol) -> dict[str, dict[str, tuple[float, float]]]:
+    """Return each family's placements: its menu, then its family faces.
+
+    Parameters
+    ----------
+    base : Symbol
+        Tank or vessel body.
+
+    Returns
+    -------
+    dict[str, dict[str, tuple[float, float]]]
+        ``"inlet"`` and ``"outlet"`` to their placements by face.
+    """
+    return {role: {**base.port_faces.get(role, {}), **base.family_faces.get(role, {})}
+            for role in ("inlet", "outlet")}
+
+
+def _face_anchor(base: Symbol, reach: dict[str, dict[str, tuple[float, float]]],
+                 face: str, members: list[str]) -> tuple[float, float, float]:
+    """Return where a face's family ports spread from, and their clearance.
+
+    Inlets and outlets on one face spread about their anchors' mean,
+    and keep the larger of their clearances from the supports.
+
+    Parameters
+    ----------
+    base : Symbol
+        Tank or vessel body.
+    reach : dict[str, dict[str, tuple[float, float]]]
+        What :func:`_reach` returned.
+    face : str
+        Face the ports are on.
+    members : list[str]
+        Family ports on the face.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        Anchor along the face, inset from its edge, and clearance.
+    """
+    roles = {_role(name) for name in members}
+    local = {_face_local(face, *reach[role][face], base.width, base.height) for role in roles}
+    t0, inset = (next(iter(local)) if len(local) == 1 else
+                 (sum(t for t, _ in local) / len(local), sum(i for _, i in local) / len(local)))
+    return t0, inset, max(_SUPPORT_CLEARANCE[role] for role in roles)
 
 
 @lru_cache(maxsize=None)
@@ -2128,12 +2261,12 @@ def vessel_room(variant: str, faces: tuple[tuple[str, str], ...],
         Width and height to add.
     """
     base, spans = _vessel_base("vessel", variant, overlays, ports, size)
+    reach = _reach(base)
     wide = tall = 0.0
-    for (role, face), members in _groups(faces).items():
-        menu = base.port_faces.get(role, {})
-        if face not in menu:
+    for face, members in _groups(faces).items():
+        if any(face not in reach[_role(name)] for name in members):
             continue
-        t0, inset = _face_local(face, *menu[face], base.width, base.height)
+        t0, inset, clearance = _face_anchor(base, reach, face, members)
         along = base.height if face in ("W", "E") else base.width
         band = base.bands.get(face)
         fixed = {name: xy for name, xy in base.ports.items()
@@ -2141,7 +2274,7 @@ def vessel_room(variant: str, faces: tuple[tuple[str, str], ...],
         members = _wall_members(base, face, members, t0, band, along, fixed)
         _, short = _family_band(band, along, inset, t0, len(members),
                                 [(a, b) for f, a, b in spans if f == face],
-                                _SUPPORT_CLEARANCE[role], _has_wall(variant, face))
+                                clearance, _has_wall(variant, face))
         if face in ("W", "E"):
             tall = max(tall, short)
         else:
@@ -2156,10 +2289,12 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   size: "tuple[float, float] | None" = None) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
-    Each family is spread about the stencil's anchor within the part of
-    :attr:`Symbol.bands` nearer its face than either end of the box,
-    clear of the supports beside its wall where that stretch holds it.
-    A role with one member keeps its full menu. If a member lands nearer
+    The family ports on a face are spread about the stencil's anchor,
+    or the mean of the inlet's and outlet's where both share it, within
+    the part of :attr:`Symbol.bands` nearer its face than either end of
+    the box, clear of the supports beside its wall where that stretch
+    holds it. A family may take :attr:`Symbol.family_faces` too; a role
+    with one member keeps its full menu. If a member lands nearer
     a stencil nozzle on its band than the family's pitch, the band's
     stencil nozzles are spread with the family, in order along the
     wall.
@@ -2204,30 +2339,29 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     }
     fixed = [name for name in placed if name not in dict(ports)]
     menus = {"inlet": base.port_faces.get("inlet", {}), "outlet": base.port_faces.get("outlet", {})}
+    reach = _reach(base)
     members_by_role: dict[str, list[str]] = {"inlet": [], "outlet": []}
-    groups: dict[tuple[str, str], list[str]] = {}
     by_face: dict[str, list[str]] = {}
     for port_name, face in faces:
-        role = "inlet" if port_name.startswith("in_") else "outlet"
-        members_by_role[role].append(port_name)
-        groups.setdefault((role, face), []).append(port_name)
+        members_by_role[_role(port_name)].append(port_name)
         by_face.setdefault(face, []).append(port_name)
-    for (role, face), members in groups.items():
-        menu = menus[role]
-        if face not in menu:
+    for face, members in by_face.items():
+        missing = [name for name in members if face not in reach[_role(name)]]
+        if missing:
+            role = _role(missing[0])
             raise ValueError(
                 f"{kind}/{variant}: {role} has no {face!r} placement to draw "
-                f"{', '.join(members)} on; offered: "
-                f"{', '.join(menu) if menu else 'nothing'}"
+                f"{', '.join(missing)} on; offered: "
+                f"{', '.join(reach[role]) if reach[role] else 'nothing'}"
             )
-        t0, inset = _face_local(face, *menu[face], base.width, base.height)
+        t0, inset, clearance = _face_anchor(base, reach, face, members)
         along = base.height if face in ("W", "E") else base.width
         band = base.bands.get(face)
         members = _wall_members(base, face, members, t0, band, along,
                                 {name: placed[name] for name in fixed})
         band, _ = _family_band(band, along, inset, t0, len(members),
                                [(a, b) for f, a, b in spans if f == face],
-                               _SUPPORT_CLEARANCE[role], kind == "vessel" and _has_wall(variant, face))
+                               clearance, kind == "vessel" and _has_wall(variant, face))
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
@@ -2248,11 +2382,17 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         band = base.bands.get(face)
         if len(on_face) > 1 and band is not None and band[0] >= band[1]:
             raise bandless_face(f"{kind}/{variant}", face, band[0], on_face, base)
-    # A lone member keeps its whole face menu, at the point it is drawn.
+    # A lone member keeps its own placement and the faces of its menu no
+    # other family member is on.
+    on = dict(faces)
     for role, members in members_by_role.items():
         if len(members) == 1 and menus[role]:
-            on = dict(faces)[members[0]]
-            port_faces[members[0]] = {**menus[role], on: placed[members[0]]}
+            name = members[0]
+            port_faces[name] = {
+                **{face: xy for face, xy in menus[role].items()
+                   if not any(face == on[other] for other in on if other != name)},
+                on[name]: placed[name],
+            }
     return replace(base, ports=placed, port_faces=port_faces)
 
 
@@ -2833,6 +2973,8 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         # The body's face menu, moved with the ink.
         port_faces={name: {face: shift(xy) for face, xy in menu.items()}
                     for name, menu in body.port_faces.items()},
+        family_faces={name: {face: shift(xy) for face, xy in menu.items()}
+                      for name, menu in body.family_faces.items()},
         faceless_ports=body.faceless_ports,
         port_series=tuple(_shifted_series(s, body, ox, oy, width, height)
                           for s in body.port_series),
@@ -3899,6 +4041,55 @@ _MIXER_SETTLER = Symbol(
 MS_AGITATOR_W, MS_AGITATOR_FOOT = 24.0, 42.0
 
 
+# Deaerator: a horizontal storage drum with dished ends, and the
+# deaerating column standing on its crown towards the west end.
+_DA_DRUM_W, _DA_DRUM_H = 160.0, 50.0
+_DA_DRUM_END = 12.0
+_DA_COLUMN_X, _DA_COLUMN_W = 30.0, 40.0
+_DA_COLUMN_H = 60.0
+_DA_CROWN = 8.0
+_DA_H = _DA_COLUMN_H + _DA_DRUM_H
+_DA_FEED_DX = -16.0
+
+
+def _da_crown_y(dx: float) -> float:
+    """Return the column crown's height a distance off its centre line.
+
+    Parameters
+    ----------
+    dx : float
+        Distance from the column's centre line.
+
+    Returns
+    -------
+    float
+        Height of the crown, rounded to four places.
+    """
+    return round(_DA_CROWN * (1 - math.sqrt(1 - (2 * dx / _DA_COLUMN_W) ** 2)), 4)
+
+
+_DEAERATOR = Symbol(
+    svg='<g id="sym_deaerator">'
+        f'<path d="M {_DA_DRUM_END:g} {_DA_COLUMN_H:g} L {_DA_DRUM_W - _DA_DRUM_END:g} {_DA_COLUMN_H:g} '
+        f'A {_DA_DRUM_END:g} {_DA_DRUM_H / 2:g} 0 0 1 {_DA_DRUM_W - _DA_DRUM_END:g} {_DA_H:g} '
+        f'L {_DA_DRUM_END:g} {_DA_H:g} '
+        f'A {_DA_DRUM_END:g} {_DA_DRUM_H / 2:g} 0 0 1 {_DA_DRUM_END:g} {_DA_COLUMN_H:g} Z" {_OUTLINE}/>'
+        f'<path d="M {_DA_COLUMN_X:g} {_DA_COLUMN_H:g} L {_DA_COLUMN_X:g} {_DA_CROWN:g} '
+        f'A {_DA_COLUMN_W / 2:g} {_DA_CROWN:g} 0 0 1 {_DA_COLUMN_X + _DA_COLUMN_W:g} {_DA_CROWN:g} '
+        f'L {_DA_COLUMN_X + _DA_COLUMN_W:g} {_DA_COLUMN_H:g}" {_OUTLINE}/></g>',
+    width=_DA_DRUM_W, height=_DA_H,
+    # Water and vent through the column's crown, steam into the drum's
+    # west end, deaerated water out of the drum's floor.
+    ports={
+        "feed": (_DA_COLUMN_X + _DA_COLUMN_W / 2 + _DA_FEED_DX, _da_crown_y(_DA_FEED_DX)),
+        "vent": (_DA_COLUMN_X + _DA_COLUMN_W / 2, 0.0),
+        "steam": (0.0, _DA_COLUMN_H + _DA_DRUM_H / 2),
+        "outlet": (120.0, _DA_H),
+    },
+    gravity_fixed=True,
+)
+
+
 # Rotary kiln shell: 26 units of fall over 180 of length.
 _KILN_W = 180.0
 _KILN_BORE = 28.0
@@ -4564,6 +4755,7 @@ class SymbolRegistry:
         self.register("silo", _SILO)
         self.register("silo", _BUNKER, "bunker")
         self.register("mixer_settler", _MIXER_SETTLER)
+        self.register("deaerator", _DEAERATOR)
         self._register_kilns()
         self._register_steam_trap()
         self._register_fans()
