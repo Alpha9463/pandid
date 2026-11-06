@@ -1048,6 +1048,9 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "centrifuge/pusher": "X8038",
     "centrifuge/skimmer": "X8039",
     # ISO 10628-2 group 4, STEAM GENERATORS, FURNACES, RECOOLING DEVICE.
+    # Group 1, VESSELS AND TANKS.
+    "silo/bunker": "2064",
+    "silo/default": "X2062",
     "boiler/default": "2532",
     "furnace/general": "2533",
     "furnace/combustion_chamber": "X8106",

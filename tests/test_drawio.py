@@ -28,6 +28,7 @@ from pandid.render.drawio import (
     _hops,
     _PART_APPROXIMATIONS,
     DrawioRenderer,
+    OWN_OUTLINE,
 )
 from pandid.render.svg import (
     CROSSING_STYLES,
@@ -133,6 +134,8 @@ def test_every_drawing_exports_as_a_stencil_or_a_written_down_approximation(entr
         assert sym.stretchable, f"{kind}/{variant} references a fixed-aspect stencil"
         return
     base = variant.split(" [")[0]
+    if (kind, base) in OWN_OUTLINE:
+        return
     assert (kind, base) in _APPROXIMATIONS, f"{kind}/{base} has no stencil and no approximation"
     assert _APPROXIMATIONS[(kind, base)].shape in _BUILTIN_SHAPES
 
