@@ -297,15 +297,18 @@ def _column_room(run: MountedRun, upright: bool = False) -> float:
     -------
     float
         Length along an upright pipe, or 0 if the run carries a station
-        and ``upright`` is not set.
+        and ``upright`` is not set. A run carrying a station gets at
+        least the pipe that holds each element where wanted.
     """
     from pandid.stations import StationAssembly
 
-    if not upright and any(isinstance(element, StationAssembly) for element in run.elements):
+    station = any(isinstance(element, StationAssembly) for element in run.elements)
+    if station and not upright:
         return 0.0
     lengths = [_level_length(element) for element in run.elements]
-    return (sum(lengths) + ALONG * (len(lengths) - 1) + NOZZLE_END + END
+    room = (sum(lengths) + ALONG * (len(lengths) - 1) + NOZZLE_END + END
             + 2 * (TAP + ALONG) * len(run.taps))
+    return max(room, _room(run)) if station else room
 
 
 @contextmanager

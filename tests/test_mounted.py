@@ -684,3 +684,21 @@ def test_a_station_on_a_stacked_drop_stands_on_it() -> None:
     bypass, valve = station.bypass, station.control
     assert bypass is not None and bypass.frame is not None and valve.frame is not None
     assert valve.frame.label_pos == ("left" if bypass.frame.cx > top[0] else "right")
+
+
+def test_a_station_set_part_way_down_a_drop_gets_room_where_it_is_wanted() -> None:
+    """Check that a station set at=0.25 on a drop, with a tap below it, is drawn with room."""
+    from pandid import HeatExchanger
+
+    fs = Flowsheet("Station part way down a drop")
+    upper = fs.add(HeatExchanger("E-1"))
+    lower = fs.add(HeatExchanger("E-2"))
+    line = fs.connect(upper.shell_out, lower.shell_in)
+    station = fs.add_valve_station("FV-101", on=line, at=0.25)
+    fs.add_instrument("PI", 201, sensing=line, at=0.5)
+
+    fs.route()
+    assert upper.frame is not None
+    assert _upright_at(station) == pytest.approx(port_point(upper, upper.frame, "shell_out")[0])
+    assert not fs.validate()
+    assert _clean(fs)
