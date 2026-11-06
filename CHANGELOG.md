@@ -168,6 +168,9 @@ These are removed in 0.4.0.
 - Where `route()` finds no path for a line and draws it through a unit, it
   draws it round the units in its way along a clear lane where that draws no
   worse; otherwise `validate()` reports `route-crosses-unit` as before.
+- An angle valve put on a line with `on=`, such as
+  `fs.add(Valve("HV-1", variant="angle"), on=line)`, is set at a corner of the
+  line, so the line turns through the valve instead of bending to leave it.
 
 ## [0.2.0] - 2026-11-05
 
