@@ -700,6 +700,10 @@ class Flowsheet:
         # the far unit it feeds, and whether the last layout left one far.
         self._near_branches = False
         self._far_branches = False
+        # Whether layout moves each unit to level its pipe from a flag that
+        # the flag cannot level, and whether the last layout left one off.
+        self._level_flags = False
+        self._flags_off = False
         # Whether layout sets each angle valve at a corner of its line, and
         # whether the last layout drew any angle valve it could set so.
         self._corner_valves = False
@@ -2326,7 +2330,7 @@ class Flowsheet:
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
-        self._fannable = self._far_branches = self._angle_valves = False
+        self._fannable = self._far_branches = self._flags_off = self._angle_valves = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2360,6 +2364,11 @@ class Flowsheet:
         laid out and routed again with each such run ending just before
         that unit, kept only if no crossing, bend, fallback, finding, clash
         or tap off its line grows; the layouts after it keep the runs there.
+        Each time the sheet is settled, where a flag's line to a unit is not
+        level and moving the unit, none of whose other lines is level, would
+        level it, the sheet is laid out and routed again with each such unit
+        moved, kept only if no crossing, bend, fallback, finding, clash or
+        tap off its line grows.
         Where a line from a splitter or into a mixer carries valves or
         fittings set with no ``at=``, the sheet is laid out and routed
         again with each such line turned beside the splitter or mixer and
@@ -2741,7 +2750,7 @@ class Flowsheet:
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
                         self._mounted_layout, self._widened, self._stack_spans,
                         self._rows_out, self._tees_away, self._fannable,
-                        self._far_branches, self._angle_valves))
+                        self._far_branches, self._flags_off, self._angle_valves))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2754,7 +2763,7 @@ class Flowsheet:
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
          self._rows_out, self._tees_away, self._fannable,
-         self._far_branches, self._angle_valves) = _copied(state)
+         self._far_branches, self._flags_off, self._angle_valves) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2892,11 +2901,15 @@ class Flowsheet:
                 self._priced = False
 
         def settle_best() -> None:
-            """Settle the sheet, then priced where it draws a touch."""
+            """Settle the sheet, then priced where it draws a touch, then
+            laid out with each flag's line levelled where one is off."""
             settle()
             touch = {"route-along-unit", "route-crosses-near-nozzle"}
             if tries and any(i.code in touch for i in geometry_issues(self)):
                 keep_if_better(priced, _flaws(self))
+            if tries and self._flags_off:
+                relaid_if_better("_level_flags")
+                self._flags_off = False
 
         def rechecked() -> None:
             """Settle the sheet again, routing again each stream whose
@@ -2943,9 +2956,9 @@ class Flowsheet:
             self._exit_clear = True
             try:
                 self.layout(self._engine)
+                settle_best()
             finally:
                 self._exit_clear = False
-            settle_best()
 
         def repinned() -> None:
             """Lay out with each balloon pinned on both axes kept clear,

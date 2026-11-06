@@ -89,6 +89,9 @@ These are removed in 0.4.0.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.
+- A unit moves up or down to meet a feed or product flag held under another
+  unit in its column, so the line between them runs straight, where that adds
+  no crossing, bend or finding.
 - Lines that cross on their way into a mixer are laid on lanes even where they
   share their stretch of the gap with only some of the lines beside them, so the
   last two pumps of a header of tees no longer cross into the mixer.
