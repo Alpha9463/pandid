@@ -2650,7 +2650,7 @@ class Flowsheet:
             close_bands(self, cuts)
             new = _score(self)
             grew = new[1] > judged[1] or any(n > judged[0][k] for k, n in new[0].items())
-            if grew or covered(self) > notes or (pinned and not _beats(new, judged)):
+            if grew or not covered(self) <= notes or (pinned and not _beats(new, judged)):
                 self._put_drawing(drawn)
                 continue
             if self._main is None:

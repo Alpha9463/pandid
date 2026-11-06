@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from pandid import Flowsheet, units as U
-from pandid.document import notes
+from pandid.devices import ControlValve
+from pandid.document import TableBox, notes
 from pandid.layout.attach import stream_path
-from pandid.layout.compact import empty_bands
+from pandid.layout.compact import covered, empty_bands
+from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
 from pandid.portgeom import port_point, unit_box
-from pandid.render.furniture import measure_annotation
+from pandid.render.furniture import measure_annotation, measure_table
+from pandid.render.svg import _unit_label_box, sheet_connections, stream_numbers, unit_tags
 from pandid.route_geometry import stream_polyline
 from pandid.routing.lanes import _score
 from _layout_cases import build_unpinned, frame_of
@@ -260,3 +265,117 @@ def test_lines_routed_by_hand_as_a_closed_sheet_draws_them_move_nothing() -> Non
 
     after = _boxes(fs)
     assert [k for k in before if after[k] != pytest.approx(before[k], abs=0.01)] == []
+
+
+def test_closing_a_band_draws_no_tag_over_a_placed_note() -> None:
+    """Check that a pump's tag does not move in under a note placed above where it was."""
+    fs = _chain()
+    note = _note_box(fs, 390.0, 119.0)
+    fs.to_svg(diagram="p&id")
+
+    joints = sheet_connections("p&id", None)
+    tags = [
+        _unit_label_box(item) for _, _, items in unit_tags(fs, joints, "vertical") for item in items
+    ]
+    assert not any(box is not None and boxes_overlap(box, note) for box in tags)
+
+
+def _valved() -> Flowsheet:
+    """Return the chain with a control valve, failing closed, before the second drum."""
+    fs = Flowsheet("valved")
+    drum = fs.add(U.Vessel("V-101"))
+    pump = fs.add(U.Pump("P-101"))
+    fs.connect(drum.outlet, pump.suction)
+    valve = fs.add(ControlValve("CV-101", fail="closed"))
+    fs.connect(pump.discharge, valve.inlet)
+    fs.connect(valve.outlet, fs.add(U.Vessel("V-102")).inlet)
+    return fs
+
+
+def _packaged() -> Flowsheet:
+    """Return the chain with its pump in a package."""
+    fs = _chain()
+    fs.package("PK-101", [_unit(fs, "P-101")])
+    return fs
+
+
+def _labels(fs: Flowsheet) -> dict[str, Box]:
+    """Return the drawn box of the pump's tag, the valve's letters and a line number."""
+    out: dict[str, Box] = {}
+    placed: list[Box] = []
+    for unit, tag, items in unit_tags(fs, None, "vertical"):
+        for item in items:
+            box = _unit_label_box(item)
+            if box is not None:
+                placed.append(box)
+                out[f"{unit.name} {'tag' if item is tag else 'letters'}"] = box
+    numbers = stream_numbers(fs, placed, None, "vertical")
+    out["number"] = next(n.words for n in numbers if n.words is not None)
+    return out
+
+
+def _touches_only_labels(fs: Flowsheet, box: Box) -> bool:
+    """Return whether no unit or line run meets a box."""
+    runs = [(a, b) for path in map(stream_path, fs.streams) for a, b in zip(path, path[1:])]
+    return not any(boxes_overlap(unit_box(u, frame_of(u)), box) for u in fs.units) and not any(
+        segment_crosses_box(a, b, box) for a, b in runs
+    )
+
+
+@pytest.mark.parametrize(
+    ("make", "label", "side"),
+    [
+        (_chain, "P-101 tag", "above"),
+        (_valved, "CV-101 letters", "below"),
+        (_chain, "number", "above"),
+    ],
+    ids=["tag", "fail-letters", "line-number"],
+)
+def test_a_label_drawn_over_a_placed_note_counts(
+    make: Callable[[], Flowsheet], label: str, side: str
+) -> None:
+    """Check that the closing's keep check counts a label, and nothing else, over a placed note."""
+    fs = make()
+    fs.route()
+    x0, y0, x1, y1 = _labels(fs)[label]
+    w, h = measure_annotation(notes(NOTE))
+    y = y0 + 3.0 - h if side == "above" else y1 - 3.0
+    note = _note_box(fs, (x0 + x1 - w) / 2, y)
+
+    assert _touches_only_labels(fs, note)
+    assert covered(fs)
+
+
+def test_a_package_label_drawn_over_a_placed_note_counts() -> None:
+    """Check that the keep check counts a package's tag over a placed note."""
+    from pandid.package import frame as package_frame
+    from pandid.render.svg import package_labels
+
+    fs = _packaged()
+    fs.route()
+    package = fs.packages[0]
+    frame = package_frame(package)
+    assert frame is not None
+    x0, y0, x1, _ = next(
+        b for b in map(_unit_label_box, package_labels(package, frame)) if b is not None
+    )
+    w, h = measure_annotation(notes(NOTE))
+    note = _note_box(fs, (x0 + x1 - w) / 2, y0 + 3.0 - h)
+
+    assert _touches_only_labels(fs, note)
+    assert covered(fs)
+
+
+def test_a_tag_drawn_over_a_placed_table_counts() -> None:
+    """Check that the keep check counts a tag over a table placed by position."""
+    fs = _chain()
+    fs.route()
+    x0, y0, x1, _ = _labels(fs)["P-101 tag"]
+    table = TableBox(title="DUTY", headers=["Unit", "kW"], rows=[["P-101", "15"]])
+    w, h = measure_table(table)
+    table.position = ((x0 + x1 - w) / 2, y0 + 3.0 - h)
+    fs.add_annotation(table)
+    box = (table.position[0], table.position[1], table.position[0] + w, table.position[1] + h)
+
+    assert _touches_only_labels(fs, box)
+    assert covered(fs)

@@ -52,8 +52,11 @@ def placed(fs: Flowsheet) -> list[tuple[float, float, float, float]]:
     return out
 
 
-def covered(fs: Flowsheet) -> int:
-    """Count the units and line runs drawn over a placed annotation.
+def covered(fs: Flowsheet) -> set[tuple]:
+    """Return what is drawn over a placed annotation.
+
+    Labels are placed as the SVG and draw.io backends place them, with
+    and without a P&ID's joint marking and with either jump direction.
 
     Parameters
     ----------
@@ -62,21 +65,72 @@ def covered(fs: Flowsheet) -> int:
 
     Returns
     -------
-    int
-        Unit boxes that overlap a placed annotation, plus line runs
-        that enter one.
+    set[tuple]
+        A key for each unit, line, tag or letter beside a unit, package
+        label, letter code, line number and number leader that meets a
+        placed annotation.
     """
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+    from pandid.package import frame as package_frame
     from pandid.portgeom import unit_box
+    from pandid.render.svg import (_unit_label_box, drawn_codes, package_labels,
+                                   stream_numbers, unit_tags)
 
     notes = placed(fs)
     if not notes:
-        return 0
-    boxes = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
-    runs = [(a, b) for path in map(stream_path, fs.streams) for a, b in zip(path, path[1:])]
-    return (sum(boxes_overlap(box, note) for box in boxes for note in notes)
-            + sum(segment_crosses_box(a, b, note) for a, b in runs for note in notes))
+        return set()
+
+    def over(box: tuple | None) -> bool:
+        """Return whether a box meets a placed annotation.
+
+        Parameters
+        ----------
+        box : tuple or None
+            Box as left, top, right, bottom, or ``None``.
+
+        Returns
+        -------
+        bool
+            True if it overlaps one.
+        """
+        return box is not None and any(boxes_overlap(box, note) for note in notes)
+
+    def crosses(points: list) -> bool:
+        """Return whether a polyline enters a placed annotation.
+
+        Parameters
+        ----------
+        points : list
+            Polyline points.
+
+        Returns
+        -------
+        bool
+            True if a segment enters one.
+        """
+        return any(segment_crosses_box(a, b, note)
+                   for a, b in zip(points, points[1:]) for note in notes)
+
+    out: set[tuple] = {("unit", id(u)) for u in fs.units if u.frame is not None
+                       and over(unit_box(u, u.frame))}
+    out |= {("line", id(s)) for s in fs.streams if crosses(stream_path(s))}
+    frames = [(pkg, package_frame(pkg)) for pkg in fs.packages]
+    packages = [((id(pkg), k), item) for pkg, frame in frames if frame is not None
+                for k, item in enumerate(package_labels(pkg, frame))]
+    for joints in (None, "none"):
+        for direction in ("vertical", "horizontal"):
+            items = packages + [((id(u), k), item) for u, _, drawn in unit_tags(fs, joints, direction)
+                                for k, item in enumerate(drawn)]
+            out |= {("label", key) for key, item in items if over(_unit_label_box(item))}
+            labels = [b for b in (_unit_label_box(item) for _, item in items) if b is not None]
+            numbers = stream_numbers(fs, labels, joints, direction)
+            out |= {("number", n.name) for n in numbers if over(n.words) or over(n.box)}
+            out |= {("leader", n.name) for n in numbers
+                    if n.leader is not None and crosses(list(n.leader))}
+            out |= {("code", k) for k, item in enumerate(drawn_codes(fs, joints, direction, labels))
+                    if over(_unit_label_box(item))}
+    return out
 
 
 def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
