@@ -551,3 +551,30 @@ def test_a_second_route_draws_no_line_on_another():
     for _ in range(2):
         fs.route()
         assert _flaws(fs)["line-on-line"] == 0
+
+
+def test_every_route_starts_main_from_mains_own_last_drawing():
+    """Judge each route() against main's drawing of that call, not the last winner."""
+    from pandid.routing.lanes import _score
+
+    fs = Flowsheet("blending")
+    tank = fs.add(units.Tank("TK-1")).pin(x=1200, y=850)
+    vessel = fs.add(units.Vessel("V-1")).pin(x=1200, y=600)
+    pump = fs.add(units.Pump("P-1")).pin(x=900, y=350)
+    mixer = fs.add(units.Mixer("M-1")).pin(x=900, y=850)
+    product = fs.add(units.Product("Product")).pin(x=600, y=350)
+    feed = fs.add(units.Feed("Feed-0")).pin(x=70, y=100)
+    vessel_feed = fs.add(units.Feed("Vessel feed")).pin(x=70, y=950)
+    fs.connect(feed.outlet, tank.inlet)
+    fs.connect(tank.outlet, pump.suction)
+    fs.connect(pump.discharge, mixer.inlets[0])
+    fs.connect(vessel_feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, mixer.inlets[1])
+    line = fs.connect(mixer.outlet, product.inlet)
+    fs.add_instrument("FI", 101, sensing=line, at=0.5, offset=60)
+    fs.layout()
+    crossings = []
+    for _ in range(3):
+        fs.route()
+        crossings.append(_score(fs)[0]["crossings"])
+    assert crossings == [8, 8, 8]
