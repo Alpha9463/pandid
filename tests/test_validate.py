@@ -1649,6 +1649,7 @@ _UNDRAWN: dict[str, tuple[str | None, list[dict[str, Any]], list[str], int]] = {
     ),
     "stated-past-a-valve": (None, [{"size": 6}, {"spec": "A1A"}], ["spec"], 1),
     "changed-past-a-valve": (None, [{"size": 6, "service": "P"}, {"size": 4}], ["size"], 1),
+    "sequence-hidden-by-a-given-name": (None, [{"name": "X-1", "sequence": 2740}], ["sequence"], 2),
 }
 
 
@@ -1761,6 +1762,7 @@ def test_following_the_line_field_advice_keeps_two_lines_apart(taken: str):
         ("{size}", [{"size": 6}]),
         (None, [{"name": "6-P-2001", "size": 6, "service": "P", "sequence": 2001}]),
         (None, [{"size": 6, "service": "P"}, {"size": 6}]),
+        (None, [{"sequence": 2740}]),
     ],
     ids=[
         "no-fields",
@@ -1768,6 +1770,7 @@ def test_following_the_line_field_advice_keeps_two_lines_apart(taken: str):
         "automatic-sequence-left-out",
         "fields-in-a-given-name",
         "repeated-past-a-valve",
+        "sequence-alone",
     ],
 )
 def test_a_line_that_draws_every_field_it_states_is_not_reported(
@@ -2551,14 +2554,20 @@ def test_a_flag_is_measured_by_the_pennant_it_draws():
 # --- a valve under the arrowhead into a nozzle --------------------------------
 
 
-def _suction(placed: dict[str, float]) -> Flowsheet:
-    """Build a pump suction carrying valves and strainers at line fractions."""
+def _suction(placed: dict[str, float | None], apart: float | None = None) -> Flowsheet:
+    """Build a pump suction carrying valves and strainers at line fractions.
+
+    With ``apart``, the feed and the pump suction are pinned that far apart.
+    """
     fs = Flowsheet("arrowhead")
-    pump = fs.add(U.Pump("P-1"))
-    line = fs.connect(fs.add(U.Feed("F")).outlet, pump.suction)
+    feed, pump = fs.add(U.Feed("F")), fs.add(U.Pump("P-1"))
+    if apart is not None:
+        feed.pin(x=100, y=200)
+        pump.pin(port="suction", x=100 + apart, y=200)
+    line = fs.connect(feed.outlet, pump.suction)
     for name, at in placed.items():
         kind = U.Valve(name) if name.startswith("HV") else U.Fitting(name, variant="strainer")
-        fs.add(kind, on=line, at=at)
+        fs.add(kind, on=line, **({} if at is None else {"at": at}))
     fs.connect(pump.discharge, fs.add(U.Product("Out")).inlet)
     fs.route()
     return fs
@@ -2569,20 +2578,47 @@ def _order(fs: Flowsheet) -> list[str]:
     return [s.dest.owner.name for s in fs.streams if s.dest.owner.kind in ("valve", "fitting")]
 
 
-@pytest.mark.parametrize(
-    "placed",
-    [{"HV-1": 0.99}, {"HV-1": 0.8}, {"HV-1": 0.7, "ST-1": 0.99}, {"HV-1": 0.5, "ST-1": 0.95}],
-)
-def test_following_the_arrowhead_advice_keeps_the_order_and_clears_it(placed):
-    fs = _suction(placed)
+def _advice(fs: Flowsheet) -> str:
+    """Return the one valve-under-arrowhead message on a sheet."""
     (issue,) = _found(fs, "valve-under-arrowhead")
     assert "P-1.suction" in issue.message
-    call = re.search(r"fs\.add\((\S+), on=S1, at=([0-9.]+)\)", issue.message)
-    assert call is not None, issue.message
-    name, at = call.group(1), float(call.group(2))
-    again = _suction({**placed, name: at})
-    assert _order(again) == _order(fs)
-    assert _found(again, "valve-under-arrowhead") == []
+    return issue.message
+
+
+_NUMBER = re.compile(r"fs\.add\((\S+), on=S1, at=(\d[0-9.]*)\)")
+
+
+@pytest.mark.parametrize(("at", "apart"), [(0.99, None), (0.8, None), (0.99, 150.0)])
+def test_following_the_at_advised_for_a_lone_valve_clears_it(at, apart):
+    call = _NUMBER.search(_advice(_suction({"HV-1": at}, apart)))
+    assert call is not None and call.group(1) == "HV-1"
+    assert _found(_suction({"HV-1": float(call.group(2))}, apart), "valve-under-arrowhead") == []
+
+
+@pytest.mark.parametrize(
+    ("placed", "bounds"),
+    [
+        ({"HV-1": 0.7, "ST-1": 0.99}, "between HV-1 (at=0.7) and the P-1.suction end"),
+        (
+            {"HV-1": None, "HV-2": 0.9, "ST-1": 0.99},
+            "between HV-2 (at=0.9) and the P-1.suction end",
+        ),
+    ],
+)
+def test_a_valve_with_neighbours_is_given_the_bounds_that_keep_the_order(placed, bounds):
+    message = _advice(_suction(placed))
+    assert bounds in message and "fs.add(ST-1, on=S1, at=...)" in message
+    assert _NUMBER.search(message) is None
+
+
+@pytest.mark.parametrize(
+    ("placed", "apart", "move"),
+    [({"HV-1": 0.99}, 45.0, "pin P-1 at least"), ({"HV-1": 0.9, "ST-1": 0.99}, 120.0, "move HV-1")],
+)
+def test_pinned_ends_with_no_room_name_what_to_move(placed, apart, move):
+    message = _advice(_suction(placed, apart))
+    assert move in message
+    assert _NUMBER.search(message) is None
 
 
 def test_a_valve_clear_of_the_arrowhead_is_not_reported():

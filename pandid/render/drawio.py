@@ -372,6 +372,9 @@ HOP_DROPPED = "drawio-hop-dropped"
 
 _BALLOON_FILL = "#ffffff"
 
+#: Drawings exported as an inline stencil of their own outline.
+OWN_OUTLINE = frozenset({("silo", "default"), ("silo", "bunker")})
+
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
 _APPROXIMATIONS = {
@@ -1142,6 +1145,8 @@ class DrawioRenderer:
             shift = (-min([0.0, *(o.x * body.width for o in sym.overlays)]),
                      -min([0.0, *(o.y * body.height for o in sym.overlays)]))
             stencil = drawio_stencil(body.svg, sym.width, sym.height, shift)
+        elif not stencil and (u.kind, u.variant) in OWN_OUTLINE:
+            stencil = drawio_stencil(sym.svg, sym.width, sym.height)
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
             keys = [f"shape={stencil}", "outlineConnect=0",
