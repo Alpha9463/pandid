@@ -168,6 +168,9 @@ These are removed in 0.4.0.
 - `route()` ends the run a line leaves a nozzle on clear of every other unit,
   so a signal line between two balloons no longer cuts through a third
   standing between them.
+- Where `route()` finds no path for a line and draws it through a unit, it
+  draws it round the units in its way along a clear lane where that draws no
+  worse; otherwise `validate()` reports `route-crosses-unit` as before.
 
 ## [0.2.0] - 2026-11-05
 

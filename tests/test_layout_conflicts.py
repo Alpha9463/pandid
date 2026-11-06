@@ -46,7 +46,7 @@ def test_fixed_blocker_names_the_sealed_source_exit() -> None:
     blocker = fs.add(Block("Blocker", inputs=0, outputs=1))
     source.pin(x=0, y=50)
     dest.pin(x=300, y=50)
-    blocker.pin(x=10, y=20)
+    blocker.pin(x=0, y=20)
     stream = fs.connect(source.outlet, dest.inlet)
     fs.layout()
     fs.route()
@@ -54,7 +54,7 @@ def test_fixed_blocker_names_the_sealed_source_exit() -> None:
     assert stream.route.used_fallback
     assert Conflict("blocked-exit", (0,), (0, 2), "outlet") in analyze_conflicts(fs)
     assert resolve_port(source, source.frame, "outlet").anchor == (0, 50)
-    assert (blocker.frame.x, blocker.frame.y) == (10, 20)
+    assert blocker.frame is not None and (blocker.frame.x, blocker.frame.y) == (0, 20)
 
 
 def test_detached_and_inward_stubs_are_named() -> None:
