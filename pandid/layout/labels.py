@@ -42,8 +42,9 @@ def assign_labels(fs: "Flowsheet") -> None:
     """Set ``label_pos`` on every placed unit's frame but a flag's.
 
     An explicit ``label_pos`` wins, then the symbol's default, then the
-    first side free of connected nozzles and of balloons moved off E
-    (:func:`~pandid.layout.attach.free_face`), then ``"top"``.
+    first side free of connected nozzles, of balloons moved off E
+    (:func:`~pandid.layout.attach.free_face`) and, on the run of a valve
+    station drawn upright, of its bypass, then ``"top"``.
 
     Parameters
     ----------
@@ -51,6 +52,7 @@ def assign_labels(fs: "Flowsheet") -> None:
         Sheet whose units to label.
     """
     from pandid.layout.attach import free_face
+    from pandid.portgeom import port_anchor
     from pandid.render.symbols import default_registry
     from pandid.units import Instrument
 
@@ -59,6 +61,17 @@ def assign_labels(fs: "Flowsheet") -> None:
         face = free_face(inst) if isinstance(inst, Instrument) else None
         if face is not None:
             moved.setdefault(id(inst.host), set()).add(face)
+    for assembly in fs._station_assemblies:
+        station = assembly.station
+        tee = station.tees[0] if station.bypass is not None else None
+        face = None if tee is None or tee.frame is None else port_anchor(
+            tee, tee.frame, "branch")[2]
+        if face not in ("E", "W"):
+            continue
+        branch = {station.bypass, station.upstream_drain, station.downstream_drain}
+        for unit in station.members:
+            if unit not in branch:
+                moved.setdefault(id(unit), set()).add(face)
     for u in fs.units:
         if u.kind in ("feed", "product") or u.frame is None:
             continue  # A boundary flag draws its own label.

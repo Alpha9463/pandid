@@ -2661,9 +2661,39 @@ def test_keeping_hung_balloons_further_off_leaves_the_priced_fallback_to_run() -
     assert _taps_off(fs) == set()
 
 
+def test_a_signal_line_keeps_out_of_a_balloon_it_does_not_connect() -> None:
+    """Route TT-2's signal to TIC-2 clear of TIC-1, which stands between them."""
+    from pandid.layout.attach import stream_path
+
+    fs = _chains_by_a_vessel((400, 100), [(0.7, 60, 135, "N", 80, 0), (0.7, 35, 0, "S", 45, 90)])
+    fs.to_svg(diagram="p&id")
+
+    clipped = []
+    for s in fs.streams:
+        points = stream_path(s)
+        for u in fs.units:
+            if u.kind != "instrument" or u in (s.source.owner, s.dest.owner):
+                continue
+            f = frame_of(u)
+            centre, radius = (f.x + f.w / 2, f.y + f.h / 2), f.w / 2
+            for (ax, ay), (bx, by) in zip(points, points[1:]):
+                dx, dy = bx - ax, by - ay
+                t = max(
+                    0.0,
+                    min(
+                        1.0,
+                        ((centre[0] - ax) * dx + (centre[1] - ay) * dy)
+                        / (dx * dx + dy * dy or 1.0),
+                    ),
+                )
+                if math.dist((ax + t * dx, ay + t * dy), centre) < radius:
+                    clipped.append(f"{s.name} through {u.name}")
+    assert clipped == []
+
+
 def test_keeping_hung_balloons_further_off_leaves_the_priced_remedy_judged_as_before() -> None:
     """Keep the line off the vessel's wall, as the priced remedy does before any wider gap."""
-    fs = _chains_by_a_vessel((400, 100), [(0.7, 60, 135, "N", 70, 0), (0.7, 35, 0, "S", 45, 90)])
+    fs = _chains_by_a_vessel((400, 100), [(0.7, 70, 135, "N", 80, 0), (0.7, 30, 0, "S", 45, 90)])
 
     assert "route-along-unit" not in [i.code for i in fs.validate()]
 

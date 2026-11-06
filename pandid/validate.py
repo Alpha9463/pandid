@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from pandid.flowsheet import Flowsheet
+    from pandid.render.symbols import Overlay
     from pandid.streams import Stream
 
 _TOL = 1.0  # tolerance in px
@@ -206,6 +207,100 @@ def _move_cure(u) -> str:
                 f"{host.name} {'stream' if stream else 'unit'}>, {key}=..., "
                 f"offset=...{kept}) on {u.name}")
     return f"Move {u.name} clear of it: {_pin_call(u)}"
+
+
+def _arrowhead_cure(u) -> str:
+    """Return advice that sets a device clear of the arrowhead after it.
+
+    A device alone on its line gets an ``at=`` that clears the
+    arrowhead: on the shortest line layout would draw, or, between two
+    ends pinned on both axes, on the line as drawn. Where those ends
+    sit too close, the advice names the end to move. A device with
+    other items on its line gets the ``at=`` bounds that keep the
+    line's order, and, between pinned ends with no room inside those
+    bounds, the neighbour to move.
+
+    Parameters
+    ----------
+    u : Unit
+        Valve or fitting drawn under the arrowhead into the nozzle it
+        feeds.
+
+    Returns
+    -------
+    str
+        Advice naming an ``fs.add()`` call, or the unit to move.
+    """
+    from pandid.inline import position
+    from pandid.layout.mounted import ALONG, NOZZLE_END
+    from pandid.portgeom import pin_intent, port_point
+    from pandid.render.svg import stream_polyline
+    from pandid.render.symbols import ARROWHEAD, MIN_HEAD_CLEARANCE
+    from pandid.routing.metrics import path_length
+
+    def length(unit) -> float:
+        """Return a device's length along its line, nozzle to nozzle.
+
+        Parameters
+        ----------
+        unit : Unit
+            Device on the line.
+
+        Returns
+        -------
+        float
+            Length.
+        """
+        return math.dist(*(port_point(unit, unit.frame, name) for name in ("inlet", "outlet")))
+
+    entering = u.ports["inlet"].stream
+    line = None if entering is None else entering._logical_root or entering
+    items = [] if line is None else [s.dest.owner for s in line._logical_segments[:-1]]
+    if line is None or u not in items:
+        return (f"Add it on its line with an at= nearer the middle, "
+                f"fs.add({u.name}, on=<line>, at=...), in place of connect()")
+    segments = line._logical_segments
+    source, dest = segments[0].source, segments[-1].dest
+    clear = ARROWHEAD + MIN_HEAD_CLEARANCE + length(u) / 2
+    # Two ends pinned on both axes hold the line at its drawn length.
+    held = all(len(pin_intent(end.owner)) == 2 for end in (source, dest))
+    span = (sum(path_length(stream_polyline(s)) for s in segments)
+            + sum(map(length, items)))
+    if items == [u]:
+        need = NOZZLE_END + length(u) / 2 + clear
+        if held and span < need:
+            return (f"{source.owner.name} and {dest.owner.name} are pinned "
+                    f"{span:.0f}px apart along {line.name}, and {u.name} needs {need:.0f}px "
+                    f"there to clear the arrowhead: pin {dest.owner.name} at least "
+                    f"{need - span:.0f}px further from {source.owner.name} first")
+        # On a free line, layout draws the line no shorter than the room
+        # from its start to the device's centre.
+        at = (1 - clear / span if held
+              else (NOZZLE_END + length(u) / 2) / (NOZZLE_END + length(u) / 2 + clear))
+        return (f"Set it further from {dest.owner.name}.{dest.name}, clear of the "
+                f"arrowhead: fs.add({u.name}, on={line.name}, at={math.floor(at * 100) / 100:g})")
+    k = items.index(u)
+    stated = [i for i, segment in enumerate(segments[:-1]) if segment._inline_at is not None]
+    below = max((i for i in stated if i < k), default=None)
+    above = min((i for i in stated if i > k), default=None)
+    low = 0.0 if below is None else position(segments[below]) or 0.0
+    high = 1.0 if above is None else position(segments[above]) or 1.0
+    lower = (f"the start of {line.name}" if below is None
+             else f"{items[below].name} (at={low:g})")
+    upper = (f"the {dest.owner.name}.{dest.name} end" if above is None
+             else f"{items[above].name} (at={high:g})")
+    if held:
+        lengths = [length(items[i]) for i in (below, above) if i is not None]
+        room = ((high - low) * span - sum(lengths) / 2
+                - (ALONG if below is not None else NOZZLE_END) - length(u) / 2 - clear)
+        if room < 0:
+            mover = items[below].name if below is not None else dest.owner.name
+            return (f"No at= between {lower} and {upper} leaves {u.name} clear of the "
+                    f"arrowhead on a line pinned at {span:.0f}px: move {mover} further "
+                    f"from {upper if below is not None else source.owner.name} first")
+    return (f"Set it with an at= between {lower} and {upper}, far enough from "
+            f"{items[k + 1].name if k + 1 < len(items) else dest.owner.name} to clear the "
+            f"arrowhead: fs.add({u.name}, on={line.name}, at=...)")
 
 
 def _is_control_function(letters: str, i: int) -> bool:
@@ -416,6 +511,38 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     return (offset, span, sh <= dh) if offset < span else None
 
 
+def _drawn_part_boxes(u) -> "list[tuple[Overlay, tuple[float, float, float, float]]]":
+    """Return each part drawn on a placed unit, with its box on the sheet.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    list[tuple[Overlay, tuple[float, float, float, float]]]
+        Each part, manholes and sockets last, and its
+        ``(left, top, right, bottom)`` on the sheet.
+    """
+    from pandid.portgeom import _xform, symbol_to_box
+    from pandid.render.symbols import default_registry, overlay_boxes
+    from pandid.units import _drawn_parts
+
+    body, parts, _, _ = _drawn_parts(u, tuple(getattr(u, "overlays", ()) or ()))
+    sym, f = default_registry.for_unit(u), u.frame
+    rot, mirror_x, mirror_y = _xform(f)
+    placed = []
+    for part, box in zip(parts, overlay_boxes(body, parts)):
+        (x0, y0, w, h), (x1, y1, _, _) = (
+            symbol_to_box(x, y, sym.width, sym.height, rot, mirror_x, mirror_y)
+            for x, y in (box[:2], box[2:]))
+        kx, ky = f.w / w, f.h / h
+        placed.append((part, (f.x + min(x0, x1) * kx, f.y + min(y0, y1) * ky,
+                              f.x + max(x0, x1) * kx, f.y + max(y0, y1) * ky)))
+    return placed
+
+
 def _wall_clashes(u) -> list[Issue]:
     """Return a placed unit's lines and parts drawn over its wall parts.
 
@@ -430,62 +557,79 @@ def _wall_clashes(u) -> list[Issue]:
         One ``wall-part-clash`` error per manhole or socket drawn over a
         part, or crossed by a line on its way into the unit.
     """
-    from pandid.portgeom import _xform, resolve_port, symbol_to_box
-    from pandid.render.symbols import default_registry, overlay_boxes
-    from pandid.units import _drawn_walls
+    from pandid.portgeom import resolve_port
 
     walls = [(part, place) for part in ("manhole", "socket")
              for place in getattr(u, f"{part}s", ())]
     if not walls:
         return []
-    base = tuple(getattr(u, "overlays", ()) or ())
-    parts, _, _ = _drawn_walls(u, base)
-    boxes = overlay_boxes(default_registry.get(u.kind, u.variant), base + parts)
-    named = [f"the {part} at {place!r}" for part, place in walls]
-    drawn = [(f"the {o.name} support", box) for o, box in zip(base, boxes)]
-    drawn += list(zip(named, boxes[len(base):]))
+    placed = _drawn_part_boxes(u)
+    first = len(placed) - len(walls)
+    drawn = [(f"the {o.name} support", box) for o, box in placed[:first]]
+    drawn += [(f"the {part} at {place!r}", box)
+              for (part, place), (_, box) in zip(walls, placed[first:])]
     issues = []
-    for i, (name, box) in enumerate(drawn[len(base):]):
+    for i, (name, box) in enumerate(drawn[first:]):
         issues += [Issue("error", "wall-part-clash",
                          f"{u.name}: {name} is drawn over {other}. Build {u.name} "
                          f"with them further apart along the wall")
-                   for other, under in drawn[:len(base) + i]
+                   for other, under in drawn[:first + i]
                    if boxes_overlap(box, under, -_TOL)]
-    mine = [(part, name, box) for (part, _), (name, box) in zip(walls, drawn[len(base):])]
-    sym, f = default_registry.for_unit(u), u.frame
-    rot, mirror_x, mirror_y = _xform(f)
-
-    def on_sheet(box):
-        """Return a box in the drawing's coordinates on the sheet.
-
-        Parameters
-        ----------
-        box : tuple[float, float, float, float]
-            Box in the drawing's own coordinates.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            Box placed by the unit's frame.
-        """
-        (x0, y0, w, h), (x1, y1, _, _) = (
-            symbol_to_box(x, y, sym.width, sym.height, rot, mirror_x, mirror_y)
-            for x, y in (box[:2], box[2:]))
-        kx, ky = f.w / w, f.h / h
-        return (f.x + min(x0, x1) * kx, f.y + min(y0, y1) * ky,
-                f.x + max(x0, x1) * kx, f.y + max(y0, y1) * ky)
-
+    mine = [(part, name, box) for (part, _), (name, box) in zip(walls, drawn[first:])]
     for port_name, port in u.ports.items():
         if port.stream is None:
             continue
-        stub = resolve_port(u, f, port_name)
+        stub = resolve_port(u, u.frame, port_name)
         issues += [Issue("error", "wall-part-clash",
                          f"{u.name}: the line on {port_name} meets it through {name}, so it "
                          f"reads as piped to the {part}. Build {u.name} with the {part} "
                          f"elsewhere on the wall, or take the line to another face with "
                          f"{u.name}.nozzle({port_name!r}, face)")
                    for part, name, box in mine
-                   if segment_crosses_box(stub.anchor, stub.point, on_sheet(box))]
+                   if segment_crosses_box(stub.anchor, stub.point, box)]
+    return issues
+
+
+def _support_crossings(u) -> list[Issue]:
+    """Return a placed unit's lines drawn through its legs, brackets or rings.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    list[Issue]
+        One ``line-through-support`` warning per line crossing a
+        support on its way into the unit.
+    """
+    from pandid.portgeom import resolve_port
+    from pandid.render.iso_parts import SUPPORTS
+    from pandid.units import _built_to_size
+
+    # A skirt carries the bottom connections through it.
+    held = {o.name for o in getattr(u, "overlays", ()) or ()} & (set(SUPPORTS) - {"skirt"})
+    if not held:
+        return []
+    boxes = [(o.name, box) for o, box in _drawn_part_boxes(u) if o.name in held]
+    issues = []
+    for port_name, port in u.ports.items():
+        if port.stream is None:
+            continue
+        stub = resolve_port(u, u.frame, port_name)
+        crossed = next((name for name, box in boxes
+                        if segment_crosses_box(stub.anchor, stub.point, box)), None)
+        if crossed is None:
+            continue
+        dim = "height" if stub.face in ("W", "E") else "width"
+        cure = (f"Leave {u.name}.{dim} unset so the shell grows clear of it, give a larger "
+                f"{dim}, or take the line to another face with "
+                f"{u.name}.nozzle({port_name!r}, face)" if _built_to_size(u) else
+                f"Build {u.name} with supports= that keep clear of the line")
+        issues.append(Issue(
+            "warning", "line-through-support",
+            f"{u.name}: the line on {port_name} runs through its {crossed} support. {cure}"))
     return issues
 
 
@@ -909,11 +1053,12 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
             if s.kind != "energy":
                 continue
             given = not s.auto_named
-            if s.service and (str(s.service) in s.name if given else numbered):
+            named_service = s.service not in (None, "")
+            if named_service and (str(s.service) in s.name if given else numbered):
                 continue
             # Keep every value the author gave; suggest one only for service.
-            carrier = str(s.service) if s.service else "LP steam"
-            keys = [] if s.service else [f"service={carrier!r}"]
+            carrier = str(s.service) if named_service else "LP steam"
+            keys = [] if named_service else [f"service={carrier!r}"]
             if given:
                 # A given name is drawn in place of the line number.
                 keys.append(f"name={f'{s.name} {carrier}'!r}")
@@ -930,6 +1075,79 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                 f"sheet (ISO 10628-1:2014 4.3.2 e)). Write what it carries "
                 f"into the label drawn on it, keeping the other arguments: "
                 f"{' and '.join(fixes)}"))
+
+    # --- a line-number field the line's label leaves out ---
+    from pandid.flowsheet import _format_line_number, _numbered, _unused_fields
+
+    scheme = fs.line_numbering_scheme
+    for name, segments in runs.items():
+        given = not all(s.auto_named for s in segments)
+        # The segment a line number is formed from.
+        origin = _numbered(segments)
+        if not given and (callable(scheme) or origin is None):
+            continue
+        # Every field the author set, by field and value.
+        authored = {(f, str(v)): v for s in segments for f, v in _unused_fields("", s).items()}
+        # Leave an energy line's service on a PFD to energy-carrier-missing.
+        typed = {key: v for key, v in authored.items()
+                 if not (tabulates and segments[0].kind == "energy" and key[0] == "service")}
+        carried = ({(f, str(v)) for f, v in _unused_fields("", origin).items()}
+                   if origin is not None else set())
+        omitted = [] if origin is None or callable(scheme) else list(_unused_fields(scheme, origin))
+        undrawn = [(f, v) for (f, text), v in typed.items()
+                   if (text not in name if given else (f, text) not in carried or f in omitted)]
+        if not undrawn:
+            continue
+        # The line number the scheme, widened by the omitted fields, would
+        # draw on the line without a name.
+        widened = scheme if callable(scheme) else scheme + "".join(f"-{{{f}}}" for f in omitted)
+        try:
+            label = (_format_line_number(widened, replace(origin, name="", auto_named=True))
+                     if origin is not None else "")
+        except Exception:  # a scheme that cannot number this line
+            label = ""
+        # The line numbers the other lines draw, renumbered by a widened scheme.
+        elsewhere = set()
+        for other, rest in runs.items():
+            first = next((s for s in rest if s.has_line_number), None)
+            if other != name:
+                elsewhere.add(_format_line_number(widened, first)
+                          if omitted and first is not None and all(s.auto_named for s in rest)
+                          else other)
+        numbered = (set(authored) <= carried and all(text in label for _, text in authored)
+                    and label not in elsewhere)
+        it = "it" if len(undrawn) == 1 else "them"
+        extra = [str(v) for (_, text), v in authored.items() if text not in name]
+        them = "it" if len(extra) == 1 else "them"
+        written = " ".join([name, *extra])
+        free = written not in runs
+        fields = _and([f"{{{f}}}" for f in omitted])
+        call = f": Flowsheet(..., line_numbering_scheme={widened!r})" if omitted else ""
+        fixes = []
+        if given:
+            if free:
+                fixes.append(f"write {them} into the name: name={written!r}")
+            if numbered:
+                add = f" and add {fields} to line_numbering_scheme" if omitted else ""
+                fixes.append(f"drop name={name!r}{add} so its line number draws {it}{call}")
+            source = "the name given to connect()"
+        elif numbered:
+            fixes.append(f"add {fields} to the scheme, keeping its other arguments{call}")
+            source = f"line_numbering_scheme {scheme!r}"
+        else:
+            assert origin is not None
+            fixes.append("set new_line_number = True on the valve, fitting or tee where a "
+                         "new line number starts")
+            if free:
+                fixes.append(f"name the line with {them} in one of its connect() calls: "
+                             f"name={written!r}")
+            source = (f"its line number, formed from the segment from "
+                      f"{origin.source.owner.name} to {origin.dest.owner.name},")
+        fix = ", or ".join(fixes)
+        warnings.append(Issue(
+            "warning", "line-field-undrawn",
+            f"{name} states {_and([f'{f}={v!r}' for f, v in undrawn])}, "
+            f"which {source} does not draw." + (f" {fix[:1].upper()}{fix[1:]}" if fix else "")))
 
     return errors + warnings
 
@@ -951,9 +1169,11 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     """
     from pandid.inline import _INLINE_KINDS
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import (drawn_box, is_anchored, pin_intent, port_faces,
-                                 port_point, resolve_port)
+    from pandid.portgeom import (is_anchored, pin_intent, port_faces, port_point,
+                                 resolve_port, unit_box)
+    from pandid.package import frame as package_frame
     from pandid.render.svg import crossings, stream_polyline
+    from pandid.routing.metrics import path_length
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
                                        label_span, wears_arrowhead)
@@ -1071,8 +1291,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # Hard: a line or a part drawn over a manhole or socket.
         for u in placed:
             errors += _wall_clashes(u)
+            # Soft: a line through a support.
+            warnings += _support_crossings(u)
 
-        boxes = [(u, drawn_box(u, u.frame)) for u in placed]
+        boxes = [(u, unit_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
@@ -1118,6 +1340,21 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     a, b = boxes[i][0], boxes[j][0]
                     errors.append(Issue("error", "unit-overlap",
                                         f"{a.name} and {b.name} overlap. {_overlap_cure(a, b)}"))
+
+        # Hard: a unit inside the frame of a package it is not in.
+        for pkg in fs.packages:
+            frame = package_frame(pkg)
+            for u, box in boxes:
+                if frame is None or u in pkg.units or not boxes_overlap(box, frame, -_BODY_TOL):
+                    continue
+                cure = (_move_cure(u) if getattr(u, "host", None) is not None
+                        else f"Otherwise move it out of the frame: {_pin_call(u)}")
+                errors.append(Issue(
+                    "error", "package-encloses",
+                    f"{u.name} is drawn inside the frame of package {pkg.name} but is not "
+                    f"one of its units, so the drawing puts it in the package. If it is "
+                    f"part of {pkg.name}, add {u.name} to the units of "
+                    f"fs.package({pkg.name!r}, [...]). {cure}"))
 
         # Hard: two live connections on one unit landing on one point.
         # Boundary flags are exempt.
@@ -1222,7 +1459,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
-            ends = [(u, name, drawn_box(u, u.frame), end.face) if is_anchored(u, name) else None
+            ends = [(u, name, unit_box(u, u.frame), end.face) if is_anchored(u, name) else None
                     for u, name, end in ((src_u, s.source.name, src), (dst_u, s.dest.name, dst))]
             pierced = _pierced_end(path, ends) if len(path) > 1 else None
             if pierced is not None:
@@ -1274,8 +1511,22 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
 
-        # Soft: a crossing within an arrowhead length of either line's nozzle.
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
+
+        # Soft: a valve or fitting under the arrowhead into the nozzle it feeds.
+        for s, line in zip(drawn, lines.values()):
+            u, dest = s.source.owner, s.dest
+            gap = path_length(line)
+            if (not arrows or u.kind not in _INLINE_KINDS or gap >= ARROWHEAD
+                    or not wears_arrowhead(s, default_registry)):
+                continue
+            warnings.append(Issue(
+                "warning", "valve-under-arrowhead",
+                f"{u.name} is drawn {gap:.1f}px from {dest.owner.name}.{dest.name}, so the "
+                f"{ARROWHEAD:.0f}px arrowhead into that nozzle reaches over it. "
+                f"{_arrowhead_cure(u)}"))
+
+        # Soft: a crossing within an arrowhead length of either line's nozzle.
         for n, _, m, x, y, _ in crossings(lines, "vertical"):
             d, k, port = min(((math.dist((x, y), lines[k][i]), k, port)
                               for k in (n, m)

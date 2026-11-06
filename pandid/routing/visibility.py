@@ -262,7 +262,7 @@ def _tag_halo(u: "Unit", f) -> "Rect | None":
 
 
 class VisibilityGraph:
-    """Graph of clear orthogonal lanes around units and tags.
+    """Graph of clear orthogonal lanes around units, tags and package frames.
 
     Parameters
     ----------
@@ -300,6 +300,7 @@ class VisibilityGraph:
 
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
+        from pandid.package import frame as package_frame
         from pandid.portgeom import COMPASS, port_anchor, unit_box
         from pandid.route_geometry import SNAP
 
@@ -383,6 +384,13 @@ class VisibilityGraph:
                 x_set.add(px_proj)
                 y_set.add(py_proj)
 
+        # Lanes round each package's frame, outside layout.
+        for pkg in [] if fs._laying_out else fs.packages:
+            box = package_frame(pkg)
+            if box is not None:
+                x_set.update((box[0] - margin, box[2] + margin))
+                y_set.update((box[1] - margin, box[3] + margin))
+
         for stream in fs.streams:
             src, dst = stream.source, stream.dest
             s_key, d_key = (src.owner.name, src.name), (dst.owner.name, dst.name)
@@ -465,6 +473,9 @@ class VisibilityGraph:
     ) -> Tuple[float, float] | None:
         """Return the furthest stub node clear of other units' bodies.
 
+        Neither the stub nor its node may touch another unit's body,
+        edges included.
+
         Parameters
         ----------
         anchor : tuple[float, float]
@@ -496,8 +507,11 @@ class VisibilityGraph:
             candidate = (coordinate, anchor[1]) if axis == 0 else (anchor[0], coordinate)
             if not self.edges.get(candidate):
                 continue
+            cx, cy = candidate
             if any(
-                other is not owner and body.intersects_segment(*anchor, *candidate)
+                other is not owner and (body.intersects_segment(*anchor, *candidate)
+                                        or (body.x_min <= cx <= body.x_max
+                                            and body.y_min <= cy <= body.y_max))
                 for other, body in self.body_obstacles
             ):
                 continue

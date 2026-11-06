@@ -11,6 +11,7 @@ from datetime import datetime
 from functools import lru_cache
 
 from pandid.layout.conflicts import boxes_overlap
+from pandid.package import INSET as _PACKAGE_INSET, frame as package_frame
 from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
@@ -46,6 +47,13 @@ _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
 
 # Dash for a tap line that is a signal, not impulse tubing.
 _TAP_DASH = "5,4"
+
+#: Dash of a package's boundary frame: ISO 128-20 line type 10 at
+#: the detail weight (ISO 15519-1 6.1, Table 1).
+PACKAGE_DASH = ",".join(f"{k * LineWeight.DETAIL.width:g}" for k in (12, 3, 0.5, 3))
+
+# Rise of a package's tag above its frame's upper-left corner.
+_PACKAGE_RISE = 4.0
 
 
 #: Radius of a crossing mark: half the run an arc or gap takes out.
@@ -470,7 +478,9 @@ def _quadrant_pairs(fs, direction: str) -> list:
 def _quadrant_side(box, codes, prefers: int, ink, symbols):
     """Return a pair of codes placed on the cleaner side of a symbol.
 
-    The other side wins only if it is cleaner.
+    The other side wins only if it is cleaner. Where neither side is
+    clean, each quadrant takes its own cleaner side if that is cleaner
+    still.
 
     Parameters
     ----------
@@ -499,6 +509,12 @@ def _quadrant_side(box, codes, prefers: int, ink, symbols):
         if damage == (0, 0, 0):
             break
     assert best is not None
+    if best[0] != (0, 0, 0) and len(codes) > 1 and all(codes.values()):
+        (one, upper), (two, lower) = (_quadrant_side(box, {name: quadrant}, prefers, ink, symbols)
+                                      for name, quadrant in codes.items())
+        split = (one[0] + two[0], one[1] + two[1], one[2] + two[2])
+        if split < best[0]:
+            best = (split, upper + lower)
     return best
 
 
@@ -1361,6 +1377,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
     symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
+    symbols += [_obstacle(b) for b in package_edges(fs)]
 
     # One number per run name, through inline valves and fittings.
     label_items: list = []
@@ -1701,7 +1718,7 @@ class Pennant(NamedTuple):
 def boundary_flag(u, frame) -> Pennant:
     """Return the pennant an off-page flag is drawn as.
 
-    The pennant fills :func:`~pandid.portgeom.drawn_box` and points
+    The pennant fills :func:`~pandid.portgeom.unit_box` and points
     east, or west when mirrored.
 
     Parameters
@@ -1716,9 +1733,9 @@ def boundary_flag(u, frame) -> Pennant:
     Pennant
         Flag geometry.
     """
-    from pandid.portgeom import drawn_box
+    from pandid.portgeom import unit_box
 
-    return Pennant(drawn_box(u, frame), FLAG_POINT, not frame.mirrored)
+    return Pennant(unit_box(u, frame), FLAG_POINT, not frame.mirrored)
 
 
 #: Positions of the two strokes of a pneumatic double cross-hatch along
@@ -2871,7 +2888,8 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
 
 
 def drawing_bounds(fs) -> "tuple[float, float, float, float]":
-    """Return the bounding box of every unit box and route waypoint.
+    """Return the bounding box of every unit box, tag beside a unit, and
+    route waypoint.
 
     Parameters
     ----------
@@ -2889,6 +2907,7 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
         If a unit has no frame.
     """
     from pandid.portgeom import unit_box
+    from pandid.routing.visibility import _tag_halo
 
     if not fs.units:
         return (0.0, 0.0, 0.0, 0.0)
@@ -2897,15 +2916,77 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
     for u in fs.units:
         if u.frame is None:
             raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-        bx0, by0, bx1, by1 = unit_box(u, u.frame)
-        x0, y0 = min(x0, bx0), min(y0, by0)
-        x1, y1 = max(x1, bx1), max(y1, by1)
+        beside = u.kind != "instrument" and u.frame.label_pos in ("left", "right")
+        halo = _tag_halo(u, u.frame) if beside else None
+        boxes = [unit_box(u, u.frame)]
+        if halo is not None:
+            boxes.append((halo.x_min, halo.y_min, halo.x_max, halo.y_max))
+        for bx0, by0, bx1, by1 in boxes:
+            x0, y0 = min(x0, bx0), min(y0, by0)
+            x1, y1 = max(x1, bx1), max(y1, by1)
     for s in fs.streams:
         if s.route and s.route.waypoints:
             for px, py in s.route.waypoints:
                 x0, y0 = min(x0, px), min(y0, py)
                 x1, y1 = max(x1, px), max(y1, py)
+    for pkg in fs.packages:
+        frame = package_frame(pkg)
+        assert frame is not None
+        for bx0, by0, bx1, by1 in (frame, *(b for b in map(_unit_label_box,
+                                                           package_labels(pkg, frame))
+                                            if b is not None)):
+            x0, y0 = min(x0, bx0), min(y0, by0)
+            x1, y1 = max(x1, bx1), max(y1, by1)
     return (x0, y0, x1, y1)
+
+
+def package_edges(fs) -> "list[tuple[float, float, float, float]]":
+    """Return the four sides of each package's frame as boxes.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        ``(x0, y0, x1, y1)`` of each side, as thin as its line.
+    """
+    out = []
+    for pkg in fs.packages:
+        frame = package_frame(pkg)
+        if frame is None:
+            continue
+        x0, y0, x1, y1 = frame
+        out += [(x0, y0, x1, y0), (x0, y1, x1, y1), (x0, y0, x0, y1), (x1, y0, x1, y1)]
+    return out
+
+
+def package_labels(pkg, box) -> list:
+    """Return a package's tag and reference as label items.
+
+    The tag stands outside the frame's upper-left corner (ISO 15519-1
+    7.3.3) and the reference inside its lower-left corner (7.3.2).
+
+    Parameters
+    ----------
+    pkg : Package
+        Package being drawn.
+    box : tuple[float, float, float, float]
+        Its frame from :func:`pandid.package.frame`.
+
+    Returns
+    -------
+    list[tuple]
+        ``(x, y, anchor, baseline, side, text)`` items.
+    """
+    x0, y0, _, y1 = box
+    items = [(x0, y0 - _PACKAGE_RISE, "start", "baseline", "top", pkg.name)]
+    if pkg.reference:
+        items.append((x0 + _PACKAGE_INSET, y1 - _PACKAGE_INSET, "start", "baseline",
+                      "bottom", str(pkg.reference)))
+    return items
 
 
 def _scale_text(s: float) -> str:
@@ -3486,6 +3567,7 @@ class SvgRenderer:
         drawing: list[str] = []
         # Opaque plates, for the debug overlay and the codes drawn last.
         plates: "list[tuple[float, float, float, float]]" = []
+        drawing.extend(self._draw_packages(fs, unit_labels))
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints,
                                         quadrants))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
@@ -3768,6 +3850,7 @@ class SvgRenderer:
         symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         symbols += [(None, b) for b in flange_boxes(fs, joints)]
         symbols += [(None, b) for b in map(_unit_label_box, quadrants) if b is not None]
+        symbols += [(None, b) for b in package_edges(fs)]
         for u in fs.units:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines
@@ -3824,6 +3907,33 @@ class SvgRenderer:
                                               tag_box, ink, symbols))
         lines.append('  </g>')
         return lines
+
+    def _draw_packages(self, fs, label_items):
+        """Return the ``packages`` group of boundary frames.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+        label_items : list
+            Receives each package's tag and reference.
+
+        Returns
+        -------
+        list[str]
+            SVG lines, empty when there are no packages.
+        """
+        out = []
+        for pkg in fs.packages:
+            box = package_frame(pkg)
+            assert box is not None
+            x0, y0, x1, y1 = box
+            out.append(f'    <rect x="{fmt(x0, 2)}" y="{fmt(y0, 2)}" '
+                       f'width="{fmt(x1 - x0, 2)}" height="{fmt(y1 - y0, 2)}" fill="none" '
+                       f'stroke="black" stroke-width="{LineWeight.DETAIL.width:g}" '
+                       f'stroke-dasharray="{PACKAGE_DASH}" />')
+            label_items.extend(package_labels(pkg, box))
+        return ['  <g id="packages">'] + out + ['  </g>'] if out else []
 
     def _draw_taps(self, fs):
         """Return the lines from tap points to their balloons.

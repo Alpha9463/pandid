@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import base64
 import html
 import math
 from dataclasses import dataclass
 from decimal import Decimal
 import pathlib
 import re
+import urllib.parse
 import xml.etree.ElementTree as ET
+import zlib
 
 import pytest
 
@@ -16,7 +19,7 @@ from _render_cases import _script, copy_settled_case
 from test_crossing_style import _ARC, MARKED, _paths
 from _layout_cases import overlaps
 import pandid
-from pandid import units
+from pandid import devices, units
 from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import (
@@ -25,6 +28,7 @@ from pandid.render.drawio import (
     _hops,
     _PART_APPROXIMATIONS,
     DrawioRenderer,
+    OWN_OUTLINE,
 )
 from pandid.render.svg import (
     CROSSING_STYLES,
@@ -42,8 +46,9 @@ from pandid.render.svg import (
     tap_lines,
     tap_route,
 )
-from pandid.render.symbols import _GROUP, Symbol, default_registry, expander
+from pandid.render.symbols import _GROUP, Symbol, default_registry, expander, overlay_boxes
 from pandid.render.weights import LineWeight
+from pandid.units import _drawn_parts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -78,6 +83,26 @@ def _stencil_keys() -> set[str]:
 STENCIL_KEYS = _stencil_keys()
 
 
+def _inline_stencil(shape: str) -> ET.Element | None:
+    """Return the stencil an inline ``stencil(...)`` shape decodes to."""
+    if not (shape.startswith("stencil(") and shape.endswith(")")):
+        return None
+    packed = base64.b64decode(shape[len("stencil(") : -1])
+    root = ET.fromstring(urllib.parse.unquote(zlib.decompress(packed, -15).decode()))
+    assert root.tag == "shape" and root.find("foreground") is not None, shape
+    return root
+
+
+def _resolves(shape: str | None) -> bool:
+    """Return whether a shape reference names something draw.io draws."""
+    return (
+        shape is None
+        or shape in STENCIL_KEYS
+        or shape in _BUILTIN_SHAPES
+        or _inline_stencil(shape) is not None
+    )
+
+
 def _every_drawing() -> list[tuple[str, str, Symbol]]:
     """Collect registered, closed, and reversed symbol drawings."""
     out = [
@@ -109,6 +134,8 @@ def test_every_drawing_exports_as_a_stencil_or_a_written_down_approximation(entr
         assert sym.stretchable, f"{kind}/{variant} references a fixed-aspect stencil"
         return
     base = variant.split(" [")[0]
+    if (kind, base) in OWN_OUTLINE:
+        return
     assert (kind, base) in _APPROXIMATIONS, f"{kind}/{base} has no stencil and no approximation"
     assert _APPROXIMATIONS[(kind, base)].shape in _BUILTIN_SHAPES
 
@@ -241,7 +268,7 @@ def test_an_exported_sheet_references_only_shapes_that_resolve(every_symbol_shee
             if key.startswith("shape="):
                 shapes.add(key[len("shape=") :])
     assert shapes, "no shape references at all -- the sheet exported as blank boxes"
-    unresolved = sorted(s for s in shapes if s not in STENCIL_KEYS and s not in _BUILTIN_SHAPES)
+    unresolved = sorted(s for s in shapes if not _resolves(s))
     assert not unresolved, f"unresolvable shape references: {unresolved}"
 
 
@@ -432,11 +459,12 @@ def test_a_flag_is_drawn_across_its_own_box():
             flag = fs.add(cls("X", reference=reference))
             flag.pin(x=137.5, y=42.25, mirrored=mirrored)
             fs.layout()
+            assert flag.frame is not None
             bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
-            ux0, uy0, ux1, uy1 = unit_box(flag, flag.frame)
+            ux0, _, ux1, _ = unit_box(flag, flag.frame)
             assert (bx0, bx1) == pytest.approx((ux0, ux1), abs=1e-9)
-            # Keep vertical insets within the flag box.
-            assert uy0 < by0 < by1 < uy1
+            # Keep vertical insets within the flag's frame.
+            assert flag.frame.y < by0 < by1 < flag.frame.y + flag.frame.h
 
 
 def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
@@ -452,13 +480,13 @@ def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
         flag.pin(x=100, y=50, mirrored=mirrored, port=None)
         fs.layout()
 
-        ux0, uy0, ux1, uy1 = unit_box(flag, flag.frame)
-        assert (uy1 - uy0) == pytest.approx(120.0)
+        assert flag.frame is not None
+        assert flag.frame.h == pytest.approx(120.0)
 
         bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
         # The pennant is inset a fixed amount from the placed height.
         assert (by1 - by0) == pytest.approx(120.0 - 2 * 15)
-        assert uy0 < by0 < by1 < uy1
+        assert flag.frame.y < by0 < by1 < flag.frame.y + flag.frame.h
 
         port_name = next(iter(flag.ports))
         _, py = port_point(flag, flag.frame, port_name)
@@ -1074,6 +1102,7 @@ def test_a_letter_code_is_exported_clear_of_a_flange_mark():
         "a_flange_and_a_line",
         "a_fixed_tag",
         "another_balloon",
+        "a_line_and_a_balloon",
         "a_closed_valve",
         "a_pneumatic_line",
         "a_stacked_tag",
@@ -2191,9 +2220,7 @@ def test_each_representative_export_matches_its_rendered_sheet(settled_gallery, 
         assert float(geometry.get("height")) == pytest.approx(y1 - y0, abs=0.01)
         at[id(u)] = _style(cells[f"u{i}"])
         shape = at[id(u)].get("shape")
-        assert shape is None or shape in STENCIL_KEYS or shape in _BUILTIN_SHAPES, (
-            f"{stem}: {u.name} references {shape!r}, which resolves to nothing"
-        )
+        assert _resolves(shape), f"{stem}: {u.name} references {shape!r}, which resolves to nothing"
 
     for n, s in enumerate(fs.streams):
         drawn = stream_polyline(s)
@@ -2782,10 +2809,17 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
     inner = _GROUP.match(sym.svg).group(2)
     assert inner.count("<g transform=") >= len(sym.overlays)
 
-    for overlay, cell in zip(sym.overlays, children):
+    # A vessel's shell is drawn in place within the cell, its parts round it.
+    shell = _drawn_parts(unit, unit.__dict__["overlays"])[0] if unit.kind == "vessel" else None
+    boxes = [] if shell is None else overlay_boxes(shell, sym.overlays)
+    for i, (overlay, cell) in enumerate(zip(sym.overlays, children)):
         box = cell.find("mxGeometry")
         got = tuple(float(box.get(k)) for k in ("x", "y", "width", "height"))
         want = (overlay.x * w, overlay.y * h, overlay.w * w, overlay.h * h)
+        if boxes:
+            left, top, right, bottom = boxes[i]
+            kx, ky = w / sym.width, h / sym.height
+            want = (left * kx, top * ky, (right - left) * kx, (bottom - top) * ky)
         assert got == pytest.approx(want, abs=0.02), f"{unit.name}: {overlay.group}/{overlay.name}"
         assert _style(cell)["movable"] == "0" and _style(cell)["connectable"] == "0"
 
@@ -2799,7 +2833,10 @@ def test_a_composed_symbol_still_draws_its_body(composed_sheet):
             c for k, c in cells.items() if c.get("value") == unit.name and c.get("vertex") == "1"
         )
         style = _style(cell)
-        if sym.drawio_body_shape:
+        if unit.kind == "vessel":
+            # A vessel's shell is exported as built.
+            assert _inline_stencil(style.get("shape", "")) is not None
+        elif sym.drawio_body_shape:
             assert style.get("shape") == sym.drawio_body_shape
         else:
             key = (unit.kind, getattr(unit, "variant", "default"))
@@ -2839,3 +2876,116 @@ def test_an_annotation_of_empty_rows_exports() -> None:
     fs.annotations.append(Annotation(title="NOTES", rows=[(), ()]))
 
     ET.fromstring(fs.to_drawio(check=False))
+
+
+# Drawings exported as their own outline.
+
+
+def _stencil_svg(stencil: ET.Element) -> str:
+    """Return the SVG a decoded draw.io stencil's foreground draws."""
+    out = []
+    foreground = stencil.find("foreground")
+    assert foreground is not None
+    for el in foreground:
+        if el.tag == "path":
+            d = []
+            for step in el:
+                at = f"{step.get('x')} {step.get('y')}"
+                if step.tag == "move":
+                    d.append(f"M {at}")
+                elif step.tag == "line":
+                    d.append(f"L {at}")
+                elif step.tag == "arc":
+                    d.append(
+                        f"A {step.get('rx')} {step.get('ry')} {step.get('x-axis-rotation')} "
+                        f"{step.get('large-arc-flag')} {step.get('sweep-flag')} {at}"
+                    )
+                elif step.tag == "close":
+                    d.append("Z")
+            out.append(f'<path d="{" ".join(d)}"/>')
+        elif el.tag == "rect":
+            out.append(
+                f'<rect x="{el.get("x")}" y="{el.get("y")}" '
+                f'width="{el.get("w")}" height="{el.get("h")}"/>'
+            )
+        elif el.tag == "ellipse":
+            rx, ry = float(el.get("w", "0")) / 2, float(el.get("h", "0")) / 2
+            cx, cy = float(el.get("x", "0")) + rx, float(el.get("y", "0")) + ry
+            out.append(f'<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}"/>')
+    return f"<g>{''.join(out)}</g>"
+
+
+def _rounded(segments) -> list:
+    """Return segments as sorted, direction-free pairs of rounded points."""
+    return sorted(
+        tuple(sorted((round(x, 2), round(y, 2)) for x, y in segment)) for segment in segments
+    )
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: units.Silo("SI-1"),
+        lambda: devices.Bunker("BN-1"),
+        lambda: units.Crystallizer("CR-1"),
+        lambda: units.FlotationCell("FC-1"),
+        lambda: units.Blower("B-1", variant="general"),
+        lambda: units.Blower("B-2"),
+        lambda: devices.CentrifugalFan("K-1"),
+        lambda: devices.AxialFan("K-2"),
+        lambda: units.Furnace("F-1", variant="general"),
+        lambda: devices.CombustionChamber("FH-1"),
+        lambda: units.MixerSettler("MS-1"),
+        lambda: units.Deaerator("DA-1"),
+    ],
+    ids=[
+        "silo",
+        "bunker",
+        "crystallizer",
+        "flotation_cell",
+        "fan",
+        "blower",
+        "centrifugal",
+        "axial",
+        "furnace",
+        "combustion_chamber",
+        "mixer_settler",
+        "deaerator",
+    ],
+)
+def test_a_drawing_exported_as_its_outline_traces_the_sheets_artwork(build):
+    """Check that each own-outline drawing's draw.io stencil draws the SVG body's geometry."""
+    from test_symbol_invariants import _collect_segments
+
+    unit = build()
+    assert (unit.kind, unit.variant) in OWN_OUTLINE
+    fs = Flowsheet("outline")
+    fs.add(unit)
+    cell = next(c for c in _model(fs, check=False).iter("mxCell") if c.get("value") == unit.name)
+    stencil = _inline_stencil(_style(cell).get("shape", ""))
+    assert stencil is not None, f"{unit.name} exports as a box, not its outline"
+    body = default_registry.get(unit.kind, unit.variant)
+    assert _rounded(_collect_segments(_stencil_svg(stencil))) == _rounded(
+        _collect_segments(body.svg)
+    )
+
+    # Each element is drawn at its own stroke width, scaled as the cell's
+    # outline is: mxGraph reads a stencil's strokewidth as a width.
+    drawables = [el for el in ET.fromstring(body.svg).iter() if el.tag in _DRAWN]
+    declared = [float(el.get("stroke-width", "nan")) for el in drawables]
+    cell_width = float(_style(cell)["strokeWidth"])
+    want = [w * cell_width / max(declared) for w in declared]
+    got, current = [], cell_width
+    foreground = stencil.find("foreground")
+    assert foreground is not None
+    for el in foreground:
+        if el.tag == "strokewidth":
+            assert el.get("fixed") == "1", "a stencil stroke width scales with the box"
+            current = float(el.get("width", "nan"))
+        elif el.tag in ("path", "rect", "ellipse"):
+            got.append(current)
+    assert got == pytest.approx(want)
+
+
+#: SVG elements a stencil draws one of each.
+_DRAWN = ("path", "rect", "circle", "line")

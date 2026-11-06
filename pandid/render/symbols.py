@@ -172,9 +172,10 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
     # Each member's faces whose band has length.
-    menus = [[f for f in sym.port_faces.get("inlet" if m.startswith("in_") else "outlet", {})
+    roles = ["inlet" if m.startswith("in_") else "outlet" for m in members]
+    menus = [[f for f in {**sym.port_faces.get(role, {}), **sym.family_faces.get(role, {})}
               if (band := sym.bands.get(f)) is None or band[0] < band[1]]
-             for m in members]
+             for role in roles]
     offered = [f for f in menus[0] if all(f in menu for menu in menus)]
     cure = (
         "Put them on "
@@ -449,6 +450,9 @@ class Symbol:
         Port families, each on N, S, E or W and apart from ``ports``.
     bands : dict[str, tuple[float, float]]
         Stretch ``(lo, hi)`` a family may use, from each face's start.
+    family_faces : dict[str, dict[str, tuple[float, float]]]
+        Further placements by face of the ``inlet`` and ``outlet``
+        families, left out of a lone port's menu.
     rim : tuple[tuple[float, float], ...]
         Outline of the artwork as a convex polygon, which lines sharing
         a face are drawn to; the box when empty.
@@ -494,6 +498,7 @@ class Symbol:
     faceless_ports: frozenset[str] = frozenset()
     port_series: tuple[PortSeries, ...] = ()
     bands: dict[str, tuple[float, float]] = field(default_factory=dict)
+    family_faces: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     rim: tuple[tuple[float, float], ...] = ()
     label_pos: str | None = None
     id_suffix: str = ""
@@ -559,6 +564,16 @@ class Symbol:
                     f"stretch of a {along:g}-long face measured from its start; a "
                     f"family confined to it would be drawn off the box"
                 )
+        for name, faces in self.family_faces.items():
+            for face, coord in faces.items():
+                lands = outward_dir(coord[0], coord[1], self.width, self.height)
+                if lands != face:
+                    raise ValueError(
+                        f"{self.symbol_id()}: family_faces[{name!r}][{face!r}] at "
+                        f"{coord} is nearest the {lands} edge of the "
+                        f"{self.width}x{self.height} box, so that is the face it "
+                        f"would come out of"
+                    )
         menu: dict[str, dict[str, tuple[float, float]]] = {}
         for name, xy in self.ports.items():
             home = outward_dir(xy[0], xy[1], self.width, self.height)
@@ -1239,6 +1254,691 @@ def _face_point(face: str, t: float, inset: float, width: float, height: float
     return t, height - inset  # "S"
 
 
+# Vessel shells, built to the size they are drawn at: the heads, the
+# detail on the shell and the nozzle offsets keep their own dimensions,
+# and the straight shell takes up the rest of the box.
+
+#: Depth of a pressure vessel's ellipsoidal head.
+_HEAD = 7.5
+
+#: Depth of a dished head.
+_DISHED = 7.6923
+
+#: Depth of a horizontal drum's head.
+_DRUM_HEAD = 5.7692
+
+#: Gap between a wall's band and the end of its straight shell.
+_BAND_GAP = 10.0
+
+#: Offset of the relief from the crown of a dished head.
+_RELIEF_OFF_CROWN = 12.0
+
+#: Least distance of a relief from the vent on the crown.
+_RELIEF_MIN = MIN_NOZZLE_PITCH / 2
+
+
+#: Side and drop of a dished vessel's own brackets, and the height of
+#: their foot above the bottom tangent line.
+_BRACKET, _BRACKET_FOOT = 10.0, 15.0
+
+#: Thickness of a jacket or of insulation, and how far inside the
+#: tangent lines it ends.
+_CLAD, _CLAD_END = 6.0, 5.0
+
+#: Pitch of the insulation hatching.
+_HATCH = 5.0
+
+#: Electric heater: element width, element height, lead length, and
+#: the reach from the shell to the far side of the element.
+_HEATER_W, _HEATER_H, _HEATER_LEAD, _HEATER_REACH = 6.0, 20.0, 10.0, 10.0
+
+#: Swaged vessel: step in from the wide shell to the narrow one, the
+#: top head's depth, the narrow shell's length, the cone's height and
+#: the bottom head's depth.
+_SWAGE_STEP, _SWAGE_TOP, _SWAGE_NECK, _SWAGE_CONE, _SWAGE_HEAD = 10.0, 15.0, 25.0, 10.0, 12.5
+
+#: Swaged vessel: offset of the relief from the crown.
+_SWAGE_RELIEF = 9.0
+
+#: Horizontal drum: where along its length the top inlet, the relief,
+#: the drain, the vent and the outlet sit, as fractions of it.
+_DRUM_INLET_N, _DRUM_RELIEF, _DRUM_DRAIN = 20.0 / 91.5, 30.0 / 91.5, 25.0 / 91.5
+_DRUM_VENT, _DRUM_OUTLET = 55.0 / 91.5, 68.0 / 91.5
+
+#: Domed vessel: the manway's width, straight height and cap depth, its
+#: east side's offset from the east tangent line, and the height of the
+#: head nozzles above the axis.
+_DOME_W, _DOME_NECK, _DOME_CAP, _DOME_OFF, _DOME_NOZZLE = 20.0, 10.0, 5.0, 15.0, 8.0
+
+#: Each variant's drawn size when none is stated.
+VESSEL_SIZES = {
+    "default": (62.0, 100.0),
+    "dished": (60.0, 95.4),
+    "dome": (95.4, 55.0),
+    "electrical_heating": (50.0, 95.4),
+    "horizontal": (91.5, 30.0),
+    "insulated": (52.0, 95.4),
+    "jacketed": (52.0, 95.4),
+    "swaged": (50.0, 97.5),
+}
+
+#: draw.io stencil each variant exports as.
+_DRAWIO = {
+    "default": "mxgraph.pid.vessels.pressurized_vessel",
+    "dished": "mxgraph.pid.vessels.vessel_(dished_ends,_brackets)",
+    "dome": "mxgraph.pid.vessels.vessel_(dome)",
+    "electrical_heating": "mxgraph.pid.vessels.vessel_(dished_ends,_electrical_heating)",
+    "horizontal": "mxgraph.pid.vessels.drum_or_condenser",
+    "insulated": "mxgraph.pid.vessels.vessel_(dished_ends,_thermal_insulation)",
+    "jacketed": "mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)",
+    "swaged": "mxgraph.pid.vessels.vessel_(different_diameters)",
+}
+
+
+def _n(value: float) -> str:
+    """Return a coordinate as SVG text.
+
+    Parameters
+    ----------
+    value : float
+        Coordinate.
+
+    Returns
+    -------
+    str
+        The value to four decimals, without trailing zeros.
+    """
+    return f"{round(value, 4) + 0.0:g}"
+
+
+def _band(start: float, end: float) -> tuple[float, float]:
+    """Return the stretch of a straight wall a nozzle family may use.
+
+    Parameters
+    ----------
+    start, end : float
+        The straight wall's ends.
+
+    Returns
+    -------
+    tuple[float, float]
+        The wall held :data:`_BAND_GAP` off each end, or its middle
+        third on a wall too short for that.
+    """
+    gap = min(_BAND_GAP, (end - start) / 3)
+    return start + gap, end - gap
+
+
+def _relief_off(rx: float, depth: float, off: float) -> float:
+    """Return a relief's distance from a head's crown, kept where it is flat.
+
+    Parameters
+    ----------
+    rx : float
+        Head's half-width.
+    depth : float
+        Head's depth.
+    off : float
+        Distance wanted.
+
+    Returns
+    -------
+    float
+        ``off``, or less where the head there slopes more steeply than
+        it runs, so the relief's line leaves the head upward.
+    """
+    return min(off, rx * rx / math.hypot(rx, depth))
+
+
+def _on_head(rx: float, depth: float, off: float) -> float:
+    """Return how far below the crown a point on a top head lies.
+
+    Parameters
+    ----------
+    rx : float
+        Head's half-width.
+    depth : float
+        Head's depth.
+    off : float
+        Distance from the crown along the head.
+
+    Returns
+    -------
+    float
+        Drop from the crown to the head's outline.
+    """
+    return depth * (1 - math.sqrt(max(0.0, 1 - (off / rx) ** 2)))
+
+
+def _upright(x0: float, x1: float, height: float, depth: float) -> str:
+    """Return an upright shell with an elliptical head at each end.
+
+    Parameters
+    ----------
+    x0, x1 : float
+        The shell's walls.
+    height : float
+        Crown to crown.
+    depth : float
+        Head depth.
+
+    Returns
+    -------
+    str
+        SVG path data.
+    """
+    rx, cx = (x1 - x0) / 2, (x0 + x1) / 2
+    top, bottom = depth, height - depth
+    arc = f"A {_n(rx)} {_n(depth)} 0 0 1"
+    return (f"M {_n(x0)} {_n(top)} {arc} {_n(cx)} 0 {arc} {_n(x1)} {_n(top)} "
+            f"L {_n(x1)} {_n(bottom)} {arc} {_n(cx)} {_n(height)} {arc} {_n(x0)} {_n(bottom)} Z")
+
+
+def _tangents(x0: float, x1: float, height: float, depth: float) -> str:
+    """Return the tangent lines where an upright shell meets its heads.
+
+    Parameters
+    ----------
+    x0, x1 : float
+        The shell's walls.
+    height : float
+        Crown to crown.
+    depth : float
+        Head depth.
+
+    Returns
+    -------
+    str
+        SVG path data.
+    """
+    return (f" M {_n(x0)} {_n(depth)} L {_n(x1)} {_n(depth)}"
+            f" M {_n(x0)} {_n(height - depth)} L {_n(x1)} {_n(height - depth)}")
+
+
+def _dished_ports(x0: float, x1: float, height: float) -> dict[str, tuple[float, float]]:
+    """Return the vent, relief and drain of a dished shell.
+
+    Parameters
+    ----------
+    x0, x1 : float
+        The shell's walls.
+    height : float
+        Crown to crown.
+
+    Returns
+    -------
+    dict[str, tuple[float, float]]
+        Port anchors.
+    """
+    cx, rx = (x0 + x1) / 2, (x1 - x0) / 2
+    off = _relief_off(rx, _DISHED, _RELIEF_OFF_CROWN)
+    return {"vent": (cx, 0.0), "relief": (cx - off, _on_head(rx, _DISHED, off)),
+            "drain": (cx, height)}
+
+
+def _default(w: float, h: float) -> tuple:
+    """Return the pressure vessel: a shell with ellipsoidal heads.
+
+    Parameters
+    ----------
+    w, h : float
+        Box.
+
+    Returns
+    -------
+    tuple
+        Artwork, ports and bands.
+    """
+    art = f'<path d="{_upright(0.0, w, h, _HEAD)}" {_OUTLINE}/>'
+    off = _relief_off(w / 2, _HEAD, w / 4)
+    ports = {"inlet": (0.0, h / 2), "outlet": (w, h / 2), "vent": (w / 2, 0.0),
+             "relief": (w / 2 - off, _on_head(w / 2, _HEAD, off)), "drain": (w / 2, h)}
+    band = _band(_HEAD, h - _HEAD)
+    return art, ports, {"W": band, "E": band}
+
+
+def _dished(w: float, h: float) -> tuple:
+    """Return the dished vessel on its own pair of brackets.
+
+    Parameters
+    ----------
+    w, h : float
+        Box.
+
+    Returns
+    -------
+    tuple
+        Artwork, ports and bands.
+    """
+    x0, x1 = _BRACKET, w - _BRACKET
+    top = h - _DISHED - _BRACKET_FOOT - _BRACKET
+    foot = top + _BRACKET
+    brackets = (f" M {_n(x1)} {_n(top)} L {_n(w)} {_n(foot)} L {_n(x1)} {_n(foot)} Z"
+                f" M {_n(x0)} {_n(top)} L 0 {_n(foot)} L {_n(x0)} {_n(foot)} Z")
+    art = (f'<path d="{_upright(x0, x1, h, _DISHED)}{_tangents(x0, x1, h, _DISHED)}'
+           f'{brackets}" {_OUTLINE}/>')
+    ports = {"inlet": (x0, h / 2), "outlet": (x1, h / 2), **_dished_ports(x0, x1, h)}
+    band = _band(_DISHED, h - _DISHED)
+    return art, ports, {"W": band, "E": band}
+
+
+def _clad(w: float, h: float, insulated: bool) -> tuple:
+    """Return a dished vessel in a jacket or in insulation.
+
+    Parameters
+    ----------
+    w, h : float
+        Box.
+    insulated : bool
+        Hatched insulation rather than a jacket.
+
+    Returns
+    -------
+    tuple
+        Artwork, ports and bands.
+    """
+    x0, x1 = _CLAD, w - _CLAD
+    start, end = _DISHED + _CLAD_END, h - _DISHED - _CLAD_END
+    shell = f'<path d="{_upright(x0, x1, h, _DISHED)}{_tangents(x0, x1, h, _DISHED)}" {_OUTLINE}/>'
+    if insulated:
+        lines = [f"M 0 {_n(start)} L 0 {_n(end)}", f"M {_n(w)} {_n(start)} L {_n(w)} {_n(end)}"]
+        steps = int((end - start) / _HATCH - 0.05) + 1
+        for y in (start + _HATCH * i for i in range(steps)):
+            run = min(_CLAD, end - y)
+            lines.append(f"M {_n(x0)} {_n(y)} L {_n(x0 - run)} {_n(y + run)}")
+        for y in (start + _HATCH * i for i in range(steps)):
+            run = min(_CLAD, end - y)
+            lines.append(f"M {_n(w)} {_n(y)} L {_n(w - run)} {_n(y + run)}")
+        art = shell + f'<path d="{" ".join(lines)}" {_INK}/>'
+    else:
+        art = shell + "".join(
+            f'<rect x="{_n(x)}" y="{_n(start)}" width="{_n(_CLAD)}" '
+            f'height="{_n(end - start)}" {_OUTLINE}/>' for x in (0.0, x1))
+    ports = {"inlet": (0.0, h / 2), "outlet": (w, h / 2), **_dished_ports(x0, x1, h)}
+    band = _band(start, end)
+    return art, ports, {"W": band, "E": band}
+
+
+def _electrical(w: float, h: float) -> tuple:
+    """Return a dished vessel with an electric heater on its east side.
+
+    Parameters
+    ----------
+    w, h : float
+        Box.
+
+    Returns
+    -------
+    tuple
+        Artwork, ports and bands.
+    """
+    x1 = w - _HEATER_REACH
+    mid, left, lead = h / 2, w - _HEATER_W, w - _HEATER_W / 2
+    shell = f'<path d="{_upright(0.0, x1, h, _DISHED)}{_tangents(0.0, x1, h, _DISHED)}" {_OUTLINE}/>'
+    top, bottom = mid - _HEATER_H / 2, mid + _HEATER_H / 2
+    element = (f'<rect x="{_n(left)}" y="{_n(top)}" width="{_n(_HEATER_W)}" '
+               f'height="{_n(_HEATER_H)}" {_OUTLINE}/>')
+    marks = [f"M {_n(lead)} {_n(top - _HEATER_LEAD)} L {_n(lead)} {_n(top)}",
+             f"M {_n(lead)} {_n(bottom)} L {_n(lead)} {_n(bottom + _HEATER_LEAD)}"]
+    marks += [f"M {_n(left)} {_n(y)} L {_n(w)} {_n(y)}"
+              for y in (mid - _HEATER_H / 4, mid, mid + _HEATER_H / 4)]
+    art = shell + element + f'<path d="{" ".join(marks)}" {_INK}/>'
+    tangent = h - _DISHED
+    ports = {"inlet": (0.0, mid), "outlet": (x1, tangent - _BAND_GAP),
+             **_dished_ports(0.0, x1, h)}
+    band = _band(_DISHED, tangent)
+    return art, ports, {"W": band, "E": band}
+
+
+def _swaged(w: float, h: float) -> tuple:
+    """Return a vessel whose narrow upper shell swages out to a wide one.
+
+    Parameters
+    ----------
+    w, h : float
+        Box.
+
+    Returns
+    -------
+    tuple
+        Artwork, ports and bands.
+    """
+    x0, x1, cx = _SWAGE_STEP, w - _SWAGE_STEP, w / 2
+    r = (x1 - x0) / 2
+    off = _relief_off(r, _SWAGE_TOP, _SWAGE_RELIEF)
+    neck = _SWAGE_TOP + _SWAGE_NECK
+    wide = neck + _SWAGE_CONE
+    knuckle = h - _SWAGE_HEAD
+    top = f"A {_n(r)} {_n(_SWAGE_TOP)} 0 0 1"
+    art = (f'<path d="M {_n(x0)} {_n(_SWAGE_TOP)} {top} {_n(cx)} 0 '
+           f'{top} {_n(x1)} {_n(_SWAGE_TOP)} L {_n(x1)} {_n(neck)} '
+           f'L {_n(w)} {_n(wide)} L {_n(w)} {_n(knuckle)} '
+           f'A {_n(cx)} {_n(_SWAGE_HEAD)} 0 0 1 {_n(cx)} {_n(h)} '
+           f'A {_n(cx)} {_n(_SWAGE_HEAD)} 0 0 1 0 {_n(knuckle)} L 0 {_n(wide)} '
+           f'L {_n(x0)} {_n(neck)} Z" {_OUTLINE}/>')
+    mid = (wide + knuckle) / 2
+    ports = {"inlet": (0.0, mid), "outlet": (w, mid), "vent": (cx, 0.0),
+             "relief": (cx - off, _on_head(r, _SWAGE_TOP, off)),
+             "drain": (cx, h)}
+    band = _band(wide, knuckle)
+    return art, ports, {"W": band, "E": band}
+
+
+def _horizontal(w: float, h: float) -> tuple:
+    """Return a horizontal drum.
+
+    Parameters
+    ----------
+    w, h : float
+        Box.
+
+    Returns
+    -------
+    tuple
+        Artwork, ports, bands and the inlet's face menu.
+    """
+    x0, x1, mid = _DRUM_HEAD, w - _DRUM_HEAD, h / 2
+    arc = f"A {_n(_DRUM_HEAD)} {_n(mid)} 0 0 0"
+    art = (f'<path d="M {_n(x0)} {_n(h)} L {_n(x1)} {_n(h)} {arc} {_n(w)} {_n(mid)} '
+           f'{arc} {_n(x1)} 0 L {_n(x0)} 0 {arc} 0 {_n(mid)} {arc} {_n(x0)} {_n(h)} Z '
+           f'M {_n(x0)} 0 L {_n(x0)} {_n(h)} M {_n(x1)} 0 L {_n(x1)} {_n(h)}" {_OUTLINE}/>')
+    ports = {"inlet": (0.0, mid), "outlet": (_DRUM_OUTLET * w, h),
+             "vent": (_DRUM_VENT * w, 0.0), "relief": (_DRUM_RELIEF * w, 0.0),
+             "drain": (_DRUM_DRAIN * w, h)}
+    band = _band(x0, x1)
+    faces = {"inlet": {"W": (0.0, mid), "N": (_DRUM_INLET_N * w, 0.0), "E": (w, mid)}}
+    return art, ports, {"N": band, "S": band, "W": (mid, mid), "E": (mid, mid)}, faces
+
+
+def _dome(w: float, h: float) -> tuple:
+    """Return a horizontal vessel with a manway dome on top.
+
+    Parameters
+    ----------
+    w, h : float
+        Box.
+
+    Returns
+    -------
+    tuple
+        Artwork, ports and bands.
+    """
+    top = _DOME_NECK + _DOME_CAP
+    ry, mid = (h - top) / 2, top + (h - top) / 2
+    x0, x1 = _DISHED, w - _DISHED
+    right = x1 - _DOME_OFF
+    left, apex = right - _DOME_W, right - _DOME_W / 2
+    head = f"A {_n(_DISHED)} {_n(ry)} 0 0 1"
+    cap = f"A {_n(_DOME_W / 2)} {_n(_DOME_CAP)} 0 0 1"
+    art = (f'<path d="M {_n(x1)} {_n(top)} {head} {_n(w)} {_n(mid)} {head} {_n(x1)} {_n(h)} '
+           f'L {_n(x0)} {_n(h)} {head} 0 {_n(mid)} {head} {_n(x0)} {_n(top)} '
+           f'L {_n(left)} {_n(top)} L {_n(left)} {_n(_DOME_CAP)} {cap} {_n(apex)} 0 '
+           f'{cap} {_n(right)} {_n(_DOME_CAP)} L {_n(right)} {_n(top)} Z" {_OUTLINE}/>')
+    # The head nozzles sit on the heads' outline, above the axis.
+    nozzle, inset = mid - _DOME_NOZZLE, _on_head(ry, _DISHED, _DOME_NOZZLE)
+    ports = {"inlet": (inset, nozzle), "outlet": (w - inset, nozzle), "vent": (apex, 0.0),
+             "relief": ((x0 + left) / 2, top), "drain": (w / 2, h)}
+    return art, ports, {"W": (nozzle, nozzle), "E": (nozzle, nozzle)}
+
+
+_BUILDERS = {
+    "default": _default,
+    "dished": _dished,
+    "dome": _dome,
+    "electrical_heating": _electrical,
+    "horizontal": _horizontal,
+    "insulated": lambda w, h: _clad(w, h, insulated=True),
+    "jacketed": lambda w, h: _clad(w, h, insulated=False),
+    "swaged": _swaged,
+}
+
+
+def vessel_shell(variant: str, width: float | None = None,
+                 height: float | None = None) -> Symbol:
+    """Return a vessel's shell drawn at a size.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`VESSEL_SIZES`.
+    width, height : float, optional
+        Box; the variant's natural size where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The shell, with its nozzles and walls; one object per size.
+    """
+    nw, nh = VESSEL_SIZES[variant]
+    return _shell(variant, float(nw if width is None else width),
+                  float(nh if height is None else height))
+
+
+@lru_cache(maxsize=None)
+def _shell(variant: str, w: float, h: float) -> Symbol:
+    """Return a vessel's shell drawn at a size.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`VESSEL_SIZES`.
+    w, h : float
+        Box.
+
+    Returns
+    -------
+    Symbol
+        The shell, with its nozzles and walls.
+    """
+    built = _BUILDERS[variant](w, h)
+    art, ports, bands = built[:3]
+    faces = built[3] if len(built) > 3 else {}
+    family = _shell_family(variant, w, ports)
+    if "N" in family.get("inlet", {}):
+        x = family["inlet"]["N"][0]
+        bands = {**bands, "N": (x, x)}
+    name = f"sym_vessel{'' if variant == 'default' else '_' + variant}"
+    return Symbol(
+        svg=f'<g id="{name}">{art}</g>',
+        width=w, height=h,
+        ports={k: (round(x, 4), round(y, 4)) for k, (x, y) in ports.items()},
+        port_faces={role: {face: (round(x, 4), round(y, 4)) for face, (x, y) in menu.items()}
+                    for role, menu in faces.items()},
+        family_faces={role: {face: (round(x, 4), round(y, 4)) for face, (x, y) in menu.items()}
+                      for role, menu in family.items()},
+        bands={k: (round(lo, 4), round(hi, 4)) for k, (lo, hi) in bands.items()},
+        id_suffix="" if (w, h) == VESSEL_SIZES[variant] else f"_{w:g}x{h:g}",
+        drawio_shape=_DRAWIO[variant],
+        gravity_fixed=True,
+    )
+
+
+def _shell_family(variant: str, w: float, ports: dict[str, tuple[float, float]]
+                  ) -> dict[str, dict[str, tuple[float, float]]]:
+    """Return the family faces of a vessel's shell.
+
+    An upright shell's inlet and outlet each take the opposite wall at
+    their own height, and its inlet the top head opposite the relief;
+    the heater takes ``electrical_heating``'s east wall. A dome's take
+    the opposite head. A horizontal drum has none.
+
+    Parameters
+    ----------
+    variant : str
+        Vessel variant.
+    w : float
+        Box width.
+    ports : dict[str, tuple[float, float]]
+        The shell's nozzles.
+
+    Returns
+    -------
+    dict[str, dict[str, tuple[float, float]]]
+        ``"inlet"`` and ``"outlet"`` to their further placements by face.
+    """
+    if variant == "horizontal":
+        return {}
+    # The vent marks an upright shell's axis.
+    axis = w / 2 if variant == "dome" else ports["vent"][0]
+
+    def mirrored(name: str) -> tuple[float, float]:
+        """Return a nozzle mirrored about the shell's axis.
+
+        Parameters
+        ----------
+        name : str
+            Nozzle.
+
+        Returns
+        -------
+        tuple[float, float]
+            Mirrored point.
+        """
+        x, y = ports[name]
+        return 2 * axis - x, y
+
+    inlet = {} if variant == "electrical_heating" else {"E": mirrored("inlet")}
+    if variant != "dome":
+        inlet["N"] = mirrored("relief")
+    return {"inlet": inlet, "outlet": {"W": mirrored("outlet")}}
+
+
+def vessel_shell_fits(variant: str) -> tuple[float, float]:
+    """Return the smallest box a shell can be drawn in.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`VESSEL_SIZES`.
+
+    Returns
+    -------
+    tuple[float, float]
+        Least width and least height.
+    """
+    def reach(depth: float) -> float:
+        """Return the half-width a head needs to carry its relief clear of its vent.
+
+        Parameters
+        ----------
+        depth : float
+            Head's depth.
+
+        Returns
+        -------
+        float
+            Least half-width.
+        """
+        m = _RELIEF_MIN ** 2
+        return math.sqrt((m + math.sqrt(m * m + 4 * m * depth ** 2)) / 2)
+
+    least = {
+        "default": (2 * reach(_HEAD), 2 * _HEAD),
+        "dished": (2 * reach(_DISHED) + 2 * _BRACKET,
+                   2 * _DISHED + _BRACKET_FOOT + _BRACKET),
+        # The relief stays off the head and nearer the roof than the end.
+        "dome": (max(2 * _DISHED + _BAND_GAP, 2 * (_DOME_NECK + _DOME_CAP + 1))
+                 + _DOME_OFF + _DOME_W, _DOME_NECK + _DOME_CAP + 2 * _DOME_NOZZLE),
+        "electrical_heating": (max(2 * reach(_DISHED), _HEATER_REACH + 1) + _HEATER_REACH,
+                               _HEATER_H + 2 * _HEATER_LEAD),
+        "horizontal": (_DRUM_HEAD / min(_DRUM_INLET_N, 1 - _DRUM_OUTLET), 1.0),
+        "insulated": (2 * reach(_DISHED) + 2 * _CLAD, 2 * (_DISHED + _CLAD_END)),
+        "jacketed": (2 * reach(_DISHED) + 2 * _CLAD, 2 * (_DISHED + _CLAD_END)),
+        "swaged": (2 * reach(_SWAGE_TOP) + 2 * _SWAGE_STEP,
+                   _SWAGE_TOP + _SWAGE_NECK + _SWAGE_CONE + _SWAGE_HEAD),
+    }
+    return least[variant]
+
+
+def vessel_floor(variant: str, width: float, height: float, x: float) -> float:
+    """Return how far down a shell's outline reaches at a point across it.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`VESSEL_SIZES`.
+    width, height : float
+        The shell's box.
+    x : float
+        Distance across the box, held to the shell's own span.
+
+    Returns
+    -------
+    float
+        Depth of the shell's lowest outline at ``x``.
+    """
+    heads = {
+        "default": (width / 2, width / 2, _HEAD),
+        "dished": (width / 2, width / 2 - _BRACKET, _DISHED),
+        "electrical_heating": ((width - _HEATER_REACH) / 2, (width - _HEATER_REACH) / 2, _DISHED),
+        "insulated": (width / 2, width / 2 - _CLAD, _DISHED),
+        "jacketed": (width / 2, width / 2 - _CLAD, _DISHED),
+        "swaged": (width / 2, width / 2, _SWAGE_HEAD),
+    }
+    if variant not in heads:
+        # A lying shell's floor is its straight bottom wall.
+        return height
+    cx, rx, depth = heads[variant]
+    off = min(abs(x - cx), rx)
+    return height - depth + depth * math.sqrt(max(0.0, 1 - (off / rx) ** 2))
+
+
+def _own_detail(variant: str, height: float) -> list[tuple[str, float, float]]:
+    """Return the stretches of a shell's side walls its own detail covers.
+
+    Parameters
+    ----------
+    variant : str
+        Vessel variant.
+    height : float
+        Box height.
+
+    Returns
+    -------
+    list[tuple[str, float, float]]
+        ``(face, top, bottom)`` of the dished vessel's brackets and of
+        the electric heater with its leads.
+    """
+    if variant == "dished":
+        top = height - _DISHED - _BRACKET_FOOT - _BRACKET
+        return [(face, top, top + _BRACKET) for face in ("W", "E")]
+    if variant == "electrical_heating":
+        reach = _HEATER_H / 2 + _HEATER_LEAD
+        return [("E", height / 2 - reach, height / 2 + reach)]
+    return []
+
+
+def vessel_side(variant: str, width: float, height: float) -> tuple[float, float]:
+    """Return the stretch of a shell's west edge its outline meets.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`VESSEL_SIZES`.
+    width, height : float
+        The shell's box.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(top, bottom)`` down the west edge of the box.
+    """
+    if variant == "dished":
+        foot = height - _DISHED - _BRACKET_FOOT
+        return foot, foot
+    if variant in ("jacketed", "insulated"):
+        return _DISHED + _CLAD_END, height - _DISHED - _CLAD_END
+    if variant == "swaged":
+        return _SWAGE_TOP + _SWAGE_NECK + _SWAGE_CONE, height - _SWAGE_HEAD
+    if variant == "horizontal":
+        return height / 2, height / 2
+    if variant == "dome":
+        top = _DOME_NECK + _DOME_CAP
+        return top + (height - top) / 2, top + (height - top) / 2
+    head = _HEAD if variant == "default" else _DISHED
+    return head, height - head
+
+
 def _nearest_stretch(band: "tuple[float, float] | None", along: float,
                      inset: float, count: int) -> "tuple[float, float] | None":
     """Return the stretch of a band nearer its face than either end.
@@ -1270,17 +1970,331 @@ def _nearest_stretch(band: "tuple[float, float] | None", along: float,
 _VESSEL_PITCH = 20.0
 _VESSEL_EXTENT = 0.7
 
+#: Clearance of a nozzle from a support beside its wall: an arrowhead's
+#: half-width and the gap ISO 128-20 4.4 asks for at an inlet, the gap
+#: alone at an outlet.
+_SUPPORT_CLEARANCE = {"inlet": ARROWHEAD / 2 + MIN_HEAD_CLEARANCE, "outlet": MIN_HEAD_CLEARANCE}
+
+
+@lru_cache(maxsize=None)
+def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
+                 ports: "tuple[tuple[str, tuple[float, float]], ...]",
+                 size: "tuple[float, float] | None"
+                 ) -> "tuple[Symbol, list[tuple[str, float, float]]]":
+    """Return a tank or vessel with its parts, and the supports beside it.
+
+    Parameters
+    ----------
+    kind : str
+        ``"tank"`` or ``"vessel"``.
+    variant : str
+        Resolved variant.
+    overlays : tuple[Overlay, ...]
+        The unit's parts.
+    ports : tuple[tuple[str, tuple[float, float]], ...]
+        ``(name, point)`` nozzles the parts add, in body coordinates.
+    size : tuple[float, float] or None
+        Box of a shell built to size; the registered body if ``None``.
+
+    Returns
+    -------
+    tuple
+        The composed symbol, and each support beside a wall as
+        ``(face, start, end)`` along that face.
+    """
+    from pandid.render.iso_parts import SUPPORTS
+
+    if size is None:
+        base = default_registry.composed(kind, variant, overlays, ports)
+        body = default_registry.get(kind, variant)
+    else:
+        body = vessel_shell(variant, *size)
+        drawn = replace(body, ports={**body.ports, **dict(ports)}) if ports else body
+        base = compose(drawn, [(o, default_registry.part(o.group, o.name)) for o in overlays])
+    boxes = overlay_boxes(body, overlays)
+    oy = -min([0.0, *(o.y * body.height for o in overlays)])
+    spans = []
+    # A skirt carries the bottom connections through it.
+    for o, (left, top, right, bottom) in zip(overlays, boxes):
+        if o.name not in SUPPORTS or o.name == "skirt":
+            continue
+        beside = {"W": o.x < 0, "E": o.x + o.w > 1, "N": o.y < 0, "S": o.y + o.h > 1}
+        spans += [(face, top, bottom) if face in ("W", "E") else (face, left, right)
+                  for face, out in beside.items() if out]
+    if kind == "vessel" and body is vessel_shell(variant, body.width, body.height):
+        spans += [(face, a + oy, b + oy) for face, a, b in _own_detail(variant, body.height)]
+    return base, spans
+
+
+def _family_band(band: "tuple[float, float] | None", along: float, inset: float,
+                 t0: float, count: int, spans: "list[tuple[float, float]]",
+                 clearance: float, wall: bool) -> "tuple[tuple[float, float] | None, float]":
+    """Return the stretch a family is spread in, and the length it lacks.
+
+    The stretch is nearer the family's face than either end of the box
+    and clear of the supports beside the wall, and holds the family at
+    :data:`MIN_NOZZLE_PITCH`; the clear stretch nearest the anchor that
+    does, else the longest clear stretch.
+
+    Parameters
+    ----------
+    band : tuple[float, float] or None
+        ``(lo, hi)`` the face offers; the whole face if ``None``.
+    along : float
+        Face length.
+    inset : float
+        Distance in from the face's edge to the wall.
+    t0 : float
+        The family's anchor along the face.
+    count : int
+        Family size.
+    spans : list[tuple[float, float]]
+        Stretches of the face supports cover.
+    clearance : float
+        Gap kept from a support.
+    wall : bool
+        Whether the face is a wall that lengthens with the shell, rather
+        than a head's apex.
+
+    Returns
+    -------
+    tuple
+        The stretch, and how much longer the face would have to be for
+        a clear stretch to hold the family.
+    """
+    near = _nearest_stretch(band, along, inset, count) if count > 1 else band
+    if near is not None and near[0] >= near[1] and (count == 1 or not wall):
+        # A head's apex, or a lone nozzle: it cannot move along it.
+        return near, 0.0
+    need = MIN_NOZZLE_PITCH * (count - 1)
+    pieces = [near or (0.0, along)]
+    for a, b in spans:
+        a, b = a - clearance, b + clearance
+        pieces = [p for lo, hi in pieces for p in ((lo, min(hi, a)), (max(lo, b), hi))]
+    longest = max(pieces, key=lambda p: p[1] - p[0])
+    short = max(need - (longest[1] - longest[0]),
+                need / _VESSEL_EXTENT - along if count > 1 else 0.0, 0.0)
+    if not spans:
+        return near, short
+    fit = [p for p in pieces if p[1] - p[0] >= need]
+    if fit:
+        return min(fit, key=lambda p: max(p[0] - t0, t0 - p[1], 0.0)), short
+    if longest[1] - longest[0] >= (count - 1) * _COINCIDENT:
+        return longest, short
+    return near, short
+
+
+def _wall_members(base: Symbol, face: str, members: list[str], t0: float,
+                  band: "tuple[float, float] | None", along: float,
+                  fixed: "dict[str, tuple[float, float]]") -> list[str]:
+    """Return a family with the stencil nozzles it crowds on its wall.
+
+    If a member lands nearer a stencil nozzle on its band than the
+    family's pitch, the band's stencil nozzles join the family, in order
+    along the wall.
+
+    Parameters
+    ----------
+    base : Symbol
+        The tank or vessel with its parts.
+    face : str
+        The family's face.
+    members : list[str]
+        The family, in port order.
+    t0 : float
+        The family's anchor along the face.
+    band : tuple[float, float] or None
+        ``(lo, hi)`` the face offers; the whole face if ``None``.
+    along : float
+        Face length.
+    fixed : dict[str, tuple[float, float]]
+        The stencil's own nozzles.
+
+    Returns
+    -------
+    list[str]
+        Nozzles to spread along the wall, in order.
+    """
+    lo, hi = band or (0.0, along)
+    on_wall = {
+        name: _face_local(face, *xy, base.width, base.height)[0]
+        for name, xy in fixed.items() if outward_dir(*xy, base.width, base.height) == face
+    }
+    beside = {name: t for name, t in on_wall.items() if lo <= t <= hi}
+    run = [spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT, at=t0, band=band)
+           for i in range(len(members))]
+    pitch = (run[-1] - run[0]) / (len(run) - 1) if len(run) > 1 else 0.0
+    if not any(abs(t - f) < pitch for t in run for f in beside.values()):
+        return members
+    order = sorted(beside, key=beside.__getitem__)
+    return ([n for n in order if beside[n] <= t0] + members
+            + [n for n in order if beside[n] > t0])
+
+
+def _has_wall(variant: str, face: str) -> bool:
+    """Return whether a vessel shell's face is a wall at its natural size.
+
+    Parameters
+    ----------
+    variant : str
+        Vessel variant.
+    face : str
+        Face name.
+
+    Returns
+    -------
+    bool
+        Whether the face's band has length.
+    """
+    lo, hi = default_registry.get("vessel", variant).bands.get(face, (0.0, 1.0))
+    return lo < hi
+
+
+def _groups(faces: tuple[tuple[str, str], ...]) -> dict[str, list[str]]:
+    """Return a tank's or vessel's family ports, by face.
+
+    Parameters
+    ----------
+    faces : tuple[tuple[str, str], ...]
+        ``(port_name, face)`` for the inlet and outlet families.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Inlets and outlets on each face, in drawn order.
+    """
+    groups: dict[str, list[str]] = {}
+    for port_name, face in faces:
+        groups.setdefault(face, []).append(port_name)
+    return groups
+
+
+def _role(port_name: str) -> str:
+    """Return the family a tank's or vessel's port belongs to.
+
+    Parameters
+    ----------
+    port_name : str
+        ``in_*`` or ``out_*``.
+
+    Returns
+    -------
+    str
+        ``"inlet"`` or ``"outlet"``.
+    """
+    return "inlet" if port_name.startswith("in_") else "outlet"
+
+
+def _reach(base: Symbol) -> dict[str, dict[str, tuple[float, float]]]:
+    """Return each family's placements: its menu, then its family faces.
+
+    Parameters
+    ----------
+    base : Symbol
+        Tank or vessel body.
+
+    Returns
+    -------
+    dict[str, dict[str, tuple[float, float]]]
+        ``"inlet"`` and ``"outlet"`` to their placements by face.
+    """
+    return {role: {**base.port_faces.get(role, {}), **base.family_faces.get(role, {})}
+            for role in ("inlet", "outlet")}
+
+
+def _face_anchor(base: Symbol, reach: dict[str, dict[str, tuple[float, float]]],
+                 face: str, members: list[str]) -> tuple[float, float, float]:
+    """Return where a face's family ports spread from, and their clearance.
+
+    Inlets and outlets on one face spread about their anchors' mean,
+    and keep the larger of their clearances from the supports.
+
+    Parameters
+    ----------
+    base : Symbol
+        Tank or vessel body.
+    reach : dict[str, dict[str, tuple[float, float]]]
+        What :func:`_reach` returned.
+    face : str
+        Face the ports are on.
+    members : list[str]
+        Family ports on the face.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        Anchor along the face, inset from its edge, and clearance.
+    """
+    roles = {_role(name) for name in members}
+    local = {_face_local(face, *reach[role][face], base.width, base.height) for role in roles}
+    t0, inset = (next(iter(local)) if len(local) == 1 else
+                 (sum(t for t, _ in local) / len(local), sum(i for _, i in local) / len(local)))
+    return t0, inset, max(_SUPPORT_CLEARANCE[role] for role in roles)
+
+
+@lru_cache(maxsize=None)
+def vessel_room(variant: str, faces: tuple[tuple[str, str], ...],
+                overlays: "tuple[Overlay, ...]",
+                ports: "tuple[tuple[str, tuple[float, float]], ...]",
+                size: "tuple[float, float]") -> "tuple[float, float]":
+    """Return how much wider and taller a vessel's shell must be.
+
+    The shell is long enough when each family has a stretch of its wall
+    clear of the supports that holds it at :data:`MIN_NOZZLE_PITCH`.
+
+    Parameters
+    ----------
+    variant : str
+        Vessel variant.
+    faces : tuple[tuple[str, str], ...]
+        ``(port_name, face)`` for the inlet and outlet families.
+    overlays : tuple[Overlay, ...]
+        The vessel's parts, placed on the shell.
+    ports : tuple[tuple[str, tuple[float, float]], ...]
+        ``(name, point)`` nozzles the parts add, in body coordinates.
+    size : tuple[float, float]
+        The shell's box.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height to add.
+    """
+    base, spans = _vessel_base("vessel", variant, overlays, ports, size)
+    reach = _reach(base)
+    wide = tall = 0.0
+    for face, members in _groups(faces).items():
+        if any(face not in reach[_role(name)] for name in members):
+            continue
+        t0, inset, clearance = _face_anchor(base, reach, face, members)
+        along = base.height if face in ("W", "E") else base.width
+        band = base.bands.get(face)
+        fixed = {name: xy for name, xy in base.ports.items()
+                 if name not in ("inlet", "outlet", *dict(ports))}
+        members = _wall_members(base, face, members, t0, band, along, fixed)
+        _, short = _family_band(band, along, inset, t0, len(members),
+                                [(a, b) for f, a, b in spans if f == face],
+                                clearance, _has_wall(variant, face))
+        if face in ("W", "E"):
+            tall = max(tall, short)
+        else:
+            wide = max(wide, short)
+    return wide, tall
+
 
 @lru_cache(maxsize=None)
 def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   overlays: "tuple[Overlay, ...]" = (),
-                  ports: "tuple[tuple[str, tuple[float, float]], ...]" = ()
-                  ) -> Symbol:
+                  ports: "tuple[tuple[str, tuple[float, float]], ...]" = (),
+                  size: "tuple[float, float] | None" = None) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
-    Each family is spread about the stencil's anchor within the part of
-    :attr:`Symbol.bands` nearer its face than either end of the box; a
-    role with one member keeps its full menu. If a member lands nearer
+    The family ports on a face are spread about the stencil's anchor,
+    or the mean of the inlet's and outlet's where both share it, within
+    the part of :attr:`Symbol.bands` nearer its face than either end of
+    the box, clear of the supports beside its wall where that stretch
+    holds it. A family may take :attr:`Symbol.family_faces` too; a role
+    with one member keeps its full menu. If a member lands nearer
     a stencil nozzle on its band than the family's pitch, the band's
     stencil nozzles are spread with the family, in order along the
     wall.
@@ -1297,6 +2311,9 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         The unit's composed parts.
     ports : tuple[tuple[str, tuple[float, float]], ...], default=()
         ``(name, point)`` nozzles the parts add, in body coordinates.
+    size : tuple[float, float], optional
+        Box of a vessel shell built to size; the registered body if
+        omitted.
 
     Returns
     -------
@@ -1314,7 +2331,7 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     ValueError
         If the parts leave a nozzle nearer another edge than its face.
     """
-    base = default_registry.composed(kind, variant, overlays, ports)
+    base, spans = _vessel_base(kind, variant, overlays, ports, size)
     placed = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
     port_faces = {
         name: dict(menu) for name, menu in base.port_faces.items()
@@ -1322,41 +2339,29 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     }
     fixed = [name for name in placed if name not in dict(ports)]
     menus = {"inlet": base.port_faces.get("inlet", {}), "outlet": base.port_faces.get("outlet", {})}
+    reach = _reach(base)
     members_by_role: dict[str, list[str]] = {"inlet": [], "outlet": []}
-    groups: dict[tuple[str, str], list[str]] = {}
     by_face: dict[str, list[str]] = {}
     for port_name, face in faces:
-        role = "inlet" if port_name.startswith("in_") else "outlet"
-        members_by_role[role].append(port_name)
-        groups.setdefault((role, face), []).append(port_name)
+        members_by_role[_role(port_name)].append(port_name)
         by_face.setdefault(face, []).append(port_name)
-    for (role, face), members in groups.items():
-        menu = menus[role]
-        if face not in menu:
+    for face, members in by_face.items():
+        missing = [name for name in members if face not in reach[_role(name)]]
+        if missing:
+            role = _role(missing[0])
             raise ValueError(
                 f"{kind}/{variant}: {role} has no {face!r} placement to draw "
-                f"{', '.join(members)} on; offered: "
-                f"{', '.join(menu) if menu else 'nothing'}"
+                f"{', '.join(missing)} on; offered: "
+                f"{', '.join(reach[role]) if reach[role] else 'nothing'}"
             )
-        t0, inset = _face_local(face, *menu[face], base.width, base.height)
+        t0, inset, clearance = _face_anchor(base, reach, face, members)
         along = base.height if face in ("W", "E") else base.width
         band = base.bands.get(face)
-        lo, hi = band or (0.0, along)
-        on_wall = {
-            name: _face_local(face, *placed[name], base.width, base.height)[0]
-            for name in fixed if outward_dir(*placed[name], base.width, base.height) == face
-        }
-        beside = {name: t for name, t in on_wall.items() if lo <= t <= hi}
-        run = [spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT, at=t0, band=band)
-               for i in range(len(members))]
-        pitch = (run[-1] - run[0]) / (len(run) - 1) if len(run) > 1 else 0.0
-        if any(abs(t - f) < pitch for t in run for f in beside.values()):
-            # Spread the wall's own nozzles with the family, in order.
-            order = sorted(beside, key=beside.__getitem__)
-            members = ([n for n in order if beside[n] <= t0] + members
-                       + [n for n in order if beside[n] > t0])
-        if len(members) > 1:
-            band = _nearest_stretch(band, along, inset, len(members))
+        members = _wall_members(base, face, members, t0, band, along,
+                                {name: placed[name] for name in fixed})
+        band, _ = _family_band(band, along, inset, t0, len(members),
+                               [(a, b) for f, a, b in spans if f == face],
+                               clearance, kind == "vessel" and _has_wall(variant, face))
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
@@ -1377,10 +2382,17 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         band = base.bands.get(face)
         if len(on_face) > 1 and band is not None and band[0] >= band[1]:
             raise bandless_face(f"{kind}/{variant}", face, band[0], on_face, base)
-    # A lone member keeps its whole face menu.
+    # A lone member keeps its own placement and the faces of its menu no
+    # other family member is on.
+    on = dict(faces)
     for role, members in members_by_role.items():
         if len(members) == 1 and menus[role]:
-            port_faces[members[0]] = dict(menus[role])
+            name = members[0]
+            port_faces[name] = {
+                **{face: xy for face, xy in menus[role].items()
+                   if not any(face == on[other] for other in on if other != name)},
+                on[name]: placed[name],
+            }
     return replace(base, ports=placed, port_faces=port_faces)
 
 
@@ -1961,6 +2973,8 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         # The body's face menu, moved with the ink.
         port_faces={name: {face: shift(xy) for face, xy in menu.items()}
                     for name, menu in body.port_faces.items()},
+        family_faces={name: {face: shift(xy) for face, xy in menu.items()}
+                      for name, menu in body.family_faces.items()},
         faceless_ports=body.faceless_ports,
         port_series=tuple(_shifted_series(s, body, ox, oy, width, height)
                           for s in body.port_series),
@@ -2976,6 +3990,106 @@ _FLOT_PORTS = {
 }
 
 
+# ISO 10628-2 items 1.8 and 1.9: walls 6 M apart and 6 M deep over a
+# 3 M cone, fed through the west wall a module below the rim and
+# emptied at the apex. Item 1.9 closes the top; item 1.8 leaves it open.
+_BIN_PORTS = {"feed": (0.0, M), "discharge": (3 * M, 9 * M)}
+_BIN_WALLS = f"M 0 0 L 0 {6 * M:g} L {3 * M:g} {9 * M:g} L {6 * M:g} {6 * M:g} L {6 * M:g} 0"
+
+# Item 1.9, X2062, closed tank with conical bottom, vented at the
+# middle of its roof.
+_SILO = Symbol(
+    svg=f'<g id="sym_silo"><path d="{_BIN_WALLS} Z" {_OUTLINE}/></g>',
+    width=6 * M, height=9 * M,
+    ports={**_BIN_PORTS, "vent": (3 * M, 0.0)},
+    gravity_fixed=True,
+    iso_reg="X2062",
+)
+
+# Item 1.8, 2064, bunker with conical bottom.
+_BUNKER = Symbol(
+    svg=f'<g id="sym_silo_bunker"><path d="{_BIN_WALLS}" {_INK}/></g>',
+    width=6 * M, height=9 * M,
+    ports=dict(_BIN_PORTS),
+    gravity_fixed=True,
+    iso_reg="2064",
+)
+
+
+# Mixer-settler: a closed box whose west compartment is the mixer. The
+# dispersion overflows the partition into the settler, and the light
+# phase overflows the weir into the launder at the east end.
+MS_W, MS_H = 140.0, 50.0
+#: Mixer partition: position, and the gap it leaves under the lid.
+MS_MIXER_W, _MS_OVERFLOW = 40.0, 12.0
+# Light-phase weir: position, and its height off the floor.
+_MS_WEIR_X, _MS_WEIR_H = 120.0, 30.0
+_MIXER_SETTLER = Symbol(
+    svg='<g id="sym_mixer_settler">'
+        f'<rect x="0" y="0" width="{MS_W:g}" height="{MS_H:g}" {_OUTLINE}/>'
+        f'<path d="M {MS_MIXER_W:g} {_MS_OVERFLOW:g} L {MS_MIXER_W:g} {MS_H:g} '
+        f'M {_MS_WEIR_X:g} {MS_H - _MS_WEIR_H:g} L {_MS_WEIR_X:g} {MS_H:g}" {_INK}/></g>',
+    width=MS_W, height=MS_H,
+    # Both phases into the mixer; the heavy phase out of the settler's
+    # floor, the light phase out of the launder.
+    ports={"light_in": (0.0, 15.0), "heavy_in": (0.0, 35.0),
+           "light_out": (MS_W, 40.0), "heavy_out": (100.0, MS_H)},
+    gravity_fixed=True,
+)
+
+#: Agitator on the mixer's centre line: width, and the depth of its foot.
+MS_AGITATOR_W, MS_AGITATOR_FOOT = 24.0, 42.0
+
+
+# Deaerator: a horizontal storage drum with dished ends, and the
+# deaerating column standing on its crown towards the west end.
+_DA_DRUM_W, _DA_DRUM_H = 160.0, 50.0
+_DA_DRUM_END = 12.0
+_DA_COLUMN_X, _DA_COLUMN_W = 30.0, 40.0
+_DA_COLUMN_H = 60.0
+_DA_CROWN = 8.0
+_DA_H = _DA_COLUMN_H + _DA_DRUM_H
+_DA_FEED_DX = -16.0
+
+
+def _da_crown_y(dx: float) -> float:
+    """Return the column crown's height a distance off its centre line.
+
+    Parameters
+    ----------
+    dx : float
+        Distance from the column's centre line.
+
+    Returns
+    -------
+    float
+        Height of the crown, rounded to four places.
+    """
+    return round(_DA_CROWN * (1 - math.sqrt(1 - (2 * dx / _DA_COLUMN_W) ** 2)), 4)
+
+
+_DEAERATOR = Symbol(
+    svg='<g id="sym_deaerator">'
+        f'<path d="M {_DA_DRUM_END:g} {_DA_COLUMN_H:g} L {_DA_DRUM_W - _DA_DRUM_END:g} {_DA_COLUMN_H:g} '
+        f'A {_DA_DRUM_END:g} {_DA_DRUM_H / 2:g} 0 0 1 {_DA_DRUM_W - _DA_DRUM_END:g} {_DA_H:g} '
+        f'L {_DA_DRUM_END:g} {_DA_H:g} '
+        f'A {_DA_DRUM_END:g} {_DA_DRUM_H / 2:g} 0 0 1 {_DA_DRUM_END:g} {_DA_COLUMN_H:g} Z" {_OUTLINE}/>'
+        f'<path d="M {_DA_COLUMN_X:g} {_DA_COLUMN_H:g} L {_DA_COLUMN_X:g} {_DA_CROWN:g} '
+        f'A {_DA_COLUMN_W / 2:g} {_DA_CROWN:g} 0 0 1 {_DA_COLUMN_X + _DA_COLUMN_W:g} {_DA_CROWN:g} '
+        f'L {_DA_COLUMN_X + _DA_COLUMN_W:g} {_DA_COLUMN_H:g}" {_OUTLINE}/></g>',
+    width=_DA_DRUM_W, height=_DA_H,
+    # Water and vent through the column's crown, steam into the drum's
+    # west end, deaerated water out of the drum's floor.
+    ports={
+        "feed": (_DA_COLUMN_X + _DA_COLUMN_W / 2 + _DA_FEED_DX, _da_crown_y(_DA_FEED_DX)),
+        "vent": (_DA_COLUMN_X + _DA_COLUMN_W / 2, 0.0),
+        "steam": (0.0, _DA_COLUMN_H + _DA_DRUM_H / 2),
+        "outlet": (120.0, _DA_H),
+    },
+    gravity_fixed=True,
+)
+
+
 # Rotary kiln shell: 26 units of fall over 180 of length.
 _KILN_W = 180.0
 _KILN_BORE = 28.0
@@ -3143,7 +4257,8 @@ class SymbolRegistry:
         self._expanders.pop((kind, variant), None)
         for key in [k for k in self._composed if k[:2] == (kind, variant)]:
             del self._composed[key]
-        vessel_symbol.cache_clear()
+        for cached in (vessel_symbol, vessel_room, _vessel_base):
+            cached.cache_clear()
 
     def register_part(self, part: OverlayPart) -> None:
         """Register one ISO 10628-2 group 26-29 supplementary symbol.
@@ -3156,7 +4271,8 @@ class SymbolRegistry:
         self._parts[part.key()] = part
         # Drop every composition; any may use this part.
         self._composed.clear()
-        vessel_symbol.cache_clear()
+        for cached in (vessel_symbol, vessel_room, _vessel_base):
+            cached.cache_clear()
 
     def part(self, group: int, name: str) -> OverlayPart:
         """Return the part registered as ``(group, name)``.
@@ -3552,7 +4668,8 @@ class SymbolRegistry:
                                     extent=0.5, at=32.0, singular="feed"),),
         ), "tubular")
 
-        # ISO 10628-2 group 4: boiler, stack and flare.
+        # ISO 10628-2 group 4: boiler, furnace, combustion chamber,
+        # stack and flare.
 
         # Item 4.1, 2532, boiler with dome.
         self.register("boiler", Symbol(
@@ -3563,6 +4680,30 @@ class SymbolRegistry:
             gravity_fixed=True,
             iso_reg="2532",
         ), "default")
+
+        # Item 4.3, 2533, furnace: a closed top over a U-shaped lining,
+        # chamfered at the floor.
+        self.register("furnace", Symbol(
+            svg='<g id="sym_furnace_general">'
+                f'<path d="M 0 0 L 80 0 L 80 60 L 60 80 L 20 80 L 0 60 Z" {_OUTLINE}/>'
+                f'<path d="M 15 0 L 15 55 L 25 65 L 55 65 L 65 55 L 65 0" {_INK}/></g>',
+            width=80.0, height=80.0,
+            ports={"inlet": (0.0, 40.0), "outlet": (80.0, 40.0), "fuel": (40.0, 80.0)},
+            iso_reg="2533",
+        ), "general")
+
+        # Item 4.5, X8106, combustion chamber: a burner's flame on its
+        # plate inside the chamber. Air from the west, fuel from below,
+        # hot gas out of the top.
+        self.register("furnace", Symbol(
+            svg='<g id="sym_furnace_combustion_chamber">'
+                f'<rect x="0" y="0" width="100" height="80" {_OUTLINE}/>'
+                '<path d="M 0 70 L 100 70 M 20 70 L 50 20 L 80 70 '
+                f'M 35 70 L 50 45 L 65 70" {_INK}/></g>',
+            width=100.0, height=80.0,
+            ports={"inlet": (0.0, 40.0), "outlet": (50.0, 0.0), "fuel": (50.0, 80.0)},
+            iso_reg="X8106",
+        ), "combustion_chamber")
 
         # Item 4.7, 2041, stack: a tapering shaft on a flange.
         self.register("stack", Symbol(
@@ -3592,6 +4733,10 @@ class SymbolRegistry:
         from pandid.render._vendored_symbols import register_vendored
         register_vendored(self)
 
+        # Vessel shells, built to size.
+        for variant in VESSEL_SIZES:
+            self.register("vessel", vessel_shell(variant), variant)
+
         # ISO 10628-2 group 26-29 parts, then the ISO families.
         from pandid.render.iso_parts import parts
         for part in parts():
@@ -3607,6 +4752,10 @@ class SymbolRegistry:
         self._register_evaporators()
         self._register_crystallizer()
         self._register_flotation_cell()
+        self.register("silo", _SILO)
+        self.register("silo", _BUNKER, "bunker")
+        self.register("mixer_settler", _MIXER_SETTLER)
+        self.register("deaerator", _DEAERATOR)
         self._register_kilns()
         self._register_steam_trap()
         self._register_fans()

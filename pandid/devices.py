@@ -18,6 +18,7 @@ from pandid.units import (
     Feeder,
     Filter,
     Fitting,
+    Furnace,
     HeatExchanger,
     Kiln,
     Mill,
@@ -25,6 +26,7 @@ from pandid.units import (
     Reactor,
     ScreeningDevice,
     Separator,
+    Silo,
     Tank,
     Valve,
 )
@@ -54,6 +56,8 @@ __all__ = [
     "FallingFilmEvaporator",
     "ClimbingFilmEvaporator",
     "PlateEvaporator",
+    "CombustionChamber",
+    "Bunker",
     "RotaryKiln",
     "FluidizedBedCalciner",
     "ShaftKiln",
@@ -519,6 +523,41 @@ class PlateEvaporator(Evaporator):
     concentrate: Port
     heating_in: Port
     condensate: Port
+
+
+class CombustionChamber(Furnace):
+    """Combustion chamber: fuel burned to make hot gas for another unit.
+
+    ``inlet`` takes the combustion air on the west wall, ``fuel`` enters
+    the burner from below and ``outlet`` sends the hot gas out of the
+    top. ISO 10628-2 item 4.5 X8106.
+
+    Parameters are those of :class:`~pandid.units.Furnace`.
+    """
+
+    VARIANTS = ("default", "combustion_chamber")
+    VARIANT_ALIASES = {"default": "combustion_chamber"}
+
+    inlet: Port
+    outlet: Port
+    fuel: Port
+
+
+class Bunker(Silo):
+    """Bunker: an open bin for bulk solids over a conical bottom.
+
+    ISO 10628-2 item 1.8, 2064. Solids enter over the west wall at
+    ``feed`` and leave the cone at ``discharge``.
+
+    Parameters are those of :class:`~pandid.units.Silo`.
+    """
+
+    VARIANTS = ("default", "bunker")
+    VARIANT_ALIASES = {"default": "bunker"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
 
 
 class RotaryKiln(Kiln):
