@@ -3290,6 +3290,25 @@ def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
     assert fs._stated() == stated
 
 
+def test_a_line_drawn_by_hand_after_routing_is_kept_clear_on_the_next_route():
+    """Route, type a signal line across the transmitter's spot, and route again.
+
+    The transmitter keeps off the line.
+    """
+    fs = Flowsheet("held line")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    product = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
+    fs.add_instrument("FT", 101).attach(fs.connect(feed.outlet, product.inlet), at=0.5)
+    first = fs.add_instrument("XI", 1).pin(x=100, y=213)
+    second = fs.add_instrument("XI", 2).pin(x=600, y=213)
+    signal = fs.connect(first.sig_out, second.sig_in, kind="electric")
+    fs.route()
+    signal.via([(200, 235), (500, 235)])
+    fs.route()
+
+    assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
 def test_a_line_drawn_by_hand_before_routing_is_kept_clear_on_every_route():
     """Type a signal line across a transmitter's spot, then route three times.
 
