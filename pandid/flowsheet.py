@@ -666,6 +666,10 @@ class Flowsheet:
         # the last layout drew any such lateral.
         self._fan_out = False
         self._fannable = False
+        # Whether layout moves each unit to level its pipe from a flag that
+        # the flag cannot level, and whether the last layout left one off.
+        self._level_flags = False
+        self._flags_off = False
         # Engine the last layout ran.
         self._engine = None
         # Whether the router prices arrowheads and lanes beside units, and
@@ -2285,7 +2289,7 @@ class Flowsheet:
         self._unhang()
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
-        self._fannable = False
+        self._fannable = self._flags_off = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2314,6 +2318,11 @@ class Flowsheet:
         line along a unit or across an arrowhead, the sheet is routed again
         pricing both, with each unfaced balloon on equipment on a free face,
         kept only if no tap leaves its line and no finding or clash grows.
+        Each time the sheet is settled, where a flag's line to a unit is not
+        level and moving the unit, none of whose other lines is level, would
+        level it, the sheet is laid out and routed again with each such unit
+        moved, kept only if no crossing, bend, fallback, finding, clash or
+        tap off its line grows.
         Where a line from a splitter or into a mixer carries valves or
         fittings set with no ``at=``, the sheet is laid out and routed
         again with each such line turned beside the splitter or mixer and
@@ -2637,7 +2646,8 @@ class Flowsheet:
         """
         return _copied((self._geometry(), self._unhung, self._free_faces, self._exit_tight,
                         self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out, self._tees_away, self._fannable))
+                        self._rows_out, self._tees_away, self._fannable,
+                        self._flags_off))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -2649,7 +2659,8 @@ class Flowsheet:
         """
         (geometry, self._unhung, self._free_faces, self._exit_tight,
          self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out, self._tees_away, self._fannable) = _copied(state)
+         self._rows_out, self._tees_away, self._fannable,
+         self._flags_off) = _copied(state)
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 
@@ -2787,11 +2798,15 @@ class Flowsheet:
                 self._priced = False
 
         def settle_best() -> None:
-            """Settle the sheet, then priced where it draws a touch."""
+            """Settle the sheet, then priced where it draws a touch, then
+            laid out with each flag's line levelled where one is off."""
             settle()
             touch = {"route-along-unit", "route-crosses-near-nozzle"}
             if tries and any(i.code in touch for i in geometry_issues(self)):
                 keep_if_better(priced, _flaws(self))
+            if tries and self._flags_off:
+                relaid_if_better("_level_flags")
+                self._flags_off = False
 
         def rechecked() -> None:
             """Settle the sheet again, routing again each stream whose
@@ -2802,13 +2817,24 @@ class Flowsheet:
             finally:
                 self._recheck = False
 
-        def fanned() -> None:
-            """Lay out with the furniture on each lateral off a splitter or
-            into a mixer next to the unit at its other end, and settle;
-            put the sheet back if a crossing, bend, fallback, finding or
-            clash grows, or a tap leaves its line."""
+        def relaid_if_better(switch: str) -> bool:
+            """Lay out with a layout switch on, and settle; put the sheet
+            back if a crossing, bend, fallback, finding or clash grows, or
+            a tap leaves its line.
+
+            Parameters
+            ----------
+            switch : str
+                Name of the flowsheet attribute that turns the layout
+                change on.
+
+            Returns
+            -------
+            bool
+                Whether the new drawing is kept.
+            """
             before, off, drawn = _score(self)[0], _taps_off(self), self._state()
-            self._fan_out = True
+            setattr(self, switch, True)
             try:
                 self.layout(self._engine)
                 settle_best()
@@ -2817,9 +2843,10 @@ class Flowsheet:
             except Exception:
                 kept = False
             finally:
-                self._fan_out = False
+                setattr(self, switch, False)
             if not kept:
                 self._put_state(drawn)
+            return kept
 
         def relaid() -> None:
             """Lay out with every signal exit a lane clear, and settle."""
@@ -2844,7 +2871,7 @@ class Flowsheet:
         tries = type(router) is DefaultRouter and not self._laying_out
         settle_best()
         if tries and self._fannable:
-            fanned()
+            relaid_if_better("_fan_out")
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False

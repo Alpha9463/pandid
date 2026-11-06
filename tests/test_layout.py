@@ -290,6 +290,28 @@ def test_a_branch_ranks_beside_the_spine_it_joins() -> None:
     assert blower.frame.col > b.frame.col
 
 
+def test_a_flag_held_down_by_a_unit_feeds_its_machine_straight() -> None:
+    """Check that a feed flag under a unit in its column lines up with the fan it feeds."""
+    fs = Flowsheet("held flag")
+    water = fs.add(U.Feed("Water"))
+    a = fs.add(U.Filter("F-1"))
+    b = fs.add(U.Filter("F-2"))
+    tower = fs.add(U.Stripper("D-1"))
+    air = fs.add(U.Feed("Air"))
+    fan = fs.add(D.AxialFan("B-1"))
+    fs.connect(water.outlet, a.inlet)
+    fs.connect(a.outlet, b.inlet)
+    fs.connect(b.outlet, tower.feed)
+    line = fs.connect(air.outlet, fan.suction)
+    fs.connect(fan.discharge, tower.boilup_in)
+    air.pin(col=1)
+    fan.pin(col=2)
+    fs.route()
+
+    assert line.route is not None
+    assert real_bends(line.route.waypoints) == 0
+
+
 def test_a_relief_valve_is_drawn_over_the_vessel_it_protects() -> None:
     """Check that a relief valve on a vessel's top nozzle sits up at that vessel."""
     fs = Flowsheet("relief")
