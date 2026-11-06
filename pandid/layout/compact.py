@@ -1,10 +1,11 @@
 """Close the empty bands across a routed drawing.
 
 A band is a strip across the whole drawing that holds no unit, tag,
-package frame, balloon standoff, line end or line run along it. Lines
-only cross it, so moving everything on one side of it inward shortens
-those lines and changes no route's shape. A line whose length places
-something on it, or something at its end, holds all it spans.
+package frame, placed annotation, balloon standoff, line end or line
+run along it. Lines only cross it, so moving everything on one side of
+it inward shortens those lines and changes no route's shape. A line
+whose length places something on it, or something at its end, holds
+all it spans.
 """
 
 from __future__ import annotations
@@ -38,12 +39,14 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
     tuple[list[Span], list[Span]]
         Each held ``(low, high)`` span, sorted, and the spans of the
         units pinned on the axis, of each manual route and of the units
-        it joins.
+        it joins, and of each annotation placed by ``position``.
     """
+    from pandid.document import TableBox
     from pandid.layout.attach import is_attached, stream_path
     from pandid.layout.control import _halos, _hangable
     from pandid.package import frame as package_frame
     from pandid.portgeom import unit_box
+    from pandid.render import furniture
     from pandid.render.svg import _unit_label_box, package_labels, tap_route
     from pandid.streams import Stream
 
@@ -80,6 +83,13 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
         held += [(frame[k], frame[k]), (frame[k + 2], frame[k + 2])]
         held += [(b[k], b[k + 2]) for b in map(_unit_label_box, package_labels(pkg, frame))
                  if b is not None]
+    for a in fs.annotations:
+        position = getattr(a, "position", None)
+        if position is not None:
+            size = (furniture.measure_table(a) if isinstance(a, TableBox)
+                    else furniture.measure_annotation(a))
+            held.append((position[k], position[k] + size[k]))
+            fixed.append(held[-1])
     # A line drawn by hand, set out by fractions of its length, or from
     # a controller that may hang off the actuator it drives, holds all
     # it spans.

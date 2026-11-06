@@ -5,12 +5,14 @@ from __future__ import annotations
 import pytest
 
 from pandid import Flowsheet, units as U
+from pandid.document import notes
 from pandid.layout.attach import stream_path
 from pandid.layout.compact import empty_bands
-from pandid.portgeom import unit_box
+from pandid.portgeom import port_point, unit_box
+from pandid.render.furniture import measure_annotation
 from pandid.route_geometry import stream_polyline
 from pandid.routing.lanes import _score
-from _layout_cases import frame_of
+from _layout_cases import build_unpinned, frame_of
 
 Box = tuple[float, float, float, float]
 
@@ -117,3 +119,99 @@ def test_three_routes_draw_the_same_closed_sheet() -> None:
         drawn.append((_boxes(fs), [stream_path(s) for s in fs.streams], _score(fs)))
 
     assert drawn[0] == drawn[1] == drawn[2]
+
+
+def _codes(fs: Flowsheet) -> set[str]:
+    """Return the codes validate() finds."""
+    return {i.code for i in fs.validate()}
+
+
+def _unit(fs: Flowsheet, name: str) -> U.Unit:
+    """Return the unit with a name."""
+    return next(u for u in fs.units if u.name == name)
+
+
+def test_a_line_routed_by_hand_on_the_closed_sheet_keeps_its_ends() -> None:
+    """Check that via() points read off the closed sheet join the units drawn there."""
+    fs = _chain()
+    fs.route()
+    before = _boxes(fs)
+    line = fs.streams[1]
+    (a, y), (b, _) = stream_polyline(line)
+    line.via([(a + 30, y), (a + 30, y - 100), (b - 30, y - 100), (b - 30, y)])
+    fs.route()
+
+    assert _boxes(fs) == before
+    assert "route-crosses-unit" not in _codes(fs)
+
+
+@pytest.mark.parametrize("name", ["V-101", "P-101", "V-102", "LT-101", "LIC-101", "suction"])
+def test_a_pin_where_the_closed_sheet_draws_a_unit_moves_nothing(name: str) -> None:
+    """Check that pinning one unit or nozzle where the closed sheet draws it changes nothing."""
+    fs = _chain()
+    fs.route()
+    before = _boxes(fs)
+    if name == "suction":
+        pump = _unit(fs, "P-101")
+        x, y = port_point(pump, frame_of(pump), name)
+        pump.pin(port=name, x=x, y=y)
+    else:
+        unit = _unit(fs, name)
+        unit.pin(x=frame_of(unit).x, y=frame_of(unit).y)
+    fs.route()
+
+    assert _boxes(fs) == before
+
+
+#: A note's lines.
+NOTE = ["Pump P-101 runs on demand."]
+
+
+def _note_box(fs: Flowsheet, x: float, y: float) -> Box:
+    """Add the note with its corner at a point and return its box."""
+    w, h = measure_annotation(fs.add_annotation(notes(NOTE, position=(x, y))))
+    return (x, y, x + w, y + h)
+
+
+def _clear(a: Box, b: Box) -> bool:
+    """Return whether two boxes do not overlap."""
+    return a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+
+
+def test_closing_a_band_keeps_equipment_off_a_placed_note(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check that a note placed in the band keeps the pump from closing onto it."""
+    pump = _boxes(_open_chain(monkeypatch))["P-101"]
+    width, _ = measure_annotation(notes(NOTE))
+    fs = _chain()
+    note = _note_box(fs, pump[0] - width - 10.0, pump[1])
+    fs.route()
+
+    assert all(_clear(box, note) for box in _boxes(fs).values())
+
+
+def test_a_note_placed_on_the_closed_sheet_keeps_its_room() -> None:
+    """Check that a note placed beside a unit the closed sheet draws stays clear of it."""
+    fs = _chain()
+    fs.route()
+    before = _boxes(fs)
+    drum = before["V-102"]
+    note = _note_box(fs, drum[2] + 10.0, drum[1])
+    fs.route()
+
+    assert _boxes(fs) == before
+    assert all(_clear(box, note) for box in _boxes(fs).values())
+
+
+def test_lines_routed_by_hand_as_a_closed_sheet_draws_them_move_nothing() -> None:
+    """Check that via() on each line where a closed sheet with hung balloons draws it moves no unit."""
+    fs, _ = build_unpinned("14_condensing_turbine")
+    fs.route()
+    before = _boxes(fs)
+    for line in fs.streams:
+        line.via(stream_polyline(line)[1:-1])
+    fs.route()
+
+    after = _boxes(fs)
+    assert [k for k in before if after[k] != pytest.approx(before[k], abs=0.01)] == []
