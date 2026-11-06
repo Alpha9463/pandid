@@ -669,3 +669,25 @@ def test_valves_either_side_of_an_angle_valve_keep_their_order() -> None:
     paths = [stream_polyline(s) for s in fs.streams]
     assert sum(map(real_bends, paths)) <= 1
     assert _clean(fs)
+
+
+def test_an_angle_valve_off_a_package_turns_its_corner_outside_the_frame() -> None:
+    """Check that an angle valve on a line leaving a package is set at a corner off its frame."""
+    from pandid import Pump, Vessel
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import real_bends
+
+    fs = Flowsheet("Angle valve off a package")
+    feed = fs.add(Feed("F")).pin(row=1, col=1)
+    pump = fs.add(Pump("P-1")).pin(row=1, col=2)
+    drum = fs.add(Vessel("V-2")).pin(row=2, col=3)
+    fs.connect(feed.outlet, pump.suction)
+    valve = fs.add(Valve("HV-1", variant="angle"), on=fs.connect(pump.discharge, drum.inlet))
+    fs.package("PK-1", [pump])
+
+    fs.route()
+    inlet, outlet = valve.inlet.stream, valve.outlet.stream
+    assert inlet is not None and outlet is not None
+    assert real_bends(stream_polyline(inlet)) + real_bends(stream_polyline(outlet)) <= 1
+    assert not [issue for issue in fs.validate() if issue.code == "package-encloses"]
+    assert _clean(fs)

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fs.package("PK-301", [p301a, p301b, f301], description="Dosing Package",
+  reference="VENDOR DWG 4711")` draws a package unit as a dash-dot boundary
+  frame round its units, tagged outside its upper-left corner, and lists it in
+  the equipment list above them. Layout keeps other units out of the frame, and
+  `validate()` reports `package-encloses` for one drawn inside it.
 - `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
   so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
   and says how to clear it: an `at=` for a valve alone on its line, the `at=`
@@ -42,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MixerSettler` draws one solvent-extraction stage with `light_in`,
   `heavy_in`, `light_out` and `heavy_out`. `ExtractionColumn` is a sieve-tray
   column whose two feeds enter its top and bottom stages.
+- `Deaerator` draws a storage drum with its deaerating column on top: `feed`
+  and `vent` on the column, `steam` into the drum and `outlet` from its floor.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.

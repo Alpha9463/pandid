@@ -17,12 +17,14 @@ from pandid.inline import _INLINE_KINDS
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import balloon_pads, pinned_balloons
 from pandid.layout.stages import process_streams, process_units, slot
+from pandid.package import MARGIN as PACKAGE_MARGIN, boundary, tag_reach
 from pandid.portgeom import port_point, resolve_size, unit_box
 from pandid.routing.metrics import path_length
 from pandid.routing.visibility import MARGIN
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.package import Package
     from pandid.ports import Port
     from pandid.stations import StationAssembly
     from pandid.streams import Stream
@@ -1147,12 +1149,15 @@ def _fanned(run: MountedRun, legs: list[Leg]) -> tuple[list[Leg], list[float]] |
 
 def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
              zones: list[Box], pipes: list[list[Point]], exit_gap: float = 0.0,
-             fan: bool = False, wanted: list[float] | None = None) -> bool:
+             fan: bool = False, packages: tuple[tuple[set[Unit], Box], ...] = (),
+             wanted: list[float] | None = None) -> bool:
     """Set a pipe's elements on its routed polyline.
 
     With no route, one straight leg from the source nozzle along the
     larger offset to the destination stands in. With ``fan`` set, a
-    header lateral is set as :func:`_fanned` turns and packs it.
+    header lateral is set as :func:`_fanned` turns and packs it. Each
+    element keeps clear of the ground of each package it has no unit
+    in.
 
     Parameters
     ----------
@@ -1170,6 +1175,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         Clearance each element's signal exits keep from other units.
     fan : bool, default=False
         Set a header lateral as :func:`_fanned` turns and packs it.
+    packages : tuple[tuple[set[Unit], Box], ...], optional
+        Each package's units and the ground they cover.
     wanted : list[float] or None, optional
         Wanted centre distance of each element along ``points``, in
         place of the one its place gives.
@@ -1205,7 +1212,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     angled = next((i for i, element in enumerate(run.elements)
                    if not isinstance(element, StationAssembly) and _turns(element)), None)
     if angled is not None:
-        return _set_corner(run, angled, legs, want, obstacles, zones, pipes, exit_gap)
+        return _set_corner(run, angled, legs, want, obstacles, zones, pipes, exit_gap,
+                           packages)
     starts = [0.0, *accumulate(map(path_length, legs))]
     # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
@@ -1237,6 +1245,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
             centres = _centres([want[i] - starts[index] for i in group], lengths, size, head, tail)
             floor = 0.0
             for i, length, centre in zip(group, lengths, centres):
+                fenced = [*mine, *(box for held, box in packages
+                                   if not held.intersection(_members(run.elements[i])))]
                 low = max(length / 2 + head, floor + length / 2)
                 high = size - length / 2 - tail
                 chosen = None
@@ -1247,7 +1257,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                     if not low - 1e-6 <= at <= high + 1e-6:
                         continue
                     frames = _frames_at(run.elements[i], at, leg)
-                    if _clear(frames, others, level, mine, pipes, (source, dest), exit_gap):
+                    if _clear(frames, others, level, fenced, pipes, (source, dest), exit_gap):
                         chosen = (at, frames)
                         break
                 if chosen is None:
@@ -1274,17 +1284,61 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     return roomy
 
 
+def _ground(pkg: Package, placed: set[Unit]) -> Box:
+    """Return the frame round a package's units placed so far.
+
+    Each unit counts with room for a tag on either side.
+
+    Parameters
+    ----------
+    pkg : Package
+        Package with at least one unit in ``placed``.
+    placed : set[Unit]
+        Units with frames.
+
+    Returns
+    -------
+    Box
+        Left, top, right, bottom.
+    """
+    boxes = [(unit_box(u, u.frame), tag_reach(u)) for u in pkg.units
+             if u in placed and u.frame is not None]
+    return boundary(pkg, [(b[0] - reach, b[1], b[2] + reach, b[3]) for b, reach in boxes])
+
+
+def _fence(run: MountedRun, group: dict[Unit, int]) -> float:
+    """Return the level pipe a pipe's package ends keep its furniture off.
+
+    Parameters
+    ----------
+    run : MountedRun
+        Furnished pipe.
+    group : dict[Unit, int]
+        Package index of each unit in a package.
+
+    Returns
+    -------
+    float
+        The package margin and the reach of a tag beside the end unit,
+        for each end in a package that holds not every element.
+    """
+    held = [group.get(unit) for element in run.elements for unit in _members(element)]
+    return sum(PACKAGE_MARGIN + tag_reach(port.owner) for port in (run.source, run.dest)
+               if (p := group.get(port.owner)) is not None and any(h != p for h in held))
+
+
 def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float],
                 obstacles: list[Unit], zones: list[Box], pipes: list[list[Point]],
-                exit_gap: float) -> bool:
+                exit_gap: float, packages: tuple[tuple[set[Unit], Box], ...]) -> bool:
     """Set a pipe's device that turns it at a corner, then the rest.
 
     The corner nearest the device's wanted distance where
-    :func:`_corner_frame` turns the pipe clear of other units takes
-    it, and its box joins ``zones``; the furniture before it is set on
-    the pipe up to its inlet, and the furniture after it on the pipe
-    from its outlet. With no such corner, the device keeps its place
-    among the equipment and the rest is set on the whole pipe.
+    :func:`_corner_frame` turns the pipe clear of other units and of
+    the ground of each package it is not in takes it, and its box joins
+    ``zones``; the furniture before it is set on the pipe up to its
+    inlet, and the furniture after it on the pipe from its outlet. With
+    no such corner, the device keeps its place among the equipment and
+    the rest is set on the whole pipe.
 
     Parameters
     ----------
@@ -1304,6 +1358,8 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
         Routed lines between placed equipment.
     exit_gap : float
         Clearance each element's signal exits keep from other units.
+    packages : tuple[tuple[set[Unit], Box], ...]
+        Each package's units and the ground they cover.
 
     Returns
     -------
@@ -1316,12 +1372,13 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
     assert not isinstance(unit, StationAssembly) and unit.frame is not None
     source, dest = run.source.owner, run.dest.owner
     others = [other for other in obstacles if other is not source and other is not dest]
+    fenced = [*zones, *(box for held, box in packages if unit not in held)]
     points = [legs[0][0], *(leg[1] for leg in legs)]
     starts = [0.0, *accumulate(map(path_length, legs))]
     for k in sorted(range(1, len(legs)), key=lambda k: abs(starts[k] - wanted[index])):
         frame = _corner_frame(unit, legs[k - 1], legs[k], _margins(k - 1, len(legs))[0],
                               _margins(k, len(legs))[1])
-        if frame is not None and _clear({unit: frame}, others, _level(legs[k - 1]), zones,
+        if frame is not None and _clear({unit: frame}, others, _level(legs[k - 1]), fenced,
                                         pipes, (source, dest), exit_gap):
             break
     else:
@@ -1329,7 +1386,7 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
         rest = MountedRun(run.segments, run.elements[:index] + run.elements[index + 1:],
                           run.places[:index] + run.places[index + 1:], run.taps)
         if rest.elements:
-            _set_run(rest, points, obstacles, zones, pipes, exit_gap,
+            _set_run(rest, points, obstacles, zones, pipes, exit_gap, packages=packages,
                      wanted=wanted[:index] + wanted[index + 1:])
         return False
     _commit({unit: frame}, obstacles)
@@ -1344,7 +1401,8 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
                         run.places[index + 1:]),
              [outlet, *points[k + 1:]], [w - after for w in wanted[index + 1:]])):
         if part.elements:
-            roomy = _set_run(part, line, obstacles, zones, pipes, exit_gap, wanted=want) and roomy
+            roomy = _set_run(part, line, obstacles, zones, pipes, exit_gap,
+                             packages=packages, wanted=want) and roomy
     return roomy
 
 
@@ -1385,12 +1443,14 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     shown = set(retained)
     loose = [a for a in fs._station_assemblies if not members.intersection(a.station.members)]
     inside = {id(segment) for run in laid for segment in run.segments}
+    group = {u: i for i, p in enumerate(fs.packages) for u in p.units}
     place_equipment(fs, retained, [
         *(Link(s.source, s.dest, s.is_recycle) for s in process_streams(fs)
           if id(s) not in inside and s.source.owner in shown and s.dest.owner in shown
           and s.source.owner is not s.dest.owner),
         *(Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
-               _chain_width(run), _column_room(run), fs._fan_out and _off_header(run))
+               _chain_width(run) + _fence(run, group), _column_room(run),
+               fs._fan_out and _off_header(run))
           for run in laid)])
     for unit in members:
         placed = slot(unit)
@@ -1403,14 +1463,18 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     # Lift each device that turns its pipe out of the equipment.
     members = {unit for run in runs for element in run.elements for unit in _members(element)}
     retained = [unit for unit in retained if unit not in members]
+    shown = set(retained)
     routes, lines = _routed_pipes(fs, runs, retained)
     fs._fannable = any(_fanned(run, list(zip(points, points[1:]))) is not None
                        for run, points in zip(runs, routes) if len(points) > 1)
     obstacles = list(retained)
     zones: list[Box] = pinned_balloons(fs, balloon_pads(fs)) if fs._pin_balloons else []
     exit_gap = MARGIN if fs._exit_clear else 0.0
+    packages = tuple((set(p.units), _ground(p, shown)) for p in fs.packages
+                     if shown.intersection(p.units))
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
-        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap, fs._fan_out)
+        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap, fs._fan_out,
+                 packages)
     # Note a signal exit drawn within MARGIN of another unit.
     fs._exit_tight = any(boxes_overlap(box, unit_box(other, other.frame), MARGIN)
                          for unit in members if unit.frame is not None
