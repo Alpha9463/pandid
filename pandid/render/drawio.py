@@ -241,14 +241,14 @@ class _Fit(NamedTuple):
 
 
 def drawio_stencil(svg: str, width: float, height: float,
-                   offset: "tuple[float, float]" = (0.0, 0.0)) -> str:
+                   offset: "tuple[float, float]" = (0.0, 0.0), scale: float = 1.0) -> str:
     """Return a draw.io inline stencil drawing an artwork's outlines.
 
     The artwork's paths, of ``M``, ``L``, ``A`` and ``Z`` commands in
     absolute coordinates, and its rectangles, circles and lines become
     the stencil's own geometry, so draw.io draws them as placed rather
-    than stretching a library shape. Each keeps its stroke width as a
-    fraction of the artwork's widest.
+    than stretching a library shape. An element drawn thinner than the
+    artwork's widest stroke gets its own fixed width.
 
     Parameters
     ----------
@@ -258,6 +258,8 @@ def drawio_stencil(svg: str, width: float, height: float,
         The stencil's box.
     offset : tuple[float, float], default=(0.0, 0.0)
         Where the artwork's origin falls in the box.
+    scale : float, default=1.0
+        Drawn width of a stroke one unit wide.
 
     Returns
     -------
@@ -266,13 +268,14 @@ def drawio_stencil(svg: str, width: float, height: float,
     """
     dx, dy = offset
     base = max((float(w) for w in re.findall(r'stroke-width="([\d.]+)"', svg)), default=1.0)
-    out, drawn = [], 1.0
+    out, drawn = [], base
     for tag, attrs in re.findall(r"<(path|rect|circle|line)\b([^>]*?)/?>", svg):
         a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
-        weight = float(a.get("stroke-width", base)) / base
-        if weight != drawn:
-            out.append(f'<strokewidth width="{fmt(weight, 4)}"/>')
-            drawn = weight
+        stroke = float(a.get("stroke-width", base))
+        if stroke != drawn:
+            # A fixed width, not scaled with the stencil's box.
+            out.append(f'<strokewidth width="{fmt(stroke * scale, 4)}" fixed="1"/>')
+            drawn = stroke
         if tag == "rect":
             out.append(f'<rect x="{fmt(float(a["x"]) + dx, 4)}" y="{fmt(float(a["y"]) + dy, 4)}" '
                        f'w="{fmt(float(a["width"]), 4)}" h="{fmt(float(a["height"]), 4)}"/>')
@@ -1109,7 +1112,8 @@ class DrawioRenderer:
             # outline, is drawn as built; its parts are child cells.
             shift = (-min([0.0, *(o.x * body.width for o in sym.overlays)]),
                      -min([0.0, *(o.y * body.height for o in sym.overlays)]))
-            stencil = drawio_stencil(body.svg, sym.width, sym.height, shift)
+            stencil = drawio_stencil(body.svg, sym.width, sym.height, shift,
+                                     fit.length(1.0))
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
             keys = [f"shape={stencil}", "outlineConnect=0",

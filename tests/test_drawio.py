@@ -2962,3 +2962,24 @@ def test_a_drawing_exported_as_its_outline_traces_the_sheets_artwork(build):
     assert _rounded(_collect_segments(_stencil_svg(stencil))) == _rounded(
         _collect_segments(body.svg)
     )
+
+    # Each element is drawn at its own stroke width, scaled as the cell's
+    # outline is: mxGraph reads a stencil's strokewidth as a width.
+    drawables = [el for el in ET.fromstring(body.svg).iter() if el.tag in _DRAWN]
+    declared = [float(el.get("stroke-width", "nan")) for el in drawables]
+    cell_width = float(_style(cell)["strokeWidth"])
+    want = [w * cell_width / max(declared) for w in declared]
+    got, current = [], cell_width
+    foreground = stencil.find("foreground")
+    assert foreground is not None
+    for el in foreground:
+        if el.tag == "strokewidth":
+            assert el.get("fixed") == "1", "a stencil stroke width scales with the box"
+            current = float(el.get("width", "nan"))
+        elif el.tag in ("path", "rect", "ellipse"):
+            got.append(current)
+    assert got == pytest.approx(want)
+
+
+#: SVG elements a stencil draws one of each.
+_DRAWN = ("path", "rect", "circle", "line")
