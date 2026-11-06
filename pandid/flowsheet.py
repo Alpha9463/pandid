@@ -2588,9 +2588,10 @@ class Flowsheet:
         stated, that drives one valve, is tried at each spot off that
         valve's actuator, nearest first, with its faces and its host's
         chosen again and only their lines routed again, and the first spot
-        kept on the same terms. Both are then tried again for the balloons
-        still so placed, each also kept where it takes a line out of a unit
-        at the price :func:`~pandid.layout.control._out_of_unit` allows.
+        kept on the same terms where no more line runs under a tag. Both
+        are then tried again for the balloons still so placed, judged the
+        same way, each also kept where it takes a line out of a unit at the
+        price :func:`~pandid.layout.control._out_of_unit` allows.
         Neither step turns or moves a balloon at an end of a ``via()``
         line, nor, to hang a controller, its transmitter. Where any of
         these is kept, the next route() or layout() starts from the drawing
@@ -2795,13 +2796,13 @@ class Flowsheet:
         start = self._drawing()
         try:
             self._route_stepped(router)
-            hung = self._drawing(), self._counted_flaws(), _taps_off(self)
+            hung = self._drawing(), self._judged(), _taps_off(self)
         except Exception:
             hung = None
         self._put_drawing(start)
         self._beside = drawn
         self._route_stepped(router)
-        fresh = self._counted_flaws()
+        fresh = self._judged()
         if hung is not None and hung[2] <= _taps_off(self) and (
                 not any(n > fresh[k] for k, n in hung[1].items())
                 or _out_of_unit(fresh, hung[1])):
@@ -2846,10 +2847,11 @@ class Flowsheet:
         """Turn each balloon :func:`~pandid.layout.faces.blocked_exits`
         finds to faces whose stand-off is clear, then hang each such
         controller near its transmitter beside the valve it drives,
-        routing again only the lines moved, each kept only if no tap
-        leaves its line and no finding, clash, crossing or fallback route
-        grows; then do both again, also keeping a drawing that takes a
-        line out of a unit at the price
+        routing again only the lines moved. A turn is kept only if no tap
+        leaves its line and nothing :meth:`_counted_flaws` counts grows,
+        and a hang only if nothing :meth:`_judged` counts grows either.
+        Then do both again, judged the same way, also keeping a drawing
+        that takes a line out of a unit at the price
         :func:`~pandid.layout.control._out_of_unit` allows.
 
         Parameters
@@ -2870,20 +2872,21 @@ class Flowsheet:
         kept = False
         for trade in (False, True):
             for unit in [u for u in blocked_exits(self) if not _by_hand([u])]:
-                before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
+                before, off, drawn = self._judged(False), _taps_off(self), self._geometry()
                 frame = unit.frame
                 assert frame is not None
                 faces = dict(frame.port_faces)
                 select_faces(self, [unit])
                 if frame.port_faces != faces:
-                    kept = self._keep_redrawn(router, [unit], before, off, drawn, trade) or kept
+                    kept = self._keep_redrawn(router, [unit], before, off, drawn, trade,
+                                              tags=False) or kept
             for unit in blocked_exits(self):
                 host = getattr(unit, "host", None)
                 if (not isinstance(unit, Instrument) or not isinstance(host, Unit)
                         or _by_hand([unit, host])):
                     continue
                 for x, y, standoff in list(_beside_valve(self, unit)):
-                    before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
+                    before, off, drawn = self._judged(), _taps_off(self), self._geometry()
                     frame = unit.frame
                     assert frame is not None
                     frame.x, frame.y = x, y
@@ -2895,10 +2898,10 @@ class Flowsheet:
         return kept
 
     def _keep_redrawn(self, router, units: "list[Unit]", before: Counter[str],
-                      off: set[int], drawn: tuple, trade: bool) -> bool:
+                      off: set[int], drawn: tuple, trade: bool, tags: bool = True) -> bool:
         """Route the lines at the given units again, and put the drawing
-        back if a tap left its line or a finding, clash, crossing or
-        fallback route grew.
+        back if a tap left its line or anything :meth:`_judged` counts
+        grew.
 
         Parameters
         ----------
@@ -2907,7 +2910,7 @@ class Flowsheet:
         units : list[Unit]
             Units whose lines are routed again.
         before : Counter[str]
-            What :meth:`_counted_flaws` returned for the drawing.
+            What :meth:`_judged` returned for the drawing.
         off : set[int]
             What :func:`~pandid.layout.control._taps_off` returned for it.
         drawn : tuple
@@ -2915,6 +2918,8 @@ class Flowsheet:
         trade : bool
             Also keep a drawing that takes a line out of a unit at a price
             :func:`~pandid.layout.control._out_of_unit` keeps.
+        tags : bool, optional
+            Count the pieces of line under each unit's tag. Default True.
 
         Returns
         -------
@@ -2926,7 +2931,7 @@ class Flowsheet:
         lines = [port.stream for unit in units for port in unit.ports.values()
                  if port.stream is not None]
         if self._route_only(router, lines) and _taps_off(self) <= off:
-            after = self._counted_flaws()
+            after = self._judged(tags)
             if (not any(n > before[k] for k, n in after.items())
                     or (trade and _out_of_unit(before, after))):
                 return True
@@ -2999,6 +3004,31 @@ class Flowsheet:
         finally:
             for route in held:
                 route.manual = False
+
+    def _judged(self, tags: bool = True) -> Counter[str]:
+        """Count what the balloon steps judge a drawing by.
+
+        Parameters
+        ----------
+        tags : bool, optional
+            Count the pieces of line under each unit's tag. Default True.
+
+        Returns
+        -------
+        Counter[str]
+            What :meth:`_counted_flaws` counts, plus, with ``tags``,
+            ``tag-on-line``: the pieces of drawn line under each unit's tag.
+        """
+        from pandid.render.svg import _erases, _ink, _unit_label_box, unit_tags
+
+        flaws = self._counted_flaws()
+        if not tags:
+            return flaws
+        ink = _ink(self, "vertical")
+        boxes = [_unit_label_box(tag) for _, tag, _ in unit_tags(self, None, "vertical")
+                 if tag is not None]
+        flaws["tag-on-line"] = sum(sum(_erases(box, ink)[1:]) for box in boxes if box is not None)
+        return flaws
 
     def _counted_flaws(self) -> Counter[str]:
         """Count findings and clashes, crossings and fallback routes.

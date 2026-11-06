@@ -32,8 +32,8 @@ REACH = 40
 #: Standoff of a balloon hung off the actuator it drives.
 ACTUATOR_OFFSET = 100.0
 
-#: Line crossings and runs along units, in all, a redraw may add where
-#: it takes a line out of a unit.
+#: Line crossings, runs along units and lines under tags, in all, a
+#: redraw may add where it takes a line out of a unit.
 UNIT_TRADE = 2
 
 
@@ -454,19 +454,19 @@ def _out_of_unit(before: "Counter[str]", after: "Counter[str]") -> bool:
     Parameters
     ----------
     before : Counter[str]
-        Counts of the drawing before, as ``Flowsheet._counted_flaws``
-        returns them.
+        Counts of the drawing before, as ``Flowsheet._judged`` returns
+        them.
     after : Counter[str]
         The same counts after.
 
     Returns
     -------
     bool
-        True if fewer lines cross units, crossings and runs along units
-        grow by at most :data:`UNIT_TRADE` in all, and no other count
-        grows.
+        True if fewer lines cross units, crossings, runs along units and
+        lines under tags grow by at most :data:`UNIT_TRADE` in all, and no
+        other count grows.
     """
-    traded = ("crossing", "route-along-unit")
+    traded = ("crossing", "route-along-unit", "tag-on-line")
     added = sum(max(0, after[k] - before[k]) for k in traded)
     return (after["route-crosses-unit"] < before["route-crosses-unit"] and added <= UNIT_TRADE
             and not any(n > before[k] for k, n in after.items() if k not in traded))

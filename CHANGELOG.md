@@ -117,7 +117,7 @@ These are removed in 0.4.0.
   finding.
 - Where no clear side or spot beside its valve takes a balloon's signal line out
   of a unit for free, `route()` takes it out at a cost of at most two more line
-  crossings or runs along units, and no other finding.
+  crossings, runs along units or lines under tags, and no other finding.
 - After `pin()` or `via()` on a routed sheet, the next `route()` starts from the
   drawing shown, so a line drawn by hand to a controller `route()` hung beside
   its valve still meets it there.
