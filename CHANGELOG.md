@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
+  so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
+  and suggests an `at=` between its neighbours on the line that clears it.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
@@ -78,6 +81,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
+  the train is drawn in the column beside that unit, where that adds no
+  crossing, bend or finding, instead of at the sheet's left edge.
 - A unit moves up or down to meet a feed or product flag held under another
   unit in its column, so the line between them runs straight, where that adds
   no crossing, bend or finding.
@@ -142,6 +148,18 @@ These are removed in 0.4.0.
   `port_offset()` can differ in the second decimal.
 - A valve station put on a line with `fs.add_valve_station("CV-1", on=line)`
   draws its run, bypass and drains in the line's `color` and `dasharray`.
+- A `Feed` or `Product` too short to letter, such as `Feed("Air", height=20)`,
+  is refused with the height that fits, `height=42`, or `height=48` with a
+  `reference`, instead of failing `nozzle-off-body` when drawn.
+- Layout, routing, labels and the sheet edge keep clear of a `Feed` or `Product`
+  as its pennant is drawn, not of the blank paper above and below it, so a
+  sheet with a flag at its top or bottom is framed tighter.
+- Where neither side of a symbol has room for both codes of a pair, such as
+  `annotate(high="TAH", low="TAL")`, one is written on each side instead of
+  over a line.
+- `route()` ends the run a line leaves a nozzle on clear of every other unit,
+  so a signal line between two balloons no longer cuts through a third
+  standing between them.
 
 ## [0.2.0] - 2026-11-05
 
