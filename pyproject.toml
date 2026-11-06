@@ -51,8 +51,8 @@ Issues = "https://github.com/Alpha9463/pandid/issues"
 [project.optional-dependencies]
 pdf = ["svglib>=2.0", "reportlab>=4.4.3", "pypdfium2>=4", "pillow>=9.1"]
 yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
-dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "pyright==1.1.411", "PyYAML>=6",
-       "hatchling"]
+dev = ["pytest>=7", "pytest-xdist>=3", "ruff==0.15.14", "mypy>=1.8", "pyright==1.1.411",
+       "PyYAML>=6", "hatchling"]
 
 [tool.hatch.version]
 path = "pandid/__init__.py"

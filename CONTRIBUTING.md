@@ -8,7 +8,7 @@ rules about this codebase that new contributors most often miss.
 Python 3.11 or later. From a checkout:
 
 ```bash
-pip install -e '.[dev]'          # pytest, ruff, mypy, pyright
+pip install -e '.[dev]'          # pytest, pytest-xdist, ruff, mypy, pyright
 pip install -e '.[dev,pdf]'      # ...plus the export backend, for PDF/PNG output
 ```
 
@@ -27,7 +27,7 @@ at import time installs cleanly and then fails on the first export. Read the
 CI (`.github/workflows/ci.yml`) runs these checks:
 
 ```bash
-python -m pytest -q                 # tests (full-suite CI: Python 3.11 and 3.15)
+python -m pytest -q -n auto         # tests (full-suite CI: Python 3.11 and 3.15)
 python -m ruff check .              # lint the whole tree
 python -m ruff format --check tests # tests/ must stay ruff-formatted
 python -m mypy pandid               # type check the package
