@@ -8,6 +8,7 @@ from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
 from pandid.layout.compact import empty_bands
 from pandid.portgeom import unit_box
+from pandid.route_geometry import stream_polyline
 from pandid.routing.lanes import _score
 from _layout_cases import frame_of
 
@@ -45,10 +46,10 @@ def _boxes(fs: Flowsheet) -> dict[str, Box]:
 
 
 def _turns(fs: Flowsheet) -> list[list[tuple[bool, bool, bool, bool]]]:
-    """Return which way each run of each line heads."""
+    """Return which way each run of each drawn line heads."""
     return [
         [(bx > ax, bx < ax, by > ay, by < ay) for (ax, ay), (bx, by) in zip(path, path[1:])]
-        for path in map(stream_path, fs.streams)
+        for path in map(stream_polyline, fs.streams)
     ]
 
 
