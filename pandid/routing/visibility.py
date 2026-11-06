@@ -262,7 +262,7 @@ def _tag_halo(u: "Unit", f) -> "Rect | None":
 
 
 class VisibilityGraph:
-    """Graph of clear orthogonal lanes around units and tags.
+    """Graph of clear orthogonal lanes around units, tags and package frames.
 
     Parameters
     ----------
@@ -300,6 +300,7 @@ class VisibilityGraph:
 
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
+        from pandid.package import frame as package_frame
         from pandid.portgeom import COMPASS, port_anchor, unit_box
         from pandid.route_geometry import SNAP
 
@@ -382,6 +383,13 @@ class VisibilityGraph:
                 self.port_projs[(u.name, name)] = (px_proj, py_proj)
                 x_set.add(px_proj)
                 y_set.add(py_proj)
+
+        # Lanes round each package's frame, outside layout.
+        for pkg in [] if fs._laying_out else fs.packages:
+            box = package_frame(pkg)
+            if box is not None:
+                x_set.update((box[0] - margin, box[2] + margin))
+                y_set.update((box[1] - margin, box[3] + margin))
 
         for stream in fs.streams:
             src, dst = stream.source, stream.dest

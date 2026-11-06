@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pandid._checks import check_real, suggest
 from pandid.deprecation import Deprecation
+from pandid.package import Package
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -409,10 +410,10 @@ class StreamLabelOptions:
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "centrifuge", "column", "compressor", "conveyor",
     "cooler", "cooling_tower", "crusher", "crushing_machine", "crystallizer",
-    "dryer", "ejector", "elevator", "evaporator", "feeder", "filter", "flare",
-    "flotation_cell", "furnace", "heater", "hex", "kiln", "kneader", "mill",
-    "pump", "reactor", "screening_device", "separator", "silo", "stack", "tank",
-    "thickener", "turbine", "vessel",
+    "deaerator", "dryer", "ejector", "elevator", "evaporator", "feeder", "filter",
+    "flare", "flotation_cell", "furnace", "heater", "hex", "kiln", "kneader",
+    "mill", "mixer_settler", "pump", "reactor", "screening_device", "separator",
+    "silo", "stack", "tank", "thickener", "turbine", "vessel",
 })
 
 # Equipment-table description of a kind whose name is not its title.
@@ -444,7 +445,9 @@ _EQUIPMENT_LIST = Deprecation(
 
 
 def _scheduled_units(fs):
-    """Return the units an equipment table lists by default.
+    """Return the units and packages an equipment table lists by default.
+
+    A package comes where its first unit would, followed by its units.
 
     Parameters
     ----------
@@ -453,26 +456,37 @@ def _scheduled_units(fs):
 
     Returns
     -------
-    list[Unit]
-        Units of a major equipment kind, in sheet order.
+    list[Unit or Package]
+        Units of a major equipment kind and packages, in sheet order.
     """
-    return [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
+    out = []
+    for u in fs.units:
+        pkg = next((p for p in fs.packages if u in p.units), None)
+        if pkg is None:
+            if u.kind in _MAJOR_EQUIPMENT:
+                out.append(u)
+        elif not any(x is pkg for x in out):
+            out.append(pkg)
+            out += [m for m in fs.units if m in pkg.units and m.kind in _MAJOR_EQUIPMENT]
+    return out
 
 
 def _described(unit):
-    """Return a unit's equipment-table description.
+    """Return a unit's or package's equipment-table description.
 
     Parameters
     ----------
-    unit : Unit
-        Unit to describe.
+    unit : Unit or Package
+        Item to describe.
 
     Returns
     -------
     str
         The stated description, else the drawing's or the kind's
-        name.
+        name, or ``"Package Unit"`` for a package.
     """
+    if isinstance(unit, Package):
+        return str(unit.description) or "Package Unit"
     return (getattr(unit, "description", "")
             or _VARIANT_LABELS.get((unit.kind, unit.variant))
             or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
@@ -497,7 +511,8 @@ def equipment_table(fs, *, title="EQUIPMENT LIST", align="top-right",
     margin : float, default=0.0
         Inset from the frame.
     include : Sequence[str], optional
-        Unit names to list, in order, instead of the major equipment.
+        Unit and package names to list, in order, instead of the major
+        equipment.
     width : float, optional
         Box width.
 
@@ -518,7 +533,7 @@ def equipment_table(fs, *, title="EQUIPMENT LIST", align="top-right",
     if include is None:
         chosen = _scheduled_units(fs)
     else:
-        by_name = {u.name: u for u in fs.units}
+        by_name = {u.name: u for u in (*fs.units, *fs.packages)}
         missing = [tag for tag in include if tag not in by_name]
         if missing:
             hints = [f"{tag!r}{suggest(tag, by_name)}" for tag in missing]

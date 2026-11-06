@@ -269,10 +269,17 @@ def test_a_recycle_into_a_south_face_does_not_drag_its_source_back() -> None:
 
 
 @pytest.mark.parametrize(
-    ("machine", "side"), [(U.Blower, 1), (D.CentrifugalPump, -1), (D.CentrifugalFan, -1)]
+    ("machine", "side"),
+    [
+        (D.RotaryCompressor, 1),
+        (U.Blower, -1),
+        (D.CentrifugalPump, -1),
+        (D.CentrifugalFan, -1),
+        (D.AxialFan, -1),
+    ],
 )
 def test_a_branch_ranks_beside_the_spine_it_joins(
-    machine: type[U.Blower | U.Pump], side: int
+    machine: type[U.Blower | U.Pump | U.Compressor], side: int
 ) -> None:
     """Check that a machine feeding a tower far along the train sits one column from it."""
     fs = Flowsheet("slack")
@@ -311,6 +318,28 @@ def test_a_fan_on_the_degasser_sheet_sits_beside_the_degasser(
     fan, degasser = frame_of(units["B-801"]).col, frame_of(units["D-801"]).col
     assert fan is not None and degasser is not None
     assert fan == degasser - 1
+
+
+def test_a_flag_held_down_by_a_unit_feeds_its_machine_straight() -> None:
+    """Check that a feed flag under a unit in its column lines up with the fan it feeds."""
+    fs = Flowsheet("held flag")
+    water = fs.add(U.Feed("Water"))
+    a = fs.add(U.Filter("F-1"))
+    b = fs.add(U.Filter("F-2"))
+    tower = fs.add(U.Stripper("D-1"))
+    air = fs.add(U.Feed("Air"))
+    fan = fs.add(D.AxialFan("B-1"))
+    fs.connect(water.outlet, a.inlet)
+    fs.connect(a.outlet, b.inlet)
+    fs.connect(b.outlet, tower.feed)
+    line = fs.connect(air.outlet, fan.suction)
+    fs.connect(fan.discharge, tower.boilup_in)
+    air.pin(col=1)
+    fan.pin(col=2)
+    fs.route()
+
+    assert line.route is not None
+    assert real_bends(line.route.waypoints) == 0
 
 
 def test_a_relief_valve_is_drawn_over_the_vessel_it_protects() -> None:

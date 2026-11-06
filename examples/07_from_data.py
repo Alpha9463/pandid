@@ -27,9 +27,7 @@ SPEC = {
         {"kind": "Splitter", "name": "SP-201", "n_outlets": 2, "description": "Minimum-Flow Tee"},
         {"kind": "Valve", "name": "FV-201", "variant": "control",
          "description": "Minimum-Flow Spillback Valve"},
-        # Move the deaerator's inlet to its north face.
-        {"kind": "Vessel", "name": "V-201", "variant": "horizontal", "width": 150, "height": 48,
-         "description": "Deaerator Drum", "port_faces": {"inlet": "N"}},
+        {"kind": "Deaerator", "name": "V-201", "description": "Deaerator"},
         {"kind": "Vent", "name": "VT-201", "description": "Deaerator Vent Stack"},
         # Pin only the flip; the engine places the valve.
         {"kind": "Valve", "name": "CV-201", "variant": "control",
@@ -66,7 +64,7 @@ SPEC = {
         {"from": ["P-201A/B", "discharge"], "to": ["SP-201", "inlet"],
          "properties": {"Temperature": "77 C", "Pressure": "12.0 barg",
                         "Mass Flow": "66.0 t/h", "Dissolved O2": "1600 ppb"}},
-        {"from": ["SP-201", "out_2"], "to": ["V-201", "inlet"],
+        {"from": ["SP-201", "out_2"], "to": ["V-201", "feed"],
          "properties": {"Temperature": "77 C", "Pressure": "11.6 barg",
                         "Mass Flow": "60.0 t/h", "Dissolved O2": "1600 ppb"}},
         {"from": ["SP-201", "out_1"], "to": ["FV-201", "inlet"],

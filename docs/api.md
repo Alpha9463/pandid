@@ -40,6 +40,7 @@ text.
 |---|---|
 | `add(unit, *, on=None, at=None)` | Register and return a `Unit`. Tags must be unique, apart from repeatable logic symbols and utility headers. `on=` puts a valve, reducer or fitting in a line. |
 | `connect(source, dest, **options)` | Join ports and return a `Stream`. Process connections go from outlet to inlet. |
+| `package(name, units, *, description="", reference="")` | Draw units as one package unit and return a `Package`; see [Package units](#package-units). |
 | `layout()` / `route()` | Resolve equipment coordinates and stream paths. `render()` calls both. |
 | `render(path, **options)` | Write SVG, draw.io, PDF or PNG according to the extension. |
 | `to_svg(**options)` / `show(**options)` | Return SVG text or open a browser preview. |
@@ -48,8 +49,8 @@ text.
 | `from_json(path)` / `from_yaml(path)` | Read a spec file; YAML needs `pandid[yaml]`. |
 | `line_list()` / `equipment_list()` / `instrument_index()` | Return a schedule as rows; see [Schedules](#schedules). |
 
-The main collections are `fs.units`, `fs.streams`, `fs.components` and
-`fs.loops`. `fs.warnings` contains findings from the last render. The sheet
+The main collections are `fs.units`, `fs.streams`, `fs.components`,
+`fs.loops` and `fs.packages`. `fs.warnings` contains findings from the last render. The sheet
 also carries `title_block`, `annotations`, `stream_table`, `stream_labels` and
 `stream_table_sections`.
 
@@ -109,6 +110,11 @@ The names depend on the class and variant. Common patterns are:
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
+- A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
+  `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
+  heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
+  its bottom one.
+- A `Deaerator` uses `feed`, `vent`, `steam` and `outlet`.
 - Columns use `feed`, `overhead` and `bottoms`; distillation columns also have
   reflux, boilup and duty ports.
 - Reactors use `feed`, `outlet`, `vent` and `duty`. A `JacketedReactor` has
@@ -211,10 +217,11 @@ sheet has fewer bends or crossings and no new finding. The faces on offer:
 | Unit | Inlets | Outlets |
 |---|---|---|
 | `Block` | `"W"`, `"E"`, `"N"`, `"S"` | `"W"`, `"E"`, `"N"`, `"S"` |
-| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"` | `"S"`; `"gas_holder"`: `"E"` |
-| `Vessel` | `"W"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`; `"horizontal"`: `"S"` |
+| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"`, `"E"` | `"S"`; `"default"`, `"conical"` and `"floating_roof"` also `"W"`, `"E"` low on the wall; `"gas_holder"`: `"E"`, `"W"` |
+| `Vessel` | `"W"`, `"E"`, `"N"` (the top head); `"dome"`: `"W"`, `"E"`; `"electrical_heating"`: `"W"`, `"N"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`, `"W"`; `"horizontal"`: `"S"` |
 
-A head, roof or cone drawn to a point takes one connection. Fix a face with a
+An inlet and an outlet on one wall are spread apart along it, the inlet
+above. A head, roof or cone drawn to a point takes one connection. Fix a face with a
 list, with `unit.nozzle("in_2", "N")`, or by pinning the nozzle with
 `unit.pin(port="in_2", x=..., y=...)`.
 
@@ -292,6 +299,28 @@ drains=2)` builds a station and returns a `ValveStation` with `inlet`, `outlet`,
 device. The station's tag scheme can be set on the flowsheet or for one
 station.
 
+## Package units
+
+```python
+skid = fs.package("PK-301", [p301a, p301b, f301],
+                  description="Dosing Package", reference="VENDOR DWG 4711")
+```
+
+`fs.package()` draws bought-in equipment, such as a vendor skid, as one package
+unit and returns a `Package` with `name`, `units`, `description` and
+`reference`. A package has no ports and no place of its own: it is drawn as a
+boundary frame round its units (ISO 15519-1 7.3), a dash-dot line at the
+detail weight, with its tag outside the upper-left corner and `reference=`
+inside the lower-left corner. The units keep their own tags. A unit belongs to
+one package, and a package tag may not repeat a unit's.
+
+Automatic layout keeps a package's units together and other units, valves on
+its lines included, out of its frame; lines that do not serve a package are
+routed round it. Whatever is drawn inside the frame is in the package, so list
+the valves and instruments drawn there too. `validate()` reports
+`package-encloses`, an error, for a unit drawn inside the frame of a package it
+is not in.
+
 ## Sheet furniture
 
 Assign a `TitleBlock` to `fs.title_block`; `Revision` entries carry its issue
@@ -339,7 +368,7 @@ writer.writerows(rows)
 | Schedule | One row per | Keys |
 |---|---|---|
 | `line_list()` | Line, grouped as the stream table groups it | `line`, `kind`, `size`, `schedule`, `service`, `spec`, `insulation`, `from_unit`, `from_nozzle`, `to_unit`, `to_nozzle`, then one per stream property |
-| `equipment_list()` | Unit that `equipment_table()` lists by default | `tag`, `description`, `class`, `variant` |
+| `equipment_list()` | Unit that `equipment_table()` lists by default, and package; a package's row comes before its units' | `tag`, `description`, `class`, `variant` (`None` for a package) |
 | `instrument_index()` | Instrument balloon | `tag`, `loop`, `measured_variable`, `function_letters`, `location`, `on`, `relation` |
 
 A field or property the sheet does not state is `None`.
@@ -406,8 +435,9 @@ streams:
 ```
 
 A spec can also define the numbering schemes and starts, components, loops,
-instruments, line properties, `pin`, `port_faces`, a title block, annotations
-and stream-table options. YAML reads only plain decimals as numbers, so
+instruments, line properties, `pin`, `port_faces`, packages
+(`packages: [{name: PK-301, units: [P-301A, F-301], reference: VENDOR DWG 4711}]`),
+a title block, annotations and stream-table options. YAML reads only plain decimals as numbers, so
 `0101` and `1:30` stay text. A key written twice in one mapping raises
 `SpecError`.
 Custom `Unit` subclasses are Python-only and cannot round-trip through the

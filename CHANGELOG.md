@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fs.package("PK-301", [p301a, p301b, f301], description="Dosing Package",
+  reference="VENDOR DWG 4711")` draws a package unit as a dash-dot boundary
+  frame round its units, tagged outside its upper-left corner, and lists it in
+  the equipment list above them. Layout keeps other units out of the frame, and
+  `validate()` reports `package-encloses` for one drawn inside it.
 - `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
   so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
   and says how to clear it: an `at=` for a valve alone on its line, the `at=`
@@ -39,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Silo` draws the closed silo of ISO 10628-2 and `Bunker` its open bunker,
   each with a conical bottom: solids enter at `feed` and leave at `discharge`,
   and a silo vents through its roof at `vent`.
+- `MixerSettler` draws one solvent-extraction stage with `light_in`,
+  `heavy_in`, `light_out` and `heavy_out`. `ExtractionColumn` is a sieve-tray
+  column whose two feeds enter its top and bottom stages.
+- `Deaerator` draws a storage drum with its deaerating column on top: `feed`
+  and `vent` on the column, `steam` into the drum and `outlet` from its floor.
 - `JacketedReactor` is a stirred reactor in a heating or cooling jacket, with
   a utility inlet and outlet on the jacket: `jacket_in`, low on the jacket,
   and `jacket_out`, high on it.
@@ -53,9 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `connect()` is not drawn: `name=` replaces the line number,
   `line_numbering_scheme` leaves the field out, or the field is stated past a
   valve or tee that carries another segment's number on. It names the fix.
+- A flat-floored `Tank` draws off from either wall as well as the floor, and an
+  upright `Vessel` takes its inlet on either wall or the top head and its outlet
+  on either wall: `Tank("TK-1").nozzle("outlet", "E")`. A counted one moves
+  there toward its peer where that draws fewer bends.
 
 ### Changed
 
+- `Blower()` draws the ISO 10628-2 fan instead of a compressor.
 - `connect()` no longer needs `kind=` for a signal line: a line to a valve
   with a diaphragm actuator, or none drawn, is pneumatic and any other is
   electric. `add_control_loop()` infers its output line the same way, so a
@@ -92,6 +107,9 @@ These are removed in 0.4.0.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.
+- A unit moves up or down to meet a feed or product flag held under another
+  unit in its column, so the line between them runs straight, where that adds
+  no crossing, bend or finding.
 - Lines that cross on their way into a mixer are laid on lanes even where they
   share their stretch of the gap with only some of the lines beside them, so the
   last two pumps of a header of tees no longer cross into the mixer.

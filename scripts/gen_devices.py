@@ -380,8 +380,7 @@ PORT_OVERRIDES = {
 # (kind, variant) -> why this drawing gets no class.
 STAYS_ON_BASE = {
     ("block", "default"): "Block's own drawing",
-    ("blower", "default"): "Blower's own drawing",
-    ("blower", "general"): "ISO item 17.1: the general fan, no casing type drawn",
+    ("blower", "general"): "Blower's own drawing (ISO item 17.1, the general fan)",
     ("boiler", "default"): "Boiler's own drawing",
     ("conveyor", "default"): "Conveyor's own drawing",
     ("cooler", "default"): "Cooler's own drawing",
@@ -427,6 +426,8 @@ STAYS_ON_BASE = {
     ("silo", "default"): "Silo's own drawing (ISO item 1.9 X2062, the closed silo)",
     ("crystallizer", "default"): "Crystallizer's own drawing (the draft-tube baffle body)",
     ("flotation_cell", "default"): "FlotationCell's own drawing (the mechanical cell)",
+    ("mixer_settler", "default"): "MixerSettler's own drawing",
+    ("deaerator", "default"): "Deaerator's own drawing",
     ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
     ("fitting", "rotary_mixer"): "body style: a rotating mixing element in the run",
     ("fitting", "mixing_path"): "body style: three mixing elements in series in the run",

@@ -220,6 +220,8 @@ GRAVITY_FIXED = {
     ("silo", "default"),
     ("silo", "bunker"),
     ("flotation_cell", "default"),
+    ("mixer_settler", "default"),
+    ("deaerator", "default"),
 }
 
 
