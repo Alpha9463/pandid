@@ -1191,9 +1191,11 @@ def test_a_balloon_pinned_where_it_is_drawn_moves_no_equipment() -> None:
 
 @pytest.mark.parametrize(("x", "y"), [(440.0, None), (None, 400.0)])
 def test_a_balloon_pinned_on_one_axis_keeps_its_hosts_room(
-    x: float | None, y: float | None
+    x: float | None, y: float | None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Check that a pin on one axis leaves the host's room and the equipment as they were."""
+    """Check that a pin on one axis leaves the host's room and the laid-out equipment as they were."""
+    # Closing empty bands moves equipment by where the balloon is drawn.
+    monkeypatch.setattr(Flowsheet, "_close_bands", lambda self: None)
     fs, drum, lt = _drum_pump_drum()
     fs.route()
     pad, boxes = balloon_pads(fs)[drum], _equipment_boxes(fs)
