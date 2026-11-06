@@ -1037,11 +1037,12 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
             if s.kind != "energy":
                 continue
             given = not s.auto_named
-            if s.service and (str(s.service) in s.name if given else numbered):
+            named_service = s.service not in (None, "")
+            if named_service and (str(s.service) in s.name if given else numbered):
                 continue
             # Keep every value the author gave; suggest one only for service.
-            carrier = str(s.service) if s.service else "LP steam"
-            keys = [] if s.service else [f"service={carrier!r}"]
+            carrier = str(s.service) if named_service else "LP steam"
+            keys = [] if named_service else [f"service={carrier!r}"]
             if given:
                 # A given name is drawn in place of the line number.
                 keys.append(f"name={f'{s.name} {carrier}'!r}")

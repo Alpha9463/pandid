@@ -171,6 +171,30 @@ def test_a_sequence_on_any_segment_numbers_the_line_with_its_fields(
     assert [i.code for i in fs.validate(diagram="p&id") if i.code == "line-field-undrawn"] == []
 
 
+@pytest.mark.parametrize(
+    ("components", "name"),
+    [({"sequence": 0}, "0"), ({"size": 0}, "0-1001"), ({"service": 0, "spec": 0}, "0-1001-0")],
+    ids=["sequence", "size", "service-and-spec"],
+)
+def test_a_zero_is_a_stated_line_number_field(components: dict[str, Any], name: str):
+    """Check that a field set to 0 is drawn in the line number like any other value."""
+    fs = Flowsheet("t")
+    s = fs.connect(fs.add(U.Feed("F")).outlet, fs.add(U.Product("P")).inlet, **components)
+    fs.to_svg(diagram="p&id")
+    assert s.name == name
+    assert fs.validate(diagram="p&id") == []
+
+
+def test_a_zero_service_names_an_energy_line_s_carrier():
+    """Check that service=0 on an energy line counts as its carrier on a PFD."""
+    fs = Flowsheet("t")
+    cooler, heater = fs.add(U.Cooler("E-2")), fs.add(U.Heater("E-1"))
+    duty = fs.connect(cooler.utility_out, heater.utility_in, service=0)
+    fs.to_svg()
+    assert duty.name == "0-1001"
+    assert [i.code for i in fs.validate() if i.code == "energy-carrier-missing"] == []
+
+
 # --- inline groups and spec breaks --------------------------------------------
 
 

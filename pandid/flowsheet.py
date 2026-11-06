@@ -245,11 +245,12 @@ def _numbered(run: "list[Stream]") -> "Stream | None":
         The carrier, a copy of it holding the run's sequence, or
         ``None`` when the run states no line-number field.
     """
-    carrier = next((s for s in run if any(getattr(s, f) for f in _LINE_FIELDS)), None)
-    sequenced = next((s for s in run if s.sequence and s.sequence != s._auto_sequence), None)
+    carrier = next((s for s in run if any(getattr(s, f) not in (None, "") for f in _LINE_FIELDS)),
+                   None)
+    sequenced = next((s for s in run if s.sequence not in (None, "", s._auto_sequence)), None)
     if carrier is None or sequenced is None:
-        return carrier or sequenced
-    if carrier.sequence and carrier.sequence != carrier._auto_sequence:
+        return carrier if carrier is not None else sequenced
+    if carrier.sequence not in (None, "", carrier._auto_sequence):
         return carrier
     return replace(carrier, sequence=sequenced.sequence)
 
