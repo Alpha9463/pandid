@@ -570,6 +570,24 @@ def _copied(state: tuple) -> tuple:
 
     return (geometry(state[0]), geometry(state[1]), *state[2:])
 
+def _by_hand(units: "list[Unit]") -> "list[Stream]":
+    """Return the lines drawn by hand that end at the given units.
+
+    Parameters
+    ----------
+    units : list[Unit]
+        Units to read.
+
+    Returns
+    -------
+    list[Stream]
+        Each line with a ``via()`` route at one of them.
+    """
+    return [port.stream for unit in units for port in unit.ports.values()
+            if port.stream is not None and port.stream.route is not None
+            and port.stream.route.manual]
+
+
 def _beats(new: tuple, old: tuple) -> bool:
     """Return whether one routed drawing's score beats another's.
 
@@ -779,9 +797,13 @@ class Flowsheet:
         self._added_faces = False
         self._main: tuple | None = None
         self._in_route = False
-        # What the author had stated in drawing coordinates when route()
-        # last closed bands on the drawing shown.
-        self._closed: tuple | None = None
+        # What the author had stated when route() last finished; the
+        # drawings it holds for the next route() or layout() are put back
+        # only while that is unchanged.
+        self._stated_then: tuple | None = None
+        # The corner and nozzle faces of each balloon a via() line meets,
+        # by id(), as the drawing the line was typed against has them.
+        self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -793,9 +815,13 @@ class Flowsheet:
         self._keep_clear = 0.0
         self._kept_clear = False
         # The state route() left before it placed balloons hung from
-        # balloons further off, which the next route() or layout() starts
-        # from.
+        # balloons further off or moved them clear, which the next route()
+        # or layout() starts from.
         self._unkept: tuple | None = None
+        # Controllers route() hung beside the valve they drive, by id(),
+        # each with its standoff and angle off the actuator and its
+        # attachment then.
+        self._beside: dict[int, tuple[tuple[float, float], tuple]] = {}
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes and moves its chain's room there.
         self._pin_balloons = False
@@ -2552,21 +2578,39 @@ class Flowsheet:
         where that does not settle, again from the sheet with its automatic
         routes cleared, each kept only if no tap leaves its line and no
         finding or clash grows. Then each balloon with a nozzle whose
-        stand-off runs into another unit is turned to faces whose stand-off
-        is clear, with only its lines routed again, each kept only if no
-        tap leaves its line and no finding, clash, crossing or fallback
-        route grows. Where any of these is kept, the next route() or
-        layout() starts from the drawing before them. Then, where a line
-        that found no path runs through a unit, the sheet is routed again
-        with each such line drawn round the units in its way where a clear
-        route exists, kept only if no tap leaves its line and no finding,
-        clash, crossing or fallback route grows.
+        stand-off runs into another unit, or at an end of a line that found
+        no path, is turned to faces whose stand-off is clear, with only its
+        lines routed again, each kept only if no tap leaves its line and no
+        finding, clash, crossing or fallback route grows. Then each such
+        balloon placed near the balloon it hangs from, with no face or pin
+        stated, that drives one valve, is tried at each spot off that
+        valve's actuator, nearest first, with its faces and its host's
+        chosen again and only their lines routed again, and the first spot
+        kept on the same terms where no more line runs under a tag. Both
+        are then tried again for the balloons still so placed, judged the
+        same way, each also kept where it takes a line out of a unit at the
+        price :func:`~pandid.layout.control._out_of_unit` allows.
+        Neither step turns or moves a balloon at an end of a ``via()``
+        line, nor, to hang a controller, its transmitter. Where any of
+        these is kept, the next route() or layout() starts from the drawing
+        before them, unless the author has stated a pin, ``via()`` route or
+        note position since; then it starts from the drawing shown. A
+        controller hung beside its valve then stays there where a
+        ``via()`` line meets it or its transmitter; any other is kept there
+        only if the sheet so drawn passes the hang's terms against the
+        sheet drawn without it. Then, where a line that found no path runs
+        through a unit, the sheet is routed again with each such line drawn
+        round the units in its way where a clear route exists, kept only if
+        no tap leaves its line and no finding, clash, crossing or fallback
+        route grows.
 
         With the default router, where a symbol offers a connected port
         family faces, the sheet is then laid out again from where all of
         that started, with family faces as well, and drawn in full only if
         a move takes one. That drawing is kept only if it beats the first;
-        either way the next route() or layout() starts from the first.
+        either way the next route() or layout() starts from the first,
+        unless the author has stated a pin, ``via()`` route or note
+        position since.
 
         Last, with the default router and layout engine, each band across
         the drawing that holds no unit, tag, package frame, annotation
@@ -2580,9 +2624,9 @@ class Flowsheet:
         if no crossing, bend, fallback, finding or clash grows, no tap
         leaves its line and nothing more is drawn over a placed
         annotation. The next route() or layout() starts from the drawing
-        before it, unless a pin, a ``via()`` or an annotation's
-        ``position`` has changed since; then it starts from the closed
-        drawing those coordinates were read against.
+        before it, unless the author has stated a pin, ``via()`` route or
+        note position since; then it starts from the closed drawing those
+        were read against.
 
         Parameters
         ----------
@@ -2599,6 +2643,8 @@ class Flowsheet:
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
 
+        if not self._in_route:
+            self._hold_typed()
         self._put_main()
         tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
         start = self._drawing() if tries and self._offers_family_faces() else None
@@ -2625,6 +2671,8 @@ class Flowsheet:
                 self._close_bands()
         finally:
             self._in_route = outer
+            if not outer:
+                self._stated_then = self._stated()
 
     def _close_bands(self) -> None:
         """Close the empty bands across the drawing, kept only if no
@@ -2655,7 +2703,6 @@ class Flowsheet:
                 continue
             if self._main is None:
                 self._main = drawn
-            self._closed = self._stated()
             # The states held for the next route() lie before the bands
             # closed; main's drawing holds them.
             self._plain_state = self._stacked = self._unkept = self._unhung = None
@@ -2667,9 +2714,8 @@ class Flowsheet:
         Returns
         -------
         tuple
-            Each pinned unit's pin and the nozzles it places, each
-            manual route's waypoints and each placed annotation's
-            position.
+            Each pinned unit's pin and the nozzles it places, each manual
+            route's waypoints and each placed annotation's position.
         """
         return (tuple((u, copy.copy(u._pin), dict(u._pin_ports)) for u in self.units
                       if u._pin is not None),
@@ -2677,6 +2723,32 @@ class Flowsheet:
                       if s.route is not None and s.route.manual),
                 tuple((a, a.position) for a in self.annotations
                       if getattr(a, "position", None) is not None))
+
+    def _hold_typed(self) -> None:
+        """Hold each unpinned balloon a ``via()`` line meets where the
+        drawing shown has it, once the author has stated coordinates since
+        route(), and let go of each balloon no such line meets.
+        """
+        from pandid.layout.stages import is_control
+
+        ends = {id(u): u for s in self.streams if s.route is not None and s.route.manual
+                for u in (s.source.owner, s.dest.owner) if is_control(u) and u.pin_ is None}
+        held = {k: v for k, v in self._typed_at.items() if k in ends}
+        if not self._unedited():
+            held.update({k: (u.frame.x, u.frame.y, dict(u.frame.port_faces))
+                         for k, u in ends.items() if k not in held and u.frame is not None})
+        self._typed_at = held
+
+    def _unedited(self) -> bool:
+        """Return whether the author has stated nothing new since route().
+
+        Returns
+        -------
+        bool
+            True if :meth:`_stated` is unchanged since route() last
+            finished, or route() has not run.
+        """
+        return self._stated_then is None or self._stated_then == self._stated()
 
     def _route_drawing(self, router=None) -> None:
         """Route the sheet as the face switches stand.
@@ -2693,6 +2765,7 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
+        from pandid.layout.control import _out_of_unit, _taps_off
         from pandid.routing import DefaultRouter
 
         self._put_unkept()
@@ -2701,6 +2774,49 @@ class Flowsheet:
         if held is not None and not (self._layout_stale
                                      or any(u.frame is None for u in self.units)):
             self._put_state(held)
+        # A controller an earlier route() hung beside its valve stays there
+        # while a via() line meets it or its transmitter.
+        units = {id(u): u for u in self.units}
+        drawn = {k: v for k, v in self._beside.items() if k in units
+                 and _by_hand([units[k], getattr(units[k], "host", None) or units[k]])}
+        if (drawn == self._beside or self._laying_out
+                or not (router is None or type(router) is DefaultRouter)):
+            self._route_stepped(router)
+            return
+        # Keep the rest only where they draw as their hang step requires
+        # against the drawing without them.
+        start = self._drawing()
+        try:
+            self._route_stepped(router)
+            hung = self._drawing(), self._judged(), _taps_off(self)
+        except Exception:
+            hung = None
+        self._put_drawing(start)
+        self._beside = drawn
+        self._route_stepped(router)
+        fresh = self._judged()
+        if hung is not None and hung[2] <= _taps_off(self) and (
+                not any(n > fresh[k] for k, n in hung[1].items())
+                or _out_of_unit(fresh, hung[1])):
+            self._put_drawing(hung[0])
+
+    def _route_stepped(self, router=None) -> None:
+        """Route the sheet, then run the steps that judge each change.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.routing import DefaultRouter
+
         self._route_faces(router)
         if ((self._stack_spans or self._rows_out or self._tees_away) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
@@ -2720,10 +2836,15 @@ class Flowsheet:
             self._route_round_units(router or DefaultRouter())
 
     def _turn_blocked_exits(self, router) -> bool:
-        """Turn each balloon with a nozzle whose stand-off is blocked to
-        faces whose stand-off is clear, routing again only its lines, each
-        kept only if no tap leaves its line and no finding, clash, crossing
-        or fallback route grows.
+        """Turn each balloon :func:`~pandid.layout.faces.blocked_exits`
+        finds to faces whose stand-off is clear, then hang each such
+        controller near its transmitter beside the valve it drives,
+        routing again only the lines moved. A turn is kept only if no tap
+        leaves its line and nothing :meth:`_counted_flaws` counts grows,
+        and a hang only if nothing :meth:`_judged` counts grows either.
+        Then do both again, judged the same way, also keeping a drawing
+        that takes a line out of a unit at the price
+        :func:`~pandid.layout.control._out_of_unit` allows.
 
         Parameters
         ----------
@@ -2733,28 +2854,81 @@ class Flowsheet:
         Returns
         -------
         bool
-            Whether any balloon's new faces are kept.
+            Whether any balloon's new faces or place are kept.
         """
-        from pandid.layout.control import _taps_off
+        from pandid.layout.attach import _attachment
+        from pandid.layout.control import _beside_valve, _taps_off
         from pandid.layout.faces import blocked_exits, select_faces
+        from pandid.units import Instrument, Unit
 
         kept = False
-        for unit in blocked_exits(self):
-            before, off, drawn = self._counted_flaws(), _taps_off(self), self._geometry()
-            frame = unit.frame
-            assert frame is not None
-            faces = dict(frame.port_faces)
-            select_faces(self, [unit])
-            if frame.port_faces == faces:
-                continue
-            routed = self._route_only(
-                router, [port.stream for port in unit.ports.values() if port.stream is not None])
-            if routed and _taps_off(self) <= off and not any(
-                    n > before[k] for k, n in self._counted_flaws().items()):
-                kept = True
-            else:
-                self._put_geometry(drawn, keep_manual=False)
+        for trade in (False, True):
+            for unit in [u for u in blocked_exits(self) if not _by_hand([u])]:
+                before, off, drawn = self._judged(False), _taps_off(self), self._geometry()
+                frame = unit.frame
+                assert frame is not None
+                faces = dict(frame.port_faces)
+                select_faces(self, [unit])
+                if frame.port_faces != faces:
+                    kept = self._keep_redrawn(router, [unit], before, off, drawn, trade,
+                                              tags=False) or kept
+            for unit in blocked_exits(self):
+                host = getattr(unit, "host", None)
+                if (not isinstance(unit, Instrument) or not isinstance(host, Unit)
+                        or _by_hand([unit, host])):
+                    continue
+                for x, y, standoff in list(_beside_valve(self, unit)):
+                    before, off, drawn = self._judged(), _taps_off(self), self._geometry()
+                    frame = unit.frame
+                    assert frame is not None
+                    frame.x, frame.y = x, y
+                    select_faces(self, [unit, host])
+                    if self._keep_redrawn(router, [unit, host], before, off, drawn, trade):
+                        self._beside = {**self._beside, id(unit): (standoff, _attachment(unit))}
+                        kept = True
+                        break
         return kept
+
+    def _keep_redrawn(self, router, units: "list[Unit]", before: Counter[str],
+                      off: set[int], drawn: tuple, trade: bool, tags: bool = True) -> bool:
+        """Route the lines at the given units again, and put the drawing
+        back if a tap left its line or anything :meth:`_judged` counts
+        grew.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+        units : list[Unit]
+            Units whose lines are routed again.
+        before : Counter[str]
+            What :meth:`_judged` returned for the drawing.
+        off : set[int]
+            What :func:`~pandid.layout.control._taps_off` returned for it.
+        drawn : tuple
+            What :meth:`_geometry` returned for it.
+        trade : bool
+            Also keep a drawing that takes a line out of a unit at a price
+            :func:`~pandid.layout.control._out_of_unit` keeps.
+        tags : bool, optional
+            Count the pieces of line under each unit's tag. Default True.
+
+        Returns
+        -------
+        bool
+            Whether the new drawing is kept.
+        """
+        from pandid.layout.control import _out_of_unit, _taps_off
+
+        lines = [port.stream for unit in units for port in unit.ports.values()
+                 if port.stream is not None]
+        if self._route_only(router, lines) and _taps_off(self) <= off:
+            after = self._judged(tags)
+            if (not any(n > before[k] for k, n in after.items())
+                    or (trade and _out_of_unit(before, after))):
+                return True
+        self._put_geometry(drawn, keep_manual=False)
+        return False
 
     def _route_round_units(self, router) -> bool:
         """Route the sheet again where a route that found no path runs
@@ -2823,6 +2997,31 @@ class Flowsheet:
             for route in held:
                 route.manual = False
 
+    def _judged(self, tags: bool = True) -> Counter[str]:
+        """Count what the balloon steps judge a drawing by.
+
+        Parameters
+        ----------
+        tags : bool, optional
+            Count the pieces of line under each unit's tag. Default True.
+
+        Returns
+        -------
+        Counter[str]
+            What :meth:`_counted_flaws` counts, plus, with ``tags``,
+            ``tag-on-line``: the pieces of drawn line under each unit's tag.
+        """
+        from pandid.render.svg import _erases, _ink, _unit_label_box, unit_tags
+
+        flaws = self._counted_flaws()
+        if not tags:
+            return flaws
+        ink = _ink(self, "vertical")
+        boxes = [_unit_label_box(tag) for _, tag, _ in unit_tags(self, None, "vertical")
+                 if tag is not None]
+        flaws["tag-on-line"] = sum(sum(_erases(box, ink)[1:]) for box in boxes if box is not None)
+        return flaws
+
     def _counted_flaws(self) -> Counter[str]:
         """Count findings and clashes, crossings and fallback routes.
 
@@ -2841,12 +3040,14 @@ class Flowsheet:
         return flaws
 
     def _put_unkept(self) -> None:
-        """Put back the state held from before balloons were kept further off.
+        """Put back the state held from before balloons were kept further off
+        or moved clear, unless the author has stated drawing coordinates
+        since.
 
         Whether the layout is stale is kept as it stands.
         """
         held, self._unkept = self._unkept, None
-        if held is not None:
+        if held is not None and self._unedited():
             stale = self._layout_stale
             self._put_state(held)
             self._layout_stale = stale
@@ -3019,14 +3220,13 @@ class Flowsheet:
 
     def _put_main(self) -> None:
         """Put back main's drawing held behind a family-face or closed-band
-        drawing, unless the author has stated drawing coordinates since the
-        bands were closed.
+        drawing, unless the author has stated drawing coordinates since
+        route().
 
         Whether the layout and routes are stale is kept as it stands.
         """
         held, self._main = self._main, None
-        closed, self._closed = self._closed, None
-        if held is not None and (closed is None or closed == self._stated()):
+        if held is not None and self._unedited():
             stale = self._layout_stale, self._route_stale
             self._put_drawing(held)
             self._layout_stale = self._layout_stale or stale[0]
@@ -3152,7 +3352,7 @@ class Flowsheet:
                         tuple((u, u._stock_face) for u in self.units
                               if hasattr(u, "_stock_face")),
                         self._lanes, self._relaned, self._crowded_station,
-                        self._angle_valves))
+                        self._angle_valves, self._beside))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -3167,7 +3367,7 @@ class Flowsheet:
          self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
          self._rows_out, self._tees_away, self._fannable, self._far_branches,
          self._flags_off, stock, self._lanes, self._relaned,
-         self._crowded_station, self._angle_valves) = _copied(state)
+         self._crowded_station, self._angle_valves, self._beside) = _copied(state)
         for u, flag in stock:
             u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)

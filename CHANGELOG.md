@@ -111,6 +111,21 @@ These are removed in 0.4.0.
 - A balloon whose signal nozzle faces into a unit close by turns its nozzles
   to clear sides, so its lines are no longer drawn through that unit, where
   that adds no crossing or other finding.
+- A loop's controller with no clear side by its transmitter, and no
+  `controller_face=` given, is hung beside the valve it drives, so its lines
+  are no longer drawn through a unit, where that adds no crossing or other
+  finding.
+- Where no clear side or spot beside its valve takes a balloon's signal line out
+  of a unit for free, `route()` takes it out at a cost of at most two more line
+  crossings, runs along units or lines under tags, and no other finding.
+- After `pin()` or `via()` on a routed sheet, the next `route()` starts from the
+  drawing shown, so a line drawn by hand to a controller `route()` hung beside
+  its valve still meets it there.
+- A balloon at either end of a line frozen with `via()` stays where that line
+  meets it, and no other balloon is placed over it or over a balloon pinned on
+  both axes.
+- Attached balloons keep off every line drawn with `via()` on each `route()`,
+  the first included, so a frozen line stays clear over any number of routes.
 - A pump, compressor or fan fed from a `Feed` flag and feeding a unit far along
   the train is drawn in the column beside that unit, where that adds no
   crossing, bend or finding, instead of at the sheet's left edge.

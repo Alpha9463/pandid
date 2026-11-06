@@ -614,10 +614,60 @@ def on_leader(fs: "Flowsheet") -> bool:
     return False
 
 
+def _attachment(inst: "Instrument") -> tuple:
+    """Return what a balloon's attachment states.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    tuple
+        Its host, ``at``, face, whether the face was stated, ``offset``,
+        ``angle`` and ``relation``.
+    """
+    return (id(inst.host), inst.at, inst.face, inst._face_stated, inst.offset, inst.angle,
+            inst.relation)
+
+
+def _typed_boxes(fs: "Flowsheet", units: "list[Unit]") -> dict[int, Box]:
+    """Return the boxes of the balloons held where a via() line met them.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being placed.
+    units : list[Unit]
+        Balloons to read.
+
+    Returns
+    -------
+    dict[int, Box]
+        Each held balloon's box at its held corner, by ``id()``.
+    """
+    from pandid.portgeom import resolve_size
+
+    out = {}
+    for u in units:
+        corner = fs._typed_at.get(id(u))
+        if corner is not None:
+            w, h = resolve_size(u)
+            out[id(u)] = (corner[0], corner[1], corner[0] + w, corner[1] + h)
+    return out
+
+
 def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
-    Balloons left unplaced are recorded in ``fs.unplaced_instruments``.
+    Each balloon keeps off the runs between the points of every
+    ``via()`` line that does not end at it. A balloon held where a
+    ``via()`` line met it stays there, and no other balloon is placed
+    over it or over a balloon pinned on both axes. A controller route() hung beside
+    the valve it drives stays there while its attachment and that valve
+    are unchanged. Balloons left unplaced are recorded in
+    ``fs.unplaced_instruments``.
 
     Parameters
     ----------
@@ -630,6 +680,8 @@ def place_attached(fs: "Flowsheet") -> bool:
         True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
+    from pandid.layout.control import _actuator_box, _hangs_beside
+    from pandid.layout.halo import pinned_balloons
     from pandid.portgeom import resolve_size, unit_box
 
     moved = False
@@ -638,8 +690,16 @@ def place_attached(fs: "Flowsheet") -> bool:
                  if u.frame is not None and not is_attached(u)]
     mounted = fs._mounted_layout
     keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if mounted else 0.0)
+    # Runs between the points of each line drawn by hand, with the units
+    # it joins.
+    held = [((s.source.owner, s.dest.owner),
+             (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
+            for s in fs.streams if s.route is not None and s.route.manual
+            for a, b in zip(s.route.waypoints, s.route.waypoints[1:])]
     # Place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
+    typed = _typed_boxes(fs, pending)
+    obstacles += list(typed.values()) + pinned_balloons(fs, {})
     while pending:
         progressed = False
         for inst in list(pending):
@@ -656,12 +716,25 @@ def place_attached(fs: "Flowsheet") -> bool:
             if fs._off_leaders:
                 runs += _leader_runs(inst)
                 clearance = max(clearance, TOUCHING)
-            distance, angle = _clear_standoff(
-                inst, (tx, ty), ref, w, h,
-                obstacles + keepouts if mounted else obstacles,
-                [] if mounted else keepouts, runs, clearance)
-            ux, uy = _rotate_ccw(ref[0], ref[1], angle)
-            cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
+            mine = tuple(run for ends, run in held if inst not in ends)
+            if mine:
+                runs += mine
+                clearance = max(clearance, TOUCHING)
+            beside = fs._beside.get(id(inst))
+            valve = (_hangs_beside(fs, inst)
+                     if beside is not None and beside[1] == _attachment(inst) else None)
+            if id(inst) in typed:
+                cx, cy = typed[id(inst)][:2]
+            elif beside is not None and valve is not None:
+                # Stay where route() hung it off the valve it drives.
+                cx, cy, _, _ = _actuator_box(valve, beside[0], w, h)
+            else:
+                distance, angle = _clear_standoff(
+                    inst, (tx, ty), ref, w, h,
+                    obstacles + keepouts if mounted else obstacles,
+                    [] if mounted else keepouts, runs, clearance)
+                ux, uy = _rotate_ccw(ref[0], ref[1], angle)
+                cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis.
             pin = inst.pin_
             if pin is not None:
@@ -679,6 +752,8 @@ def place_attached(fs: "Flowsheet") -> bool:
                 # Keep the faces already chosen.
                 port_faces=dict(old.port_faces) if old is not None else {},
             )
+            if id(inst) in typed:
+                inst.frame.port_faces = dict(fs._typed_at[id(inst)][2])
             inst.tap = (tx, ty)
             pending.remove(inst)
             progressed = True

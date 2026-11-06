@@ -147,7 +147,7 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
     -------
     tuple[list[Span], list[Span]]
         Each held ``(low, high)`` span, sorted, and the spans of the
-        units pinned on the axis.
+        units pinned on the axis or held where a ``via()`` line met them.
     """
     from pandid.layout.attach import is_attached, stream_path
     from pandid.layout.control import _halos, _hangable
@@ -179,7 +179,7 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
         box = unit_box(u, u.frame)
         held.append((box[k], box[k + 2]))
         pin = u.pin_
-        if pin is not None and (pin.x, pin.y)[k] is not None:
+        if (pin is not None and (pin.x, pin.y)[k] is not None) or id(u) in fs._typed_at:
             fixed.append((box[k], box[k + 2]))
     held += [(h[k], h[k + 2]) for h in _halos(fs)]
     for pkg in fs.packages:

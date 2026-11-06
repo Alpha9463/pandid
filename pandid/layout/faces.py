@@ -21,7 +21,8 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
     A connected port can move when it has two or more faces and neither
     ``nozzle()``, a list of faces nor a pin names it. A block, tank or
     vessel connection that shares its family's faces moves only where
-    that saves its family bends.
+    that saves its family bends. A balloon held where a ``via()`` line
+    met it keeps its faces.
 
     Parameters
     ----------
@@ -37,7 +38,7 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
 
     for unit in fs.units if units is None else units:
         frame = unit.frame
-        if frame is None:
+        if frame is None or id(unit) in fs._typed_at:
             continue
         frame.port_faces.clear()
         if not fs.auto_faces:
@@ -70,7 +71,7 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
 
 
 def blocked_exits(fs: "Flowsheet") -> "list[Unit]":
-    """Return the balloons with a movable port whose stand-off is blocked.
+    """Return the balloons whose lines cannot leave them cleanly.
 
     Parameters
     ----------
@@ -81,15 +82,21 @@ def blocked_exits(fs: "Flowsheet") -> "list[Unit]":
     -------
     list[Unit]
         Each placed balloon with a movable port whose outward stub
-        enters a unit other than the one at its line's other end.
+        enters a unit other than the one at its line's other end, then
+        each at an end of an automatic line that found no path.
     """
     from pandid.layout.stages import is_control
 
     if not fs.auto_faces:
         return []
-    return [unit for unit in fs.units if is_control(unit) and unit.frame is not None
-            and any(_blocked(unit, unit.frame, name, _obstacles(fs, unit, name))
-                    for name in _movable(unit, unit.frame)[2])]
+    out = [unit for unit in fs.units if is_control(unit) and unit.frame is not None
+           and any(_blocked(unit, unit.frame, name, _obstacles(fs, unit, name))
+                   for name in _movable(unit, unit.frame)[2])]
+    for stream in fs.streams:
+        if stream.route is not None and stream.route.used_fallback and not stream.route.manual:
+            out += [unit for unit in (stream.source.owner, stream.dest.owner)
+                    if is_control(unit) and unit.frame is not None and unit not in out]
+    return out
 
 
 def _movable(unit: "Unit", frame) -> tuple[list[str], set[str], dict[str, list[str]]]:
