@@ -3260,7 +3260,7 @@ class Flowsheet:
             if tries and self._undercharged:
                 keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
             if tries and any(isinstance(u, Instrument) and nozzle_tap(u) for u in self.units):
-                keep_if_better(cleared, _flaws(self))
+                keep_if_better(cleared, _score(self)[0], lambda fs: _score(fs)[0])
         finally:
             self._near_branches = False
         self._route_stale = False
