@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fs.package("PK-301", [p301a, p301b, f301], description="Dosing Package",
+  reference="VENDOR DWG 4711")` draws a package unit as a dash-dot boundary
+  frame round its units, tagged outside its upper-left corner, and lists it in
+  the equipment list above them. Layout keeps other units out of the frame, and
+  `validate()` reports `package-encloses` for one drawn inside it.
 - `validate()` warns `valve-under-arrowhead` when a valve or fitting is drawn
   so near the nozzle it feeds that the arrowhead into the nozzle reaches over it,
   and says how to clear it: an `at=` for a valve alone on its line, the `at=`
