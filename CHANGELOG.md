@@ -203,6 +203,10 @@ These are removed in 0.4.0.
   line, so the line turns through the valve instead of bending to leave it.
 - `nozzle()` on a `Tank` or `Vessel` inlet or outlet names the face as drawn
   again, so a turned or mirrored tank draws the nozzle on the face named.
+- A balloon hung on another balloon, such as `fs.add_instrument("LIC", 101,
+  near=lt)` on a pinned `LT`, is no longer drawn across that balloon's tap line.
+- A balloon attached with `face=` to a face whose middle a line leaves from taps
+  the face beside that nozzle, so its tap line no longer runs along the pipe.
 
 ## [0.2.0] - 2026-11-05
 

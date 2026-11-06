@@ -2265,6 +2265,73 @@ def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
         assert x1 == x2 or y1 == y2, route
 
 
+@pytest.mark.parametrize("pinned", [False, True])
+def test_a_tap_is_drawn_off_a_nozzle_its_face_carries(pinned: bool) -> None:
+    """Check that a balloon on a face a line leaves from taps the face beside the nozzle."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("leader")
+    drum = fs.add(U.Vessel("D-101"))
+    line = fs.connect(drum.outlet, fs.add(U.Pump("P-101")).suction)
+    lt = fs.add_instrument("LT", 101, sensing=drum, face="E")
+    if pinned:
+        lt.pin(x=700, y=180)
+    fs.route()
+
+    ((inst, tap, centre),) = tap_lines(fs)
+    box = frame_of(drum)
+    assert tap[0] == box.x_max and box.y < tap[1] < box.y_max, f"{tap} is on the east face"
+    nozzle = port_point(drum, box, line.source.name)
+    assert math.dist(tap, nozzle) >= 12, f"{tap} sits on {line.name}'s nozzle {nozzle}"
+    route, pipe = tap_route(inst, tap, centre), stream_path(line)
+    assert not any(
+        _shared(a, b, c, d) for a, b in zip(route, route[1:]) for c, d in zip(pipe, pipe[1:])
+    ), f"{route} runs along {pipe}"
+    # The drum's east wall is straight between its heads.
+    assert box.y + 0.175 * box.h <= tap[1] <= box.y + 0.825 * box.h, tap
+
+
+@pytest.mark.parametrize(
+    ("kind", "nozzle", "face"),
+    [
+        ("mixer", "outlet", "E"),
+        ("vessel", "drain", "S"),
+        ("exchanger", "tube_out", "E"),
+        ("pump", "suction", "W"),
+    ],
+)
+def test_a_tap_beside_a_nozzle_stays_on_the_drawn_outline(
+    kind: str, nozzle: str, face: str
+) -> None:
+    """Check that a tap on a face with no straight wall beside its nozzle stays put."""
+    from pandid.portgeom import face_point
+    from pandid.render.svg import tap_lines
+
+    fs = Flowsheet("outline")
+    unit: U.Unit = {
+        "mixer": U.Mixer("M-101"),
+        "vessel": U.Vessel("D-101"),
+        "exchanger": U.HeatExchanger("E-101"),
+        "pump": U.Pump("P-101"),
+    }[kind]
+    fs.add(unit)
+    port = unit.ports[nozzle]
+    if port.direction == "outlet":
+        fs.connect(port, fs.add(U.Product("P")).inlet)
+    else:
+        fs.connect(fs.add(U.Feed("F")).outlet, port)
+    fs.add_instrument("TI", 101, sensing=unit, face=face)
+    fs.route()
+
+    ((_, tap, _),) = tap_lines(fs)
+    middle = face_point(unit, frame_of(unit), face)[0]
+    # The mixer's apex, the drum's head and the exchanger's shell meet the
+    # box only at the nozzle; the pump's casing at the face's middle.
+    assert tap == pytest.approx(middle), f"{tap} left the outline at {middle}"
+
+
 def test_a_placement_is_still_a_placement():
     """Check that ``near=`` still hangs the balloon off the face it names."""
     _, standing = _drum("near")
@@ -2671,6 +2738,32 @@ def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     asked = _standoff_box(tap, ref, tic.offset, tic.angle, w, h)
     assert tic.frame.x == pytest.approx(asked[0])
     assert tic.frame.y == pytest.approx(500)
+
+
+@pytest.mark.parametrize(("face", "x", "y"), [("W", 210, 250), ("E", 280, 300)])
+def test_a_balloon_hung_on_a_pinned_balloon_keeps_off_its_tap_line(
+    face: str, x: float, y: float
+) -> None:
+    """Check that LIC hung on a pinned LT is not drawn across the LT's own tap line."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("chain")
+    drum = fs.add(U.Vessel("D-101"))
+    pump = fs.add(U.Pump("P-101"))
+    fs.connect(drum.outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Vessel("D-102")).inlet)
+    lt = fs.add_instrument("LT", 101, sensing=drum, face=face).pin(x=x, y=y)
+    lic = fs.add_instrument("LIC", 101, near=lt, face="N")
+    fs.route()
+
+    ((inst, tap, centre),) = tap_lines(fs)
+    assert inst is lt
+    route, box = tap_route(inst, tap, centre), unit_box(lic, frame_of(lic))
+    assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:])), (
+        f"{route} crosses LIC-101 at {box}"
+    )
 
 
 def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
