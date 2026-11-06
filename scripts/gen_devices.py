@@ -104,6 +104,14 @@ DEVICES = {
     ("evaporator", "climbing_film"): ("ClimbingFilmEvaporator", """Climbing-film evaporator: liquor fed into the foot of the tubes."""),
     ("evaporator", "plate"): ("PlateEvaporator", """Plate evaporator: a plate pack in place of a tube bundle."""),
 
+    # --- Furnaces -----------------------------------------------------
+    ("furnace", "combustion_chamber"): ("CombustionChamber", """Combustion chamber: fuel burned to make hot gas for another unit.
+
+    ``inlet`` takes the combustion air on the west wall, ``fuel`` enters
+    the burner from below and ``outlet`` sends the hot gas out of the
+    top. ISO 10628-2 item 4.5 X8106.
+"""),
+
     # --- Kilns and calciners ------------------------------------------
     ("kiln", "default"): ("RotaryKiln", """Rotary kiln: a sloping, turning shell fired down its length."""),
     ("kiln", "fluidized_bed"): ("FluidizedBedCalciner", """Fluidised-bed calciner: solids held up in the firing gas.
@@ -421,6 +429,7 @@ STAYS_ON_BASE = {
     ("flare", "default"): "Flare's own drawing",
     ("funnel", "default"): "Funnel's own drawing",
     ("furnace", "default"): "Furnace's own drawing",
+    ("furnace", "general"): "ISO item 4.3: the general furnace, no tubes drawn",
     ("heater", "default"): "Heater's own drawing",
     ("mixer", "default"): "Mixer's own drawing",
     ("separator", "default"): "Separator's own drawing (the flash drum)",

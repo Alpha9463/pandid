@@ -136,16 +136,6 @@ KIND_MAP = {
                              "side_b_in": "N", "side_b_out": "S"}),
     # Vessels / columns / reactors / separators / tanks.
     #
-    # The vessel shares the column's stencil, which SCALE reproportions. Process
-    # nozzles sit at mid-height on the straight shell. ``relief`` goes on the crown
-    # beside the vent, on the head's ink; ``drain`` on the vessel's lowest drawn point.
-    ("vessel", "default"): ("vessels", "Pressurized Vessel",
-                            {"inlet": ("W", 100.0), "outlet": ("E", 100.0),
-                             "vent": ("N", 50.0),
-                             # Unscaled; (25, 2) is on the top head's ellipse,
-                             # half a radius off the crown.
-                             "relief": ("AT", 25.0, 2.0),
-                             "drain": ("S", 50.0)}),
     # The feed and draw families sit on opposite walls inside 65..145, the band the
     # duty arrows bound: two 35 pitches fit, so extent = 70 / 200 = 0.35.
     ("column", "default"): ("vessels", "Pressurized Vessel",
@@ -375,43 +365,6 @@ KIND_MAP = {
     ("compressor", "rotary"):      ("compressors", "Rotary Compressor", {"suction": "W", "discharge": "N"}),
     ("compressor", "liquid_ring"): ("compressors", "Liquid Ring Compressor", {"suction": "W", "discharge": "N"}),
     # Vessel / tank styles.
-    # Brackets widen the box past the shell, so the process ports sit on the shell walls.
-    # The 40-wide dished shells share one head: relief at (cx - 12, 1.5), drain at
-    # (cx, 95.38).
-    ("vessel", "dished"): ("vessels", "Vessel (Dished Ends, Brackets)",
-                           {"inlet": ("AT", 10.0, 47.0), "outlet": ("AT", 50.0, 47.0),
-                            "vent": ("N", 30.0),
-                            "relief": ("AT", 18.0, 1.5), "drain": ("S", 30.0)}),
-    # Dome: the vent rides the manway apex near x = 62.7; the relief and drain sit on
-    # the body's top and bottom walls, inboard of the box.
-    ("vessel", "dome"):   ("vessels", "Vessel (Dome)",
-                           {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7),
-                            "relief": ("AT", 30.0, 15.0), "drain": ("S", 47.69)}),
-    # Jacketed: the process nozzles on the jacket's outer wall at mid-height; the vent
-    # on the crown.
-    ("vessel", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
-                             {"inlet": ("W", 47.69), "outlet": ("E", 47.69),
-                              "vent": ("N", 26.0),
-                              # Relief and drain on the shell's heads (cx = 26), not on the jacket.
-                              "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
-    # Insulated: the same box, shell and heads as ``jacketed``, so the same port map.
-    ("vessel", "insulated"): ("vessels", "Vessel (Dished Ends, Thermal Insulation)",
-                              {"inlet": ("W", 47.69), "outlet": ("E", 47.69),
-                               "vent": ("N", 26.0),
-                               "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
-    # Electrically heated: the element on the east wall widens the box, so the
-    # outlet drops to y = 77.7 below it, on the shell at x = 40.
-    ("vessel", "electrical_heating"): (
-        "vessels", "Vessel (Dished Ends, Electrical Heating)",
-        {"inlet": ("W", 47.69), "outlet": ("AT", 40.0, 77.7), "vent": ("N", 20.0),
-         # Shell at x 0..40, so cx = 20 and the heads give 8 and 95.38.
-         "relief": ("AT", 8.0, 1.5), "drain": ("S", 20.0)}),
-    # Swaged: the process nozzles on the wide section at mid-height, y = 67. The top
-    # head is a true semicircle, r = 15 about (25, 15), so x = 16 puts the relief at y = 3.
-    ("vessel", "swaged"): ("vessels", "Vessel (Different Diameters)",
-                           {"inlet": ("W", 67.0), "outlet": ("E", 67.0),
-                            "vent": ("N", 25.0),
-                            "relief": ("AT", 16.0, 3.0), "drain": ("S", 25.0)}),
     # Floating roof: the vent and relief on the deck plate at y = 5. The fill has no
     # roof placement, since the deck moves; it enters the shell at y = 60.
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)",
@@ -467,14 +420,6 @@ KIND_MAP = {
     ("thickener", "default"): ("vessels", "Settling Tank",
                                {"feed": ("W", 8.0), "overflow": ("E", 8.0),
                                 "underflow": ("S", 50.0)}),
-    # Horizontal vessel: inlet on either head or from above, liquid out of the bottom.
-    # The whole top and bottom walls are its high and low points, so the relief and
-    # drain take those faces directly.
-    ("vessel", "horizontal"): ("vessels", "Drum or Condenser",
-                               {"inlet": [("W", 15), ("N", 20.0), ("E", 15)],
-                                "outlet": ("S", 68.0),
-                                "vent": ("N", 55.0),
-                                "relief": ("N", 30.0), "drain": ("S", 25.0)}),
     # Horizontal separator: the feed offers three faces, so it is a menu rather than
     # a family; ``Separator`` refuses ``n_feeds`` above one here.
     ("separator", "horizontal"): ("vessels", "Drum or Condenser",
@@ -700,16 +645,6 @@ GRAVITY_FIXED = {
         "dished roof over a free surface, drains to the cone apex",
     # The bell rests on the water seal.
     ("tank", "gas_holder"):     "the bell floats on the water seal",
-    # Holdup with a vapour space: vent on top, drain from the shell.
-    ("vessel", "default"):    "vent on the top head, free surface below it",
-    ("vessel", "dished"):     "vent on the top head; stands on brackets",
-    ("vessel", "dome"):       "the manway dome is on top",
-    ("vessel", "horizontal"): "vent off the top, liquid out of the bottom",
-    ("vessel", "jacketed"):   "vent on the top head, free surface below it",
-    ("vessel", "insulated"):  "vent on the top head, free surface below it",
-    ("vessel", "electrical_heating"): "vent on the top head, low draw-off from the shell",
-    # The larger diameter, below, holds the inventory.
-    ("vessel", "swaged"):     "vent on the top head, and the larger diameter is the one below it",
     # Liquid runs down a tower and vapour rises through it.
     ("column", "default"): "distillate off the top, bottoms off the floor",
     ("column", "packed"):  "packed beds rest on their support grids",
@@ -778,25 +713,6 @@ BANDS = {
     ("tank", "gas_holder"): {"W": (45.0, 80.0), "E": (45.0, 80.0)},
     # The sphere meets W and E at y = 75 only; S is the draw-off boss.
     ("tank", "sphere"): {"W": (75.0, 75.0), "E": (75.0, 75.0), "S": (40.0, 40.0)},
-    # The barrel, y 7.5..92.5 as drawn, held 10 off each end.
-    ("vessel", "default"): {"W": (17.5, 82.5), "E": (17.5, 82.5)},
-    ("vessel", "dished"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
-    # Drawn on its side: the W and E faces are the two dished heads, and a head
-    # meets the box at its apex alone.
-    ("vessel", "dome"): {"W": (27.0, 27.0), "E": (27.0, 27.0)},
-    # The same 7,7..87,7 barrel. The outlet is drawn at 77,7, which is where the
-    # 10 clearance already puts the band's lower end, so it does not move.
-    ("vessel", "electrical_heating"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
-    # The lagging lines, y 12.69..82.69, are the W and E faces.
-    ("vessel", "insulated"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
-    # The jacket, for insulated's reason: the outer faces are the jacket boxes,
-    # y 12,69..82,69.
-    ("vessel", "jacketed"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
-    # Only the lower, larger barrel meets the W and E faces.
-    ("vessel", "swaged"): {"W": (60.3, 75.0), "E": (60.0, 75.0)},
-    # Roof and floor between the heads; W and E are the heads' apexes at y = 15.
-    ("vessel", "horizontal"): {"N": (15.8, 75.8), "S": (15.8, 75.8),
-                               "W": (15.0, 15.0), "E": (15.0, 15.0)},
 }
 
 
@@ -836,9 +752,7 @@ SCALE = {"valve": 0.25, "fitting": 0.25,
          ("vent", "exhaust_head"): 0.5, ("vent", "breather"): 0.5,
          # Every reducer is drawn 12.5 tall, the line it sits in.
          "reducer": 12.5 / 20, ("reducer", "eccentric"): 12.5 / 15,
-         # A drum is short and a tower slender: 62 x 100 against the column's 100 x 200.
-         ("vessel", "default"): (0.62, 0.5),
-         # The flash drum shares the column's stencil and takes the drum's box.
+         # The flash drum shares the column's stencil at a drum's 62 x 100 box.
          ("separator", "default"): (0.62, 0.5),
          # The stirred tank shares the same stencil and box.
          ("reactor", "default"): (0.62, 0.5),
