@@ -632,12 +632,40 @@ def _attachment(inst: "Instrument") -> tuple:
             inst.relation)
 
 
+def _typed_boxes(fs: "Flowsheet", units: "list[Unit]") -> dict[int, Box]:
+    """Return the boxes of the balloons held where a via() line met them.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being placed.
+    units : list[Unit]
+        Balloons to read.
+
+    Returns
+    -------
+    dict[int, Box]
+        Each held balloon's box at its held corner, by ``id()``.
+    """
+    from pandid.portgeom import resolve_size
+
+    out = {}
+    for u in units:
+        corner = fs._typed_at.get(id(u))
+        if corner is not None:
+            w, h = resolve_size(u)
+            out[id(u)] = (corner[0], corner[1], corner[0] + w, corner[1] + h)
+    return out
+
+
 def place_attached(fs: "Flowsheet") -> bool:
     """Place attached balloons and return whether any moved.
 
-    A controller route() hung beside the valve it drives stays there
-    while its attachment and that valve are unchanged. Balloons left
-    unplaced are recorded in ``fs.unplaced_instruments``.
+    A balloon held where a ``via()`` line met it stays there, and no
+    other balloon is placed over it. A controller route() hung beside
+    the valve it drives stays there while its attachment and that valve
+    are unchanged. Balloons left unplaced are recorded in
+    ``fs.unplaced_instruments``.
 
     Parameters
     ----------
@@ -666,6 +694,8 @@ def place_attached(fs: "Flowsheet") -> bool:
             for a, b in zip(stream_path(s), stream_path(s)[1:])]
     # Place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
+    typed = _typed_boxes(fs, pending)
+    obstacles += list(typed.values())
     while pending:
         progressed = False
         for inst in list(pending):
@@ -689,7 +719,9 @@ def place_attached(fs: "Flowsheet") -> bool:
             beside = fs._beside.get(id(inst))
             valve = (_hangs_beside(fs, inst)
                      if beside is not None and beside[1] == _attachment(inst) else None)
-            if beside is not None and valve is not None:
+            if id(inst) in typed:
+                cx, cy = typed[id(inst)][:2]
+            elif beside is not None and valve is not None:
                 # Stay where route() hung it off the valve it drives.
                 cx, cy, _, _ = _actuator_box(valve, beside[0], w, h)
             else:
@@ -716,6 +748,8 @@ def place_attached(fs: "Flowsheet") -> bool:
                 # Keep the faces already chosen.
                 port_faces=dict(old.port_faces) if old is not None else {},
             )
+            if id(inst) in typed:
+                inst.frame.port_faces = dict(fs._typed_at[id(inst)][2])
             inst.tap = (tx, ty)
             pending.remove(inst)
             progressed = True

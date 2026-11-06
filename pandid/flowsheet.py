@@ -803,6 +803,9 @@ class Flowsheet:
         self._stated_then: tuple | None = None
         # Whether balloons keep off lines drawn by hand while route() runs.
         self._hand_held = False
+        # The corner and nozzle faces of each balloon a via() line meets,
+        # by id(), as the drawing the line was typed against has them.
+        self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -2642,6 +2645,8 @@ class Flowsheet:
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
 
+        if not self._in_route:
+            self._hold_typed()
         # Balloons keep off lines drawn by hand on the drawing shown, where
         # the author has stated coordinates since and nothing is laid out
         # again.
@@ -2725,6 +2730,21 @@ class Flowsheet:
                       if s.route is not None and s.route.manual),
                 tuple((a, a.position) for a in self.annotations
                       if getattr(a, "position", None) is not None))
+
+    def _hold_typed(self) -> None:
+        """Hold each unpinned balloon a ``via()`` line meets where the
+        drawing shown has it, once the author has stated coordinates since
+        route(), and let go of each balloon no such line meets.
+        """
+        from pandid.layout.stages import is_control
+
+        ends = {id(u): u for s in self.streams if s.route is not None and s.route.manual
+                for u in (s.source.owner, s.dest.owner) if is_control(u) and u.pin_ is None}
+        held = {k: v for k, v in self._typed_at.items() if k in ends}
+        if not self._unedited():
+            held.update({k: (u.frame.x, u.frame.y, dict(u.frame.port_faces))
+                         for k, u in ends.items() if k not in held and u.frame is not None})
+        self._typed_at = held
 
     def _unedited(self) -> bool:
         """Return whether the author has stated nothing new since route().

@@ -1285,16 +1285,16 @@ def test_the_fallback_starts_from_the_settled_state_it_saved() -> None:
     assert fs.route_converged
 
 
-def test_a_line_drawn_by_hand_after_routing_is_routed_from_the_unhung_sheet() -> None:
-    """Check that a line drawn by hand after routing stays square on the next route."""
+def test_a_line_drawn_by_hand_before_routing_keeps_its_controller_unhung() -> None:
+    """Check that a line drawn by hand to the free controller stays square over two routes."""
     fs, lic, valve = _hung_controller()
     line = lic.sig_out.stream
     assert line is not None
-    fs.route()
     line.via([(284.25, 234.9), (312.2, 234.9), (312.2, 275)])
-    fs.route()
+    for _ in range(2):
+        fs.route()
 
-    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+        assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
 def test_a_hung_controllers_line_keeps_out_of_a_tag_halo() -> None:
@@ -1358,13 +1358,15 @@ def test_a_route_drawn_by_hand_and_then_cleared_stays_cleared() -> None:
 
 
 def test_a_copied_sheet_routes_from_its_own_unhung_state() -> None:
-    """Check that a deep copy of a hung sheet keeps a later hand-drawn line square."""
+    """Check that a deep copy of a hung sheet keeps a line frozen on it square."""
     import copy
 
     fs, _, _ = _hung_controller()
     fs.route()
     fs = copy.deepcopy(fs)
-    fs.streams[0].via([(284.25, 234.9), (312.2, 234.9), (312.2, 275)])
+    line = fs.streams[0]
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
     fs.route()
 
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
@@ -3224,8 +3226,18 @@ def _edit_bank(fs: Flowsheet, loops: list[ControlLoop], edit: str) -> None:
     """State one thing more on a routed bank, as an author editing it would."""
     units = {u.name: u for u in fs.units}
     transmitter = loops[1].transmitter
-    if edit == "pin transmitter":
+    frozen = {
+        "via measurement": loops[1].measurement,
+        "via output": loops[1].output,
+        "via process": next(s for s in fs.streams if s.source.owner is units["P-1"]),
+    }.get(edit)
+    if frozen is not None:
+        assert frozen.route is not None
+        frozen.via(list(frozen.route.waypoints))
+    elif edit == "pin transmitter":
         transmitter.pin(x=300, y=110)
+    elif edit == "pin balloon where drawn":
+        transmitter.pin(x=frame_of(transmitter).x, y=frame_of(transmitter).y)
     elif edit == "pin valve":
         units["FV-11"].pin(x=430, y=230)
     elif edit == "pin pump":
@@ -3238,22 +3250,36 @@ def _edit_bank(fs: Flowsheet, loops: list[ControlLoop], edit: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "edit", ["pin transmitter", "pin valve", "pin pump", "nozzle on valve", "attach transmitter"]
+    "edit",
+    [
+        "via measurement",
+        "via output",
+        "via process",
+        "pin transmitter",
+        "pin balloon where drawn",
+        "pin valve",
+        "pin pump",
+        "nozzle on valve",
+        "attach transmitter",
+    ],
 )
 def test_an_edit_after_a_controller_hangs_beside_its_valve_draws_no_line_through_a_unit(
     edit: str,
 ):
-    """Route a bank, state a pin, nozzle face or attachment, and route again.
+    """Route a bank, freeze a line or state a pin, nozzle face or attachment, and route again.
 
-    The P&ID exports, and no line is drawn through a unit.
+    The P&ID exports to SVG and draw.io, nothing overlaps, and no line is drawn
+    through a unit.
     """
     fs, loops = _valved_bank(10)
     assert fs._beside
     _edit_bank(fs, loops, edit)
     fs.route()
     fs.to_svg(diagram="p&id")
+    fs.to_drawio(diagram="p&id")
+    codes = ("route-crosses-unit", "unit-overlap")
 
-    assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+    assert [i.message for i in fs.validate() if i.code in codes] == []
 
 
 def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
@@ -3267,3 +3293,23 @@ def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
     _edit_bank(fs, loops, "attach transmitter")
 
     assert fs._stated() == stated
+
+
+def test_a_measurement_line_frozen_on_a_bank_keeps_both_balloons_where_drawn():
+    """Freeze FT-201's line to FIC-201 with via() and route the bank again.
+
+    Both balloons stay where the line was drawn to them, nothing overlaps
+    them, and the P&ID exports.
+    """
+    fs, loops = _valved_bank(10)
+    line = loops[1].measurement
+    assert line.route is not None
+    balloons = (loops[1].transmitter, loops[1].controller)
+    drawn = [(frame_of(b).x, frame_of(b).y) for b in balloons]
+    line.via(list(line.route.waypoints))
+    fs.route()
+    fs.to_svg(diagram="p&id")
+
+    assert [(frame_of(b).x, frame_of(b).y) for b in balloons] == pytest.approx(drawn)
+    assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
+

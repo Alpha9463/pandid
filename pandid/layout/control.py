@@ -70,7 +70,7 @@ def _place_free(fs: "Flowsheet") -> bool:
         True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
-    from pandid.layout.attach import _nozzle_keepouts
+    from pandid.layout.attach import _nozzle_keepouts, _typed_boxes
     from pandid.layout.faces import select_faces
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
@@ -82,6 +82,9 @@ def _place_free(fs: "Flowsheet") -> bool:
     # Use each unit's drawn box, which may reach outside its frame.
     taken = [unit_box(u, u.frame) for u in fs.units
              if u.frame is not None and u not in set(pending)]
+    # Balloons held where a via() line met them; the rest keep off them.
+    typed = _typed_boxes(fs, pending)
+    taken += list(typed.values())
     # Strips a balloon hung off an actuator must clear.
     clear = _nozzle_keepouts(fs, skip=set(pending))
     # Drawn lines it must clear too, each with the units it joins.
@@ -101,7 +104,11 @@ def _place_free(fs: "Flowsheet") -> bool:
                 else _actuator_box(valve, standoff, w, h)[:2])
         if hung is not None:
             fs._hung.add(id(inst))
-        x, y = hung or _spot(fs, inst, w, h, taken)
+        if id(inst) in typed:
+            hung = None
+            x, y = typed[id(inst)][:2]
+        else:
+            x, y = hung or _spot(fs, inst, w, h, taken)
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
             moved = True
@@ -118,6 +125,8 @@ def _place_free(fs: "Flowsheet") -> bool:
             # Keep the faces already chosen.
             port_faces=dict(old.port_faces) if old is not None else {},
         )
+        if id(inst) in typed:
+            inst.frame.port_faces = dict(fs._typed_at[id(inst)][2])
         taken.append(unit_box(inst, inst.frame))
     # Faces were chosen for where a newly hung controller stood.
     if rehung:

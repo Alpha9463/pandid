@@ -21,7 +21,8 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
     A connected port can move when it has two or more faces and neither
     ``nozzle()``, a list of faces nor a pin names it. A block, tank or
     vessel connection that shares its family's faces moves only where
-    that saves its family bends.
+    that saves its family bends. A balloon held where a ``via()`` line
+    met it keeps its faces.
 
     Parameters
     ----------
@@ -37,7 +38,7 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
 
     for unit in fs.units if units is None else units:
         frame = unit.frame
-        if frame is None:
+        if frame is None or id(unit) in fs._typed_at:
             continue
         frame.port_faces.clear()
         if not fs.auto_faces:
