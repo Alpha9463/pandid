@@ -659,6 +659,11 @@ def place_attached(fs: "Flowsheet") -> bool:
                  if u.frame is not None and not is_attached(u)]
     mounted = fs._mounted_layout
     keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if mounted else 0.0)
+    # Runs of lines drawn by hand, each with the units it joins.
+    held = [((s.source.owner, s.dest.owner),
+             (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
+            for s in fs.streams if fs._hand_held and s.route is not None and s.route.manual
+            for a, b in zip(stream_path(s), stream_path(s)[1:])]
     # Place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     while pending:
@@ -676,6 +681,10 @@ def place_attached(fs: "Flowsheet") -> bool:
             clearance = fs._keep_clear
             if fs._off_leaders:
                 runs += _leader_runs(inst)
+                clearance = max(clearance, TOUCHING)
+            mine = tuple(run for ends, run in held if inst not in ends)
+            if mine:
+                runs += mine
                 clearance = max(clearance, TOUCHING)
             beside = fs._beside.get(id(inst))
             valve = (_hangs_beside(fs, inst)

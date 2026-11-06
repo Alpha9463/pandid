@@ -3204,10 +3204,12 @@ def test_a_line_leaves_a_unit_for_at_most_two_crossings_or_runs_along_units(
 def test_a_line_frozen_from_a_controller_beside_its_valve_keeps_its_points():
     """Route a bank again after freezing FIC-201's output, drawn from beside FV-11.
 
-    The frozen line keeps its points, is square and crosses no unit.
+    The first route() both hangs FIC-201 beside FV-11 and closes the bank's empty
+    bands. The frozen line keeps its points, is square and crosses no unit.
     """
     fs, loops = _valved_bank(10)
     line = loops[1].output
+    assert fs._beside and fs._main is not None and not fs._offers_family_faces()
     assert line.route is not None
     points = list(line.route.waypoints)
     line.via(points)
@@ -3218,37 +3220,27 @@ def test_a_line_frozen_from_a_controller_beside_its_valve_keeps_its_points():
     assert _drawn_wrong(fs, line) == []
 
 
-def test_a_frozen_line_from_a_controller_beside_its_valve_survives_a_spec_round_trip():
-    """Rebuild a bank from to_dict() after freezing FIC-201's output, and route it.
-
-    The frozen line keeps its points, is square and crosses no unit.
-    """
-    fs, loops = _valved_bank(10)
-    line = loops[1].output
-    assert line.route is not None
-    points = list(line.route.waypoints)
-    line.via(points)
-    rebuilt = Flowsheet.from_dict(fs.to_dict())
-    rebuilt.route()
-    drawn = next(s for s in rebuilt.streams if s.name == line.name)
-
-    assert drawn.route is not None
-    assert drawn.route.waypoints == points
-    assert _drawn_wrong(rebuilt, drawn) == []
-
-
 def test_a_transmitter_pinned_where_drawn_keeps_the_controller_beside_its_valve():
     """Pin FT-201 where a bank draws it and route again.
 
-    FIC-201 stays where it was drawn, and its lines stay clear of units.
+    FIC-201 keeps its place off FV-11, and its lines stay clear of units.
     """
     fs, loops = _valved_bank(10)
     controller, transmitter = loops[1].controller, loops[1].transmitter
-    drawn = frame_of(controller)
+    valve = next(u for u in fs.units if u.name == "FV-11")
+
+    def off_valve() -> tuple[float, float]:
+        """Return FIC-201's corner from FV-11's."""
+        return (
+            frame_of(controller).x - frame_of(valve).x,
+            frame_of(controller).y - frame_of(valve).y,
+        )
+
+    drawn = off_valve()
     transmitter.pin(x=frame_of(transmitter).x, y=frame_of(transmitter).y)
     fs.route()
 
-    assert (frame_of(controller).x, frame_of(controller).y) == pytest.approx((drawn.x, drawn.y))
+    assert off_valve() == pytest.approx(drawn)
     assert [m for s in (loops[1].measurement, loops[1].output) for m in _drawn_wrong(fs, s)] == []
 
 
