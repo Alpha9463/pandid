@@ -95,7 +95,8 @@ def _codes_beside_a_flange() -> "tuple[Flowsheet, dict]":
     prod.pin(port="inlet", x=380, y=140)
     riser = fs.connect(feed.outlet, valve.inlet)
     fs.connect(valve.outlet, prod.inlet)
-    fs.add_instrument("PI", 1, sensing=riser, at=0.6).annotate(high="PAH", low="PAL")
+    pi = fs.add_instrument("PI", 1, sensing=riser, at=0.6)
+    pi.annotate(high="PAH", low="PAL").pin(x=101.18, y=117.18)
     return fs, {"diagram": "p&id", "connections": "flanged"}
 
 
@@ -348,11 +349,11 @@ def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
     assert not under, "not written along its line and not led: " + "; ".join(under)
 
 
-def test_the_p_and_id_needs_exactly_one_leader(sheets):
-    """Check that the P&ID needs exactly one leader."""
+def test_the_p_and_id_needs_exactly_two_leaders(sheets):
+    """Check that the P&ID needs exactly two leaders."""
     _fs, labels = sheets["10_ethanol_pid"]
     led = sorted(lab.name for lab in labels if lab.leader)
-    assert led == ["AE-304-150-80-SS"]
+    assert led == ["AE-304-150-80-SS", "FB-301-200-160-SS"]
 
 
 def test_a_leader_leaves_the_lettering_and_not_the_paper_beside_it(sheets):

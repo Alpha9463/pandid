@@ -90,6 +90,14 @@ def test_unit_fields():
     assert valve.new_line_number is True
 
 
+def test_a_flag_too_short_to_letter_is_refused_where_the_spec_sizes_it():
+    """Check that a spec flag too short to letter is refused with the height that fits."""
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(_spec(units=[{"kind": "Feed", "name": "Air", "height": 20}]))
+    assert "'Air'" in str(excinfo.value)
+    assert "give height=42 or more" in str(excinfo.value)
+
+
 def test_reference_on_equipment_is_refused():
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
