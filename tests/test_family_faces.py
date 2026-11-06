@@ -587,7 +587,7 @@ def test_every_route_starts_main_from_mains_own_last_drawing():
 # down, at y = 205, and a feed and a draw on one wall at 187.5 and 222.5. A
 # default separator at (300, 300) is 62 x 100: its feed
 # sits at y = 350. A stirred reactor at (300, 300) takes a top-head feed at
-# x = 312.4, clear of the drive.
+# x = 310, clear of the drive.
 @pytest.mark.parametrize(
     ("unit", "port", "x", "y", "mirrored", "face"),
     [

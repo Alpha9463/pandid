@@ -234,7 +234,7 @@ A reactor's, column's or separator's feeds and draws move the same way:
 | `Separator` | `"W"`; `"default"` and `"knockout"` also `"E"` | |
 
 A feed or draw on the opposite wall keeps its stage height, which must lie
-between the reflux and boil-up duty nozzles. Fix one with
+between the condenser and reboiler duty nozzles. Fix one with
 `column.nozzle("feed_2", "E")`.
 
 Symbols whose function depends on gravity should keep their upright orientation.

@@ -719,7 +719,7 @@ BANDS = {
 # Further faces a port series may take, as ``{port: [(face, at, extent,
 # inset)]}`` in finished coordinates, each emitted in its series' ``also``
 # with its pitch. A column's feeds and draws take the opposite wall at their
-# stage height, inside the stretch between the reflux and boil-up duty
+# stage height, inside the stretch between the condenser and reboiler duty
 # nozzles; an upright drum's feeds take its east wall. A stirred reactor's
 # feed takes the top head on the side away from the vent, clear of the drive
 # and shaft, where it meets the head's ink; it takes one there.
@@ -728,8 +728,9 @@ SERIES_FACES = {
                             "draw": [("W", 105.0, 0.35, 0.0)]},
     ("column", "packed"): {"feed": [("E", 105.0, 0.35, 0.0)],
                            "draw": [("W", 105.0, 0.35, 0.0)]},
-    ("reactor", "default"): {"feed": [("N", 12.4, 0.0, 1.5)]},
-    ("reactor", "jacketed"): {"feed": [("N", 12.0, 0.0, 2.2)]},
+    # An arrowhead's width short of the motor.
+    ("reactor", "default"): {"feed": [("N", 10.0, 0.0, 2.0)]},
+    ("reactor", "jacketed"): {"feed": [("N", 8.0, 0.0, 4.35)]},
     ("separator", "default"): {"feed": [("E", 50.0, 0.5, 0.0)]},
     # The level gauge stands off the east wall down to 52.7, so the east feeds
     # sit below it on the shell, eleven inside the box.
