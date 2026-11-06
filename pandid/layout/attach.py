@@ -220,8 +220,10 @@ def nozzle_tap(inst: "Instrument") -> Point | None:
 
     A balloon drawn from a face the author named taps the face's middle.
     Where a line leaves a nozzle there, the tap slides one nozzle pitch
-    along the face, if that stays on the face and off its other connected
-    nozzles: to the side with more room, else toward the balloon.
+    along the face, if that stays on the straight wall the symbol declares
+    there (:func:`~pandid.portgeom.face_wall`) and off the face's other
+    connected nozzles: to the side with more room, else toward the
+    balloon.
 
     Parameters
     ----------
@@ -233,7 +235,7 @@ def nozzle_tap(inst: "Instrument") -> Point | None:
     Point or None
         The moved tap point, or None if the tap stays.
     """
-    from pandid.portgeom import drawn_box, face_point, port_point
+    from pandid.portgeom import face_point, face_wall, port_point
     from pandid.render.symbols import MIN_NOZZLE_PITCH
     from pandid.streams import Stream
 
@@ -241,18 +243,20 @@ def nozzle_tap(inst: "Instrument") -> Point | None:
     if (isinstance(host, Stream) or host is None or host.frame is None
             or not inst._face_stated or inst.relation == "near"):
         return None
-    point, (nx, ny) = face_point(host, host.frame, inst.face or "E")
+    face = inst.face or "E"
+    point, (nx, ny) = face_point(host, host.frame, face)
     nozzles = [port_point(host, host.frame, name)
                for name, port in host.ports.items() if port.stream is not None]
-    if not any(math.dist(point, n) < 0.5 for n in nozzles):
+    wall = face_wall(host, host.frame, face)
+    if wall is None or not any(math.dist(point, n) < 0.5 for n in nozzles):
         return None
-    x0, y0, x1, y1 = drawn_box(host, host.frame)
+    along = 1 if face in ("W", "E") else 0
     f = inst.frame
     lean = 0.0 if f is None else (f.cx - point[0]) * -ny + (f.cy - point[1]) * nx
     sides = [(point[0] - sign * ny * MIN_NOZZLE_PITCH, point[1] + sign * nx * MIN_NOZZLE_PITCH)
              for sign in (1, -1)]
     room = [(min(MIN_NOZZLE_PITCH, *(math.dist(q, n) for n in nozzles)), sign * lean, q)
-            for sign, q in zip((1, -1), sides) if x0 <= q[0] <= x1 and y0 <= q[1] <= y1]
+            for sign, q in zip((1, -1), sides) if wall[0] <= q[along] <= wall[1]]
     best = max(room, default=None)
     return best[2] if best is not None and best[0] >= 0.5 else None
 

@@ -465,6 +465,43 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     }[face.upper()]
 
 
+def face_wall(unit: "Unit", frame, face: str) -> tuple[float, float] | None:
+    """Return the stretch of a drawn face its outline runs straight along.
+
+    It is the symbol's :attr:`~pandid.render.symbols.Symbol.bands` entry
+    for the face as drawn, the stretch its nozzle families may use.
+
+    Parameters
+    ----------
+    unit : Unit
+        Placed unit.
+    frame : Frame
+        Its placement.
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"`` as drawn.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Lowest and highest sheet coordinate along the face, or None if
+        the symbol declares no such stretch on it.
+    """
+    sym = _placed_sym(unit, frame)
+    rot, mirrored, mirror_y = _xform(frame)
+    own = next((f for f in COMPASS_FACES if drawn_side(f, rot, mirrored, mirror_y) == face), None)
+    if own is None:
+        return None
+    band = sym.bands.get(own)
+    if band is None or band[0] >= band[1]:
+        return None
+    edge = {"N": 0.0, "W": 0.0, "S": sym.height, "E": sym.width}[own]
+    ends = [(edge, t) if own in ("W", "E") else (t, edge) for t in band]
+    along, origin = (1, frame.y) if face in ("W", "E") else (0, frame.x)
+    lo, hi = sorted(origin + _to_box(sym, px, py, frame.w, frame.h, rot, mirrored, mirror_y)[0][along]
+                    for px, py in ends)
+    return lo, hi
+
+
 def _flag_reference(unit: "Unit") -> str:
     """Return the off-page reference a boundary flag draws, as text.
 
