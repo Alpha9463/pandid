@@ -113,7 +113,6 @@ KIND_MAP = {
                                 {"suction": ("W", 30.0), "discharge": ("E", 10.0)}),
     ("compressor", "reciprocating"): ("compressors", "Reciprocating Compressor",
                                       {"suction": "W", "discharge": ("E", 25.0)}),
-    ("blower", "default"):     ("compressors", "Compressor", {"suction": "W", "discharge": "N"}),
     # Heat exchangers: nozzles are named for the side (shell or tube), not the duty.
     # The ISO circle-and-zigzag: the tube runs W to E, the shell takes N and S.
     ("hex", "default"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
