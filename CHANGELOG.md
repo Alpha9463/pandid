@@ -145,6 +145,8 @@ These are removed in 0.4.0.
 - A valve station put with `on=` on a line between stacked units is turned to
   run up or down the line, with room kept for it between the units, instead of
   being drawn over the unit above.
+- A sheet fitted to its drawing reaches past a tag drawn beside a unit at its
+  edge, so `label_pos="right"` on the last unit no longer cuts its tag off.
 
 ## [0.2.0] - 2026-11-05
 

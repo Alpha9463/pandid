@@ -2871,7 +2871,8 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
 
 
 def drawing_bounds(fs) -> "tuple[float, float, float, float]":
-    """Return the bounding box of every unit box and route waypoint.
+    """Return the bounding box of every unit box, tag beside a unit, and
+    route waypoint.
 
     Parameters
     ----------
@@ -2889,6 +2890,7 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
         If a unit has no frame.
     """
     from pandid.portgeom import unit_box
+    from pandid.routing.visibility import _tag_halo
 
     if not fs.units:
         return (0.0, 0.0, 0.0, 0.0)
@@ -2897,9 +2899,14 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
     for u in fs.units:
         if u.frame is None:
             raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-        bx0, by0, bx1, by1 = unit_box(u, u.frame)
-        x0, y0 = min(x0, bx0), min(y0, by0)
-        x1, y1 = max(x1, bx1), max(y1, by1)
+        beside = u.kind != "instrument" and u.frame.label_pos in ("left", "right")
+        halo = _tag_halo(u, u.frame) if beside else None
+        boxes = [unit_box(u, u.frame)]
+        if halo is not None:
+            boxes.append((halo.x_min, halo.y_min, halo.x_max, halo.y_max))
+        for bx0, by0, bx1, by1 in boxes:
+            x0, y0 = min(x0, bx0), min(y0, by0)
+            x1, y1 = max(x1, bx1), max(y1, by1)
     for s in fs.streams:
         if s.route and s.route.waypoints:
             for px, py in s.route.waypoints:
