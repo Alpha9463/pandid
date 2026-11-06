@@ -673,45 +673,29 @@ def _tag_pass(fs, joints: "str | None", direction: str) -> "_Tags":
     _Tags
         Tag placements and plates.
     """
-    from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
-                                   flange_boxes, quadrant_labels)
+    from pandid.render.svg import SvgRenderer, _unit_label_box, unit_tags
 
     sheet = SvgRenderer()
-    ink = _ink(fs, direction)
-    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    symbols += [(None, b) for b in flange_boxes(fs, joints)]
-    # Reserve the quadrant codes' boxes before placing tags.
-    codes = quadrant_labels(fs, direction)
-    symbols += [(None, b) for b in map(_unit_label_box, codes) if b is not None]
     at: dict = {}
-    items: list = []
-    for u in fs.units:
+    plates: list = []
+    for u, item, items in unit_tags(fs, joints, direction):
+        plates += [b for b in map(_unit_label_box, items) if b is not None]
         f = u.frame
-        if f is None or u.kind in ("feed", "product", "instrument"):
+        if item is None or f is None:
             continue
         x, y, w, h = f.x, f.y, f.w, f.h
-        tag_box = None
-        if u.tag:
-            item = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols)
-            tag_box = _unit_label_box(item)
-            items.append(item)
-            # The side, the offset from its default spot, and the halo's near edge.
-            side = item[4]
-            base = sheet._label_place(side, x, y, w, h)
-            near = None
-            if tag_box is not None:
-                hx0, hy0, hx1, hy1 = tag_box
-                mx, my = (hx0 + hx1 - 2 * x - w) / 2, (hy0 + hy1 - 2 * y - h) / 2
-                near = {"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
-                        "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[side]
-            at[id(u)] = (side, item[0] - base[0], item[1] - base[1], near)
-        if closed_marking(u, default_registry) == "NC":
-            items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
-        letters = fail_marking(u)
-        if letters:
-            items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
-                                                ink, symbols))
-    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None])
+        tag_box = _unit_label_box(item)
+        # The side, the offset from its default spot, and the halo's near edge.
+        side = item[4]
+        base = sheet._label_place(side, x, y, w, h)
+        near = None
+        if tag_box is not None:
+            hx0, hy0, hx1, hy1 = tag_box
+            mx, my = (hx0 + hx1 - 2 * x - w) / 2, (hy0 + hy1 - 2 * y - h) / 2
+            near = {"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
+                    "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[side]
+        at[id(u)] = (side, item[0] - base[0], item[1] - base[1], near)
+    return _Tags(at, plates)
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
@@ -885,16 +869,16 @@ class DrawioRenderer:
         if table_sheet:
             return self._table_sheet(fs, sheet, border, kind)
 
+        joints = sheet_connections(diagram, connections)
+        tags = _tag_pass(fs, joints, jump_direction)
         body: list[str] = []
         # Cell order is z-order: border and furniture first.
         furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table), border,
-                                                kind)
+                                                kind, tags.plates)
         body.extend(self._border(frame, border))
         body.extend(furniture)
         body.extend(self._packages(fs, fit))
         # Then equipment, runs, taps and balloons.
-        joints = sheet_connections(diagram, connections)
-        tags = _tag_pass(fs, joints, jump_direction)
         balloons: list[str] = []
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
@@ -1745,7 +1729,7 @@ class DrawioRenderer:
     # -------------------------------------------------- furniture
 
     def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False,
-                   border: str = "none", diagram: "str | None" = None):
+                   border: str = "none", diagram: "str | None" = None, labels=()):
         """Return the furniture cells, the frame and the drawing fit.
 
         With a fixed ``sheet`` the drawing is fitted into the space the
@@ -1763,6 +1747,8 @@ class DrawioRenderer:
             ``"none"`` or ``"zone"``.
         diagram : str or None, optional
             Diagram type; ``None`` is a PFD.
+        labels : sequence of tuple, optional
+            Boxes ``(x0, y0, x1, y1)`` of the labels drawn beside units.
 
         Returns
         -------
@@ -1774,7 +1760,7 @@ class DrawioRenderer:
         ValueError
             If the page is too small for the furniture.
         """
-        plan = diagram_plan(fs, sheet, border, show_stream_table, diagram)
+        plan = diagram_plan(fs, sheet, border, show_stream_table, diagram, labels)
         fit = _Fit(1.0, 0.0, 0.0) if plan.fit is None else _Fit(*plan.fit)
         # Fallbacks for the strip's name, date and scale.
         name = fs.name
