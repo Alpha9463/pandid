@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -422,6 +423,17 @@ def test_a_balloon_pinned_where_the_closed_sheet_draws_it_moves_nothing() -> Non
 
         assert _boxes(fs) == before
     assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+@pytest.mark.parametrize("stated", [{"orientation": 0}, {"mirrored": False}])
+def test_a_pin_where_drawn_that_restates_the_turn_is_no_edit(stated: dict[str, Any]) -> None:
+    """Check that a pin where drawn restating the drawn turn or mirror leaves the sheet unchanged."""
+    fs = _gauged()
+    fs.route()
+    pump = _unit(fs, "P-101")
+    pump.pin(x=frame_of(pump).x, y=frame_of(pump).y, **stated)
+
+    assert fs._given() == fs._given_then
 
 
 @pytest.mark.parametrize(
