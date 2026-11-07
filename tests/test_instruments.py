@@ -3463,8 +3463,8 @@ def test_a_balloon_keeps_off_a_balloon_pinned_later_on_both_axes():
     assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
 
 
-def test_a_valve_pinned_where_drawn_after_a_hang_routes():
-    """Route a bank at k = 99, then pin FV-100 where it is drawn and route again.
+def test_a_valve_pinned_by_where_drawn_after_a_hang_routes():
+    """Route a bank at k = 99, then pin FV-100 1 px left of where it is drawn and route again.
 
     The first route() hangs a controller and draws FT-201's line to FIC-201 and
     FIC-202's output with no fallback path and through no unit. The second
@@ -3476,7 +3476,7 @@ def test_a_valve_pinned_where_drawn_after_a_hang_routes():
         assert line.route is not None and not line.route.used_fallback
         assert _drawn_wrong(fs, line) == []
     valve = next(u for u in fs.units if u.name == "FV-100")
-    valve.pin(x=frame_of(valve).x, y=frame_of(valve).y)
+    valve.pin(x=frame_of(valve).x - 1, y=frame_of(valve).y)
     fs.route()
     fs.to_svg(diagram="p&id")
     fs.to_drawio(diagram="p&id")
