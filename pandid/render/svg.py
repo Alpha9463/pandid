@@ -80,6 +80,10 @@ _LABEL_GAP = 4.0
 _LABEL_STEP = 6.0
 # Number of sideways stand-off bands the search tries, nearest first.
 _LABEL_BANDS = 7
+# Furthest a tag steps out from its side's spot.
+_TAG_STEP_OUT = 30.0
+# Outward direction of each side.
+_OUTWARD = {"top": (0, -1), "bottom": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
 def _class_weight(sym) -> LineWeight:
     """Return the line weight of a symbol's outline.
@@ -721,6 +725,22 @@ def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
             if limit is not None and (hits, n) > limit:
                 break
     return hits, n
+
+
+def _box_gap(a, b) -> float:
+    """Return the distance between two boxes, ``0`` where they meet.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float, float, float]
+        Boxes ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    float
+        Shortest distance from one to the other.
+    """
+    return math.hypot(max(b[0] - a[2], a[0] - b[2], 0.0), max(b[1] - a[3], a[1] - b[3], 0.0))
 
 
 def _step_aside(item, room: float, ink=(), others=()):
@@ -4200,8 +4220,10 @@ class SvgRenderer:
         is kept.
 
         Given ``labels``, the tag then also tries every side, free sides
-        first, sliding until its near end reaches the corner, and takes
-        the spot that erases least, then covers fewest labels.
+        first, sliding until its near end reaches the corner, then steps
+        out from the face, staying nearer its own symbol than any other
+        tagged one. It takes the spot that erases least, then covers
+        fewest labels.
 
         Parameters
         ----------
@@ -4234,7 +4256,7 @@ class SvgRenderer:
         if getattr(u, "label_pos", None) or default_registry.for_unit(u).label_pos:
             return item
         # Test only ink near the unit.
-        pad = max(u_width, u_height) + (box[2] - box[0])
+        pad = max(u_width, u_height) + (box[2] - box[0]) + _TAG_STEP_OUT
         window = (x - pad, y - pad, x + u_width + pad, y + u_height + pad)
         near = [line for line in ink if boxes_overlap(line.box, window)]
         # Every other symbol box, grown to its ink.
@@ -4279,21 +4301,32 @@ class SvgRenderer:
             return (*_erases(halo, near, others),
                     sum(1 for b in covered if boxes_overlap(halo, b)))
 
+        own = (x, y, x + u_width, y + u_height)
+        rivals = [b for v, b in symbols if v is not None and v is not u
+                  and v.kind not in ("feed", "product", "instrument")
+                  and boxes_overlap(b, window)]
         least = score(best)
-        for side in free + [s for s in LABEL_SIDES if s not in free]:
-            if least == (0, 0, 0, 0):
-                break
-            lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
-            edgewise = side in ("left", "right")
-            face, along = ((u_height, box[3] - box[1]) if edgewise
-                           else (u_width, box[2] - box[0]))
-            for sx, sy in _slide(lx, ly, (face + along) / 2, edgewise):
-                spot = (sx, sy, anchor, baseline, side, tag)
-                cost = score(spot)
-                if cost < least:
-                    best, least = spot, cost
-                    if least == (0, 0, 0, 0):
-                        break
+        sides = free + [s for s in LABEL_SIDES if s not in free]
+        for out in [k * _LABEL_STEP for k in range(int(_TAG_STEP_OUT // _LABEL_STEP) + 1)]:
+            for side in sides:
+                if least == (0, 0, 0, 0):
+                    return best
+                lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
+                nx, ny = _OUTWARD[side]
+                edgewise = side in ("left", "right")
+                face, along = ((u_height, box[3] - box[1]) if edgewise
+                               else (u_width, box[2] - box[0]))
+                for sx, sy in _slide(lx + nx * out, ly + ny * out, (face + along) / 2, edgewise):
+                    spot = (sx, sy, anchor, baseline, side, tag)
+                    halo = _unit_label_box(spot)
+                    assert halo is not None
+                    if out and any(_box_gap(halo, b) <= _box_gap(halo, own) for b in rivals):
+                        continue
+                    cost = score(spot)
+                    if cost < least:
+                        best, least = spot, cost
+                        if least == (0, 0, 0, 0):
+                            break
         return best
 
     def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):

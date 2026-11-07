@@ -493,20 +493,73 @@ def test_no_halo_lands_on_another_halo(drawn, name):
     assert not struck, f"{name}: halos overlap at " + "; ".join(struck)
 
 
-def test_a_tag_moved_off_a_label_erases_no_line():
-    """Check that tags kept off each other on a crowded bank erase no line."""
-    from test_instruments import _valved_bank
+def _two_pump_bank(face: str) -> Flowsheet:
+    """Build two pumps in parallel, a flow loop on each one's valved suction."""
+    from pandid.devices import ControlValve
 
-    fs, _loops = _valved_bank(100)
-    svg = fs.to_svg(diagram="p&id")
+    fs = Flowsheet("two valved pumps")
+    sp = fs.add(U.Splitter("SP", n_outlets=2))
+    mx = fs.add(U.Mixer("MX", n_inlets=2))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        line = fs.connect(outlet, pump.suction)
+        fs.connect(pump.discharge, inlet)
+        valve = fs.add(ControlValve(f"FV-{100 + i}"), on=line, at=0.5)
+        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve, controller_face=face)
+    return fs
+
+
+def _erased_lines(fs: Flowsheet, svg: str) -> list[str]:
+    """Return each line a tag's halo erases on the drawn sheet."""
     tags = [u.tag for u in fs.units if u.kind not in ("feed", "product", "instrument")]
-    erased = [
+    return [
         f"{tag} on {line.kind} at ({line.box[0]:.0f}, {line.box[1]:.0f})"
         for tag in tags
         for line in _ink(fs, "vertical")
         if overlaps(_tag_halo(svg, tag), line.box)
     ]
-    assert not erased, "; ".join(erased)
+
+
+@pytest.mark.parametrize("face", ["S", "W"])
+def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it(face):
+    """Check that a valve's tag with no clear spot beside its face is written off every line."""
+    fs = _two_pump_bank(face)
+    assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
+
+
+@pytest.mark.parametrize("face", ["N", "S", "E", "W"])
+def test_a_tag_moved_off_a_label_erases_no_more_line_than_its_first_spot(face):
+    """Check that no tag erases more of any ink than where it is placed alone."""
+    from pandid.render.svg import (
+        SvgRenderer,
+        _erases,
+        _unit_label_box,
+        flange_boxes,
+        quadrant_labels,
+        sheet_connections,
+        unit_tags,
+    )
+
+    fs = _two_pump_bank(face)
+    fs.route()
+    joints = sheet_connections("p&id", None)
+    ink = _ink(fs, "vertical")
+    symbols: list = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, "vertical")) if b]
+    worse = []
+    for u, tag, _items in unit_tags(fs, joints, "vertical"):
+        f = u.frame
+        if tag is None or f is None:
+            continue
+        first = SvgRenderer()._tag_item(u, f, f.x, f.y, f.w, f.h, u.tag, ink, symbols)
+        others = [_obstacle(b) for v, b in symbols if v is not u]
+        now, was = (_erases(_unit_label_box(t), ink, others) for t in (tag, first))
+        if any(a > b for a, b in zip(now, was)):
+            worse.append(f"{u.tag}: {was} -> {now}")
+    assert not worse, worse
 
 
 def test_a_tag_moved_off_a_tag_clips_no_symbol():

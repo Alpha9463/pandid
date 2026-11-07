@@ -238,6 +238,10 @@ These are removed in 0.4.0.
   or a balloon moves beside its symbol, a nozzle or the symbol's corner when a
   spot there erases no more of any line or symbol, so the tags of valves close
   together on a line no longer run into each other.
+- A tag with no clear spot beside its symbol steps a little further out, still
+  nearer its own symbol than any other, to a spot that erases no line, so on a
+  small bank of control valves the valve's tag no longer breaks the pipe beside
+  it.
 
 ## [0.2.0] - 2026-11-05
 
