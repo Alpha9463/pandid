@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from collections.abc import Sequence
+from functools import cache
 from itertools import combinations
 from pathlib import Path
 
@@ -42,6 +44,20 @@ def _overlapping(fs: Flowsheet) -> list[tuple[str, str]]:
 def _unit_overlaps(fs: Flowsheet) -> list[str]:
     """Return the messages of the sheet's unit-overlap findings."""
     return [issue.message for issue in fs.validate() if issue.code == "unit-overlap"]
+
+
+@cache
+def _routed() -> tuple[Flowsheet, dict[str, U.Unit]]:
+    """Lay out and route the pinned biodiesel sheet once, for tests to copy."""
+    fs, units = build()
+    fs.layout()
+    fs.route()
+    return fs, units
+
+
+def _routed_copy() -> tuple[Flowsheet, dict[str, U.Unit]]:
+    """Return a copy of the routed pinned biodiesel sheet and its units."""
+    return copy.deepcopy(_routed())
 
 
 def _long_train(n: int) -> Flowsheet:
@@ -736,9 +752,7 @@ def test_partial_pixel_pins_follow_transformed_nozzles_and_preserve_grid_intent(
 
 def test_translating_every_pin_translates_the_drawing() -> None:
     """Check that moving every biodiesel pin 1000 down and right moves every unit as far."""
-    fs, _ = build()
-    fs.layout()
-    fs.route()
+    fs, _ = _routed_copy()
     before = {}
     for unit in fs.units:
         assert unit.frame is not None
@@ -872,9 +886,7 @@ def test_two_units_pinned_to_one_column_and_height_sit_side_by_side() -> None:
 
 def test_the_pinned_biodiesel_sheet_draws_without_an_overlap() -> None:
     """Check that a sheet pinned mostly by height lays out with no two units overlapping."""
-    fs, _ = build()
-    fs.layout()
-    fs.route()
+    fs, _ = _routed_copy()
 
     assert _unit_overlaps(fs) == []
 
@@ -1050,9 +1062,7 @@ def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed() -
 @pytest.mark.parametrize("skip", ["s103", "dirty_water"])
 def test_an_unpinned_sheet_matches_a_fresh_build_and_keeps_remaining_pins(skip: str) -> None:
     """Check that removing a pin draws what a build without it draws."""
-    live, units = build()
-    live.layout()
-    live.route()
+    live, units = _routed_copy()
     units[skip].pin_ = None
     fresh, _ = build(skip=skip)
 
