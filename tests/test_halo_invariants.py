@@ -498,15 +498,118 @@ def test_a_tag_moved_off_a_label_erases_no_line():
     from test_instruments import _valved_bank
 
     fs, _loops = _valved_bank(100)
-    svg = fs.to_svg(diagram="p&id")
+    assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
+
+
+def _two_pump_bank(face: str) -> Flowsheet:
+    """Build two pumps in parallel, a flow loop on each one's valved suction."""
+    from test_instruments import _valved_bank
+
+    return _valved_bank(100, controller_face=face, route=False, pumps=2)[0]
+
+
+def _erased_lines(fs: Flowsheet, svg: str) -> list[str]:
+    """Return each line a tag's halo erases on the drawn sheet."""
     tags = [u.tag for u in fs.units if u.kind not in ("feed", "product", "instrument")]
-    erased = [
+    return [
         f"{tag} on {line.kind} at ({line.box[0]:.0f}, {line.box[1]:.0f})"
         for tag in tags
         for line in _ink(fs, "vertical")
         if overlaps(_tag_halo(svg, tag), line.box)
     ]
-    assert not erased, "; ".join(erased)
+
+
+def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it():
+    """Check that a valve's tag with no clear spot beside its face is written off every line."""
+    fs = _two_pump_bank("S")
+    assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
+
+
+def test_a_tag_takes_the_next_spot_when_the_best_erases_more_line(monkeypatch):
+    """Check that the tag pass passes over a spot that erases more line than the first."""
+    from pandid.render.svg import SvgRenderer, unit_tags
+
+    fs = Flowsheet("one valve")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    valve = fs.add(U.Valve("HV-1")).pin(port="inlet", x=200, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    fs.route()
+    place = SvgRenderer._tag_spots
+    aside: list = []
+
+    def across_the_line(
+        self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None, hatches=(), step_out=True
+    ):
+        """Rank a spot across the outlet line first, then one beside the first."""
+        spots = place(self, u, f, x, y, w, h, tag, ink, symbols, labels, hatches, step_out)
+        if labels is None:
+            return spots
+        aside.append((spots[-1][0] - 6, *spots[-1][1:]))
+        return [(x + w + 10, y + h / 2, "start", "middle", "right", tag), aside[0], *spots]
+
+    monkeypatch.setattr(SvgRenderer, "_tag_spots", across_the_line)
+    ((_unit, tag, _items),) = unit_tags(fs, None, "vertical")
+    assert aside and tag == aside[0], tag
+
+
+def test_a_tag_may_pass_over_a_label_still_to_move_on_its_way_clear():
+    """Check that tags on two rows of close valves end clear of each other."""
+    fs = Flowsheet("valve rows")
+    rows = {
+        200: [("HV-100", 200, "closed", ""), ("FV-101", 250, "open", "closed")]
+        + [("FV-102", 290, "open", "closed"), ("FV-103", 340, "open", "closed")],
+        275: [("FV-111", 245, "open", "open"), ("HV-112", 290, "open", "")],
+    }
+    for y, valves in rows.items():
+        before = fs.add(U.Feed(f"F{y}")).pin(port="outlet", x=100, y=y).outlet
+        for tag, x, normal, fail in valves:
+            valve = U.Valve(
+                tag, "control" if fail else "default", normal_position=normal, fail=fail
+            )
+            fs.add(valve).pin(port="inlet", x=x, y=y)
+            fs.connect(before, valve.inlet)
+            before = valve.outlet
+        fs.connect(before, fs.add(U.Product(f"P{y}")).pin(port="inlet", x=700, y=y).inlet)
+    svg = fs.to_svg(diagram="p&id")
+    tags = {u.tag: _tag_halo(svg, u.tag) for u in fs.units if u.kind == "valve"}
+    names = sorted(tags)
+    struck = [
+        (a, b) for i, a in enumerate(names) for b in names[i + 1 :] if overlaps(tags[a], tags[b])
+    ]
+    assert not struck, struck
+
+
+def test_a_tag_stepped_out_stays_nearer_its_own_unit():
+    """Check that a tag with no clear spot near its valve is not left by another unit."""
+    fs = _two_pump_bank("N")
+    svg = fs.to_svg(diagram="p&id")
+    tagged = [
+        u
+        for u in fs.units
+        if u.kind not in ("feed", "product", "instrument") and u.frame is not None
+    ]
+    astray = []
+    for u in tagged:
+        halo = _tag_halo(svg, u.tag)
+        gap = {v.tag: _gap(halo, unit_box(v, v.frame)) for v in tagged if v.frame is not None}
+        astray += [f"{u.tag} by {v}" for v, g in gap.items() if v != u.tag and g < gap[u.tag]]
+    assert not astray, astray
+
+
+def _gap(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    """Return the distance between two boxes, 0 where they meet."""
+    return math.hypot(max(b[0] - a[2], a[0] - b[2], 0.0), max(b[1] - a[3], a[1] - b[3], 0.0))
+
+
+def test_a_tag_keeps_off_the_hatch_marks_of_a_pneumatic_signal():
+    """Check that no tag's halo erases a hatch mark on a control valve's signal."""
+    fs = _two_pump_bank("W")
+    svg = fs.to_svg(diagram="p&id")
+    tags = [u.tag for u in fs.units if u.kind not in ("feed", "product", "instrument")]
+    struck = [tag for tag in tags for bar in _hatch_bars(fs) if overlaps(_tag_halo(svg, tag), bar)]
+    assert not struck, struck
 
 
 def test_a_tag_moved_off_a_tag_clips_no_symbol():
