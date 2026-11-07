@@ -112,6 +112,10 @@ These are removed in 0.4.0.
   the `route()` after it draws what `route()` draws on a fresh build, balloons
   set along their lines with `at=` and controllers hung beside their valve
   included.
+- After `via()` freezes a line to a balloon, laying the sheet out again keeps
+  units clear of the balloon where the line meets it, as of a pinned one, or
+  places the balloon afresh where they cannot clear it, so `validate()` no
+  longer reports `unit-overlap` with it.
 - `route()` called again on a sheet that has not changed no longer draws it
   worse, sometimes with a line through a pump: it keeps a settled drawing as it
   is, and draws an unsettled one again only to keep a better one.
