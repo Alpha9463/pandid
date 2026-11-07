@@ -495,7 +495,7 @@ def test_no_halo_lands_on_another_halo(drawn, name):
 
 def test_a_tag_moved_off_a_label_erases_no_line():
     """Check that tags kept off each other on a crowded bank erase no line."""
-    from test_instruments import _valved_bank
+    from test_instrument_banks import _valved_bank
 
     fs, _loops = _valved_bank(100, controller_face="E")
     svg = fs.to_svg(diagram="p&id")
