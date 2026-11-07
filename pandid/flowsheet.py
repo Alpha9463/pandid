@@ -2483,6 +2483,10 @@ class Flowsheet:
     def layout(self, engine=None) -> None:
         """Lay out every unit, replacing any previous frames.
 
+        Outside route(), first drop every route not drawn with ``via()``,
+        so the sheet is laid out from what the author has stated, as a
+        fresh build is.
+
         Parameters
         ----------
         engine : object or None, optional
@@ -2495,6 +2499,10 @@ class Flowsheet:
         self._put_unkept()
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
+        if not self._in_route:
+            for st in self.streams:
+                if st.route is not None and not st.route.manual:
+                    st.route = None
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
         self._fannable = self._far_branches = self._flags_off = False

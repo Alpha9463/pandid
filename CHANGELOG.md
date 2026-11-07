@@ -108,6 +108,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- `layout()` on a routed sheet lays it out from what the author has stated, so
+  the `route()` after it draws what `route()` draws on a fresh build, balloons
+  set along their lines with `at=` included.
 - `route()` called again on a sheet that has not changed no longer draws it
   worse, sometimes with a line through a pump: it keeps a settled drawing as it
   is, and draws an unsettled one again only to keep a better one.
