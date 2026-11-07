@@ -2101,6 +2101,23 @@ def test_a_face_set_without_attach_after_routing_is_drawn():
     assert frame_of(loops[1].controller).cy < frame_of(loops[1].transmitter).cy
 
 
+def test_a_controller_placed_near_a_process_unit_is_not_hung_beside_its_valve():
+    """Offer no spot beside its valve to a controller placed near the pump it serves."""
+    from pandid.devices import ControlValve
+    from pandid.layout.control import _beside_valve
+
+    fs = Flowsheet("one loop")
+    pump = fs.add(U.Pump("P-1"))
+    line = fs.connect(fs.add(U.Feed("F")).outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Product("P")).inlet)
+    valve = fs.add(ControlValve("FV-1"), on=line, at=0.5)
+    loop = fs.add_control_loop("F", 1, measuring=line, acting_on=valve)
+    loop.controller.attach(pump, offset=45, relation="near")
+    fs.route()
+
+    assert list(_beside_valve(fs, loop.controller)) == []
+
+
 def test_a_line_drawn_by_hand_after_routing_is_kept_clear_on_the_next_route():
     """Route, type a signal line across the transmitter's spot, and route again.
 

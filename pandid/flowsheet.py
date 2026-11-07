@@ -821,10 +821,6 @@ class Flowsheet:
         # for none, and whether any kept one since route() set it.
         self._keep_clear = 0.0
         self._kept_clear = False
-        # The state route() left before it placed balloons hung from
-        # balloons further off or moved them clear, which the next route()
-        # or layout() starts from.
-        self._unkept: tuple | None = None
         # Controllers route() hung beside the valve they drive, by id(),
         # each with its standoff and angle off the actuator and its
         # attachment then.
@@ -2490,7 +2486,6 @@ class Flowsheet:
 
         if not self._in_route:
             self._put_main()
-        self._put_unkept()
         self._unhang()
         if not self._in_route:
             for st in self.streams:
@@ -2611,10 +2606,7 @@ class Flowsheet:
         are then tried again for the balloons still so placed, judged the
         same way, each also kept where it takes a line out of a unit at the
         price :func:`~pandid.layout.control._out_of_unit` allows.
-        Where any of these is kept, the next route() or layout() starts
-        from the drawing before them, unless the author has stated a pin,
-        ``via()`` route or note position since; then it starts from the
-        drawing shown. A controller hung beside its valve then stays there
+        On a later route(), a controller hung beside its valve stays there
         where a ``via()`` line meets it or its transmitter; any other is
         kept there only if the sheet so drawn passes the hang's terms
         against the sheet drawn without it. Then, where a line that found
@@ -2773,8 +2765,6 @@ class Flowsheet:
             self._put_drawing(drawn)
             self._spread, self._layout_stale = side, True
             if fit:
-                # Start from this layout, not the state held for the next route().
-                self._unkept = None
                 for u in headers:
                     u._fit_pitch = pitches[u]
             try:
@@ -2844,9 +2834,9 @@ class Flowsheet:
                 continue
             if self._main is None:
                 self._main = drawn
-            # The states held for the next route() lie before the bands
-            # closed; main's drawing holds them.
-            self._unkept = self._unhung = None
+            # The sheet held as routed without hanging lies before the
+            # bands closed; main's drawing holds it.
+            self._unhung = None
 
     def _stated(self) -> tuple:
         """Return every drawing coordinate the author has stated.
@@ -2908,7 +2898,6 @@ class Flowsheet:
         from pandid.layout.control import _out_of_unit, _taps_off
         from pandid.routing import DefaultRouter
 
-        self._put_unkept()
         # A controller an earlier route() hung beside its valve stays there
         # while a via() line meets it or its transmitter.
         units = {id(u): u for u in self.units}
@@ -2961,11 +2950,8 @@ class Flowsheet:
                 self._relayout(router, split, order, True)
             self._stack_spans = self._rows_out = self._tees_away = self._route_stale = False
         if not self._laying_out and (router is None or type(router) is DefaultRouter):
-            unkept = self._state()
-            if self._keep_further_off(router or DefaultRouter()):
-                self._unkept = unkept
-            if self._turn_blocked_exits(router or DefaultRouter()):
-                self._unkept = unkept
+            self._keep_further_off(router or DefaultRouter())
+            self._turn_blocked_exits(router or DefaultRouter())
             self._route_round_units(router or DefaultRouter())
 
     def _turn_blocked_exits(self, router) -> bool:
@@ -3170,19 +3156,6 @@ class Flowsheet:
         flaws.update(c.kind for c in analyze_conflicts(self)
                      if c.kind in ("crossing", "fallback"))
         return flaws
-
-    def _put_unkept(self) -> None:
-        """Put back the state held from before balloons were kept further off
-        or moved clear, unless the author has stated drawing coordinates
-        since.
-
-        Whether the layout is stale is kept as it stands.
-        """
-        held, self._unkept = self._unkept, None
-        if held is not None and self._unedited():
-            stale = self._layout_stale
-            self._put_state(held)
-            self._layout_stale = stale
 
     def _keep_on_sheet(self, router) -> bool:
         """Place each balloon drawn past the sheet's top or left edge, on an
@@ -3394,8 +3367,8 @@ class Flowsheet:
         tuple
             State for :meth:`_put_drawing`.
         """
-        return (self._state(), self._unkept, self._layout_stale, self._route_stale,
-                self._family_faces, self._added_faces, list(self.unplaced_instruments))
+        return (self._state(), self._layout_stale, self._route_stale, self._family_faces,
+                self._added_faces, list(self.unplaced_instruments))
 
     def _put_drawing(self, drawing: tuple) -> None:
         """Put back what :meth:`_drawing` returned.
@@ -3405,8 +3378,8 @@ class Flowsheet:
         drawing : tuple
             What :meth:`_drawing` returned.
         """
-        (state, self._unkept, layout_stale, route_stale, self._family_faces,
-         self._added_faces, unplaced) = drawing
+        (state, layout_stale, route_stale, self._family_faces, self._added_faces,
+         unplaced) = drawing
         self._put_state(state)
         self._layout_stale, self._route_stale = layout_stale, route_stale
         self.unplaced_instruments = list(unplaced)

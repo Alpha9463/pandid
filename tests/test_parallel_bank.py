@@ -172,6 +172,19 @@ def test_a_header_kept_stock_draws_as_the_stock_header_without_lanes(monkeypatch
     assert _drawing(fs) == _drawing(plain)
 
 
+def test_a_header_keeps_its_stock_face_where_a_grown_one_would_overlap_a_unit():
+    fs = Flowsheet("Blend")
+    mx = fs.add(U.Mixer("MX", n_inlets=4)).pin(x=400, y=200)
+    for i, inlet in enumerate(mx.inlets):
+        fs.connect(fs.add(U.Feed(f"F-{i}")).outlet, inlet)
+    pump = fs.add(U.Pump("P-1")).pin(x=390, y=280)
+    fs.connect(mx.outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Product("P")).inlet)
+    fs.route()
+    assert mx.frame is not None and mx.frame.h == 50
+    assert not [i for i in fs.validate() if i.code == "unit-overlap"]
+
+
 def _retyped(fs: Flowsheet) -> None:
     """Type the feed line's drawn route back in with via()."""
     line = fs.streams[0]

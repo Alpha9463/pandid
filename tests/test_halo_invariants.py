@@ -497,7 +497,7 @@ def test_a_tag_moved_off_a_label_erases_no_line():
     """Check that tags kept off each other on a crowded bank erase no line."""
     from test_instrument_banks import _valved_bank
 
-    fs, _loops = _valved_bank(100, controller_face="E")
+    fs, _loops = _valved_bank(100)
     assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
 
 
