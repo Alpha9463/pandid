@@ -108,6 +108,10 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- Where its drawing does not settle, `route()` also lays the sheet out again
+  from that drawing and draws it again, and keeps the new drawing where it is
+  better, so a bank of tapped pumps is drawn on the first `route()` as well as
+  after `layout()`.
 - `layout()` on a routed sheet also lays it out from what the author has
   stated, as a fresh build is, and keeps that layout where the `route()` after
   it draws no worse than from the drawing's own routes, so a routed sheet laid
