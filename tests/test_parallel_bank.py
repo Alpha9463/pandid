@@ -296,6 +296,22 @@ def test_valves_moved_apart_on_a_banks_discharge_cross_no_line_at_a_nozzle():
     assert not [i for i in fs.validate() if i.code == "route-crosses-near-nozzle"]
 
 
+def test_a_valve_moved_off_its_neighbour_keeps_other_lines_out_of_it():
+    fs, valves, _ = _valved(4, at=0.5, kind=ControlValve, discharge=True)
+    fs.route()
+    boxes = [unit_box(valve, valve.frame) for valve in valves]
+    for valve, box in zip(valves, boxes):
+        if any(other is not box and boxes_overlap(box, other, -1.0) for other in boxes):
+            continue
+        for stream in fs.streams:
+            if valve in (stream.source.owner, stream.dest.owner):
+                continue
+            points = stream_polyline(stream)
+            for (x0, y0), (x1, y1) in zip(points, points[1:]):
+                segment = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+                assert not boxes_overlap(box, segment), (valve.name, stream.name)
+
+
 @pytest.mark.parametrize("build", [lambda: _valved(4, at=0.3)[0], _makeup])
 def test_a_valve_placed_or_off_a_flag_keeps_its_place(monkeypatch, build):
     fs = build()

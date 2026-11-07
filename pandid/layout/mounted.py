@@ -859,6 +859,33 @@ def _footprint(assembly: StationAssembly, frames: dict[Unit, Frame]) -> list[Box
     return boxes
 
 
+def _on_pipes(frames: dict[Unit, Frame], pipes: list[list[Point]], leg: Leg) -> bool:
+    """Return whether a pipe other than a leg's own line enters a frame.
+
+    Parameters
+    ----------
+    frames : dict[Unit, Frame]
+        Proposed frames on the leg.
+    pipes : list[list[Point]]
+        Routed lines.
+    leg : Leg
+        Leg the frames sit on.
+
+    Returns
+    -------
+    bool
+        True if a segment off the leg's line overlaps any frame.
+    """
+    axis = 1 if _level(leg) else 0
+    line = leg[0][axis]
+    boxes = [unit_box(unit, frame) for unit, frame in frames.items()]
+    return any(boxes_overlap(box, (min(a[0], b[0]), min(a[1], b[1]),
+                                   max(a[0], b[0]), max(a[1], b[1])))
+               for points in pipes for a, b in zip(points, points[1:])
+               if abs(a[axis] - line) > 1e-6 or abs(b[axis] - line) > 1e-6
+               for box in boxes)
+
+
 def _signal_exits(frames: dict[Unit, Frame]) -> list[Box]:
     """Return the stand-off box beyond each connected signal port.
 
@@ -1257,8 +1284,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     element keeps clear of the ground of each package it has no unit
     in. With ``spread`` set, where no way keeps :data:`ALONG` along
     the pipe and the elements would be drawn over a unit, each keeps
-    :data:`GAP` all round on the nearest spot on the side ``spread``
-    names, if any way has one.
+    :data:`GAP` all round and off every other pipe on the nearest spot
+    on the side ``spread`` names, if any way has one.
 
     Parameters
     ----------
@@ -1339,7 +1366,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
             pipe, then across it.
         side : int, default=0
             -1 to search only back along the leg from each wanted
-            centre, +1 only on along it, 0 both ways.
+            centre, +1 only on along it, 0 both ways; either way set,
+            each element also stays off every other pipe.
 
         Returns
         -------
@@ -1376,6 +1404,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                     chosen = next(((at, frames) for frames in _frames_at(element, at, leg)
                                    if _clear(frames, others, level, fenced, pipes, (source, dest),
                                              exit_gap, room)
+                                   and not (side and _on_pipes(frames, pipes, leg))
                                    and (turned is None or not any(
                                        boxes_overlap(box, end, GAP)
                                        for box in _footprint(turned, frames) for end in ends))),
