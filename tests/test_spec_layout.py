@@ -180,9 +180,9 @@ def test_the_layout_keeps_the_state_route_left_out_of_its_readable_keys() -> Non
     assert state["fallback"]
 
 
-@pytest.mark.parametrize("spoil", ["engine", "route_state"])
+@pytest.mark.parametrize(("spoil", "edit"), [("engine", "face"), ("route_state", "layout")])
 def test_a_layout_read_without_its_route_state_draws_as_saved_and_edits_afresh(
-    spoil: str,
+    spoil: str, edit: str
 ) -> None:
     """Check that a layout of another engine, or whose route_state does not decode, draws
     as saved, and lays the sheet out afresh once edited."""
@@ -199,7 +199,7 @@ def test_a_layout_read_without_its_route_state_draws_as_saved_and_edits_afresh(
     assert "route_state" not in again.to_dict()["layout"]
     fresh = Flowsheet.from_dict({key: value for key, value in spec.items() if key != "layout"})
     for sheet in (again, fresh):
-        _edits()["face"](sheet)
+        _edits()[edit](sheet)
         sheet.route()
     assert _drawn(again) == _drawn(fresh)
 
@@ -249,6 +249,9 @@ def _edits() -> dict[str, Callable[[Flowsheet], Any]]:
     def nozzle(fs: Flowsheet) -> None:
         unit(fs, "P-0").nozzle("suction", "W").nozzle("discharge", "E")
 
+    def lay_out(fs: Flowsheet) -> None:
+        fs.layout()
+
     return {
         "pin": pin,
         "via": via,
@@ -256,6 +259,7 @@ def _edits() -> dict[str, Callable[[Flowsheet], Any]]:
         "add a unit": add,
         "face": face,
         "nozzle": nozzle,
+        "layout": lay_out,
     }
 
 
@@ -269,6 +273,7 @@ def _edits() -> dict[str, Callable[[Flowsheet], Any]]:
         (2, None, "add a unit"),
         (2, None, "face"),
         (2, None, "nozzle"),
+        (1, None, "layout"),
     ],
 )
 def test_an_edit_after_reading_back_draws_as_on_the_original(
