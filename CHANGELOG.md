@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and says how to clear it: an `at=` for a valve alone on its line, the `at=`
   bounds that keep the line's order where other items share it, or the end or
   neighbour to move where pinned ends leave no room.
+- `validate()` warns `tap-crosses-unit` when a balloon's tap line is drawn
+  through a unit other than its own, and names the pin that moves it clear.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:

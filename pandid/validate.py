@@ -1172,7 +1172,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.portgeom import (is_anchored, pin_intent, port_faces, port_point,
                                  resolve_port, unit_box)
     from pandid.package import frame as package_frame
-    from pandid.render.svg import crossings, stream_polyline
+    from pandid.render.svg import crossings, stream_polyline, tap_lines, tap_route
     from pandid.routing.metrics import path_length
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
@@ -1523,6 +1523,19 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 warnings.append(Issue("warning", "route-detour",
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
+
+        # Soft: a balloon's tap line through a unit body other than its own.
+        for inst, tap, centre in tap_lines(fs):
+            route = tap_route(inst, tap, centre)
+            for u, box, _ in hosted:
+                if u is inst or u is getattr(inst, "host", None):
+                    continue
+                if any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:])):
+                    warnings.append(Issue(
+                        "warning", "tap-crosses-unit",
+                        f"{inst.name}'s tap line is drawn through {u.name}. "
+                        f"{_move_cure(inst)}"))
+                    break
 
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
 
