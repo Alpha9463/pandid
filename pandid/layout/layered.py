@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
-from pandid.layout.halo import Pad, balloon_pads, pinned_balloons
+from pandid.layout.halo import Pad, balloon_pads, fixed_balloons
 from pandid.layout.stages import slot
 from pandid.package import DEPTH as PACKAGE_DEPTH, MARGIN as PACKAGE_MARGIN, text_width
 from pandid.portgeom import COMPASS, pinned_x, pinned_y, port_faces, resolve_port, unit_box
@@ -279,8 +279,8 @@ def _flag(port: Port | None) -> bool:
 def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None:
     """Give every unit a frame by layered drawing, keeping pins.
 
-    With ``fs._pin_balloons`` set, units step off each balloon pinned
-    on both axes and its chain. With ``fs._near_branches`` set, each
+    With ``fs._pin_balloons`` set, units step off each fixed balloon
+    (:func:`~pandid.layout.halo.fixed_balloons`) and its chain. With ``fs._near_branches`` set, each
     branch :func:`_layers` finds ends just before the unit it feeds;
     ``fs._far_branches`` records whether one is left where it is. With
     ``fs._level_flags`` set, each stack :func:`_level` finds moves to
@@ -369,7 +369,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
                     s.col = pin.col
                 if pin is not None and pin.row is not None:
                     s.row = pin.row
-    _clear_pins(units, pinned_balloons(fs, pads) if fs._pin_balloons else [])
+    _clear_pins(units, fixed_balloons(fs, pads) if fs._pin_balloons else [])
     for unit in units:
         s = slot(unit)
         unit.frame = Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, col=s.col, row=s.row,

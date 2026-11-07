@@ -2067,15 +2067,14 @@ _ROUTE_STATE_KEYS = {
     "held_drawings",
 }
 _DRAWN_LINE_KEYS = {"points", "fallback"}
-_HELD_KEYS = {"main", "unhung", "plain"}
+_HELD_KEYS = {"main", "unhung"}
 _GEOMETRY_KEYS = {"units", "lines", "manual", "settled", "unpriced_crossings"}
 _STATE_KEYS = {"geometry", "unhung", "switches", "stock", "beside"}
-_DRAWING_KEYS = {"state", "plain", "switches", "unplaced"}
+_DRAWING_KEYS = {"state", "switches", "unplaced"}
 # A drawing's own switches, in _drawing() order; the shown drawing's,
 # which the sheet holds; and each switch's default.
-_DRAWING_SWITCHES = ("_plain_stale", "_layout_stale", "_route_stale", "_family_faces",
-                     "_added_faces")
-_SHOWN_SWITCHES = (*_SWITCHES, "_plain_stale", "_family_faces", "_added_faces")
+_DRAWING_SWITCHES = ("_layout_stale", "_route_stale", "_family_faces", "_added_faces")
+_SHOWN_SWITCHES = (*_SWITCHES, "_family_faces", "_added_faces")
 _SWITCH_DEFAULTS = {"_lanes": True, "_family_faces": True}
 
 
@@ -2369,8 +2368,7 @@ def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None
 
 
 def _read_drawing(fs: Flowsheet, entry: Any, where: str) -> tuple:
-    """Read a held drawing: its state, the states held with it and its
-    own switches.
+    """Read a held drawing: its state and its own switches.
 
     Parameters
     ----------
@@ -2394,13 +2392,11 @@ def _read_drawing(fs: Flowsheet, entry: Any, where: str) -> tuple:
     data = _mapping(entry, where)
     _check_keys(data, _DRAWING_KEYS, where)
     state = _read_state(fs, data.get("state", {}), f"{where}.state")
-    plain = (None if data.get("plain") is None
-             else _read_state(fs, data["plain"], f"{where}.plain", state[0]))
-    plain_stale, layout_stale, route_stale, family, added = _read_switches(
+    layout_stale, route_stale, family, added = _read_switches(
         data.get("switches", {}), _DRAWING_SWITCHES, f"{where}.switches")
     unplaced = [_find_unit(fs, _text(name, f"{where}.unplaced"), where)
                 for name in _sequence(data.get("unplaced", []), f"{where}.unplaced")]
-    return (state, plain, plain_stale, layout_stale, route_stale, family, added, unplaced)
+    return (state, layout_stale, route_stale, family, added, unplaced)
 
 
 def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
@@ -2509,8 +2505,6 @@ def _read_route_state(fs: Flowsheet, state: Mapping, where: str) -> bool:
         _check_keys(drawings, _HELD_KEYS, at)
         main = (None if drawings.get("main") is None
                 else _read_drawing(fs, drawings["main"], f"{at}.main"))
-        plain = (None if drawings.get("plain") is None
-                 else _read_state(fs, drawings["plain"], f"{at}.plain"))
         unhung = (None if drawings.get("unhung") is None
                   else _read_geometry(fs, drawings["unhung"], f"{at}.unhung"))
         redraw = state.get("redraw", False)
@@ -2533,7 +2527,7 @@ def _read_route_state(fs: Flowsheet, state: Mapping, where: str) -> bool:
     for unit in held:
         assert unit.frame is not None
         fs._typed_at[id(unit)] = (unit.frame.x, unit.frame.y, dict(unit.frame.port_faces))
-    fs._main, fs._plain_state, fs._unhung = main, plain, unhung
+    fs._main, fs._unhung = main, unhung
     restated, fs.route_converged, fs._undercharged = flags
     fs._drawn_from_spec(redraw is True, restated, redraw is False, held=True)
     return True
@@ -2876,8 +2870,7 @@ def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict
 
 
 def _write_drawing(fs: Flowsheet, drawing: tuple) -> dict[str, Any]:
-    """Write a held drawing: its state, the states held with it and its
-    own switches.
+    """Write a held drawing: its state and its own switches.
 
     Parameters
     ----------
@@ -2891,12 +2884,10 @@ def _write_drawing(fs: Flowsheet, drawing: tuple) -> dict[str, Any]:
     dict[str, Any]
         The drawing entry.
     """
-    state, plain, plain_stale, layout_stale, route_stale, family, added, unplaced = drawing
+    state, layout_stale, route_stale, family, added, unplaced = drawing
     entry: dict[str, Any] = {"state": _write_state(fs, state)}
-    if plain is not None:
-        entry["plain"] = _write_state(fs, plain, state[0])
-    if values := _write_switches(_DRAWING_SWITCHES, (plain_stale, layout_stale, route_stale,
-                                                     family, added)):
+    if values := _write_switches(_DRAWING_SWITCHES, (layout_stale, route_stale, family,
+                                                     added)):
         entry["switches"] = values
     if unplaced:
         entry["unplaced"] = [unit.name for unit in unplaced]
@@ -2972,8 +2963,6 @@ def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
     held: dict[str, Any] = {}
     if fs._main is not None:
         held["main"] = _write_drawing(fs, fs._main)
-    if fs._plain_state is not None:
-        held["plain"] = _write_state(fs, fs._plain_state)
     if fs._unhung is not None:
         held["unhung"] = _write_geometry(fs, fs._unhung)
     if held:

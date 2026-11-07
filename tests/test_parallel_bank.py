@@ -216,17 +216,14 @@ def _tapped_bank(n: int) -> Flowsheet:
     return fs
 
 
-def test_a_sheet_laid_out_again_draws_as_it_would_without_lanes(monkeypatch):
-    fs = _tapped_bank(6)
+def test_a_sheet_laid_out_again_draws_as_a_fresh_build():
+    fresh = _tapped_bank(3)
+    fresh.route()
+    fs = _tapped_bank(3)
     fs.route()
     fs.layout()
     fs.route()
-    _as_main(monkeypatch)
-    plain = _tapped_bank(6)
-    plain.route()
-    plain.layout()
-    plain.route()
-    assert _drawing(fs) == _drawing(plain)
+    assert _drawing(fs) == _drawing(fresh)
 
 
 def test_lanes_are_kept_only_where_they_draw_no_worse_than_without():

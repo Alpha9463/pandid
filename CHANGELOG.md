@@ -119,6 +119,14 @@ These are removed in 0.4.0.
 - A balloon's face set by assignment, as in `tic.face = "N"`, counts as stated:
   the spec writes it, and `route()` no longer turns the balloon to another face
   or hangs it beside the valve it drives.
+- `layout()` on a routed sheet also lays it out from what the author has
+  stated, as a fresh build is, and keeps that layout where the `route()` after
+  it draws no worse than from the drawing's own routes, so a routed sheet laid
+  out again draws as a fresh build wherever that is no worse.
+- After `via()` freezes a line to a balloon, laying the sheet out again keeps
+  units clear of the balloon where the line meets it, as of a pinned one, or
+  places the balloon afresh where they cannot clear it, so `validate()` no
+  longer reports `unit-overlap` with it.
 - `route()` called again on a sheet that has not changed no longer draws it
   worse, sometimes with a line through a pump: it keeps a settled drawing as it
   is, and draws an unsettled one again only to keep a better one.
