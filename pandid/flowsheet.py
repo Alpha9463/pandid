@@ -2773,7 +2773,7 @@ class Flowsheet:
             self._spread, self._layout_stale = side, True
             if fit:
                 # Start from this layout, not the states held with stock faces.
-                self._plain_state = self._unkept = self._stacked = None
+                self._plain_state = self._unkept = None
                 for u in headers:
                     u._fit_pitch = pitches[u]
             try:
