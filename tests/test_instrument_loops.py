@@ -242,6 +242,17 @@ def test_a_unit_laid_out_again_keeps_off_a_controller_held_at_its_frozen_line() 
     ] == []
 
 
+def test_a_balloon_pinned_where_drawn_on_a_fresh_build_has_no_unit_laid_over_it() -> None:
+    """Draw stripped 03_control_loop with FE-101 (2) pinned where route() drew it, clear."""
+    drawn, _ = build_unpinned("03_control_loop")
+    drawn.route()
+    spot = frame_of(next(u for u in drawn.units if u.name == "FE-101 (2)"))
+    fs, _ = build_unpinned("03_control_loop")
+    next(u for u in fs.units if u.name == "FE-101 (2)").pin(x=spot.x, y=spot.y)
+    fs.route()
+    assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
+
+
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
     """Check that a hung controller stands clear of a balloon pinned by grid rank."""
     fs = Flowsheet("grid")

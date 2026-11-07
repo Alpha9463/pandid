@@ -108,6 +108,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A balloon pinned with `pin(x=..., y=...)` where `route()` drew it no longer
+  has a unit laid over it by `layout()` or by a fresh build with the same pin,
+  so `validate()` no longer refuses the sheet with `unit-overlap`.
 - `layout()` on a routed sheet also lays it out from what the author has
   stated, as a fresh build is, and keeps that layout where the `route()` after
   it draws no worse than from the drawing's own routes, so a routed sheet laid

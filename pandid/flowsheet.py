@@ -589,6 +589,28 @@ def _by_hand(units: "list[Unit]") -> "list[Stream]":
             and port.stream.route.manual]
 
 
+def _overlaps_and_flaws(fs: "Flowsheet") -> Counter:
+    """Count a routed sheet's unit overlaps and all its counted flaws.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    Counter
+        ``unit-overlap`` and ``flaws``, the sum of what
+        :func:`~pandid.layout.control._flaws` counts.
+    """
+    from collections import Counter
+
+    from pandid.layout.control import _flaws
+
+    flaws = _flaws(fs)
+    return Counter({"unit-overlap": flaws["unit-overlap"], "flaws": sum(flaws.values())})
+
+
 def _beats(new: tuple, old: tuple) -> bool:
     """Return whether one routed drawing's score beats another's.
 
@@ -3876,11 +3898,12 @@ class Flowsheet:
                 keep_if_better(relaid, _flaws(self))
                 self._exit_tight = False
             if tries and fixed_balloons(self, {}):
-                flaws = _flaws(self)
+                flaws = _overlaps_and_flaws(self)
                 if flaws["unit-overlap"]:
-                    # Keep only a drawing with fewer overlaps.
+                    # Keep only a drawing with fewer overlaps and no more
+                    # flaws in all.
                     flaws["unit-overlap"] -= 1
-                    keep_if_better(repinned, flaws)
+                    keep_if_better(repinned, flaws, _overlaps_and_flaws)
             if tries and self._undercharged:
                 keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
             if tries and any(isinstance(u, Instrument) and nozzle_tap(u) for u in self.units):
