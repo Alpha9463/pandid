@@ -225,9 +225,12 @@ def test_a_restored_drawing_shares_no_frame_with_the_one_it_was_saved_from():
 
 
 def _valved(
-    n: int, at: float | None = None, kind: type[U.Valve] = U.Valve
+    n: int, at: float | None = None, kind: type[U.Valve] = U.Valve, discharge: bool = False
 ) -> tuple[Flowsheet, list[U.Valve], list[U.Pump]]:
-    """Return n pumps between SP and MX, each with a ``kind`` valve on its suction."""
+    """Return n pumps between SP and MX, each with a ``kind`` valve on its suction.
+
+    With ``at`` given, put each valve on its pump's discharge instead if ``discharge``.
+    """
     fs = Flowsheet(f"Valved bank of {n}")
     sp = fs.add(U.Splitter("SP", n_outlets=n))
     mx = fs.add(U.Mixer("MX", n_inlets=n))
@@ -240,9 +243,10 @@ def _valved(
             valve = fs.add(kind(f"HV-{i}"))
             fs.connect(outlet, valve.inlet)
             fs.connect(valve.outlet, pump.suction)
+            fs.connect(pump.discharge, inlet)
         else:
-            valve = fs.add(kind(f"HV-{i}"), on=fs.connect(outlet, pump.suction), at=at)
-        fs.connect(pump.discharge, inlet)
+            lines = [fs.connect(outlet, pump.suction), fs.connect(pump.discharge, inlet)]
+            valve = fs.add(kind(f"HV-{i}"), on=lines[discharge], at=at)
         valves.append(valve)
         pumps.append(pump)
     return fs, valves, pumps
@@ -284,6 +288,12 @@ def test_control_valves_set_on_a_banks_laterals_keep_clear_of_each_other():
     for k, box in enumerate(boxes):
         for other in boxes[k + 1 :]:
             assert not boxes_overlap(box, other, GAP)
+
+
+def test_valves_moved_apart_on_a_banks_discharge_cross_no_line_at_a_nozzle():
+    fs = _valved(5, at=0.5, kind=ControlValve, discharge=True)[0]
+    fs.route()
+    assert not [i for i in fs.validate() if i.code == "route-crosses-near-nozzle"]
 
 
 @pytest.mark.parametrize("build", [lambda: _valved(4, at=0.3)[0], _makeup])

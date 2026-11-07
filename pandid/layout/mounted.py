@@ -1247,16 +1247,18 @@ def _fanned(run: MountedRun, legs: list[Leg]) -> tuple[list[Leg], list[float]] |
 def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
              zones: list[Box], pipes: list[list[Point]], exit_gap: float = 0.0,
              fan: bool = False, packages: tuple[tuple[set[Unit], Box], ...] = (),
-             upright: bool = False, wanted: list[float] | None = None) -> bool:
+             upright: bool = False, wanted: list[float] | None = None,
+             spread: int = 0) -> bool:
     """Set a pipe's elements on its routed polyline.
 
     With no route, one straight leg from the source nozzle along the
     larger offset to the destination stands in. With ``fan`` set, a
     header lateral is set as :func:`_fanned` turns and packs it. Each
     element keeps clear of the ground of each package it has no unit
-    in. Where no way keeps :data:`ALONG` along the pipe and the
-    elements would be drawn over a unit, each keeps :data:`GAP` all
-    round if it can.
+    in. With ``spread`` set, where no way keeps :data:`ALONG` along
+    the pipe and the elements would be drawn over a unit, each keeps
+    :data:`GAP` all round on the nearest spot on the side ``spread``
+    names, if any way has one.
 
     Parameters
     ----------
@@ -1281,6 +1283,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     wanted : list[float] or None, optional
         Wanted centre distance of each element along ``points``, in
         place of the one its place gives.
+    spread : int, default=0
+        -1 to move elements drawn over a unit back along the pipe, +1
+        to move them on along it, 0 to leave them.
 
     Returns
     -------
@@ -1314,13 +1319,13 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                    if not isinstance(element, StationAssembly) and _turns(element)), None)
     if angled is not None:
         return _set_corner(run, angled, legs, want, obstacles, zones, pipes, exit_gap,
-                           packages)
+                           packages, spread)
     starts = [0.0, *accumulate(map(path_length, legs))]
     # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
 
-    def attempt(assigned: list[int], strict: bool,
-                room: tuple[float, float] = (ALONG, GAP)) -> list[dict[Unit, Frame]] | None:
+    def attempt(assigned: list[int], strict: bool, room: tuple[float, float] = (ALONG, GAP),
+                side: int = 0) -> list[dict[Unit, Frame]] | None:
         """Return each element's frames on its assigned leg.
 
         Parameters
@@ -1332,6 +1337,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         room : tuple[float, float], default=(ALONG, GAP)
             Clearance each element keeps from other units along the
             pipe, then across it.
+        side : int, default=0
+            -1 to search only back along the leg from each wanted
+            centre, +1 only on along it, 0 both ways.
 
         Returns
         -------
@@ -1363,7 +1371,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                 reach = int(size / NUDGE_STEP) + 1
                 for step in sorted(range(-reach, reach + 1), key=abs):
                     at = centre + step * NUDGE_STEP
-                    if not low - 1e-6 <= at <= high + 1e-6:
+                    if step * side < 0 or not low - 1e-6 <= at <= high + 1e-6:
                         continue
                     chosen = next(((at, frames) for frames in _frames_at(element, at, leg)
                                    if _clear(frames, others, level, fenced, pipes, (source, dest),
@@ -1390,9 +1398,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     if placed is None:
         placed = attempt(plans[0], False) or []
         drawn = [unit_box(unit, unit.frame) for unit in obstacles if unit.frame is not None]
-        if any(boxes_overlap(unit_box(unit, frame), box, -_BODY_TOL)
-               for frames in placed for unit, frame in frames.items() for box in drawn):
-            placed = next((p for p in (attempt(plan, True, (GAP, GAP)) for plan in plans)
+        if spread and any(boxes_overlap(unit_box(unit, frame), box, -_BODY_TOL)
+                          for frames in placed for unit, frame in frames.items() for box in drawn):
+            placed = next((p for p in (attempt(plan, True, (GAP, GAP), spread) for plan in plans)
                            if p is not None), placed)
     for frames in placed:
         _commit(frames, obstacles)
@@ -1446,7 +1454,8 @@ def _fence(run: MountedRun, group: dict[Unit, int]) -> float:
 
 def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float],
                 obstacles: list[Unit], zones: list[Box], pipes: list[list[Point]],
-                exit_gap: float, packages: tuple[tuple[set[Unit], Box], ...]) -> bool:
+                exit_gap: float, packages: tuple[tuple[set[Unit], Box], ...],
+                spread: int = 0) -> bool:
     """Set a pipe's device that turns it at a corner, then the rest.
 
     The corner nearest the device's wanted distance where
@@ -1477,6 +1486,9 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
         Clearance each element's signal exits keep from other units.
     packages : tuple[tuple[set[Unit], Box], ...]
         Each package's units and the ground they cover.
+    spread : int, default=0
+        Way to move furniture drawn over a unit, as :func:`_set_run`
+        takes it.
 
     Returns
     -------
@@ -1504,7 +1516,7 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
                           run.places[:index] + run.places[index + 1:], run.taps)
         if rest.elements:
             _set_run(rest, points, obstacles, zones, pipes, exit_gap, packages=packages,
-                     wanted=wanted[:index] + wanted[index + 1:])
+                     wanted=wanted[:index] + wanted[index + 1:], spread=spread)
         return False
     _commit({unit: frame}, obstacles)
     zones.append(unit_box(unit, frame))
@@ -1519,7 +1531,7 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
              [outlet, *points[k + 1:]], [w - after for w in wanted[index + 1:]])):
         if part.elements:
             roomy = _set_run(part, line, obstacles, zones, pipes, exit_gap,
-                             packages=packages, wanted=want) and roomy
+                             packages=packages, wanted=want, spread=spread) and roomy
     return roomy
 
 
@@ -1544,6 +1556,9 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     as a unit, as :func:`mounted_runs` with ``angle`` unset finds it,
     then each is set at a corner of its pipe. ``fs._angle_valves``
     records whether any pipe carries such a device.
+    ``fs._spread`` is passed to :func:`_set_run` as ``spread``, and
+    ``fs._furniture_over`` records whether any furniture is drawn over
+    another unit.
 
     Parameters
     ----------
@@ -1596,7 +1611,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     crowded = False
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
         roomy = _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap,
-                         fs._fan_out, packages, fs._upright_stations)
+                         fs._fan_out, packages, fs._upright_stations, spread=fs._spread)
         crowded = crowded or (
             not roomy and any(not _level(leg) for leg in zip(routes[i], routes[i][1:]))
             and any(isinstance(element, StationAssembly) for element in runs[i].elements))
@@ -1606,3 +1621,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
                          for unit in members if unit.frame is not None
                          for box in _signal_exits({unit: unit.frame})
                          for other in obstacles if other is not unit and other.frame is not None)
+    fs._furniture_over = any(
+        boxes_overlap(unit_box(unit, unit.frame), unit_box(other, other.frame), -_BODY_TOL)
+        for unit in members if unit.frame is not None
+        for other in obstacles if other is not unit and other.frame is not None)

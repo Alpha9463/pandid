@@ -240,7 +240,8 @@ These are removed in 0.4.0.
   together on a line no longer run into each other.
 - Valves put with `on=` on neighbouring lines too close to hold them side by
   side, such as control valves on the suction lines of a three-pump bank, are
-  drawn apart along their lines instead of one on top of the other.
+  drawn apart along their lines instead of one on top of the other, where that
+  adds no finding other than line crossings, bends or a tag over a line.
 
 ## [0.2.0] - 2026-11-05
 
