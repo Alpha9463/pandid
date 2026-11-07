@@ -12,7 +12,7 @@ from pandid.layout import layered, mounted
 from pandid.layout.layered import COL_GAP, LANE_PITCH
 from pandid.layout.mounted import ALONG, GAP
 from _quality import measure_final
-from pandid.portgeom import unit_box
+from pandid.portgeom import resolve_size, unit_box
 from pandid.render import symbols
 from pandid.route_geometry import stream_polyline
 from pandid.routing import lanes
@@ -310,6 +310,15 @@ def test_a_valve_moved_off_its_neighbour_keeps_other_lines_out_of_it():
             for (x0, y0), (x1, y1) in zip(points, points[1:]):
                 segment = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
                 assert not boxes_overlap(box, segment), (valve.name, stream.name)
+
+
+def test_a_header_spaces_its_lines_to_fit_their_control_valves():
+    fs, valves, _ = _valved(4, at=0.5, kind=ControlValve, discharge=True)
+    fs.route()
+    assert not [i for i in fs.validate() if i.code == "unit-overlap"]
+    mixer = next(u for u in fs.units if u.kind == "mixer")
+    across = resolve_size(valves[0])[1] + GAP
+    assert resolve_size(mixer)[1] == pytest.approx(3 * across + 2 * symbols.JUNCTION_END)
 
 
 @pytest.mark.parametrize("build", [lambda: _valved(4, at=0.3)[0], _makeup])

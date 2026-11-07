@@ -245,6 +245,10 @@ These are removed in 0.4.0.
   side, such as control valves on the suction lines of a three-pump bank, are
   drawn apart along their lines instead of one on top of the other, where that
   adds no finding other than line crossings, bends or a tag over a line.
+- Where valves on a `Mixer`'s or `Splitter`'s lines would still be drawn over
+  each other, such as control valves on a four-pump bank's discharge lines, its
+  face grows to space its nozzles the widest valve across its line plus a gap,
+  on the same terms.
 
 ## [0.2.0] - 2026-11-05
 
