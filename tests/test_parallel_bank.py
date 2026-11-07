@@ -3,13 +3,16 @@
 import pytest
 
 from pandid import Flowsheet, ShellAndTubeExchanger, units as U
+from pandid.devices import ControlValve
 from pandid.streams import Stream
 from pandid.layout.attach import stream_path
+from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.control import _flaws, _shared, _taps_off
 from pandid.layout import layered, mounted
 from pandid.layout.layered import COL_GAP, LANE_PITCH
-from pandid.layout.mounted import ALONG
+from pandid.layout.mounted import ALONG, GAP
 from _quality import measure_final
+from pandid.portgeom import unit_box
 from pandid.render import symbols
 from pandid.route_geometry import stream_polyline
 from pandid.routing import lanes
@@ -241,8 +244,13 @@ def test_a_restored_drawing_puts_back_whether_a_lateral_can_fan():
     assert fs._fannable
 
 
-def _valved(n: int, at: float | None = None) -> tuple[Flowsheet, list[U.Valve], list[U.Pump]]:
-    """Return n pumps between SP and MX, each with a valve on its suction."""
+def _valved(
+    n: int, at: float | None = None, kind: type[U.Valve] = U.Valve, discharge: bool = False
+) -> tuple[Flowsheet, list[U.Valve], list[U.Pump]]:
+    """Return n pumps between SP and MX, each with a ``kind`` valve on its suction.
+
+    With ``at`` given, put each valve on its pump's discharge instead if ``discharge``.
+    """
     fs = Flowsheet(f"Valved bank of {n}")
     sp = fs.add(U.Splitter("SP", n_outlets=n))
     mx = fs.add(U.Mixer("MX", n_inlets=n))
@@ -252,12 +260,13 @@ def _valved(n: int, at: float | None = None) -> tuple[Flowsheet, list[U.Valve], 
     for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
         pump = fs.add(U.Pump(f"P-{i}"))
         if at is None:
-            valve = fs.add(U.Valve(f"HV-{i}"))
+            valve = fs.add(kind(f"HV-{i}"))
             fs.connect(outlet, valve.inlet)
             fs.connect(valve.outlet, pump.suction)
+            fs.connect(pump.discharge, inlet)
         else:
-            valve = fs.add(U.Valve(f"HV-{i}"), on=fs.connect(outlet, pump.suction), at=at)
-        fs.connect(pump.discharge, inlet)
+            lines = [fs.connect(outlet, pump.suction), fs.connect(pump.discharge, inlet)]
+            valve = fs.add(kind(f"HV-{i}"), on=lines[discharge], at=at)
         valves.append(valve)
         pumps.append(pump)
     return fs, valves, pumps
@@ -289,6 +298,38 @@ def _makeup() -> Flowsheet:
     fs.connect(fs.add(U.Feed("Return")).outlet, mx.inlets[1])
     fs.connect(mx.outlet, fs.add(U.Pump("P-1")).suction)
     return fs
+
+
+def test_control_valves_set_on_a_banks_laterals_keep_clear_of_each_other():
+    fs, valves, _ = _valved(3, at=0.5, kind=ControlValve)
+    fs.route()
+    assert not [i for i in fs.validate() if i.code == "unit-overlap"]
+    boxes = [unit_box(valve, valve.frame) for valve in valves]
+    for k, box in enumerate(boxes):
+        for other in boxes[k + 1 :]:
+            assert not boxes_overlap(box, other, GAP)
+
+
+def test_valves_moved_apart_on_a_banks_discharge_cross_no_line_at_a_nozzle():
+    fs = _valved(5, at=0.5, kind=ControlValve, discharge=True)[0]
+    fs.route()
+    assert not [i for i in fs.validate() if i.code == "route-crosses-near-nozzle"]
+
+
+def test_a_valve_moved_off_its_neighbour_keeps_other_lines_out_of_it():
+    fs, valves, _ = _valved(4, at=0.5, kind=ControlValve, discharge=True)
+    fs.route()
+    boxes = [unit_box(valve, valve.frame) for valve in valves]
+    for valve, box in zip(valves, boxes):
+        if any(other is not box and boxes_overlap(box, other, -1.0) for other in boxes):
+            continue
+        for stream in fs.streams:
+            if valve in (stream.source.owner, stream.dest.owner):
+                continue
+            points = stream_polyline(stream)
+            for (x0, y0), (x1, y1) in zip(points, points[1:]):
+                segment = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+                assert not boxes_overlap(box, segment), (valve.name, stream.name)
 
 
 @pytest.mark.parametrize("build", [lambda: _valved(4, at=0.3)[0], _makeup])
