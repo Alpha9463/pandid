@@ -54,6 +54,20 @@ def test_a_flag_comes_back_where_it_was_pinned():
     assert Flowsheet.from_dict(fs.to_dict()).units[0].pin_ == fs.units[0].pin_
 
 
+def test_a_face_set_without_attach_is_read_back() -> None:
+    """Check that a balloon's face set by assignment is written and read back as stated."""
+    fs = Flowsheet("face")
+    line = fs.connect(fs.add(units.Feed("F")).outlet, fs.add(units.Product("P")).inlet)
+    ft = fs.add_instrument("FT", 101, sensing=line)
+    tic = fs.add_instrument("TIC", 101, near=ft)
+    tic.face = "N"
+    again = Flowsheet.from_dict(fs.to_dict())
+    read = next(u for u in again.units if u.name == "TIC-101")
+
+    assert isinstance(read, units.Instrument)
+    assert (read.face, read._face_stated) == ("N", True)
+
+
 # --- equipment ----------------------------------------------------------------
 
 

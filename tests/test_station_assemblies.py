@@ -47,6 +47,76 @@ def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
     ]
 
 
+def test_a_pinned_station_reads_back_as_it_was_pinned() -> None:
+    """Check that a pinned, mirrored station reads back pinned, turned and mirrored as built."""
+    fs = Flowsheet("Pinned station")
+    fs.add_valve_station("CV-101", x=200, y=300, mirrored=True)
+    again = Flowsheet.from_dict(fs.to_dict())
+
+    def pinned(sheet: Flowsheet) -> dict[str, tuple[object, ...]]:
+        return {
+            u.name: (u.pin_, u._pin_ports, u._turn_stated, u._mirror_stated) for u in sheet.units
+        }
+
+    assert pinned(again) == pinned(fs)
+
+
+def test_a_turn_and_mirror_stated_on_a_station_member_are_read_back() -> None:
+    """Check that a control valve pinned unturned and unmirrored in a west-flowing station keeps it."""
+    fs = Flowsheet("Stated member")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=1300, y=300)
+    product = fs.add(Product("Product")).pin(port="inlet", x=100, y=300)
+    station = fs.add_valve_station("CV-101")
+    fs.connect(feed.outlet, station.inlet)
+    fs.connect(station.outlet, product.inlet)
+    station.control.pin(orientation=0, mirrored=False)
+    spec = fs.to_dict()
+    again = Flowsheet.from_dict(spec)
+    again.route()
+    control = next(u for u in again.units if u.name == "CV-101")
+    (entry,) = [u for u in again.to_dict()["units"] if u["name"] == "CV-101"]
+
+    assert control.frame is not None and control.frame.mirrored is False
+    assert (entry["pin"]["orientation"], entry["pin"]["mirrored"]) == (0, False)
+
+
+def test_an_older_spec_reads_a_station_s_own_turns_as_stated() -> None:
+    """Check that a spec naming no station turns or mirrors reads every written one as stated."""
+    fs = Flowsheet("Pinned station")
+    fs.add_valve_station("CV-101", x=200, y=300, mirrored=True)
+    spec = fs.to_dict()
+    (entry,) = spec["stations"]
+    assert entry.pop("station_turns") and entry.pop("station_mirrors")
+    again = Flowsheet.from_dict(spec)
+    pinned = [e for e in spec["units"] if "pin" in e]
+
+    assert {u.name for u in again.units if u._turn_stated} == {
+        e["name"] for e in pinned if "orientation" in e["pin"]
+    }
+    assert {u.name for u in again.units if u._mirror_stated} == {
+        e["name"] for e in pinned if "mirrored" in e["pin"]
+    }
+    assert again.to_dict() == spec
+
+
+def test_a_station_with_a_member_moved_reads_back_drawn_as_it_was() -> None:
+    """Check that a pinned, mirrored station with its control valve moved down draws as built."""
+
+    def build() -> Flowsheet:
+        fs = Flowsheet("station")
+        station = fs.add_valve_station("CV-101", x=200, y=300, mirrored=True)
+        station.control.pin(y=350, port="inlet")
+        return fs
+
+    fs = build()
+    again = Flowsheet.from_dict(fs.to_dict())
+    for sheet in (fs, again):
+        sheet.route()
+
+    assert again.to_svg(check=False) == fs.to_svg(check=False)
+    assert [i.code for i in again.validate() if i.code == "route-crosses-unit"] == []
+
+
 def test_hand_wired_station_is_set_on_its_pipe() -> None:
     """Keep an unpinned hand-wired station out of the equipment grid."""
     fs = Flowsheet("Hand-wired station")

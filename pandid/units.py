@@ -3845,8 +3845,7 @@ class Instrument(Unit):
         # Attachment intent, set only by attach().
         self.host: "Stream | Unit | None" = None
         self.at: float | None = None
-        self.face: str | None = None
-        self._face_stated = False
+        self.face = None
         self.offset: float = 45.0
         self.angle: float = 90.0
         self.relation: str = "sensing"
@@ -3855,6 +3854,30 @@ class Instrument(Unit):
         self.quadrants: dict[str, tuple[str, ...]] = {}
         # Resolved tap point, set only by layout.
         self.tap: tuple[float, float] | None = None
+
+    @property
+    def face(self) -> str | None:
+        """Return the face of a unit host the balloon hangs from.
+
+        Returns
+        -------
+        str or None
+            ``"N"``, ``"S"``, ``"E"`` or ``"W"``; ``None`` on a stream
+            host.
+        """
+        return self._face
+
+    @face.setter
+    def face(self, value: str | None) -> None:
+        """Set the face of a unit host, stated unless it is None.
+
+        Parameters
+        ----------
+        value : str or None
+            ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or None.
+        """
+        self._face = value
+        self._face_stated = value is not None
 
     def _resolved_variant(self, name: str, variant: str, display: str | None) -> str:
         """Set :attr:`display` and return the registered variant.
