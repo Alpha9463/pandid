@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import zlib
 from collections.abc import Callable
 from typing import Any
 
@@ -157,14 +159,49 @@ def test_a_stock_face_and_an_unsettled_sheet_are_read_back() -> None:
     assert "route-not-settled" in {i.code for i in again.validate()}
 
 
-def test_a_hung_controller_and_a_fallback_line_are_written() -> None:
-    """Check that the two-pump bank's spec records its hung controller and fallback line."""
+def _route_state(layout: dict[str, Any]) -> dict[str, Any]:
+    """Return a layout's route_state decoded."""
+    return json.loads(zlib.decompress(base64.b64decode(layout["route_state"])))
+
+
+def test_the_layout_keeps_the_state_route_left_out_of_its_readable_keys() -> None:
+    """Check that the two-pump bank's layout reads as units and lines, its hung
+    controller and fallback line in route_state."""
     fs = _bank(pumps=2)
     fs.route()
     layout = fs.to_dict()["layout"]
+    readable = {"x", "y", "size", "orientation", "mirrored", "label_pos", "port_faces", "tap"}
+    state = _route_state(layout)
 
-    assert set(layout["units"]["FIC-200"]["beside_valve"]) == {"offset", "angle"}
-    assert any(isinstance(line, dict) and line["fallback"] for line in layout["lines"])
+    assert set(layout) == {"checksum", "units", "lines", "engine", "route_state"}
+    assert all(set(entry) <= readable for entry in layout["units"].values())
+    assert all(isinstance(line, list) for line in layout["lines"])
+    assert set(state["units"]["FIC-200"]["beside_valve"]) == {"offset", "angle"}
+    assert state["fallback"]
+
+
+@pytest.mark.parametrize("spoil", ["engine", "route_state"])
+def test_a_layout_read_without_its_route_state_draws_as_saved_and_edits_afresh(
+    spoil: str,
+) -> None:
+    """Check that a layout of another engine, or whose route_state does not decode, draws
+    as saved, and lays the sheet out afresh once edited."""
+    fs = _frozen(_bank(pumps=2), 6)
+    spec = json.loads(json.dumps(fs.to_dict()))
+    if spoil == "engine":
+        spec["layout"]["engine"] += 1
+    else:
+        spec["layout"]["route_state"] = "not a route state"
+    again = Flowsheet.from_dict(spec)
+    again.route()
+
+    assert _drawn(again) == _drawn(fs)
+    assert "route_state" not in again.to_dict()["layout"]
+    fresh = Flowsheet.from_dict({key: value for key, value in spec.items() if key != "layout"})
+    for sheet in (again, fresh):
+        _edits()["face"](sheet)
+        sheet.route()
+    assert _drawn(again) == _drawn(fresh)
 
 
 def test_only_a_drawn_sheet_writes_its_layout() -> None:

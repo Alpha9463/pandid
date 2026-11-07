@@ -63,45 +63,43 @@ The format::
 
     layout:                    # where the drawn sheet drew everything
       checksum: 3f9a1c07b2e4   # of the rest of the spec
-      switches: {mounted_layout: true}
       units:
-        Raw Feed: {x: 40, y: 250, col: 0, row: 0}
+        Raw Feed: {x: 40, y: 250}
         FV-101: {x: 398.75, y: 89.5, orientation: 90, label_pos: bottom}
-        FIC-101: {x: 395.4, y: 0.8, port_faces: {sig_out: S},
-                  tap: [420.0, 110.5], beside_valve: {offset: 122, angle: 135}}
+        FIC-101: {x: 395.4, y: 0.8, port_faces: {sig_out: S}, tap: [420.0, 110.5]}
+        M-100: {x: 520, y: 240, nozzle_pitch: 27.75}
       lines:                   # one per stream, in order
         - [[140, 275], [250, 275]]
-        - {points: [[300, 275], [300, 120]], fallback: true}
-      held_drawings:           # what route() starts from after an edit
-        main: {state: {geometry: {units: {FV-101: {x: 500.75, y: 89.5}}}}}
+        - [[300, 275], [300, 120]]
+      engine: 1
+      route_state: eNrtWU1v4zYQ...   # what route() holds for its next call
 
 Units are addressed by name. Each drawing of a repeated symbol is an
 entry with the tag, addressed in list order as ``I-1``, ``I-1 (2)``.
 
 :func:`to_dict` writes ``layout`` once the sheet is drawn. Each unit
-has its corner, grid cell, turn, mirror, label side and chosen faces;
-a balloon its tap point, ``beside_valve`` where it hangs off the valve
-it drives and ``held`` where a ``via()`` line was typed against it; a
-mixer or splitter ``stock_face`` where its face is not grown and
+has its corner, turn, mirror, label side, chosen faces and, where it is
+not its symbol's, its size; a balloon its tap point; a mixer or
+splitter ``stock_face`` where its face is not grown and
 ``nozzle_pitch`` where it is grown to fit the valves on its lines. Each
-line has its points, and ``fallback`` where no clean path was found.
-``redraw`` marks a sheet edited since it was routed (``if better``:
-routed again, kept only if better), ``restated`` one with a drawing
-coordinate stated since, ``settled: false`` one whose balloons did not
-settle, and ``switches`` the layout and route switches it was drawn
-with. ``held_drawings`` are the drawings ``route()`` holds for its next
-call, each unit and line left out where it is as drawn. :func:`from_dict`
-starts the sheet from ``layout`` while ``checksum`` is the rest of the
-spec's, and otherwise lays it out afresh.
+line has its points. ``route_state`` is what ``route()`` holds for its
+next call, as zlib-compressed JSON in base64, written by the engine
+version ``engine`` names. :func:`from_dict` starts the sheet from
+``layout`` while ``checksum`` is the rest of the spec's, and otherwise
+lays it out afresh. Where ``engine`` is not this version's or
+``route_state`` does not decode, the sheet draws as ``units`` and
+``lines`` have it and is laid out afresh once edited.
 """
 
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import inspect
 import json
 import re
+import zlib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
@@ -2056,14 +2054,18 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         raise _fail_from(e, where) from None  # e.g. a bad align=
 
 
-_LAYOUT_KEYS = {
-    "checksum", "redraw", "restated", "switches", "settled", "unpriced_crossings", "units",
-    "lines", "held_drawings",
+# Version of the route_state layout writes; it changes whenever what
+# route_state holds changes shape.
+_ROUTE_STATE_ENGINE = 1
+_LAYOUT_KEYS = {"checksum", "units", "lines", "engine", "route_state"}
+_DRAWN_UNIT_KEYS = {
+    "x", "y", "size", "orientation", "mirrored", "label_pos", "port_faces", "tap",
+    "stock_face", "nozzle_pitch",
 }
-_FRAME_KEYS = {
-    "x", "y", "size", "col", "row", "orientation", "mirrored", "label_pos", "port_faces", "tap",
+_ROUTE_STATE_KEYS = {
+    "units", "fallback", "redraw", "restated", "switches", "settled", "unpriced_crossings",
+    "held_drawings",
 }
-_DRAWN_UNIT_KEYS = _FRAME_KEYS | {"stock_face", "nozzle_pitch", "beside_valve", "held"}
 _DRAWN_LINE_KEYS = {"points", "fallback"}
 _HELD_KEYS = {"main", "unhung", "plain"}
 _GEOMETRY_KEYS = {"units", "lines", "manual", "settled", "unpriced_crossings"}
@@ -2406,7 +2408,11 @@ def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
 
     The entry is left unread where its ``checksum`` is not the rest of
     the spec's, or it does not name every unit that is not attached and
-    one line per stream; the sheet is then laid out afresh.
+    one line per stream; the sheet is then laid out afresh. Its
+    ``route_state`` is left unread where ``engine`` is not
+    this engine's version or it does not decode; the sheet is then
+    drawn as ``units`` and ``lines`` have it, and laid out afresh once
+    edited.
 
     Parameters
     ----------
@@ -2420,8 +2426,9 @@ def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
     Raises
     ------
     SpecError
-        If the entry is malformed.
+        If ``units`` or ``lines`` is malformed.
     """
+    from pandid.geometry import Route
     from pandid.layout.attach import is_attached
 
     data = _mapping(entry, where)
@@ -2444,33 +2451,92 @@ def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
         unit.frame = frame
         if tap is not None:
             setattr(unit, "tap", tap)
-        if _flag(value.get("held", False), f"{at}.held"):
-            fs._typed_at[id(unit)] = (frame.x, frame.y, dict(frame.port_faces))
-    fs._beside = _read_beside(fs, {name: value["beside_valve"] for name, value in units.items()
-                                   if "beside_valve" in value}, f"{where}.units")
     for i, (stream, line) in enumerate(zip(fs.streams, lines)):
-        route = _read_line(line, f"{where}.lines[{i}]")
+        points = _points(line, f"{where}.lines[{i}]")
         if stream.route is None or not stream.route.manual:
-            stream.route = route
-    for name, value in zip(_SHOWN_SWITCHES, _read_switches(
-            data.get("switches", {}), _SHOWN_SWITCHES, f"{where}.switches")):
+            stream.route = Route(points)
+    state = None
+    engine, packed = data.get("engine"), data.get("route_state")
+    if type(engine) is int and engine == _ROUTE_STATE_ENGINE and isinstance(packed, str):
+        try:
+            state = json.loads(zlib.decompress(base64.b64decode(packed, validate=True)))
+        except (ValueError, zlib.error):
+            state = None
+    if not (isinstance(state, Mapping) and _read_route_state(fs, state, f"{where}.route_state")):
+        fs._drawn_from_spec(False, False, True, held=False)
+
+
+def _read_route_state(fs: Flowsheet, state: Mapping, where: str) -> bool:
+    """Give a sheet drawn from ``layout:`` the state ``route()`` left it in.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet drawn as ``units`` and ``lines`` have it.
+    state : Mapping
+        The decoded ``route_state``.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    bool
+        Whether the state was read; the sheet is left as drawn where it
+        is malformed.
+    """
+    ranks = {id(u): (u.frame.col, u.frame.row) for u in fs.units if u.frame is not None}
+    try:
+        _check_keys(state, _ROUTE_STATE_KEYS, where)
+        own = _mapping(state.get("units", {}), f"{where}.units")
+        for name, value in own.items():
+            unit, at = _find_unit(fs, name, f"{where}.units"), f"{where}.units.{name}"
+            _check_keys(_mapping(value, at), {"col", "row", "beside_valve", "held"}, at)
+            if unit.frame is None:
+                raise SpecError(f"{at}: {name!r} is not drawn")
+            for key in ("col", "row"):
+                if key in value:
+                    setattr(unit.frame, key, _integer(value[key], f"{at}.{key}"))
+        beside = _read_beside(fs, {name: value["beside_valve"] for name, value in own.items()
+                                   if "beside_valve" in value}, f"{where}.units")
+        held = [_find_unit(fs, name, where) for name, value in own.items()
+                if _flag(value.get("held", False), f"{where}.units.{name}.held")]
+        fallback = {_integer(i, f"{where}.fallback")
+                    for i in _sequence(state.get("fallback", []), f"{where}.fallback")}
+        switches = _read_switches(state.get("switches", {}), _SHOWN_SWITCHES,
+                                  f"{where}.switches")
+        at = f"{where}.held_drawings"
+        drawings = _mapping(state.get("held_drawings", {}), at)
+        _check_keys(drawings, _HELD_KEYS, at)
+        main = (None if drawings.get("main") is None
+                else _read_drawing(fs, drawings["main"], f"{at}.main"))
+        plain = (None if drawings.get("plain") is None
+                 else _read_state(fs, drawings["plain"], f"{at}.plain"))
+        unhung = (None if drawings.get("unhung") is None
+                  else _read_geometry(fs, drawings["unhung"], f"{at}.unhung"))
+        redraw = state.get("redraw", False)
+        if redraw not in (False, True, "if better"):
+            raise SpecError(f"{where}.redraw must be true or 'if better', got {redraw!r}")
+        flags = [_flag(state.get(key, default), f"{where}.{key}")
+                 for key, default in (("restated", False), ("settled", True),
+                                      ("unpriced_crossings", False))]
+    except (SpecError, KeyError, TypeError, ValueError):
+        for unit in fs.units:
+            if id(unit) in ranks:
+                unit.frame.col, unit.frame.row = ranks[id(unit)]
+        return False
+    for i, stream in enumerate(fs.streams):
+        if i in fallback and stream.route is not None and not stream.route.manual:
+            stream.route.used_fallback = True
+    for name, value in zip(_SHOWN_SWITCHES, switches):
         setattr(fs, name, value)
-    fs.route_converged = _flag(data.get("settled", True), f"{where}.settled")
-    fs._undercharged = _flag(data.get("unpriced_crossings", False),
-                             f"{where}.unpriced_crossings")
-    at = f"{where}.held_drawings"
-    held = _mapping(data.get("held_drawings", {}), at)
-    _check_keys(held, _HELD_KEYS, at)
-    fs._main = None if held.get("main") is None else _read_drawing(fs, held["main"], f"{at}.main")
-    fs._plain_state = (None if held.get("plain") is None
-                       else _read_state(fs, held["plain"], f"{at}.plain"))
-    fs._unhung = (None if held.get("unhung") is None
-                  else _read_geometry(fs, held["unhung"], f"{at}.unhung"))
-    redraw = data.get("redraw", False)
-    if redraw not in (False, True, "if better"):
-        raise SpecError(f"{where}.redraw must be true or 'if better', got {redraw!r}")
-    fs._drawn_from_spec(redraw is True, _flag(data.get("restated", False), f"{where}.restated"),
-                        redraw is False)
+    fs._beside = beside
+    for unit in held:
+        assert unit.frame is not None
+        fs._typed_at[id(unit)] = (unit.frame.x, unit.frame.y, dict(unit.frame.port_faces))
+    fs._main, fs._plain_state, fs._unhung = main, plain, unhung
+    restated, fs.route_converged, fs._undercharged = flags
+    fs._drawn_from_spec(redraw is True, restated, redraw is False, held=True)
+    return True
 
 
 # Writing: Flowsheet -> spec
@@ -2628,7 +2694,7 @@ def _checksum(spec: dict) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
-def _write_frame(unit: Unit, frame: Any, tap: Any) -> dict[str, Any]:
+def _write_frame(unit: Unit, frame: Any, tap: Any, ranks: bool = True) -> dict[str, Any]:
     """Write where a unit is drawn.
 
     Parameters
@@ -2639,6 +2705,8 @@ def _write_frame(unit: Unit, frame: Any, tap: Any) -> dict[str, Any]:
         Its frame.
     tap : tuple[float, float] or None
         Its tap point.
+    ranks : bool, default=True
+        Write the grid cell the layout gave it.
 
     Returns
     -------
@@ -2651,7 +2719,7 @@ def _write_frame(unit: Unit, frame: Any, tap: Any) -> dict[str, Any]:
     entry: dict[str, Any] = {"x": frame.x, "y": frame.y}
     if (frame.w, frame.h) != resolve_size(unit, frame):
         entry["size"] = [frame.w, frame.h]
-    for key in ("col", "row", "label_pos"):
+    for key in ("col", "row", "label_pos") if ranks else ("label_pos",):
         if getattr(frame, key) is not None:
             entry[key] = getattr(frame, key)
     if frame.orientation:
@@ -2836,8 +2904,8 @@ def _write_drawing(fs: Flowsheet, drawing: tuple) -> dict[str, Any]:
 
 
 def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
-    """Write where a drawn sheet draws each unit and line, and the
-    drawings ``route()`` holds for its next call.
+    """Write where a drawn sheet draws each unit and line, and the state
+    ``route()`` left it in.
 
     Parameters
     ----------
@@ -2856,34 +2924,51 @@ def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
         return None
     beside = _write_beside(fs, fs._beside)
     units: dict[str, Any] = {}
+    own: dict[str, Any] = {}
     for unit in fs.units:
-        if unit.frame is None:
+        frame = unit.frame
+        if frame is None:
             continue
-        entry = units[unit.name] = _write_frame(unit, unit.frame, getattr(unit, "tap", None))
+        entry = units[unit.name] = _write_frame(unit, frame, getattr(unit, "tap", None),
+                                                ranks=False)
         if getattr(unit, "_stock_face", False):
             entry["stock_face"] = True
         if getattr(unit, "_fit_pitch", 0.0):
             entry["nozzle_pitch"] = getattr(unit, "_fit_pitch")
+        ranks: dict[str, Any] = {key: getattr(frame, key) for key in ("col", "row")
+                                 if getattr(frame, key) is not None}
         if unit.name in beside:
-            entry["beside_valve"] = beside[unit.name]
+            ranks["beside_valve"] = beside[unit.name]
         if id(unit) in fs._typed_at:
-            entry["held"] = True
-    layout: dict[str, Any] = {"checksum": _checksum(spec)}
+            ranks["held"] = True
+        if ranks:
+            own[unit.name] = ranks
+    layout: dict[str, Any] = {
+        "checksum": _checksum(spec),
+        "units": units,
+        "lines": [[list(point) for point in stream.route.waypoints]
+                  for stream in fs.streams if stream.route is not None],
+    }
+    if fs._unheld is not None:
+        return layout
+    state: dict[str, Any] = {"units": own} if own else {}
+    fallback = [i for i, stream in enumerate(fs.streams)
+                if stream.route is not None and stream.route.used_fallback]
+    if fallback:
+        state["fallback"] = fallback
     if fs._given_then is None or fs._given_then != fs._given():
-        layout["redraw"] = True
+        state["redraw"] = True
     elif not fs._final:
-        layout["redraw"] = "if better"
+        state["redraw"] = "if better"
     if not fs._unedited():
-        layout["restated"] = True
+        state["restated"] = True
     if values := _write_switches(_SHOWN_SWITCHES,
                                  (getattr(fs, name) for name in _SHOWN_SWITCHES)):
-        layout["switches"] = values
+        state["switches"] = values
     if not fs.route_converged:
-        layout["settled"] = False
+        state["settled"] = False
     if fs._undercharged:
-        layout["unpriced_crossings"] = True
-    layout["units"] = units
-    layout["lines"] = [_write_line(stream.route) for stream in fs.streams]
+        state["unpriced_crossings"] = True
     held: dict[str, Any] = {}
     if fs._main is not None:
         held["main"] = _write_drawing(fs, fs._main)
@@ -2892,7 +2977,10 @@ def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
     if fs._unhung is not None:
         held["unhung"] = _write_geometry(fs, fs._unhung)
     if held:
-        layout["held_drawings"] = held
+        state["held_drawings"] = held
+    text = json.dumps(state, sort_keys=True, separators=(",", ":"))
+    layout["engine"] = _ROUTE_STATE_ENGINE
+    layout["route_state"] = base64.b64encode(zlib.compress(text.encode(), 9)).decode("ascii")
     return layout
 
 

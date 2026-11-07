@@ -435,10 +435,12 @@ from `fs.validate()`.
 
 `Flowsheet.from_dict()`, `from_json()` and `from_yaml()` load a spec.
 `to_dict()` writes author intent and, once the sheet is drawn, a `layout:`
-section with where each unit, balloon and line is drawn, and the drawings
-`route()` holds for its next call. `from_dict()` starts from that layout, so the
-sheet draws as it was drawn, lines frozen with `via()` included, and an edit
-after reading it back draws as on the sheet that wrote it. The layout is not a pin: it records a checksum of the rest of the
+section with where each unit, balloon and line is drawn, and `route_state`, the
+state `route()` holds for its next call, compressed and tagged with the engine
+version that wrote it. `from_dict()` starts from that layout, so the sheet
+draws as it was drawn, lines frozen with `via()` included, and an edit after
+reading it back draws as on the sheet that wrote it. Read by another engine
+version, the sheet still draws as saved and is laid out afresh once edited. The layout is not a pin: it records a checksum of the rest of the
 spec, and a spec edited since, or one without a `layout:`, is laid out afresh.
 YAML input requires the `yaml` extra. Invalid specs raise `SpecError` naming
 the entry. A minimal YAML sheet is:

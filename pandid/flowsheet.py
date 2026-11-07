@@ -839,6 +839,9 @@ class Flowsheet:
         # each with its standoff and angle off the actuator and its
         # attachment then.
         self._beside: dict[int, tuple[tuple[float, float], tuple]] = {}
+        # What the author had given when the sheet was read from a spec
+        # without route()'s state, until edited.
+        self._unheld: tuple | None = None
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes and moves its chain's room there.
         self._pin_balloons = False
@@ -2496,6 +2499,7 @@ class Flowsheet:
         from pandid.layout import ConstraintLayoutEngine, default_layout_engine
 
         if not self._in_route:
+            self._forget_unheld()
             self._put_main()
         self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
@@ -2696,6 +2700,7 @@ class Flowsheet:
         plain = tries and getattr(router, "recover_exits", True)
         last = None
         if not self._in_route:
+            self._forget_unheld()
             if (plain and self._given_then is not None and self._given() == self._given_then
                     and not (self._layout_stale or self._route_stale)
                     and all(u.frame is not None for u in self.units)
@@ -2814,7 +2819,7 @@ class Flowsheet:
             return None
         return spec, [_attachment(u) for u in self.units if is_attached(u)]
 
-    def _drawn_from_spec(self, redraw: bool, restated: bool, final: bool) -> None:
+    def _drawn_from_spec(self, redraw: bool, restated: bool, final: bool, held: bool) -> None:
         """Keep the frames, routes and held drawings a spec's ``layout``
         gave the sheet as route() last left them.
 
@@ -2827,6 +2832,9 @@ class Flowsheet:
             Whether a drawing coordinate was stated since that route().
         final : bool
             Whether route() keeps the drawing while nothing changes.
+        held : bool
+            Whether the spec gave route()'s state too; without it the
+            sheet is laid out afresh once edited.
         """
         from pandid.layout.attach import is_attached
         from pandid.layout.cycles import break_cycles
@@ -2838,6 +2846,22 @@ class Flowsheet:
                                      if is_attached(u) and u.frame is None]
         self._given_then = None if redraw else self._given()
         self._stated_then = () if restated else self._stated()
+        self._unheld = None if held else self._given()
+
+    def _forget_unheld(self) -> None:
+        """Clear the drawing of a sheet read without route()'s state once
+        the author has edited it, so that it is laid out afresh."""
+        if self._unheld is None or self._given() == self._unheld:
+            return
+        self._unheld = None
+        for unit in self.units:
+            unit.frame = None
+            if hasattr(unit, "tap"):
+                setattr(unit, "tap", None)
+        for stream in self.streams:
+            if stream.route is not None and not stream.route.manual:
+                stream.route = None
+        self._layout_stale = self._route_stale = True
 
     def _close_bands(self) -> None:
         """Move a drawing past the sheet's top or left edge onto it, then
