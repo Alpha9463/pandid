@@ -3000,7 +3000,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             (*_erases(b, ink, obstacles), sum(1 for o in others if boxes_overlap(b, o)))
             for b in boxes))]
 
-    def worse(u, now, was, others) -> bool:
+    def worse(u, now, was, settled, unsettled) -> bool:
         """Return whether new labels erase or cover more of anything.
 
         Parameters
@@ -3009,22 +3009,26 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             Unit the labels belong to.
         now, was : tuple[list, list]
             Its new and old boxes from ``drawn``.
-        others : list
-            Other units' boxes from ``drawn``.
+        settled, unsettled : list
+            Other units' boxes from ``drawn``, placed again already and
+            not yet.
 
         Returns
         -------
         bool
-            True if either drawing is worse in any count.
+            True if either drawing is worse in any count, labels of each
+            group counted apart.
         """
         for k in (0, 1):
-            rest = [b for o in others for b in o[k]]
-            if any(a > b for a, b in zip(cost(u, now[k], rest), cost(u, was[k], rest))):
-                return True
+            for group in (settled, unsettled):
+                rest = [b for o in group for b in o[k]]
+                if any(a > b for a, b in zip(cost(u, now[k], rest), cost(u, was[k], rest))):
+                    return True
         return False
 
     placed: dict = {}
     shown: dict = {}
+    settled: set = set()
     # Place each unit's labels alone, then again off the others as they
     # stand, taking the first spot no worse in either drawing than the
     # first placement.
@@ -3034,8 +3038,9 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             if f is None or u.kind in ("feed", "product", "instrument"):
                 continue
             x, y, w, h = f.x, f.y, f.w, f.h
-            others = [o for k, o in shown.items() if k != id(u)]
-            labels = None if alone else [b for o in others for b in o[0]]
+            done = [o for k, o in shown.items() if k != id(u) and k in settled]
+            undone = [o for k, o in shown.items() if k != id(u) and k not in settled]
+            labels = None if alone else [b for o in done + undone for b in o[0]]
             spots = (sheet._tag_spots(u, f, x, y, w, h, u.tag, ink, symbols, labels, hatches)
                      if u.tag else [None])
             for tag in spots:
@@ -3050,10 +3055,12 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
                     items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
                                                         ink, symbols))
                 now = drawn(u, tag, items)
-                if alone or not worse(u, now, shown[id(u)], others):
+                if alone or not worse(u, now, shown[id(u)], done, undone):
                     placed[id(u)] = (u, tag, items)
                     shown[id(u)] = now
                     break
+            if not alone:
+                settled.add(id(u))
     return list(placed.values())
 
 
