@@ -204,7 +204,22 @@ def _edits() -> dict[str, Callable[[Flowsheet], Any]]:
     def add(fs: Flowsheet) -> None:
         fs.connect(fs.add(U.Feed("F-2")).outlet, fs.add(U.Product("P-2")).inlet)
 
-    return {"pin": pin, "via": via, "re-attach": reattach, "add a unit": add}
+    def face(fs: Flowsheet) -> None:
+        fic = unit(fs, "FIC-200")
+        assert isinstance(fic, U.Instrument)
+        fic.face = "N"
+
+    def nozzle(fs: Flowsheet) -> None:
+        unit(fs, "P-0").nozzle("suction", "W").nozzle("discharge", "E")
+
+    return {
+        "pin": pin,
+        "via": via,
+        "re-attach": reattach,
+        "add a unit": add,
+        "face": face,
+        "nozzle": nozzle,
+    }
 
 
 @pytest.mark.parametrize(
@@ -213,13 +228,22 @@ def _edits() -> dict[str, Callable[[Flowsheet], Any]]:
         *((1, 3, edit) for edit in _edits()),
         (1, 5, "add a unit"),
         (2, 6, "via"),
+        (1, None, "re-attach"),
+        (2, None, "re-attach"),
+        (2, None, "add a unit"),
+        (2, None, "face"),
+        (2, None, "nozzle"),
     ],
 )
 def test_an_edit_after_reading_back_draws_as_on_the_original(
-    pumps: int, index: int, edit: str
+    pumps: int, index: int | None, edit: str
 ) -> None:
-    """Check that an edit on a frozen-line sheet read back draws as on the sheet itself."""
-    fs = _frozen(_bank(pumps), index)
+    """Check that an edit on a sheet read back draws as on the sheet itself, a line frozen or not."""
+    fs = _bank(pumps)
+    if index is None:
+        fs.route()
+    else:
+        _frozen(fs, index)
     again = _read_back(fs)
     for sheet in (fs, again):
         _edits()[edit](sheet)

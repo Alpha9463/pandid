@@ -536,6 +536,14 @@ def _whole_number(value: Any, name: str) -> int:
     return int(value)
 
 
+# Layout and route switches a drawing is held with, in _state() order.
+_SWITCHES = (
+    "_free_faces", "_clear_taps", "_off_leaders", "_exit_tight", "_mounted_layout", "_widened",
+    "_stack_spans", "_rows_out", "_tees_away", "_fannable", "_far_branches", "_flags_off",
+    "_lanes", "_relaned", "_crowded_station", "_angle_valves", "_furniture_over",
+)
+
+
 def _copied(state: tuple) -> tuple:
     """Return a :meth:`Flowsheet._state` with its frames, taps and routes
     copied.
@@ -2814,35 +2822,30 @@ class Flowsheet:
             return None
         return spec, [_attachment(u) for u in self.units if is_attached(u)]
 
-    def _drawn_from_spec(self, redraw: bool, valves_on_pipes: bool, angle_valves: bool,
-                         settled: bool) -> None:
-        """Keep the frames and routes a spec's ``layout`` gave the sheet
-        as route() last left them.
+    def _drawn_from_spec(self, redraw: bool, restated: bool, final: bool) -> None:
+        """Keep the frames, routes and held drawings a spec's ``layout``
+        gave the sheet as route() last left them.
 
         Parameters
         ----------
         redraw : bool
             Whether the sheet was edited since that route(), so that
             route() draws it again.
-        valves_on_pipes : bool
-            Whether the layout set valves and fittings on their pipes.
-        angle_valves : bool
-            Whether the layout found a line carrying an angle valve.
-        settled : bool
-            Whether that route() settled its attached instruments.
+        restated : bool
+            Whether a drawing coordinate was stated since that route().
+        final : bool
+            Whether route() keeps the drawing while nothing changes.
         """
         from pandid.layout.attach import is_attached
         from pandid.layout.cycles import break_cycles
 
         break_cycles(self)
         self._layout_stale = self._route_stale = False
-        self._auto_laid = self._final = True
-        self.route_converged = settled
-        self._mounted_layout, self._angle_valves = valves_on_pipes, angle_valves
+        self._auto_laid, self._final = True, final
         self.unplaced_instruments = [u for u in self.units
                                      if is_attached(u) and u.frame is None]
         self._given_then = None if redraw else self._given()
-        self._stated_then = () if redraw else self._stated()
+        self._stated_then = () if restated else self._stated()
 
     def _close_bands(self) -> None:
         """Move a drawing past the sheet's top or left edge onto it, then
@@ -3572,15 +3575,11 @@ class Flowsheet:
         tuple
             State for :meth:`_put_state`.
         """
-        return _copied((self._geometry(), self._unhung, self._free_faces,
-                        self._clear_taps, self._off_leaders,
-                        self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out, self._tees_away, self._fannable,
-                        self._far_branches, self._flags_off,
+        return _copied((self._geometry(), self._unhung,
+                        tuple(getattr(self, name) for name in _SWITCHES),
                         tuple((u, u._stock_face, u._fit_pitch) for u in self.units
                               if hasattr(u, "_stock_face")),
-                        self._lanes, self._relaned, self._crowded_station,
-                        self._angle_valves, self._furniture_over, self._beside))
+                        self._beside))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -3590,13 +3589,9 @@ class Flowsheet:
         state : tuple
             What :meth:`_state` returned.
         """
-        (geometry, self._unhung, self._free_faces, self._clear_taps,
-         self._off_leaders,
-         self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out, self._tees_away, self._fannable, self._far_branches,
-         self._flags_off, stock, self._lanes, self._relaned,
-         self._crowded_station, self._angle_valves, self._furniture_over,
-         self._beside) = _copied(state)
+        geometry, self._unhung, switches, stock, self._beside = _copied(state)
+        for name, value in zip(_SWITCHES, switches):
+            setattr(self, name, value)
         for u, flag, pitch in stock:
             u._stock_face, u._fit_pitch = flag, pitch
         self._put_geometry(geometry, keep_manual=True)

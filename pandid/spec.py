@@ -63,7 +63,7 @@ The format::
 
     layout:                    # where the drawn sheet drew everything
       checksum: 3f9a1c07b2e4   # of the rest of the spec
-      valves_on_pipes: true
+      switches: {mounted_layout: true}
       units:
         Raw Feed: {x: 40, y: 250, col: 0, row: 0}
         FV-101: {x: 398.75, y: 89.5, orientation: 90, label_pos: bottom}
@@ -72,6 +72,8 @@ The format::
       lines:                   # one per stream, in order
         - [[140, 275], [250, 275]]
         - {points: [[300, 275], [300, 120]], fallback: true}
+      held_drawings:           # what route() starts from after an edit
+        main: {state: {geometry: {units: {FV-101: {x: 500.75, y: 89.5}}}}}
 
 Units are addressed by name. Each drawing of a repeated symbol is an
 entry with the tag, addressed in list order as ``I-1``, ``I-1 (2)``.
@@ -83,15 +85,19 @@ it drives and ``held`` where a ``via()`` line was typed against it; a
 mixer or splitter ``stock_face`` where its face is not grown and
 ``nozzle_pitch`` where it is grown to fit the valves on its lines. Each
 line has its points, and ``fallback`` where no clean path was found.
-``redraw`` marks a sheet edited since it was routed, ``valves_on_pipes``
-and ``angle_valves`` what its layout found, and ``settled: false`` a
-sheet whose balloons did not settle. :func:`from_dict` starts the sheet
-from ``layout`` while ``checksum`` is the rest of the spec's, and
-otherwise lays it out afresh.
+``redraw`` marks a sheet edited since it was routed (``if better``:
+routed again, kept only if better), ``restated`` one with a drawing
+coordinate stated since, ``settled: false`` one whose balloons did not
+settle, and ``switches`` the layout and route switches it was drawn
+with. ``held_drawings`` are the drawings ``route()`` holds for its next
+call, each unit and line left out where it is as drawn. :func:`from_dict`
+starts the sheet from ``layout`` while ``checksum`` is the rest of the
+spec's, and otherwise lays it out afresh.
 """
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import inspect
 import json
@@ -125,6 +131,7 @@ from pandid.document import (
     _resolve_enclosure,
 )
 from pandid.flowsheet import (
+    _SWITCHES,
     DEFAULT_LINE_NUMBER_START,
     DEFAULT_LINE_NUMBERING_SCHEME,
     DEFAULT_LOOP_NUMBER_START,
@@ -2050,13 +2057,350 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
 
 
 _LAYOUT_KEYS = {
-    "checksum", "redraw", "valves_on_pipes", "angle_valves", "settled", "units", "lines",
+    "checksum", "redraw", "restated", "switches", "settled", "unpriced_crossings", "units",
+    "lines", "held_drawings",
 }
-_DRAWN_UNIT_KEYS = {
-    "x", "y", "col", "row", "orientation", "mirrored", "label_pos", "port_faces", "tap",
-    "stock_face", "nozzle_pitch", "beside_valve", "held",
+_FRAME_KEYS = {
+    "x", "y", "size", "col", "row", "orientation", "mirrored", "label_pos", "port_faces", "tap",
 }
+_DRAWN_UNIT_KEYS = _FRAME_KEYS | {"stock_face", "nozzle_pitch", "beside_valve", "held"}
 _DRAWN_LINE_KEYS = {"points", "fallback"}
+_HELD_KEYS = {"main", "unkept", "unhung", "plain"}
+_GEOMETRY_KEYS = {"units", "lines", "manual", "settled", "unpriced_crossings"}
+_STATE_KEYS = {"geometry", "unhung", "switches", "stock", "beside"}
+_DRAWING_KEYS = {"state", "plain", "unkept", "switches", "unplaced"}
+# A drawing's own switches, in _drawing() order; the shown drawing's,
+# which the sheet holds; and each switch's default.
+_DRAWING_SWITCHES = ("_plain_stale", "_layout_stale", "_route_stale", "_family_faces",
+                     "_added_faces")
+_SHOWN_SWITCHES = (*_SWITCHES, "_plain_stale", "_family_faces", "_added_faces")
+_SWITCH_DEFAULTS = {"_lanes": True, "_family_faces": True}
+
+
+def _read_frame(unit: Unit, entry: Any, where: str) -> tuple[Any, tuple[float, float] | None]:
+    """Read where a ``layout:`` entry draws one unit.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit the entry draws.
+    entry : Any
+        The unit's entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    tuple[Frame, tuple[float, float] or None]
+        The unit's frame, sized by ``resolve_size()`` unless ``size``
+        is given, and its tap point.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
+    from pandid.geometry import Frame
+    from pandid.portgeom import resolve_size
+    from pandid.render.svg import LABEL_POSITIONS
+
+    drawn = _mapping(entry, where)
+    for key in ("x", "y"):
+        if key not in drawn:
+            raise SpecError(f"{where} needs {key!r}, where the unit is drawn")
+    turn = _number(drawn.get("orientation", 0.0), f"{where}.orientation")
+    if turn not in (0, 90, 180, 270):
+        raise SpecError(f"{where}.orientation must be 0, 90, 180 or 270, got {turn!r}")
+    flips = {flip: flags for flags, flip in _MIRROR_NAMES.items()}
+    flip = drawn.get("mirrored", "")
+    if flip and flip not in flips:
+        raise SpecError(f"{where}.mirrored must be 'x', 'y' or 'xy', got {flip!r}")
+    side = drawn.get("label_pos")
+    if side is not None and side not in LABEL_POSITIONS:
+        raise SpecError(f"{where}.label_pos must be one of {list(LABEL_POSITIONS)}, got {side!r}")
+    faces = dict(_mapping(drawn.get("port_faces", {}), f"{where}.port_faces"))
+    for port, face in faces.items():
+        if port not in unit.ports or face not in ("N", "S", "E", "W"):
+            raise SpecError(f"{where}.port_faces: {port!r}: {face!r} names no port of "
+                            f"{unit.name!r} on a face 'N', 'S', 'E' or 'W'")
+    mirrored, mirror_y = flips.get(flip, (False, False))
+    frame = Frame(x=_number(drawn["x"], f"{where}.x"), y=_number(drawn["y"], f"{where}.y"),
+                  w=0.0, h=0.0,
+                  col=_integer(drawn["col"], f"{where}.col") if "col" in drawn else None,
+                  row=_integer(drawn["row"], f"{where}.row") if "row" in drawn else None,
+                  orientation=turn, mirrored=mirrored, mirror_y=mirror_y,
+                  label_pos=side, port_faces=faces)
+    frame.w, frame.h = (_point(drawn["size"], f"{where}.size") if "size" in drawn
+                        else resolve_size(unit, frame))
+    tap = _point(drawn["tap"], f"{where}.tap") if "tap" in drawn else None
+    return frame, tap
+
+
+def _read_line(entry: Any, where: str) -> Any:
+    """Read the route a ``layout:`` entry draws one line along.
+
+    Parameters
+    ----------
+    entry : Any
+        The line's points, a mapping with ``points`` and ``fallback``,
+        or None for no route.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Route or None
+        The route.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
+    from pandid.geometry import Route
+
+    if entry is None:
+        return None
+    drawn = (_mapping(entry, where) if isinstance(entry, Mapping)
+             else {"points": entry, "fallback": False})
+    _check_keys(drawn, _DRAWN_LINE_KEYS, where)
+    return Route(_points(drawn.get("points"), f"{where}.points"),
+                 used_fallback=_flag(drawn.get("fallback", False), f"{where}.fallback"))
+
+
+def _read_switches(entry: Any, names: Sequence[str], where: str) -> tuple[bool, ...]:
+    """Read ``switches:``, each switch named without its underscore.
+
+    Parameters
+    ----------
+    entry : Any
+        Mapping of switch to value; a switch left out is at its
+        default.
+    names : Sequence[str]
+        Attribute name of each switch the entry may set.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    tuple[bool, ...]
+        Each switch's value, in the order of ``names``.
+
+    Raises
+    ------
+    SpecError
+        If a key is unknown or a value is not a flag.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, {name[1:] for name in names}, where)
+    return tuple(_flag(data.get(name[1:], _SWITCH_DEFAULTS.get(name, False)),
+                       f"{where}.{name[1:]}") for name in names)
+
+
+def _read_geometry(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None) -> tuple:
+    """Read a held geometry, each unit and line not listed as in ``base``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet drawn as its ``layout:`` has it.
+    entry : Any
+        The geometry entry.
+    where : str
+        Entry path for error messages.
+    base : tuple or None, optional
+        Geometry it was written against; None for the sheet as drawn.
+
+    Returns
+    -------
+    tuple
+        What ``Flowsheet._geometry()`` returns.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, _GEOMETRY_KEYS, where)
+    units = _mapping(data.get("units", {}), f"{where}.units")
+    named = {unit.name for unit in fs.units}
+    for name in units:
+        if name not in named:
+            raise SpecError(f"{where}.units: no unit is named {name!r}")
+    drawn, routed = _base(fs, base)
+    frames = []
+    for unit in fs.units:
+        if unit.name not in units:
+            frame, tap = copy.deepcopy(drawn[id(unit)])
+        elif units[unit.name] is None:
+            frame, tap = None, None
+        else:
+            frame, tap = _read_frame(unit, units[unit.name], f"{where}.units.{unit.name}")
+        frames.append((unit, frame, tap))
+    lines = {}
+    for i, item in enumerate(_sequence(data.get("lines", []), f"{where}.lines")):
+        at = f"{where}.lines[{i}]"
+        line = _mapping(item, at)
+        _check_keys(line, {"line", "route"}, at)
+        index = _integer(line.get("line"), f"{at}.line")
+        if not 0 <= index < len(fs.streams):
+            raise SpecError(f"{at}.line: no stream has index {index}")
+        lines[index] = _read_line(line.get("route"), f"{at}.route")
+    manual = {_integer(i, f"{where}.manual")
+              for i in _sequence(data.get("manual", []), f"{where}.manual")}
+    routes = [(stream, lines[i] if i in lines else copy.deepcopy(routed[id(stream)]))
+              for i, stream in enumerate(fs.streams) if i not in manual]
+    return (frames, routes, _flag(data.get("settled", True), f"{where}.settled"),
+            _flag(data.get("unpriced_crossings", False), f"{where}.unpriced_crossings"))
+
+
+def _base(fs: Flowsheet, base: tuple | None) -> tuple[dict, dict]:
+    """Return a geometry's frame and tap per unit and route per stream.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet drawn.
+    base : tuple or None
+        What ``Flowsheet._geometry()`` returned, or None for the sheet
+        as drawn.
+
+    Returns
+    -------
+    tuple[dict, dict]
+        ``(frame, tap)`` by ``id()`` of each unit, and route by ``id()``
+        of each stream; a stream ``base`` holds no route for has the
+        one drawn.
+    """
+    routed = {id(stream): stream.route for stream in fs.streams}
+    if base is None:
+        return {id(u): (u.frame, getattr(u, "tap", None)) for u in fs.units}, routed
+    frames, routes = base[0], base[1]
+    routed.update({id(stream): route for stream, route in routes})
+    return {id(u): (frame, tap) for u, frame, tap in frames}, routed
+
+
+def _read_beside(fs: Flowsheet, entry: Any, where: str) -> dict:
+    """Read the controllers ``route()`` hung beside the valve they drive.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet read from the rest of the spec.
+    entry : Any
+        Mapping of controller to ``{offset, angle}``, with ``stale``
+        where its attachment changed since.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    dict
+        What ``Flowsheet._beside`` holds.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
+    from pandid.layout.attach import _attachment
+
+    beside = {}
+    for name, value in _mapping(entry, where).items():
+        at = f"{where}.{name}"
+        unit = _find_unit(fs, name, at)
+        if not isinstance(unit, Instrument):
+            raise SpecError(f"{at}: {name!r} is not a balloon")
+        hung = _mapping(value, at)
+        _check_keys(hung, {"offset", "angle", "stale"}, at)
+        standoff = (_number(hung.get("offset"), f"{at}.offset"),
+                    _number(hung.get("angle"), f"{at}.angle"))
+        stale = _flag(hung.get("stale", False), f"{at}.stale")
+        beside[id(unit)] = (standoff, None if stale else _attachment(unit))
+    return beside
+
+
+def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None) -> tuple:
+    """Read a held state: its geometry and what it was laid out with.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet drawn as its ``layout:`` has it.
+    entry : Any
+        The state entry.
+    where : str
+        Entry path for error messages.
+    base : tuple or None, optional
+        Geometry its geometry was written against; None for the sheet
+        as drawn.
+
+    Returns
+    -------
+    tuple
+        What ``Flowsheet._state()`` returns.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, _STATE_KEYS, where)
+    stock = _mapping(data.get("stock", {}), f"{where}.stock")
+    faces = []
+    for unit in fs.units:
+        if not hasattr(unit, "_stock_face"):
+            continue
+        at = f"{where}.stock.{unit.name}"
+        face = _mapping(stock.get(unit.name, {}), at)
+        _check_keys(face, {"stock_face", "nozzle_pitch"}, at)
+        faces.append((unit, _flag(face.get("stock_face", False), f"{at}.stock_face"),
+                      _number(face.get("nozzle_pitch", 0.0), f"{at}.nozzle_pitch")))
+    unhung = data.get("unhung")
+    geometry = _read_geometry(fs, data.get("geometry", {}), f"{where}.geometry", base)
+    return (geometry,
+            None if unhung is None else _read_geometry(fs, unhung, f"{where}.unhung", geometry),
+            _read_switches(data.get("switches", {}), _SWITCHES, f"{where}.switches"),
+            tuple(faces), _read_beside(fs, data.get("beside", {}), f"{where}.beside"))
+
+
+def _read_drawing(fs: Flowsheet, entry: Any, where: str) -> tuple:
+    """Read a held drawing: its state, the states held with it and its
+    own switches.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet drawn as its ``layout:`` has it.
+    entry : Any
+        The drawing entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    tuple
+        What ``Flowsheet._drawing()`` returns.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, _DRAWING_KEYS, where)
+    state = _read_state(fs, data.get("state", {}), f"{where}.state")
+    held = {key: None if data.get(key) is None
+            else _read_state(fs, data[key], f"{where}.{key}", state[0])
+            for key in ("plain", "unkept")}
+    plain_stale, layout_stale, route_stale, family, added = _read_switches(
+        data.get("switches", {}), _DRAWING_SWITCHES, f"{where}.switches")
+    unplaced = [_find_unit(fs, _text(name, f"{where}.unplaced"), where)
+                for name in _sequence(data.get("unplaced", []), f"{where}.unplaced")]
+    return (state, held["plain"], plain_stale, held["unkept"], layout_stale, route_stale,
+            family, added, unplaced)
 
 
 def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
@@ -2080,10 +2424,7 @@ def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
     SpecError
         If the entry is malformed.
     """
-    from pandid.geometry import Frame, Route
-    from pandid.layout.attach import _attachment, is_attached
-    from pandid.portgeom import resolve_size
-    from pandid.render.svg import LABEL_POSITIONS
+    from pandid.layout.attach import is_attached
 
     data = _mapping(entry, where)
     _check_keys(data, _LAYOUT_KEYS, where)
@@ -2094,63 +2435,45 @@ def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
             or len(lines) != len(fs.streams)
             or any(u.name not in units for u in fs.units if not is_attached(u))):
         return
-    flips = {flip: flags for flags, flip in _MIRROR_NAMES.items()}
     for name, value in units.items():
         unit, at = named[name], f"{where}.units.{name}"
-        drawn = _mapping(value, at)
-        _check_keys(drawn, _DRAWN_UNIT_KEYS, at)
-        for key in ("x", "y"):
-            if key not in drawn:
-                raise SpecError(f"{at} needs {key!r}, where the unit is drawn")
-        turn = _number(drawn.get("orientation", 0.0), f"{at}.orientation")
-        if turn not in (0, 90, 180, 270):
-            raise SpecError(f"{at}.orientation must be 0, 90, 180 or 270, got {turn!r}")
-        flip = drawn.get("mirrored", "")
-        if flip and flip not in flips:
-            raise SpecError(f"{at}.mirrored must be 'x', 'y' or 'xy', got {flip!r}")
-        side = drawn.get("label_pos")
-        if side is not None and side not in LABEL_POSITIONS:
-            raise SpecError(f"{at}.label_pos must be one of {list(LABEL_POSITIONS)}, got {side!r}")
-        faces = dict(_mapping(drawn.get("port_faces", {}), f"{at}.port_faces"))
-        for port, face in faces.items():
-            if port not in unit.ports or face not in ("N", "S", "E", "W"):
-                raise SpecError(f"{at}.port_faces: {port!r}: {face!r} names no port of "
-                                f"{unit.name!r} on a face 'N', 'S', 'E' or 'W'")
+        _check_keys(_mapping(value, at), _DRAWN_UNIT_KEYS, at)
         if hasattr(unit, "_stock_face"):
-            setattr(unit, "_stock_face", _flag(drawn.get("stock_face", False), f"{at}.stock_face"))
-            setattr(unit, "_fit_pitch", _number(drawn.get("nozzle_pitch", 0.0),
+            setattr(unit, "_stock_face", _flag(value.get("stock_face", False), f"{at}.stock_face"))
+            setattr(unit, "_fit_pitch", _number(value.get("nozzle_pitch", 0.0),
                                                 f"{at}.nozzle_pitch"))
-        mirrored, mirror_y = flips.get(flip, (False, False))
-        frame = Frame(x=_number(drawn["x"], f"{at}.x"), y=_number(drawn["y"], f"{at}.y"),
-                      w=0.0, h=0.0,
-                      col=_integer(drawn["col"], f"{at}.col") if "col" in drawn else None,
-                      row=_integer(drawn["row"], f"{at}.row") if "row" in drawn else None,
-                      orientation=turn, mirrored=mirrored, mirror_y=mirror_y,
-                      label_pos=side, port_faces=faces)
-        frame.w, frame.h = resolve_size(unit, frame)
+        frame, tap = _read_frame(unit, value, at)
         unit.frame = frame
-        if "tap" in drawn:
-            setattr(unit, "tap", _point(drawn["tap"], f"{at}.tap"))
-        if "beside_valve" in drawn:
-            hung = _mapping(drawn["beside_valve"], f"{at}.beside_valve")
-            _check_keys(hung, {"offset", "angle"}, f"{at}.beside_valve")
-            standoff = (_number(hung.get("offset"), f"{at}.beside_valve.offset"),
-                        _number(hung.get("angle"), f"{at}.beside_valve.angle"))
-            fs._beside[id(unit)] = (standoff, _attachment(unit))
-        if _flag(drawn.get("held", False), f"{at}.held"):
-            fs._typed_at[id(unit)] = (frame.x, frame.y, dict(faces))
+        if tap is not None:
+            setattr(unit, "tap", tap)
+        if _flag(value.get("held", False), f"{at}.held"):
+            fs._typed_at[id(unit)] = (frame.x, frame.y, dict(frame.port_faces))
+    fs._beside = _read_beside(fs, {name: value["beside_valve"] for name, value in units.items()
+                                   if "beside_valve" in value}, f"{where}.units")
     for i, (stream, line) in enumerate(zip(fs.streams, lines)):
-        at = f"{where}.lines[{i}]"
-        drawn = (_mapping(line, at) if isinstance(line, Mapping)
-                 else {"points": line, "fallback": False})
-        _check_keys(drawn, _DRAWN_LINE_KEYS, at)
-        points = _points(drawn.get("points"), f"{at}.points")
+        route = _read_line(line, f"{where}.lines[{i}]")
         if stream.route is None or not stream.route.manual:
-            stream.route = Route(points, used_fallback=_flag(drawn.get("fallback", False),
-                                                             f"{at}.fallback"))
-    fs._drawn_from_spec(**{key: _flag(data.get(key, default), f"{where}.{key}")
-                           for key, default in (("redraw", False), ("valves_on_pipes", False),
-                                                ("angle_valves", False), ("settled", True))})
+            stream.route = route
+    for name, value in zip(_SHOWN_SWITCHES, _read_switches(
+            data.get("switches", {}), _SHOWN_SWITCHES, f"{where}.switches")):
+        setattr(fs, name, value)
+    fs.route_converged = _flag(data.get("settled", True), f"{where}.settled")
+    fs._undercharged = _flag(data.get("unpriced_crossings", False),
+                             f"{where}.unpriced_crossings")
+    at = f"{where}.held_drawings"
+    held = _mapping(data.get("held_drawings", {}), at)
+    _check_keys(held, _HELD_KEYS, at)
+    fs._main = None if held.get("main") is None else _read_drawing(fs, held["main"], f"{at}.main")
+    fs._unkept, fs._plain_state = (
+        None if held.get(key) is None else _read_state(fs, held[key], f"{at}.{key}")
+        for key in ("unkept", "plain"))
+    fs._unhung = (None if held.get("unhung") is None
+                  else _read_geometry(fs, held["unhung"], f"{at}.unhung"))
+    redraw = data.get("redraw", False)
+    if redraw not in (False, True, "if better"):
+        raise SpecError(f"{where}.redraw must be true or 'if better', got {redraw!r}")
+    fs._drawn_from_spec(redraw is True, _flag(data.get("restated", False), f"{where}.restated"),
+                        redraw is False)
 
 
 # Writing: Flowsheet -> spec
@@ -2308,8 +2631,218 @@ def _checksum(spec: dict) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
+def _write_frame(unit: Unit, frame: Any, tap: Any) -> dict[str, Any]:
+    """Write where a unit is drawn.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit drawn.
+    frame : Frame
+        Its frame.
+    tap : tuple[float, float] or None
+        Its tap point.
+
+    Returns
+    -------
+    dict[str, Any]
+        The unit's ``layout:`` entry, with ``size`` only where the frame
+        is not ``resolve_size()``.
+    """
+    from pandid.portgeom import resolve_size
+
+    entry: dict[str, Any] = {"x": frame.x, "y": frame.y}
+    if (frame.w, frame.h) != resolve_size(unit, frame):
+        entry["size"] = [frame.w, frame.h]
+    for key in ("col", "row", "label_pos"):
+        if getattr(frame, key) is not None:
+            entry[key] = getattr(frame, key)
+    if frame.orientation:
+        entry["orientation"] = frame.orientation
+    mirror = _MIRROR_NAMES.get((frame.mirrored, frame.mirror_y))
+    if mirror:
+        entry["mirrored"] = mirror
+    if frame.port_faces:
+        entry["port_faces"] = dict(frame.port_faces)
+    if tap is not None:
+        entry["tap"] = list(tap)
+    return entry
+
+
+def _write_line(route: Any) -> Any:
+    """Write the route a line is drawn along.
+
+    Parameters
+    ----------
+    route : Route or None
+        The route.
+
+    Returns
+    -------
+    list, dict or None
+        Its points, ``{points, fallback: true}`` for a fallback route,
+        or None for no route.
+    """
+    if route is None:
+        return None
+    points = [list(point) for point in route.waypoints]
+    return {"points": points, "fallback": True} if route.used_fallback else points
+
+
+def _write_switches(names: Sequence[str], values: Iterable[bool]) -> dict[str, bool]:
+    """Write the switches not at their default, each without its underscore.
+
+    Parameters
+    ----------
+    names : Sequence[str]
+        Attribute name of each switch.
+    values : Iterable[bool]
+        Each switch's value, in the order of ``names``.
+
+    Returns
+    -------
+    dict[str, bool]
+        The ``switches:`` entry.
+    """
+    return {name[1:]: value for name, value in zip(names, values)
+            if value != _SWITCH_DEFAULTS.get(name, False)}
+
+
+def _write_beside(fs: Flowsheet, beside: dict) -> dict[str, Any]:
+    """Write the controllers ``route()`` hung beside the valve they drive.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet written.
+    beside : dict
+        What ``Flowsheet._beside`` holds.
+
+    Returns
+    -------
+    dict[str, Any]
+        Each controller's ``{offset, angle}``, with ``stale`` where its
+        attachment changed since.
+    """
+    from pandid.layout.attach import _attachment
+
+    units = {id(unit): unit for unit in fs.units}
+    out: dict[str, Any] = {}
+    for key, ((offset, angle), attachment) in beside.items():
+        unit = units[key]
+        out[unit.name] = {"offset": offset, "angle": angle}
+        if attachment != _attachment(unit):
+            out[unit.name]["stale"] = True
+    return out
+
+
+def _write_geometry(fs: Flowsheet, geometry: tuple, base: tuple | None = None) -> dict[str, Any]:
+    """Write a held geometry, leaving out each unit and line as in ``base``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet written.
+    geometry : tuple
+        What ``Flowsheet._geometry()`` returned.
+    base : tuple or None, optional
+        Geometry to write it against; None for the sheet as drawn.
+
+    Returns
+    -------
+    dict[str, Any]
+        The geometry entry.
+    """
+    frames, routes, settled, unpriced = geometry
+    drawn, routed = _base(fs, base)
+    entry: dict[str, Any] = {}
+    units = {unit.name: None if frame is None else _write_frame(unit, frame, tap)
+             for unit, frame, tap in frames if (frame, tap) != drawn.get(id(unit))}
+    if units:
+        entry["units"] = units
+    held = {id(stream): route for stream, route in routes}
+    lines = [{"line": i, "route": _write_line(held[id(stream)])}
+             for i, stream in enumerate(fs.streams)
+             if id(stream) in held and held[id(stream)] != routed[id(stream)]]
+    if lines:
+        entry["lines"] = lines
+    manual = [i for i, stream in enumerate(fs.streams) if id(stream) not in held]
+    if manual:
+        entry["manual"] = manual
+    if not settled:
+        entry["settled"] = False
+    if unpriced:
+        entry["unpriced_crossings"] = True
+    return entry
+
+
+def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict[str, Any]:
+    """Write a held state: its geometry and what it was laid out with.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet written.
+    state : tuple
+        What ``Flowsheet._state()`` returned.
+    base : tuple or None, optional
+        Geometry to write its geometry against; None for the sheet as
+        drawn.
+
+    Returns
+    -------
+    dict[str, Any]
+        The state entry.
+    """
+    geometry, unhung, switches, stock, beside = state
+    entry: dict[str, Any] = {"geometry": _write_geometry(fs, geometry, base)}
+    if unhung is not None:
+        entry["unhung"] = _write_geometry(fs, unhung, geometry)
+    if values := _write_switches(_SWITCHES, switches):
+        entry["switches"] = values
+    faces = {unit.name: {key: value for key, value in (("stock_face", flag),
+                                                       ("nozzle_pitch", pitch)) if value}
+             for unit, flag, pitch in stock if flag or pitch}
+    if faces:
+        entry["stock"] = faces
+    if hung := _write_beside(fs, beside):
+        entry["beside"] = hung
+    return entry
+
+
+def _write_drawing(fs: Flowsheet, drawing: tuple) -> dict[str, Any]:
+    """Write a held drawing: its state, the states held with it and its
+    own switches.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet written.
+    drawing : tuple
+        What ``Flowsheet._drawing()`` returned.
+
+    Returns
+    -------
+    dict[str, Any]
+        The drawing entry.
+    """
+    (state, plain, plain_stale, unkept, layout_stale, route_stale, family, added,
+     unplaced) = drawing
+    entry: dict[str, Any] = {"state": _write_state(fs, state)}
+    for key, held in (("plain", plain), ("unkept", unkept)):
+        if held is not None:
+            entry[key] = _write_state(fs, held, state[0])
+    if values := _write_switches(_DRAWING_SWITCHES, (plain_stale, layout_stale, route_stale,
+                                                     family, added)):
+        entry["switches"] = values
+    if unplaced:
+        entry["unplaced"] = [unit.name for unit in unplaced]
+    return entry
+
+
 def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
-    """Write where a drawn sheet draws each unit and line.
+    """Write where a drawn sheet draws each unit and line, and the
+    drawings ``route()`` holds for its next call.
 
     Parameters
     ----------
@@ -2324,54 +2857,48 @@ def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
         The ``layout`` entry, or None unless every line is routed and
         nothing is stale.
     """
-    from pandid.layout.attach import _attachment
-
     if fs._layout_stale or fs._route_stale or any(s.route is None for s in fs.streams):
         return None
+    beside = _write_beside(fs, fs._beside)
     units: dict[str, Any] = {}
     for unit in fs.units:
-        frame = unit.frame
-        if frame is None:
+        if unit.frame is None:
             continue
-        entry = units[unit.name] = {"x": frame.x, "y": frame.y}
-        for key in ("col", "row", "label_pos"):
-            if getattr(frame, key) is not None:
-                entry[key] = getattr(frame, key)
-        if frame.orientation:
-            entry["orientation"] = frame.orientation
-        mirror = _MIRROR_NAMES.get((frame.mirrored, frame.mirror_y))
-        if mirror:
-            entry["mirrored"] = mirror
-        if frame.port_faces:
-            entry["port_faces"] = dict(frame.port_faces)
-        tap = getattr(unit, "tap", None)
-        if tap is not None:
-            entry["tap"] = list(tap)
+        entry = units[unit.name] = _write_frame(unit, unit.frame, getattr(unit, "tap", None))
         if getattr(unit, "_stock_face", False):
             entry["stock_face"] = True
         if getattr(unit, "_fit_pitch", 0.0):
             entry["nozzle_pitch"] = getattr(unit, "_fit_pitch")
-        (offset, angle), attachment = fs._beside.get(id(unit), ((None, None), None))
-        if attachment is not None and attachment == _attachment(unit):
-            entry["beside_valve"] = {"offset": offset, "angle": angle}
+        if unit.name in beside:
+            entry["beside_valve"] = beside[unit.name]
         if id(unit) in fs._typed_at:
             entry["held"] = True
-    lines: list[Any] = []
-    for stream in fs.streams:
-        route = stream.route
-        assert route is not None
-        points = [list(point) for point in route.waypoints]
-        lines.append({"points": points, "fallback": True} if route.used_fallback else points)
     layout: dict[str, Any] = {"checksum": _checksum(spec)}
     if fs._given_then is None or fs._given_then != fs._given():
         layout["redraw"] = True
-    if fs._mounted_layout:
-        layout["valves_on_pipes"] = True
-    if fs._angle_valves:
-        layout["angle_valves"] = True
+    elif not fs._final:
+        layout["redraw"] = "if better"
+    if not fs._unedited():
+        layout["restated"] = True
+    if values := _write_switches(_SHOWN_SWITCHES,
+                                 (getattr(fs, name) for name in _SHOWN_SWITCHES)):
+        layout["switches"] = values
     if not fs.route_converged:
         layout["settled"] = False
-    layout.update(units=units, lines=lines)
+    if fs._undercharged:
+        layout["unpriced_crossings"] = True
+    layout["units"] = units
+    layout["lines"] = [_write_line(stream.route) for stream in fs.streams]
+    held: dict[str, Any] = {}
+    if fs._main is not None:
+        held["main"] = _write_drawing(fs, fs._main)
+    for key, value in (("unkept", fs._unkept), ("plain", fs._plain_state)):
+        if value is not None:
+            held[key] = _write_state(fs, value)
+    if fs._unhung is not None:
+        held["unhung"] = _write_geometry(fs, fs._unhung)
+    if held:
+        layout["held_drawings"] = held
     return layout
 
 
