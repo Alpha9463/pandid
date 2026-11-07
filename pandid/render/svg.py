@@ -80,8 +80,10 @@ _LABEL_GAP = 4.0
 _LABEL_STEP = 6.0
 # Number of sideways stand-off bands the search tries, nearest first.
 _LABEL_BANDS = 7
-# Furthest a tag steps out from its side's spot, and the step.
-_TAG_STEP_OUT, _TAG_OUT_STEP = 30.0, 3.0
+# Furthest a tag steps out from its side's spot.
+_TAG_STEP_OUT = 30.0
+# How much nearer a stepped-out tag stays to its symbol than to any other.
+_TAG_NEARER = 1.25
 # Outward direction of each side.
 _OUTWARD = {"top": (0, -1), "bottom": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
@@ -4241,10 +4243,11 @@ class SvgRenderer:
 
         Given ``labels``, the tag then also tries every side, free sides
         first, sliding until its near end reaches the corner, then steps
-        out from the face, staying nearer its own symbol than any other
-        tagged one and off every pneumatic hatch. It ranks the spots that
-        score better than the first placement, erasing least then
-        covering fewest labels, and the first placement last.
+        out from the face. A stepped-out tag stays well nearer its own
+        symbol than any other tagged one, and off every pneumatic hatch.
+        It ranks the spots that score better than the first placement,
+        erasing least then covering fewest labels, and the first
+        placement last.
 
         Parameters
         ----------
@@ -4328,12 +4331,30 @@ class SvgRenderer:
         rivals = [b for v, b in symbols if v is not None and v is not u
                   and v.kind not in ("feed", "product", "instrument")
                   and boxes_overlap(b, window)]
+
+        def astray(halo) -> bool:
+            """Return whether a stepped-out halo is too near another symbol.
+
+            Parameters
+            ----------
+            halo : tuple[float, float, float, float]
+                Halo box.
+
+            Returns
+            -------
+            bool
+                True if it is not well nearer its own symbol than any
+                other tagged one, or it lies on a hatch.
+            """
+            if any(_box_gap(halo, b) < _TAG_NEARER * _box_gap(halo, own) for b in rivals):
+                return True
+            return any(boxes_overlap(halo, h) for h in hatches)
         least = score(best)
         if least == (0, 0, 0, 0):
             return [best]
         better = []
         sides = free + [s for s in LABEL_SIDES if s not in free]
-        for out in [k * _TAG_OUT_STEP for k in range(int(_TAG_STEP_OUT // _TAG_OUT_STEP) + 1)]:
+        for out in [k * _LABEL_STEP for k in range(int(_TAG_STEP_OUT // _LABEL_STEP) + 1)]:
             for side in sides:
                 lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
                 nx, ny = _OUTWARD[side]
@@ -4344,8 +4365,7 @@ class SvgRenderer:
                     spot = (sx, sy, anchor, baseline, side, tag)
                     halo = _unit_label_box(spot)
                     assert halo is not None
-                    if out and (any(_box_gap(halo, b) <= _box_gap(halo, own) for b in rivals)
-                                or any(boxes_overlap(halo, b) for b in hatches)):
+                    if out and astray(halo):
                         continue
                     cost = score(spot)
                     if cost < least:

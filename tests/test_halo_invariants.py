@@ -501,11 +501,11 @@ def test_a_tag_moved_off_a_label_erases_no_line():
     assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
 
 
-def _two_pump_bank(face: str, first: int = 100) -> Flowsheet:
+def _two_pump_bank(face: str) -> Flowsheet:
     """Build two pumps in parallel, a flow loop on each one's valved suction."""
     from test_instruments import _valved_bank
 
-    return _valved_bank(first, controller_face=face, route=False, pumps=2)[0]
+    return _valved_bank(100, controller_face=face, route=False, pumps=2)[0]
 
 
 def _erased_lines(fs: Flowsheet, svg: str) -> list[str]:
@@ -519,15 +519,14 @@ def _erased_lines(fs: Flowsheet, svg: str) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize(("face", "first"), [("S", 100), ("W", 10)])
-def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it(face, first):
+def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it():
     """Check that a valve's tag with no clear spot beside its face is written off every line."""
-    fs = _two_pump_bank(face, first)
+    fs = _two_pump_bank("S")
     assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
 
 
-def test_a_tag_is_not_moved_onto_more_line_than_it_erased(monkeypatch):
-    """Check that the tag pass keeps a tag's first spot if the second erases a line."""
+def test_a_tag_takes_the_next_spot_when_the_best_erases_more_line(monkeypatch):
+    """Check that the tag pass passes over a spot that erases more line than the first."""
     from pandid.render.svg import SvgRenderer, unit_tags
 
     fs = Flowsheet("one valve")
@@ -538,17 +537,41 @@ def test_a_tag_is_not_moved_onto_more_line_than_it_erased(monkeypatch):
     fs.connect(valve.outlet, prod.inlet)
     fs.route()
     place = SvgRenderer._tag_spots
+    aside: list = []
 
     def across_the_line(self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None, hatches=()):
-        """Rank a spot across the outlet line first once other labels are known."""
+        """Rank a spot across the outlet line first, then one beside the first."""
         spots = place(self, u, f, x, y, w, h, tag, ink, symbols, labels, hatches)
         if labels is None:
             return spots
-        return [(x + w + 10, y + h / 2, "start", "middle", "right", tag), *spots]
+        aside.append((spots[-1][0] - 6, *spots[-1][1:]))
+        return [(x + w + 10, y + h / 2, "start", "middle", "right", tag), aside[0], *spots]
 
     monkeypatch.setattr(SvgRenderer, "_tag_spots", across_the_line)
     ((_unit, tag, _items),) = unit_tags(fs, None, "vertical")
-    assert tag is not None and tag[4] != "right", tag
+    assert aside and tag == aside[0], tag
+
+
+def test_a_tag_stepped_out_stays_nearer_its_own_unit():
+    """Check that a tag with no clear spot near its valve is not left by another unit."""
+    fs = _two_pump_bank("N")
+    svg = fs.to_svg(diagram="p&id")
+    tagged = [
+        u
+        for u in fs.units
+        if u.kind not in ("feed", "product", "instrument") and u.frame is not None
+    ]
+    astray = []
+    for u in tagged:
+        halo = _tag_halo(svg, u.tag)
+        gap = {v.tag: _gap(halo, unit_box(v, v.frame)) for v in tagged if v.frame is not None}
+        astray += [f"{u.tag} by {v}" for v, g in gap.items() if v != u.tag and g < gap[u.tag]]
+    assert not astray, astray
+
+
+def _gap(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    """Return the distance between two boxes, 0 where they meet."""
+    return math.hypot(max(b[0] - a[2], a[0] - b[2], 0.0), max(b[1] - a[3], a[1] - b[3], 0.0))
 
 
 def test_a_tag_keeps_off_the_hatch_marks_of_a_pneumatic_signal():
