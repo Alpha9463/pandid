@@ -229,7 +229,6 @@ def _edits() -> dict[str, Callable[[Flowsheet], Any]]:
         (1, 5, "add a unit"),
         (2, 6, "via"),
         (1, None, "re-attach"),
-        (2, None, "re-attach"),
         (2, None, "add a unit"),
         (2, None, "face"),
         (2, None, "nozzle"),
