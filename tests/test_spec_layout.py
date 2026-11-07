@@ -194,7 +194,7 @@ def _edits() -> dict[str, Callable[[Flowsheet], Any]]:
     [
         *((1, 3, edit) for edit in _edits()),
         (1, 5, "add a unit"),
-        (2, 3, "pin"),
+        (2, 6, "via"),
     ],
 )
 def test_an_edit_after_reading_back_draws_as_on_the_original(
@@ -210,9 +210,12 @@ def test_an_edit_after_reading_back_draws_as_on_the_original(
     assert _drawn(again) == _drawn(fs)
 
 
-def test_a_frozen_line_on_a_sheet_with_an_angle_valve_draws_as_on_the_original() -> None:
-    """Check that freezing a line on the stripped metering skid read back draws as on the sheet."""
-    fs, _ = build_unpinned("06_metering_skid")
+@pytest.mark.parametrize(
+    "stem", ["06_metering_skid", "04_reactor_recycle"], ids=["angle valve", "recycle"]
+)
+def test_a_line_frozen_on_a_gallery_sheet_read_back_draws_as_on_the_original(stem: str) -> None:
+    """Check that freezing a line on a stripped gallery sheet read back draws as on the sheet."""
+    fs, _ = build_unpinned(stem)
     fs.route()
     again = _read_back(fs)
     for sheet in (fs, again):
