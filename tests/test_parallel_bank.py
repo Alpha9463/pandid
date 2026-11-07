@@ -172,39 +172,48 @@ def test_a_header_kept_stock_draws_as_the_stock_header_without_lanes(monkeypatch
     assert _drawing(fs) == _drawing(plain)
 
 
+def _retyped(fs: Flowsheet) -> None:
+    """Type the feed line's drawn route back in with via()."""
+    line = fs.streams[0]
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+
+
 def test_a_sheet_routed_again_draws_as_it_would_without_lanes(monkeypatch):
     fs = _tapped_coolers(4, 0.5)
     fs.to_svg(diagram="p&id")
+    _retyped(fs)
     fs.route()
     fs.to_svg(diagram="p&id")
     _as_main(monkeypatch)
     plain = _tapped_coolers(4, 0.5)
     plain.to_svg(diagram="p&id")
+    _retyped(plain)
     plain.route()
     plain.to_svg(diagram="p&id")
     assert _drawing(fs) == _drawing(plain)
 
 
-def test_a_grown_header_is_kept_only_where_it_draws_no_worse():
-    fs = Flowsheet("Pump loops")
-    sp = fs.add(U.Splitter("SP", n_outlets=4))
-    mx = fs.add(U.Mixer("MX", n_inlets=4))
-    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
-    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
-    for k, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
-        i = 10 + k
-        pump = fs.add(U.Pump(f"P-{i}"))
-        exchanger = fs.add(ShellAndTubeExchanger(f"E-{i}"))
-        valve = fs.add(ControlValve(f"FV-{i}"))
-        fs.connect(outlet, pump.suction)
-        fs.connect(pump.discharge, exchanger.tube_in)
-        cooled = fs.connect(exchanger.tube_out, valve.inlet)
-        fs.connect(valve.outlet, inlet)
-        fs.add_control_loop("F", i, measuring=cooled, acting_on=valve, at=0.5)
-    fs.to_svg(diagram="p&id")
-    assert fs.route_converged
-    assert _taps_off(fs) == set()
-    assert not [i for i in fs.validate() if i.code == "route-crosses-unit"]
+def _tapped_bank(n: int) -> Flowsheet:
+    """Return n pumps with a temperature balloon halfway along each line off the splitter."""
+    fs = _bank(n, exchangers=False)
+    laterals = [s for s in fs.streams if s.source.owner.name == "SP"]
+    for i, stream in enumerate(laterals):
+        fs.add_instrument("TI", 301 + i, sensing=stream, at=0.5)
+    return fs
+
+
+def test_a_sheet_laid_out_again_draws_as_it_would_without_lanes(monkeypatch):
+    fs = _tapped_bank(6)
+    fs.route()
+    fs.layout()
+    fs.route()
+    _as_main(monkeypatch)
+    plain = _tapped_bank(6)
+    plain.route()
+    plain.layout()
+    plain.route()
+    assert _drawing(fs) == _drawing(plain)
 
 
 def test_lanes_are_kept_only_where_they_draw_no_worse_than_without():
@@ -222,6 +231,17 @@ def test_a_restored_drawing_shares_no_frame_with_the_one_it_was_saved_from():
     fs._put_state(state)
     saved = {id(frame) for _, frame, _ in state[0][0]}
     assert not saved & {id(u.frame) for u in fs.units}
+
+
+def test_a_restored_drawing_puts_back_whether_a_lateral_can_fan():
+    fs = _valved(3)[0]
+    fs.route()
+    assert fs._fannable
+    state = fs._state()
+    # Stand in for the flag a refused layout trial leaves.
+    fs._fannable = False
+    fs._put_state(state)
+    assert fs._fannable
 
 
 def _valved(
@@ -262,7 +282,7 @@ def test_each_suction_valve_sits_on_the_level_run_into_its_pump(n):
         points = stream_polyline(line)
         assert len(points) == 2, valve.name
         (x0, y0), (x1, y1) = points
-        assert y0 == y1 and x1 - x0 <= ALONG + 1, valve.name
+        assert y0 == y1 and x1 - x0 == pytest.approx(ALONG), valve.name
     assert measure_final(fs).crossings == 0
     flaws = _flaws(fs)
     assert flaws["unit-on-tag"] == flaws["line-through-tag"] == 0

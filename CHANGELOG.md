@@ -249,6 +249,10 @@ These are removed in 0.4.0.
   each other, such as control valves on a four-pump bank's discharge lines, its
   face grows to space its nozzles the widest valve across its line plus a gap,
   on the same terms.
+- A tag with no clear spot beside its symbol steps a little further out, still
+  well nearer its own symbol than any other and off any pneumatic hatch, to a
+  spot that erases no line, so on many small banks of control valves the valve's
+  tag no longer breaks the pipe beside it.
 
 ## [0.2.0] - 2026-11-05
 
