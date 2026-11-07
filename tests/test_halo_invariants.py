@@ -497,7 +497,7 @@ def test_a_tag_moved_off_a_label_erases_no_line():
     """Check that tags kept off each other on a crowded bank erase no line."""
     from test_instruments import _valved_bank
 
-    fs, _loops = _valved_bank(100, controller_face="E")
+    fs, _loops = _valved_bank(100)
     svg = fs.to_svg(diagram="p&id")
     tags = [u.tag for u in fs.units if u.kind not in ("feed", "product", "instrument")]
     erased = [
