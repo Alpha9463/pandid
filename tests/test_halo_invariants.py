@@ -536,19 +536,15 @@ def test_a_tag_moved_off_a_label_erases_no_more_line_than_its_first_spot(face):
         SvgRenderer,
         _erases,
         _unit_label_box,
-        flange_boxes,
-        quadrant_labels,
         sheet_connections,
+        tag_obstacles,
         unit_tags,
     )
 
     fs = _two_pump_bank(face)
     fs.route()
     joints = sheet_connections("p&id", None)
-    ink = _ink(fs, "vertical")
-    symbols: list = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    symbols += [(None, b) for b in flange_boxes(fs, joints)]
-    symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, "vertical")) if b]
+    ink, symbols = tag_obstacles(fs, joints, "vertical")
     worse = []
     for u, tag, _items in unit_tags(fs, joints, "vertical"):
         f = u.frame

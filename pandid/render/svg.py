@@ -2923,6 +2923,36 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
     return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
 
 
+def tag_obstacles(fs, joints: "str | None", direction: str) -> "tuple[list, list]":
+    """Return the lines and marks the tag pass keeps labels off.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed flowsheet.
+    joints : str or None
+        Sheet joint default, whose flange marks the labels avoid.
+    direction : str
+        ``jump_direction``.
+
+    Returns
+    -------
+    tuple[list, list]
+        The drawn lines as :class:`_Ink`, pneumatic hatches among them,
+        then ``(unit, box)`` for every symbol, flange mark, quadrant code
+        and package edge, ``unit`` ``None`` for a mark.
+    """
+    ink = _ink(fs, direction)
+    # A hatch stroke is ink of its signal line.
+    ink += [_Ink(*b, "h", b[1], "tap", "") for b in hatch_boxes(fs)]
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
+                if b is not None]
+    symbols += [(None, b) for b in package_edges(fs)]
+    return ink, symbols
+
+
 def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """Place each unit's tag and its ``NC`` and fail-position letters.
 
@@ -2946,13 +2976,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
         the tag item or ``None``, and every label item, tag first.
     """
     sheet = SvgRenderer()
-    ink = _ink(fs, direction)
-    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    symbols += [(None, b) for b in flange_boxes(fs, joints)]
-    symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
-                if b is not None]
-    symbols += [(None, b) for b in package_edges(fs)]
-    symbols += [(None, b) for b in hatch_boxes(fs)]
+    ink, symbols = tag_obstacles(fs, joints, direction)
 
     from pandid.render.drawio import label_box
 
