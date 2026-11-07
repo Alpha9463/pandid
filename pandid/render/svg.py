@@ -80,8 +80,8 @@ _LABEL_GAP = 4.0
 _LABEL_STEP = 6.0
 # Number of sideways stand-off bands the search tries, nearest first.
 _LABEL_BANDS = 7
-# Furthest a tag steps out from its side's spot.
-_TAG_STEP_OUT = 30.0
+# Furthest a tag steps out from its side's spot, and the step.
+_TAG_STEP_OUT, _TAG_OUT_STEP = 30.0, 3.0
 # Outward direction of each side.
 _OUTWARD = {"top": (0, -1), "bottom": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
@@ -4325,7 +4325,7 @@ class SvgRenderer:
                   and boxes_overlap(b, window)]
         least = score(best)
         sides = free + [s for s in LABEL_SIDES if s not in free]
-        for out in [k * _LABEL_STEP for k in range(int(_TAG_STEP_OUT // _LABEL_STEP) + 1)]:
+        for out in [k * _TAG_OUT_STEP for k in range(int(_TAG_STEP_OUT // _TAG_OUT_STEP) + 1)]:
             for side in sides:
                 if least == (0, 0, 0, 0):
                     return best

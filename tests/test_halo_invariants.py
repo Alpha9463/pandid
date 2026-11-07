@@ -493,7 +493,7 @@ def test_no_halo_lands_on_another_halo(drawn, name):
     assert not struck, f"{name}: halos overlap at " + "; ".join(struck)
 
 
-def _two_pump_bank(face: str) -> Flowsheet:
+def _two_pump_bank(face: str, first: int = 100) -> Flowsheet:
     """Build two pumps in parallel, a flow loop on each one's valved suction."""
     from pandid.devices import ControlValve
 
@@ -506,7 +506,7 @@ def _two_pump_bank(face: str) -> Flowsheet:
         pump = fs.add(U.Pump(f"P-{i}"))
         line = fs.connect(outlet, pump.suction)
         fs.connect(pump.discharge, inlet)
-        valve = fs.add(ControlValve(f"FV-{100 + i}"), on=line, at=0.5)
+        valve = fs.add(ControlValve(f"FV-{first + i}"), on=line, at=0.5)
         fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve, controller_face=face)
     return fs
 
@@ -522,9 +522,10 @@ def _erased_lines(fs: Flowsheet, svg: str) -> list[str]:
     ]
 
 
-def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it():
+@pytest.mark.parametrize(("face", "first"), [("S", 100), ("W", 10)])
+def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it(face, first):
     """Check that a valve's tag with no clear spot beside its face is written off every line."""
-    fs = _two_pump_bank("S")
+    fs = _two_pump_bank(face, first)
     assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
 
 
