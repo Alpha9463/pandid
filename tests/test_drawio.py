@@ -2391,7 +2391,8 @@ def test_a_tag_stacked_with_fail_letters_keeps_off_the_unit_above():
     assert not overlaps(tags["u1"], symbols["u0"]), (tags["u1"], symbols["u0"])
 
 
-def test_a_stacked_tag_kept_off_a_label_on_the_sheet_keeps_off_labels_in_draw_io():
+@pytest.mark.parametrize("backwards", [False, True])
+def test_a_stacked_tag_kept_off_a_label_on_the_sheet_keeps_off_labels_in_draw_io(backwards):
     """Keep draw.io's stacked tag and letters off the other tags on close rows of valves."""
     fs = Flowsheet("rows")
     rows = {
@@ -2412,6 +2413,9 @@ def test_a_stacked_tag_kept_off_a_label_on_the_sheet_keeps_off_labels_in_draw_io
             before = valve.outlet
         fs.connect(before, fs.add(units.Product(f"P{y}")).pin(port="inlet", x=700, y=y).inlet)
     fs.route()
+    if backwards:
+        # The tag pass takes the units in this order.
+        fs.units.reverse()
     cells = _drawio_cells_from_document(fs.to_drawio(diagram="p&id"))
     _symbols, tags, _numbers = _drawn_boxes(fs, {"diagram": "p&id"}, cells)
     boxes = sorted(tags.items())

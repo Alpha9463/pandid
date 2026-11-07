@@ -80,6 +80,12 @@ _LABEL_GAP = 4.0
 _LABEL_STEP = 6.0
 # Number of sideways stand-off bands the search tries, nearest first.
 _LABEL_BANDS = 7
+# Furthest a tag steps out from its side's spot.
+_TAG_STEP_OUT = 30.0
+# How much nearer a stepped-out tag stays to its symbol than to any other.
+_TAG_NEARER = 1.25
+# Outward direction of each side.
+_OUTWARD = {"top": (0, -1), "bottom": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
 def _class_weight(sym) -> LineWeight:
     """Return the line weight of a symbol's outline.
@@ -419,10 +425,7 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
         held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         held += flanges + [_obstacle(b) for b in labels]
         # The hatch strokes stand off a pneumatic line, outside its ink.
-        pad = _ink_pad(LineWeight.DETAIL)
-        held += [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
-                 for s in fs.streams if s.kind == "pneumatic"
-                 for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+        held += hatch_boxes(fs)
         for pair in pairs:
             box, codes, prefers, placed = pair
             if not any(boxes_overlap(b, f) for b in map(_unit_label_box, placed)
@@ -721,6 +724,22 @@ def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
             if limit is not None and (hits, n) > limit:
                 break
     return hits, n
+
+
+def _box_gap(a, b) -> float:
+    """Return the distance between two boxes, ``0`` where they meet.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float, float, float]
+        Boxes ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    float
+        Shortest distance from one to the other.
+    """
+    return math.hypot(max(b[0] - a[2], a[0] - b[2], 0.0), max(b[1] - a[3], a[1] - b[3], 0.0))
 
 
 def _step_aside(item, room: float, ink=(), others=()):
@@ -1821,6 +1840,25 @@ def _hatch_strokes(points) -> list:
     return out
 
 
+def hatch_boxes(fs) -> "list[tuple[float, float, float, float]]":
+    """Return the box each pneumatic hatch stroke inks.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed flowsheet.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        ``(x0, y0, x1, y1)`` of each stroke, grown by its half pen.
+    """
+    pad = _ink_pad(LineWeight.DETAIL)
+    return [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
+            for s in fs.streams if s.kind == "pneumatic"
+            for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+
+
 #: Joint markings where lines meet what they serve.
 #:
 #: * ``"none"`` -- no marks.
@@ -2891,7 +2929,10 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """Place each unit's tag and its ``NC`` and fail-position letters.
 
     The labels keep clear of the drawn lines, the symbols, the flange
-    marks, the quadrant codes, the package frames and each other.
+    marks, the quadrant codes, the package frames and each other. Tags
+    placed again with leave to step out from their face are kept only if
+    no unit then erases more of any ink, and no more labels overlap, than
+    without.
 
     Parameters
     ----------
@@ -2910,6 +2951,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """
     sheet = SvgRenderer()
     ink = _ink(fs, direction)
+    hatches = hatch_boxes(fs)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
@@ -2984,36 +3026,89 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
                 return True
         return False
 
-    placed: dict = {}
-    shown: dict = {}
-    # Place each unit's labels alone, then again off the others as they
-    # stand, keeping the first placement if the second is worse in either
-    # drawing.
-    for alone in (True, False):
-        for u in fs.units:
-            f = u.frame
-            if f is None or u.kind in ("feed", "product", "instrument"):
-                continue
-            x, y, w, h = f.x, f.y, f.w, f.h
-            others = [o for k, o in shown.items() if k != id(u)]
-            labels = None if alone else [b for o in others for b in o[0]]
-            tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels)
-                   if u.tag else None)
-            tag_box = None if tag is None else _unit_label_box(tag)
-            items = [] if tag is None else [tag]
-            # NC marking (ISO 15519-1 11.4.5).
-            if closed_marking(u, default_registry) == "NC":
-                items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
-            # Fail position (ISA-5.1 Table 5.4.4).
-            letters = fail_marking(u)
-            if letters:
-                items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
-                                                    ink, symbols))
-            now = drawn(u, tag, items)
-            if alone or not worse(u, now, shown[id(u)], others):
-                placed[id(u)] = (u, tag, items)
-                shown[id(u)] = now
-    return list(placed.values())
+    def place(step_out: bool) -> "tuple[dict, dict]":
+        """Place every unit's labels alone, then again off the others.
+
+        The second time, a unit takes the first spot no worse in either
+        drawing than its first placement, against the others as they
+        stand.
+
+        Parameters
+        ----------
+        step_out : bool
+            Whether tags may step out from the face, trying their spots
+            in turn.
+
+        Returns
+        -------
+        tuple[dict, dict]
+            ``id(unit)`` -> ``(unit, tag, items)``, and -> its boxes from
+            ``drawn``.
+        """
+        placed: dict = {}
+        shown: dict = {}
+        for alone in (True, False):
+            for u in fs.units:
+                f = u.frame
+                if f is None or u.kind in ("feed", "product", "instrument"):
+                    continue
+                x, y, w, h = f.x, f.y, f.w, f.h
+                others = [o for k, o in shown.items() if k != id(u)]
+                labels = None if alone else [b for o in others for b in o[0]]
+                spots = (sheet._tag_spots(u, f, x, y, w, h, u.tag, ink, symbols, labels,
+                                          hatches, step_out) if u.tag else [None])
+                if not step_out:
+                    spots = list(dict.fromkeys([spots[0], spots[-1]]))
+                for tag in spots:
+                    tag_box = None if tag is None else _unit_label_box(tag)
+                    items = [] if tag is None else [tag]
+                    # NC marking (ISO 15519-1 11.4.5).
+                    if closed_marking(u, default_registry) == "NC":
+                        items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
+                    # Fail position (ISA-5.1 Table 5.4.4).
+                    letters = fail_marking(u)
+                    if letters:
+                        items.append(sheet._fail_label_item(u, f, x, y, w, h, letters,
+                                                            tag_box, ink, symbols))
+                    now = drawn(u, tag, items)
+                    if alone or not worse(u, now, shown[id(u)], others):
+                        placed[id(u)] = (u, tag, items)
+                        shown[id(u)] = now
+                        break
+        return placed, shown
+
+    def overlaps(shown, k) -> int:
+        """Return how many pairs of units' labels overlap in one drawing.
+
+        Parameters
+        ----------
+        shown : dict
+            ``id(unit)`` -> its boxes from ``drawn``.
+        k : int
+            ``0`` for the sheet, ``1`` for draw.io.
+
+        Returns
+        -------
+        int
+            Overlapping pairs.
+        """
+        boxes = list(shown.values())
+        return sum(1 for i, a in enumerate(boxes) for b in boxes[i + 1:]
+                   if any(boxes_overlap(p, q) for p in a[k] for q in b[k]))
+
+    # Keep the stepped-out placement only if it is no worse than the plain
+    # one in either drawing: no unit erasing more of any ink, no more pairs
+    # of labels overlapping.
+    plain, plain_shown = place(False)
+    stepped, stepped_shown = place(True)
+    for k in (0, 1):
+        if overlaps(stepped_shown, k) > overlaps(plain_shown, k):
+            return list(plain.values())
+        for key, (u, _tag, _items) in plain.items():
+            if any(a > b for a, b in zip(cost(u, stepped_shown[key][k], [])[:3],
+                                         cost(u, plain_shown[key][k], [])[:3])):
+                return list(plain.values())
+    return list(stepped.values())
 
 
 def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
@@ -4191,8 +4286,9 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None):
-        """Return the equipment tag item, moved clear of drawn ink.
+    def _tag_spots(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None,
+                   hatches=(), step_out=True):
+        """Return the spots to try for an equipment tag, best first.
 
         The tag slides up to half the face along its side, then along
         the other free sides. The first placement that erases nothing
@@ -4200,8 +4296,12 @@ class SvgRenderer:
         is kept.
 
         Given ``labels``, the tag then also tries every side, free sides
-        first, sliding until its near end reaches the corner, and takes
-        the spot that erases least, then covers fewest labels.
+        first, sliding until its near end reaches the corner, then steps
+        out from the face. A stepped-out tag stays well nearer its own
+        symbol than any other tagged one, and off every pneumatic hatch.
+        It ranks the spots that score better than the first placement,
+        erasing least then covering fewest labels, and the first
+        placement last.
 
         Parameters
         ----------
@@ -4219,22 +4319,26 @@ class SvgRenderer:
             ``(unit, box)`` for every symbol and owner-less mark.
         labels : sequence of tuple, optional
             Halo boxes of other labels.
+        hatches : sequence of tuple, optional
+            Boxes of the pneumatic hatch strokes.
+        step_out : bool, default=True
+            Whether the tag may step out from the face.
 
         Returns
         -------
-        tuple
-            Label item.
+        list[tuple]
+            Label items, best first.
         """
         from pandid.layout.labels import LABEL_SIDES, free_label_sides
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)
         if box is None or not (ink or symbols):
-            return item
+            return [item]
         if getattr(u, "label_pos", None) or default_registry.for_unit(u).label_pos:
-            return item
+            return [item]
         # Test only ink near the unit.
-        pad = max(u_width, u_height) + (box[2] - box[0])
+        pad = max(u_width, u_height) + (box[2] - box[0]) + _TAG_STEP_OUT
         window = (x - pad, y - pad, x + u_width + pad, y + u_height + pad)
         near = [line for line in ink if boxes_overlap(line.box, window)]
         # Every other symbol box, grown to its ink.
@@ -4258,7 +4362,7 @@ class SvgRenderer:
                     if damage == clear:
                         break
         if labels is None:
-            return best
+            return [best]
         covered = [b for b in labels if boxes_overlap(b, window)]
 
         def score(spot) -> "tuple[int, int, int, int]":
@@ -4279,22 +4383,51 @@ class SvgRenderer:
             return (*_erases(halo, near, others),
                     sum(1 for b in covered if boxes_overlap(halo, b)))
 
+        own = (x, y, x + u_width, y + u_height)
+        rivals = [b for v, b in symbols if v is not None and v is not u
+                  and v.kind not in ("feed", "product", "instrument")
+                  and boxes_overlap(b, window)]
+
+        def astray(halo) -> bool:
+            """Return whether a stepped-out halo is too near another symbol.
+
+            Parameters
+            ----------
+            halo : tuple[float, float, float, float]
+                Halo box.
+
+            Returns
+            -------
+            bool
+                True if it is not well nearer its own symbol than any
+                other tagged one, or it lies on a hatch.
+            """
+            if any(_box_gap(halo, b) < _TAG_NEARER * _box_gap(halo, own) for b in rivals):
+                return True
+            return any(boxes_overlap(halo, h) for h in hatches)
         least = score(best)
-        for side in free + [s for s in LABEL_SIDES if s not in free]:
-            if least == (0, 0, 0, 0):
-                break
-            lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
-            edgewise = side in ("left", "right")
-            face, along = ((u_height, box[3] - box[1]) if edgewise
-                           else (u_width, box[2] - box[0]))
-            for sx, sy in _slide(lx, ly, (face + along) / 2, edgewise):
-                spot = (sx, sy, anchor, baseline, side, tag)
-                cost = score(spot)
-                if cost < least:
-                    best, least = spot, cost
-                    if least == (0, 0, 0, 0):
-                        break
-        return best
+        if least == (0, 0, 0, 0):
+            return [best]
+        better = []
+        sides = free + [s for s in LABEL_SIDES if s not in free]
+        reach = _TAG_STEP_OUT if step_out else 0.0
+        for out in [k * _LABEL_STEP for k in range(int(reach // _LABEL_STEP) + 1)]:
+            for side in sides:
+                lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
+                nx, ny = _OUTWARD[side]
+                edgewise = side in ("left", "right")
+                face, along = ((u_height, box[3] - box[1]) if edgewise
+                               else (u_width, box[2] - box[0]))
+                for sx, sy in _slide(lx + nx * out, ly + ny * out, (face + along) / 2, edgewise):
+                    spot = (sx, sy, anchor, baseline, side, tag)
+                    halo = _unit_label_box(spot)
+                    assert halo is not None
+                    if out and astray(halo):
+                        continue
+                    cost = score(spot)
+                    if cost < least:
+                        better.append((cost, len(better), spot))
+        return [spot for _cost, _n, spot in sorted(better)] + [best]
 
     def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):
         """Return the ``NC`` label above and right of the symbol.
