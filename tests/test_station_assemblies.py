@@ -81,28 +81,40 @@ def test_a_turn_and_mirror_stated_on_a_station_member_are_read_back() -> None:
 
 
 def test_an_older_spec_reads_a_station_s_own_turns_as_stated() -> None:
-    """Check that a spec writing a pinned station's own turns and mirrors reads them as stated."""
+    """Check that a spec naming no station turns or mirrors reads every written one as stated."""
     fs = Flowsheet("Pinned station")
     fs.add_valve_station("CV-101", x=200, y=300, mirrored=True)
     spec = fs.to_dict()
-    for entry in spec["units"]:
-        unit = next(u for u in fs.units if u.name == entry["name"])
-        if unit.pin_ is not None and unit.pin_.orientation:
-            entry["pin"]["orientation"] = int(unit.pin_.orientation)
-        if unit.pin_ is not None and (unit.pin_.mirrored or unit.pin_.mirror_y):
-            entry["pin"]["mirrored"] = {(True, False): "x", (False, True): "y"}.get(
-                (unit.pin_.mirrored, unit.pin_.mirror_y), "xy"
-            )
+    (entry,) = spec["stations"]
+    assert entry.pop("station_turns") and entry.pop("station_mirrors")
     again = Flowsheet.from_dict(spec)
-    turned = {u.name for u in fs.units if u.pin_ is not None and u.pin_.orientation}
-    flipped = {
-        u.name for u in fs.units if u.pin_ is not None and (u.pin_.mirrored or u.pin_.mirror_y)
-    }
+    pinned = [e for e in spec["units"] if "pin" in e]
 
-    assert turned and flipped
-    assert {u.name for u in again.units if u._turn_stated} == turned
-    assert {u.name for u in again.units if u._mirror_stated} == flipped
+    assert {u.name for u in again.units if u._turn_stated} == {
+        e["name"] for e in pinned if "orientation" in e["pin"]
+    }
+    assert {u.name for u in again.units if u._mirror_stated} == {
+        e["name"] for e in pinned if "mirrored" in e["pin"]
+    }
     assert again.to_dict() == spec
+
+
+def test_a_station_with_a_member_moved_reads_back_drawn_as_it_was() -> None:
+    """Check that a pinned, mirrored station with its control valve moved down draws as built."""
+
+    def build() -> Flowsheet:
+        fs = Flowsheet("station")
+        station = fs.add_valve_station("CV-101", x=200, y=300, mirrored=True)
+        station.control.pin(y=350, port="inlet")
+        return fs
+
+    fs = build()
+    again = Flowsheet.from_dict(fs.to_dict())
+    for sheet in (fs, again):
+        sheet.route()
+
+    assert again.to_svg(check=False) == fs.to_svg(check=False)
+    assert [i.code for i in again.validate() if i.code == "route-crosses-unit"] == []
 
 
 def test_hand_wired_station_is_set_on_its_pipe() -> None:

@@ -137,7 +137,6 @@ from pandid.portgeom import pin_intent, port_refusal
 from pandid.ports import Port
 from pandid.stations import (
     DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP, DEFAULT_VALVE_STATION_TAG_SCHEME,
-    ValveStation, member_mirror,
 )
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
@@ -998,12 +997,17 @@ _STATION_ROLES = (
 )
 _STATION_KEYS = {
     "members", "tees", "inlet", "outlet", "mirrored", "gap", "bypass_rise",
-    "drain_drop", "bypass_over", "run", "at", *_STATION_ROLES,
+    "drain_drop", "bypass_over", "run", "at", "station_turns", "station_mirrors",
+    *_STATION_ROLES,
 }
 
 
 def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     """Read one ``stations:`` entry and register the station.
+
+    The members ``station_turns`` and ``station_mirrors`` name have that
+    turn or mirror unstated; every other written turn and mirror is
+    stated.
 
     Parameters
     ----------
@@ -1103,49 +1107,14 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
         run=run, at=at,
     )
     fs._station_assemblies.append(assembly)
-    _turn_station(station, assembly.mirrored, main)
+    # Mark the turns and mirrors the station gave its members unstated.
+    for key, flag in (("station_turns", "_turn_stated"), ("station_mirrors", "_mirror_stated")):
+        for name in _sequence(data.get(key, []), f"{where}.{key}"):
+            unit = _find_unit(fs, _text(name, f"{where}.{key}"), where)
+            if unit not in members:
+                raise SpecError(f"{where}.{key}: {name!r} is not a member of this station")
+            setattr(unit, flag, False)
 
-
-def _turn_station(station: ValveStation, mirrored: bool, main: list[Unit]) -> None:
-    """Give a station laid out by coordinates its own turns and mirrors.
-
-    A station is laid out by coordinates where every member of its main
-    run is pinned by its corner's x and its inlet's y on one line. Each
-    member then takes the turn and mirror ``add_valve_station()`` gives
-    it, unstated, wherever the spec states none.
-
-    Parameters
-    ----------
-    station : ValveStation
-        Station read from the spec.
-    mirrored : bool
-        Whether the station is piped east to west.
-    main : list[Unit]
-        Members of its main run, in flow order.
-    """
-    rows = set()
-    for unit in main:
-        intent = pin_intent(unit)
-        corner, inlet = intent.get("x"), intent.get("y")
-        rows.add(inlet[1] if corner is not None and corner[0] is None
-                 and inlet is not None and inlet[0] == "inlet" else None)
-    if len(rows) != 1 or None in rows:
-        return
-    drains = (station.upstream_drain, station.downstream_drain)
-    outer = (station.tees[0], station.tees[-1]) if station.bypass is not None else ()
-    for unit in station.members:
-        if unit is station.bypass:
-            turn, mirror = 0, "x" if mirrored else False
-        elif unit in drains:
-            turn, mirror = 90, False
-        else:
-            turn, mirror = 0, member_mirror(mirrored, unit in outer)
-        stated = unit._turn_stated, unit._mirror_stated
-        if not stated[0]:
-            unit.pin(orientation=turn)
-        if not stated[1]:
-            unit.pin(mirrored=mirror)
-        unit._turn_stated, unit._mirror_stated = stated
 
 
 def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
@@ -2496,11 +2465,11 @@ def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
             ports = set(named.values())
             pin["port"] = (ports.pop() if len(ports) == 1 and len(named) == len(intent)
                            else dict(sorted(named.items())))
-        # Write a turn or mirror only where it is stated.
-        if unit._turn_stated:
+        if unit._turn_stated or unit.pin_.orientation:
             pin["orientation"] = int(unit.pin_.orientation)
-        if unit._mirror_stated:
-            pin["mirrored"] = _MIRROR_NAMES.get((unit.pin_.mirrored, unit.pin_.mirror_y), False)
+        mirror = _MIRROR_NAMES.get((unit.pin_.mirrored, unit.pin_.mirror_y))
+        if mirror or unit._mirror_stated:
+            pin["mirrored"] = mirror or False
         entry["pin"] = pin
     if unit._port_faces:
         entry["port_faces"] = {**entry.get("port_faces", {}), **unit._port_faces}
@@ -2696,6 +2665,9 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
 def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
     """Write one ``stations:`` entry.
 
+    ``station_turns`` and ``station_mirrors`` name the members whose
+    written turn or mirror the station gave them rather than the author.
+
     Parameters
     ----------
     fs : Flowsheet
@@ -2732,6 +2704,16 @@ def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
                             if stream is assembly.run)
         if assembly.at is not None:
             entry["at"] = assembly.at
+    # Name the members whose written turn or mirror the station gave them.
+    turns = [unit.name for unit in station.members
+             if unit.pin_ is not None and unit.pin_.orientation and not unit._turn_stated]
+    mirrors = [unit.name for unit in station.members
+               if unit.pin_ is not None and (unit.pin_.mirrored or unit.pin_.mirror_y)
+               and not unit._mirror_stated]
+    if turns:
+        entry["station_turns"] = turns
+    if mirrors:
+        entry["station_mirrors"] = mirrors
     return entry
 
 
