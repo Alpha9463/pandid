@@ -558,6 +558,30 @@ def test_a_tag_moved_off_a_label_erases_no_more_line_than_its_first_spot(face):
     assert not worse, worse
 
 
+def test_a_tag_is_not_moved_onto_more_line_than_it_erased(monkeypatch):
+    """Check that the tag pass keeps a tag's first spot if the second erases a line."""
+    from pandid.render.svg import SvgRenderer, unit_tags
+
+    fs = Flowsheet("one valve")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    valve = fs.add(U.Valve("HV-1")).pin(port="inlet", x=200, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    fs.route()
+    place = SvgRenderer._tag_item
+
+    def across_the_line(self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None):
+        """Place the tag as usual alone, and across its outlet line after."""
+        if labels is None:
+            return place(self, u, f, x, y, w, h, tag, ink, symbols)
+        return (x + w + 10, y + h / 2, "start", "middle", "right", tag)
+
+    monkeypatch.setattr(SvgRenderer, "_tag_item", across_the_line)
+    ((_unit, tag, _items),) = unit_tags(fs, None, "vertical")
+    assert tag is not None and tag[4] != "right", tag
+
+
 def test_a_tag_keeps_off_the_hatch_marks_of_a_pneumatic_signal():
     """Check that no tag's halo erases a hatch mark on a control valve's signal."""
     fs = _two_pump_bank("W")
