@@ -168,12 +168,12 @@ def test_a_line_frozen_on_a_bank_then_laid_out_again_still_meets_its_controller(
 
 
 def test_layout_after_a_line_is_frozen_draws_no_unit_over_a_balloon_it_held():
-    """Let go of FT-201, held where S11 was frozen, once layout() lays SP over it."""
+    """Let go of FT-201, held where S11 was frozen, once a fresh layout lays SP over it."""
     fs, loops = copy.deepcopy(_routed_bank(999))
     line = loops[1].measurement
     assert line.route is not None
     line.via(list(line.route.waypoints))
-    fs.layout()
+    fs._lay_out(None, afresh=True)
     boxes = [(u.name, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     assert [
         (a, b)
