@@ -804,6 +804,9 @@ class Flowsheet:
         # The corner and nozzle faces of each balloon a via() line meets,
         # by id(), as the drawing the line was typed against has them.
         self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
+        # Whether balloons keep to the sheet on each axis a unit is pinned
+        # on.
+        self._on_sheet = False
         # The sheet as drawn without grown faces or lanes where route() kept
         # them, whether layout() has run on the sheet since, and whether
         # route() is running.
@@ -2612,7 +2615,10 @@ class Flowsheet:
         unless the author has stated a pin, ``via()`` route or note
         position since.
 
-        Last, with the default router and layout engine, each band across
+        Last, with the default router and layout engine, a drawing that
+        reaches past the sheet's top or left edge is moved onto the sheet
+        on each axis no unit is pinned on, where no ``via()`` route or
+        placed note is drawn, kept on the terms below; then each band across
         the drawing that holds no unit, tag, package frame, annotation
         placed by ``position``, balloon standoff, line end, line run along
         it or ``via()`` waypoint is closed to the gap layout keeps between
@@ -2626,7 +2632,9 @@ class Flowsheet:
         annotation. The next route() or layout() starts from the drawing
         before it, unless the author has stated a pin, ``via()`` route or
         note position since; then it starts from the closed drawing those
-        were read against.
+        were read against. Where the only change since the last route() is
+        pins at the places the units are drawn, the drawing is kept as it
+        is.
 
         Parameters
         ----------
@@ -2643,10 +2651,12 @@ class Flowsheet:
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
 
+        tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
+        if tries and not self._in_route and self._pinned_as_drawn():
+            return
         if not self._in_route:
             self._hold_typed()
         self._put_main()
-        tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
         start = self._drawing() if tries and self._offers_family_faces() else None
         outer, self._in_route = self._in_route, True
         try:
@@ -2668,6 +2678,7 @@ class Flowsheet:
                 else:
                     self._put_drawing(mains)
             if tries and self._auto_laid:
+                self._keep_on_sheet(router or DefaultRouter())
                 self._close_bands()
         finally:
             self._in_route = outer
@@ -2675,30 +2686,32 @@ class Flowsheet:
                 self._stated_then = self._stated()
 
     def _close_bands(self) -> None:
-        """Close the empty bands across the drawing, kept only if no
-        crossing, bend, fallback, finding or clash grows, no tap leaves
-        its line and nothing more is drawn over a placed annotation; then
-        close those with pins on both sides, kept only if the drawing
-        beats the one before on the same terms.
+        """Move a drawing past the sheet's top or left edge onto it, then
+        close the empty bands across it, each kept only if no crossing,
+        bend, fallback, finding or clash grows, no tap leaves its line and
+        nothing more is drawn over a placed annotation; then close those
+        with pins on both sides, kept only if the drawing beats the one
+        before on the same terms.
 
         Where they are kept, the next route() or layout() starts from
         the drawing before them, unless the author has stated drawing
         coordinates since; then it starts from the drawing shown.
         """
-        from pandid.layout.compact import close_bands, covered, empty_bands
+        from pandid.layout.compact import close_bands, covered, empty_bands, onto_sheet
         from pandid.routing.lanes import _score
 
-        # Close what layout left, then slide what lies between pins where
-        # that draws better.
-        for pinned in (False, True):
-            cuts = empty_bands(self, pinned)
+        # Move the drawing onto the sheet, close what layout left, then
+        # slide what lies between pins where that draws better.
+        for find, better in ((onto_sheet, False), (empty_bands, False),
+                             (lambda fs: empty_bands(fs, True), True)):
+            cuts = find(self)
             if not any(cuts):
                 continue
             drawn, judged, notes = self._drawing(), _score(self), covered(self)
             close_bands(self, cuts)
             new = _score(self)
             grew = new[1] > judged[1] or any(n > judged[0][k] for k, n in new[0].items())
-            if grew or not covered(self) <= notes or (pinned and not _beats(new, judged)):
+            if grew or not covered(self) <= notes or (better and not _beats(new, judged)):
                 self._put_drawing(drawn)
                 continue
             if self._main is None:
@@ -2723,6 +2736,26 @@ class Flowsheet:
                       if s.route is not None and s.route.manual),
                 tuple((a, a.position) for a in self.annotations
                       if getattr(a, "position", None) is not None))
+
+    def _pinned_as_drawn(self) -> bool:
+        """Return whether the only change since route() is pins the drawing
+        honours.
+
+        Returns
+        -------
+        bool
+            True if the layout and routes are fresh, and what
+            :meth:`_stated` returns differs from what it returned when
+            route() last finished only in pins, each new one at the place
+            its unit is drawn.
+        """
+        then = self._stated_then
+        if then is None or self._layout_stale or self._route_stale:
+            return False
+        pins, *rest = self._stated()
+        new = [pin for pin in pins if pin not in then[0]]
+        return (bool(new) and rest == list(then[1:])
+                and all(u._drawn_as(pin, ports, {}) for u, pin, ports in new))
 
     def _hold_typed(self) -> None:
         """Hold each unpinned balloon a ``via()`` line meets where the
@@ -3051,6 +3084,71 @@ class Flowsheet:
             stale = self._layout_stale
             self._put_state(held)
             self._layout_stale = stale
+
+    def _keep_on_sheet(self, router) -> bool:
+        """Place each balloon drawn past the sheet's top or left edge, on an
+        axis a unit is pinned on, again on the sheet, holding every other
+        balloon where it is drawn, kept only if fewer units are drawn past
+        the edge, no tap leaves its line, nothing route() is judged by
+        grows and nothing more is drawn over a placed annotation.
+
+        Parameters
+        ----------
+        router : object
+            Router with ``route(fs)``.
+
+        Returns
+        -------
+        bool
+            Whether the new places are kept.
+        """
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, pinned_axes
+        from pandid.layout.compact import covered
+        from pandid.layout.control import _taps_off, place_control
+        from pandid.layout.stages import is_control
+        from pandid.routing.lanes import _score
+
+        held, self._on_sheet = self._typed_at, True
+        try:
+            px, py = pinned_axes(self)
+
+            def off() -> list[Unit]:
+                """Return the units drawn past an edge balloons keep to.
+
+                Returns
+                -------
+                list[Unit]
+                    Each such unit.
+                """
+                return [u for u in self.units if u.frame is not None
+                        and ((px and u.frame.x < 0.0) or (py and u.frame.y < 0.0))]
+
+            loose = off()
+            if not any(is_control(u) for u in loose):
+                return False
+            prior, unplaced = self._geometry(), list(self.unplaced_instruments)
+            before, taps, notes = _score(self), _taps_off(self), covered(self)
+            self._typed_at = {**held, **{id(u): (u.frame.x, u.frame.y, dict(u.frame.port_faces))
+                                         for u in self.units if is_control(u) and u not in loose
+                                         and u.frame is not None and u.pin_ is None}}
+            try:
+                self.route_converged = False
+                for _ in range(MAX_PLACEMENT_PASSES):
+                    if not place_control(self):
+                        self.route_converged = True
+                        break
+                    router.route(self)
+                new = _score(self)
+                kept = (len(off()) < len(loose) and new[1] <= taps and covered(self) <= notes
+                        and not any(n > before[0][k] for k, n in new[0].items()))
+            except Exception:
+                kept = False
+        finally:
+            self._typed_at, self._on_sheet = held, False
+        if not kept:
+            self._put_geometry(prior, keep_manual=False)
+            self.unplaced_instruments = unplaced
+        return kept
 
     def _keep_further_off(self, router) -> bool:
         """Place each balloon hung from a balloon an arrowhead clear of its

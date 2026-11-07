@@ -249,7 +249,7 @@ def main():
     # --- The high pressure trip, on a measurement of its own ----------
     pt318 = fs.add_instrument("PT", 318, sensing=vapour, at=0.55,
                               offset=overhead_y - balloon_row_y)
-    fs.add_instrument("Z", 2, sensing=pt318, face="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 2, sensing=pt318, face="W", offset=40, variant="sis")
 
     # --- Loops 302/303: tower top temperature onto reflux flow -------
     # Tapped low on the riser, below the header that crosses it.
