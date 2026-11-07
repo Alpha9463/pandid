@@ -3017,16 +3017,17 @@ def _valved_bank(
     controller_face: str | None = None,
     controller_on_line: bool = False,
     route: bool = True,
+    pumps: int = 3,
 ) -> tuple[Flowsheet, list[ControlLoop]]:
-    """Build three pumps in parallel, each with a flow loop on its valved suction line.
+    """Build pumps in parallel, each with a flow loop on its valved suction line.
 
     Route the bank unless ``route`` is False.
     """
     from pandid.devices import ControlValve
 
     fs = Flowsheet("valved loops")
-    sp = fs.add(U.Splitter("SP", n_outlets=3))
-    mx = fs.add(U.Mixer("MX", n_inlets=3))
+    sp = fs.add(U.Splitter("SP", n_outlets=pumps))
+    mx = fs.add(U.Mixer("MX", n_inlets=pumps))
     fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
     fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
     pairs = []
@@ -3310,6 +3311,78 @@ def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
     transmitter.attach(transmitter.host, at=0.3)
 
     assert fs._stated() == stated
+
+
+def _two_lines() -> tuple[Flowsheet, list[Stream], U.Instrument, U.Instrument]:
+    """Return line A above line B, FT-101 measuring A and TIC-101 on FT-101's S face."""
+    fs = Flowsheet("two lines")
+    lines = []
+    for tag, y in (("A", 200), ("B", 500)):
+        feed = fs.add(U.Feed("F" + tag)).pin(port="outlet", x=100, y=y)
+        product = fs.add(U.Product("P" + tag)).pin(port="inlet", x=600, y=y)
+        lines.append(fs.connect(feed.outlet, product.inlet, name=tag))
+    ft = fs.add_instrument("FT", 101, sensing=lines[0], at=0.5)
+    tic = fs.add_instrument("TIC", 101, near=ft, face="S")
+    return fs, lines, ft, tic
+
+
+def _attachment_set(field: str) -> tuple[Flowsheet, Callable[[], None]]:
+    """Return an unrouted sheet and the edit that sets one balloon's attachment field."""
+    if field == "relation":
+        fs, loops = _valved_bank(10, route=False, pumps=2)
+        controller = loops[0].controller
+        return fs, lambda: setattr(controller, "relation", "sensing")
+    fs, lines, ft, tic = _two_lines()
+    edits: dict[str, Callable[[], None]] = {
+        "host": lambda: setattr(ft, "host", lines[1]),
+        "at": lambda: setattr(ft, "at", 0.3),
+        "face": lambda: setattr(tic, "face", "E"),
+        "offset": lambda: setattr(ft, "offset", 90),
+        "angle": lambda: setattr(ft, "angle", 270),
+    }
+    return fs, edits[field]
+
+
+def test_a_transmitter_moved_to_another_line_after_routing_taps_it():
+    """Route FT-101 on line A, make line B its host, and route again.
+
+    FT-101 taps line B.
+    """
+    fs, lines, ft, _ = _two_lines()
+    fs.route()
+    ft.host = lines[1]
+    fs.route()
+
+    assert ft.tap is not None and ft.tap[1] == pytest.approx(500)
+
+
+@pytest.mark.parametrize("field", ["host", "at", "face", "offset", "angle", "relation"])
+def test_an_attachment_set_after_routing_is_drawn_as_set(field: str):
+    """Route a sheet, set one attachment field of a balloon, and route again.
+
+    The sheet draws as the same sheet does with the field set before its first route().
+    """
+    fs, edit = _attachment_set(field)
+    fs.route()
+    edit()
+    fs.route()
+    fresh, edit_fresh = _attachment_set(field)
+    edit_fresh()
+    fresh.route()
+
+    assert fs.to_svg(check=False) == fresh.to_svg(check=False)
+
+
+def test_a_face_set_without_attach_after_routing_is_drawn():
+    """Route a two-pump bank, set FIC-201's face to N directly, and route again.
+
+    FIC-201 is drawn above FT-201.
+    """
+    fs, loops = _valved_bank(10, pumps=2)
+    loops[1].controller.face = "N"
+    fs.route()
+
+    assert frame_of(loops[1].controller).cy < frame_of(loops[1].transmitter).cy
 
 
 def test_a_line_drawn_by_hand_after_routing_is_kept_clear_on_the_next_route():

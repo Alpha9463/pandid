@@ -5,6 +5,7 @@ A flowsheet also lays out, routes, validates and renders its drawing.
 
 from __future__ import annotations
 import copy
+import json
 from contextlib import contextmanager
 from dataclasses import replace
 from math import isfinite
@@ -801,9 +802,11 @@ class Flowsheet:
         # drawings it holds for the next route() or layout() are put back
         # only while that is unchanged.
         self._stated_then: tuple | None = None
-        # Whether route() last finished with the default router, and
-        # whether the next route() of the unchanged sheet keeps that drawing.
-        self._routed = self._final = False
+        # What the author had given when route() last finished with the
+        # default router, and whether the next route() keeps that drawing
+        # while it is unchanged.
+        self._given_then: tuple | None = None
+        self._final = False
         # The corner and nozzle faces of each balloon a via() line meets,
         # by id(), as the drawing the line was typed against has them.
         self._typed_at: dict[int, tuple[float, float, dict[str, str]]] = {}
@@ -2505,12 +2508,15 @@ class Flowsheet:
     def route(self, router=None) -> None:
         """Route every stream, laying out first if needed.
 
-        Where route() last finished with the default router and nothing
-        has changed since, route() with the default router keeps the
-        drawing as it is if it settled with every tap on its line or was
-        already drawn again; otherwise it draws the sheet again and keeps
-        the new drawing only if no finding, clash, crossing, fallback route
-        or tap off its line grows and one falls.
+        Where route() last finished with the default router and since
+        then neither the sheet's :meth:`to_dict` spec nor a balloon's
+        attachment has changed, nor has it been laid out or edited in a way
+        that redraws it, route() with
+        the default router keeps the drawing as it is if it settled with
+        every tap on its line or was already drawn again; otherwise it
+        draws the sheet again and keeps the new drawing only if no
+        finding, clash, crossing, fallback route or tap off its line grows
+        and one falls.
 
         Attached instruments are placed and the sheet re-routed until
         neither moves, up to
@@ -2669,14 +2675,14 @@ class Flowsheet:
         tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
         last = None
         if not self._in_route:
-            if (tries and self._routed and self._unedited()
+            if (tries and self._given_then is not None and self._given() == self._given_then
                     and not (self._layout_stale or self._route_stale)
                     and all(u.frame is not None for u in self.units)
                     and all(s.route is not None for s in self.streams)):
                 if self._final:
                     return
                 last = self._drawing(), self._main, measured()
-            self._routed = False
+            self._given_then = None
             self._hold_typed()
         self._put_main()
         start = self._drawing() if tries and self._offers_family_faces() else None
@@ -2705,13 +2711,34 @@ class Flowsheet:
                 self._put_drawing(last[0])
                 self._main = last[1]
             if not outer:
-                self._routed = tries
+                self._given_then = self._given() if tries else None
                 self._final = last is not None or (
                     self.route_converged and not _taps_off(self))
         finally:
             self._in_route = outer
             if not outer:
                 self._stated_then = self._stated()
+
+    def _given(self) -> tuple | None:
+        """Return what the author has given the sheet, or None where the
+        sheet has no spec.
+
+        Returns
+        -------
+        tuple or None
+            :meth:`to_dict` as JSON, values it does not write as JSON
+            written by ``repr()``, and each attached balloon's
+            :func:`~pandid.layout.attach._attachment`, or None where a
+            scheme is callable, a unit class is not built in or the
+            stream-label enclosure is unknown.
+        """
+        from pandid.layout.attach import _attachment, is_attached
+
+        try:
+            spec = json.dumps(self.to_dict(), default=repr)
+        except ValueError:
+            return None
+        return spec, [_attachment(u) for u in self.units if is_attached(u)]
 
     def _close_bands(self) -> None:
         """Close the empty bands across the drawing, kept only if no
