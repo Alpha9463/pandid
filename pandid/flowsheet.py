@@ -826,7 +826,8 @@ class Flowsheet:
         # attachment then.
         self._beside: dict[int, tuple[tuple[float, float], tuple]] = {}
         # Whether layout keeps equipment and furniture clear of each
-        # balloon pinned on both axes and moves its chain's room there.
+        # balloon pinned on both axes or held where a via() line met it,
+        # and moves its chain's room there.
         self._pin_balloons = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
@@ -3574,7 +3575,7 @@ class Flowsheet:
                                           nozzle_tap, on_leader)
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
-        from pandid.layout.halo import pinned_balloons
+        from pandid.layout.halo import fixed_balloons
         from pandid.routing.lanes import _score
         from pandid.validate import geometry_issues
 
@@ -3756,8 +3757,8 @@ class Flowsheet:
             settle_best()
 
         def repinned() -> None:
-            """Lay out with each balloon pinned on both axes kept clear,
-            and settle."""
+            """Lay out with each balloon pinned on both axes or held where
+            a via() line met it kept clear, and settle."""
             self._pin_balloons = True
             try:
                 self.layout(self._engine)
@@ -3781,7 +3782,7 @@ class Flowsheet:
             if tries and self._exit_tight:
                 keep_if_better(relaid, _flaws(self))
                 self._exit_tight = False
-            if tries and pinned_balloons(self, {}):
+            if tries and fixed_balloons(self, {}):
                 flaws = _flaws(self)
                 if flaws["unit-overlap"]:
                     # Keep only a drawing with fewer overlaps.

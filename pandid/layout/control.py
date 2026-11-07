@@ -72,7 +72,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     from pandid.geometry import Frame
     from pandid.layout.attach import _nozzle_keepouts, _typed_boxes
     from pandid.layout.faces import select_faces
-    from pandid.layout.halo import pinned_balloons
+    from pandid.layout.halo import fixed_balloons
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
 
@@ -86,7 +86,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     # Balloons pinned on both axes or held where a via() line met them;
     # the rest keep off them.
     typed = _typed_boxes(fs, pending)
-    taken += list(typed.values()) + pinned_balloons(fs, {})
+    taken += fixed_balloons(fs, {})
     # Strips a balloon hung off an actuator must clear.
     clear = _nozzle_keepouts(fs, skip=set(pending))
     # Drawn lines it must clear too, each with the units it joins.

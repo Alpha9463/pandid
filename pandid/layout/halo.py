@@ -1,8 +1,9 @@
 """Reserve room around process units for the balloons attached to them.
 
 A balloon on a stream reserves room on both units the stream joins.
-With ``fs._pin_balloons`` set, a balloon pinned on both axes reserves
-its chain's room around itself.
+With ``fs._pin_balloons`` set, a fixed balloon, one pinned on both axes
+or held where a ``via()`` line met it, reserves its chain's room around
+itself.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
     """
     from pandid.layout.stages import is_control
 
-    fixed = {id(u) for u in fs.units if fs._pin_balloons and _pinned_corner(u) is not None}
+    fixed = {id(u) for u in fs.units if fs._pin_balloons and _fixed_corner(u) is not None}
     pads: dict["Unit", Pad] = {}
     for inst in fs.units:
         if not is_control(inst) or getattr(inst, "host", None) is None:
@@ -98,9 +99,12 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
     return pads
 
 
-def pinned_balloons(fs: "Flowsheet", pads: dict["Unit", Pad]
-                    ) -> list[tuple[float, float, float, float]]:
-    """Return each balloon pinned on both axes, padded for its chain.
+def fixed_balloons(fs: "Flowsheet", pads: dict["Unit", Pad]
+                   ) -> list[tuple[float, float, float, float]]:
+    """Return each fixed balloon, padded for its chain.
+
+    A balloon is fixed where it is pinned on both axes or held where a
+    ``via()`` line met it.
 
     Parameters
     ----------
@@ -119,7 +123,7 @@ def pinned_balloons(fs: "Flowsheet", pads: dict["Unit", Pad]
 
     boxes = []
     for inst in fs.units:
-        corner = _pinned_corner(inst)
+        corner = _fixed_corner(inst)
         if not is_control(inst) or corner is None:
             continue
         (x, y), (w, h), pad = corner, resolve_size(inst), pads.get(inst, Pad())
@@ -127,8 +131,8 @@ def pinned_balloons(fs: "Flowsheet", pads: dict["Unit", Pad]
     return boxes
 
 
-def _pinned_corner(unit: "Unit") -> tuple[float, float] | None:
-    """Return a unit's pinned corner, or None.
+def _fixed_corner(unit: "Unit") -> tuple[float, float] | None:
+    """Return the corner a unit is pinned or held at, or None.
 
     Parameters
     ----------
@@ -138,12 +142,15 @@ def _pinned_corner(unit: "Unit") -> tuple[float, float] | None:
     Returns
     -------
     tuple[float, float] or None
-        The ``x`` and ``y`` pins, or None unless both are set.
+        The ``x`` and ``y`` pins where both are set, else the corner it
+        is held at where a ``via()`` line met it, else None.
     """
     pin = unit.pin_
-    if pin is None or pin.x is None or pin.y is None:
-        return None
-    return float(pin.x), float(pin.y)
+    if pin is not None and pin.x is not None and pin.y is not None:
+        return float(pin.x), float(pin.y)
+    fs = unit.flowsheet
+    held = None if fs is None else fs._typed_at.get(id(unit))
+    return None if held is None else (held[0], held[1])
 
 
 def _charge(inst: "Unit", fixed: set[int]

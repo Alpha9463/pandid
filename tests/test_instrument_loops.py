@@ -7,7 +7,7 @@ import pytest
 
 from pandid import Flowsheet, units as U
 
-from _layout_cases import frame_of
+from _layout_cases import build_unpinned, frame_of
 from test_instruments import _centre, _hatch_marks, _line, _overlaps
 
 
@@ -220,6 +220,23 @@ def test_a_hung_controller_keeps_its_own_tap_line() -> None:
 
     assert fs.route_converged
     assert pi.tap == pytest.approx(face_point(lic, frame_of(lic), "N")[0])
+
+
+def test_a_unit_laid_out_again_keeps_off_a_controller_held_at_its_frozen_line() -> None:
+    """Lay V-101 clear of FIC-101, held where S4 was frozen, when a pin moves the feed."""
+    fs, _ = build_unpinned("03_control_loop")
+    fs.route()
+    line = next(s for s in fs.streams if s.name == "S4")
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    feed = next(u for u in fs.units if u.name == "Feed")
+    assert feed.frame is not None
+    feed.pin(port=None, x=feed.frame.x - 60, y=feed.frame.y)
+    fs.route()
+    found = fs.validate()
+    assert [i.message for i in found if i.code == "unit-overlap"] == []
+    assert [i.message for i in found if i.code in ("route-diagonal", "route-crosses-unit")
+            and i.message.startswith("stream S4 ")] == []
 
 
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:

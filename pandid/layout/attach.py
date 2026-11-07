@@ -706,7 +706,7 @@ def place_attached(fs: "Flowsheet") -> bool:
     """
     from pandid.geometry import Frame
     from pandid.layout.control import _actuator_box, _hangs_beside
-    from pandid.layout.halo import pinned_balloons
+    from pandid.layout.halo import fixed_balloons
     from pandid.portgeom import resolve_size, unit_box
 
     moved = False
@@ -724,7 +724,7 @@ def place_attached(fs: "Flowsheet") -> bool:
     # Place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     typed = _typed_boxes(fs, pending)
-    obstacles += list(typed.values()) + pinned_balloons(fs, {})
+    obstacles += fixed_balloons(fs, {})
     while pending:
         progressed = False
         for inst in list(pending):
