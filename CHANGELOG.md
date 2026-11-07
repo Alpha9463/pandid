@@ -241,6 +241,10 @@ These are removed in 0.4.0.
   or a balloon moves beside its symbol, a nozzle or the symbol's corner when a
   spot there erases no more of any line or symbol, so the tags of valves close
   together on a line no longer run into each other.
+- Valves put with `on=` on neighbouring lines too close to hold them side by
+  side, such as control valves on the suction lines of a three-pump bank, are
+  drawn apart along their lines instead of one on top of the other, where that
+  adds no finding other than line crossings, bends or a tag over a line.
 - A tag with no clear spot beside its symbol steps a little further out, still
   well nearer its own symbol than any other and off any pneumatic hatch, to a
   spot that erases no line, so on many small banks of control valves the valve's

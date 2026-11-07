@@ -755,6 +755,11 @@ class Flowsheet:
         # whether the last layout drew any angle valve it could set so.
         self._corner_valves = False
         self._angle_valves = False
+        # Way layout moves pipe furniture it would draw over a unit along
+        # its pipe, 0 for not at all, and whether the last layout drew any
+        # over a unit.
+        self._spread = 0
+        self._furniture_over = False
         # Engine the last layout ran, and whether it was the default.
         self._engine = None
         self._auto_laid = False
@@ -2494,7 +2499,7 @@ class Flowsheet:
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
         self._fannable = self._far_branches = self._flags_off = False
-        self._crowded_station = self._angle_valves = False
+        self._crowded_station = self._angle_valves = self._furniture_over = False
         self._stacked = None
         if engine is None:
             engine = default_layout_engine
@@ -2629,6 +2634,15 @@ class Flowsheet:
         unless the author has stated a pin, ``via()`` route or note
         position since.
 
+        With the default router, where pipe furniture is then drawn over
+        a unit, the sheet is drawn again with each such piece moved back
+        along its pipe to the nearest spot that keeps it a gap clear of
+        other units, then on along it. The one with the fewest counts that
+        draws fewer overlaps is kept, only if no tap leaves its line and
+        no finding or clash but crossings, bends, fallback routes and tag
+        clashes grows; the next route() then starts from the drawing
+        before it.
+
         Last, with the default router and layout engine, a drawing that
         reaches past the sheet's top or left edge is moved onto the sheet
         on each axis no unit is pinned on, where no ``via()`` route or
@@ -2713,6 +2727,8 @@ class Flowsheet:
                     self._main = mains
                 else:
                     self._put_drawing(mains)
+            if tries and self._furniture_over:
+                self._spread_if_better(router)
             if tries and self._auto_laid:
                 self._keep_on_sheet(router or DefaultRouter())
                 self._close_bands()
@@ -2727,6 +2743,45 @@ class Flowsheet:
             self._in_route = outer
             if not outer:
                 self._stated_then = self._stated()
+
+    def _spread_if_better(self, router=None) -> None:
+        """Draw the sheet again with pipe furniture drawn over a unit moved
+        back along its pipe, then on along it, and keep the one with the
+        fewest counts that draws fewer overlaps, keeps every tap on its
+        line and grows no count but crossings, bends, fallback routes and
+        tag clashes; else put the drawing back.
+
+        Where one is kept, the next route() starts from the drawing before
+        it.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+        """
+        from pandid.routing.lanes import _score
+
+        drawn, (before, off) = self._drawing(), _score(self)
+        traded = ("unit-overlap", "crossings", "bends", "fallback", "unit-on-tag",
+                  "line-through-tag", "tap-through-tag")
+        best: tuple[int, tuple] | None = None
+        for side in (-1, 1):
+            self._put_drawing(drawn)
+            self._spread, self._layout_stale = side, True
+            try:
+                self._route_drawing(router)
+                after, taps = _score(self)
+            except Exception:
+                continue
+            finally:
+                self._spread = 0
+            if (taps <= off and after["unit-overlap"] < before["unit-overlap"]
+                    and not any(n > before[k] for k, n in after.items() if k not in traded)
+                    and (best is None or sum(after.values()) < best[0])):
+                best = (sum(after.values()), self._drawing())
+        self._put_drawing(drawn if best is None else best[1])
+        if best is not None and self._main is None:
+            self._main = drawn
 
     def _given(self) -> tuple | None:
         """Return what the author has given the sheet, or None where the
@@ -3493,7 +3548,7 @@ class Flowsheet:
                         tuple((u, u._stock_face) for u in self.units
                               if hasattr(u, "_stock_face")),
                         self._lanes, self._relaned, self._crowded_station,
-                        self._angle_valves, self._beside))
+                        self._angle_valves, self._furniture_over, self._beside))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -3508,7 +3563,8 @@ class Flowsheet:
          self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
          self._rows_out, self._tees_away, self._fannable, self._far_branches,
          self._flags_off, stock, self._lanes, self._relaned,
-         self._crowded_station, self._angle_valves, self._beside) = _copied(state)
+         self._crowded_station, self._angle_valves, self._furniture_over,
+         self._beside) = _copied(state)
         for u, flag in stock:
             u._stock_face = flag
         self._put_geometry(geometry, keep_manual=True)
