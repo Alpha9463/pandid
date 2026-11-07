@@ -2929,7 +2929,10 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """Place each unit's tag and its ``NC`` and fail-position letters.
 
     The labels keep clear of the drawn lines, the symbols, the flange
-    marks, the quadrant codes, the package frames and each other.
+    marks, the quadrant codes, the package frames and each other. Tags
+    placed again with leave to step out from their face are kept only if
+    no unit then erases more of any ink, and no more labels overlap, than
+    without.
 
     Parameters
     ----------
@@ -3000,7 +3003,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             (*_erases(b, ink, obstacles), sum(1 for o in others if boxes_overlap(b, o)))
             for b in boxes))]
 
-    def worse(u, now, was, settled, unsettled) -> bool:
+    def worse(u, now, was, others) -> bool:
         """Return whether new labels erase or cover more of anything.
 
         Parameters
@@ -3009,59 +3012,103 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             Unit the labels belong to.
         now, was : tuple[list, list]
             Its new and old boxes from ``drawn``.
-        settled, unsettled : list
-            Other units' boxes from ``drawn``, placed again already and
-            not yet.
+        others : list
+            Other units' boxes from ``drawn``.
 
         Returns
         -------
         bool
-            True if either drawing is worse in any count, labels of each
-            group counted apart.
+            True if either drawing is worse in any count.
         """
         for k in (0, 1):
-            for group in (settled, unsettled):
-                rest = [b for o in group for b in o[k]]
-                if any(a > b for a, b in zip(cost(u, now[k], rest), cost(u, was[k], rest))):
-                    return True
+            rest = [b for o in others for b in o[k]]
+            if any(a > b for a, b in zip(cost(u, now[k], rest), cost(u, was[k], rest))):
+                return True
         return False
 
-    placed: dict = {}
-    shown: dict = {}
-    settled: set = set()
-    # Place each unit's labels alone, then again off the others as they
-    # stand, taking the first spot no worse in either drawing than the
-    # first placement.
-    for alone in (True, False):
-        for u in fs.units:
-            f = u.frame
-            if f is None or u.kind in ("feed", "product", "instrument"):
-                continue
-            x, y, w, h = f.x, f.y, f.w, f.h
-            done = [o for k, o in shown.items() if k != id(u) and k in settled]
-            undone = [o for k, o in shown.items() if k != id(u) and k not in settled]
-            labels = None if alone else [b for o in done + undone for b in o[0]]
-            spots = (sheet._tag_spots(u, f, x, y, w, h, u.tag, ink, symbols, labels, hatches)
-                     if u.tag else [None])
-            for tag in spots:
-                tag_box = None if tag is None else _unit_label_box(tag)
-                items = [] if tag is None else [tag]
-                # NC marking (ISO 15519-1 11.4.5).
-                if closed_marking(u, default_registry) == "NC":
-                    items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
-                # Fail position (ISA-5.1 Table 5.4.4).
-                letters = fail_marking(u)
-                if letters:
-                    items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
-                                                        ink, symbols))
-                now = drawn(u, tag, items)
-                if alone or not worse(u, now, shown[id(u)], done, undone):
-                    placed[id(u)] = (u, tag, items)
-                    shown[id(u)] = now
-                    break
-            if not alone:
-                settled.add(id(u))
-    return list(placed.values())
+    def place(step_out: bool) -> "tuple[dict, dict]":
+        """Place every unit's labels alone, then again off the others.
+
+        The second time, a unit takes the first spot no worse in either
+        drawing than its first placement, against the others as they
+        stand.
+
+        Parameters
+        ----------
+        step_out : bool
+            Whether tags may step out from the face, trying their spots
+            in turn.
+
+        Returns
+        -------
+        tuple[dict, dict]
+            ``id(unit)`` -> ``(unit, tag, items)``, and -> its boxes from
+            ``drawn``.
+        """
+        placed: dict = {}
+        shown: dict = {}
+        for alone in (True, False):
+            for u in fs.units:
+                f = u.frame
+                if f is None or u.kind in ("feed", "product", "instrument"):
+                    continue
+                x, y, w, h = f.x, f.y, f.w, f.h
+                others = [o for k, o in shown.items() if k != id(u)]
+                labels = None if alone else [b for o in others for b in o[0]]
+                spots = (sheet._tag_spots(u, f, x, y, w, h, u.tag, ink, symbols, labels,
+                                          hatches, step_out) if u.tag else [None])
+                if not step_out:
+                    spots = list(dict.fromkeys([spots[0], spots[-1]]))
+                for tag in spots:
+                    tag_box = None if tag is None else _unit_label_box(tag)
+                    items = [] if tag is None else [tag]
+                    # NC marking (ISO 15519-1 11.4.5).
+                    if closed_marking(u, default_registry) == "NC":
+                        items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
+                    # Fail position (ISA-5.1 Table 5.4.4).
+                    letters = fail_marking(u)
+                    if letters:
+                        items.append(sheet._fail_label_item(u, f, x, y, w, h, letters,
+                                                            tag_box, ink, symbols))
+                    now = drawn(u, tag, items)
+                    if alone or not worse(u, now, shown[id(u)], others):
+                        placed[id(u)] = (u, tag, items)
+                        shown[id(u)] = now
+                        break
+        return placed, shown
+
+    def overlaps(shown, k) -> int:
+        """Return how many pairs of units' labels overlap in one drawing.
+
+        Parameters
+        ----------
+        shown : dict
+            ``id(unit)`` -> its boxes from ``drawn``.
+        k : int
+            ``0`` for the sheet, ``1`` for draw.io.
+
+        Returns
+        -------
+        int
+            Overlapping pairs.
+        """
+        boxes = list(shown.values())
+        return sum(1 for i, a in enumerate(boxes) for b in boxes[i + 1:]
+                   if any(boxes_overlap(p, q) for p in a[k] for q in b[k]))
+
+    # Keep the stepped-out placement only if it is no worse than the plain
+    # one in either drawing: no unit erasing more of any ink, no more pairs
+    # of labels overlapping.
+    plain, plain_shown = place(False)
+    stepped, stepped_shown = place(True)
+    for k in (0, 1):
+        if overlaps(stepped_shown, k) > overlaps(plain_shown, k):
+            return list(plain.values())
+        for key, (u, _tag, _items) in plain.items():
+            if any(a > b for a, b in zip(cost(u, stepped_shown[key][k], [])[:3],
+                                         cost(u, plain_shown[key][k], [])[:3])):
+                return list(plain.values())
+    return list(stepped.values())
 
 
 def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
@@ -4240,7 +4287,7 @@ class SvgRenderer:
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
     def _tag_spots(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None,
-                   hatches=()):
+                   hatches=(), step_out=True):
         """Return the spots to try for an equipment tag, best first.
 
         The tag slides up to half the face along its side, then along
@@ -4274,6 +4321,8 @@ class SvgRenderer:
             Halo boxes of other labels.
         hatches : sequence of tuple, optional
             Boxes of the pneumatic hatch strokes.
+        step_out : bool, default=True
+            Whether the tag may step out from the face.
 
         Returns
         -------
@@ -4361,7 +4410,8 @@ class SvgRenderer:
             return [best]
         better = []
         sides = free + [s for s in LABEL_SIDES if s not in free]
-        for out in [k * _LABEL_STEP for k in range(int(_TAG_STEP_OUT // _LABEL_STEP) + 1)]:
+        reach = _TAG_STEP_OUT if step_out else 0.0
+        for out in [k * _LABEL_STEP for k in range(int(reach // _LABEL_STEP) + 1)]:
             for side in sides:
                 lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
                 nx, ny = _OUTWARD[side]

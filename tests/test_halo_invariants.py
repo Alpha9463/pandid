@@ -539,9 +539,11 @@ def test_a_tag_takes_the_next_spot_when_the_best_erases_more_line(monkeypatch):
     place = SvgRenderer._tag_spots
     aside: list = []
 
-    def across_the_line(self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None, hatches=()):
+    def across_the_line(
+        self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None, hatches=(), step_out=True
+    ):
         """Rank a spot across the outlet line first, then one beside the first."""
-        spots = place(self, u, f, x, y, w, h, tag, ink, symbols, labels, hatches)
+        spots = place(self, u, f, x, y, w, h, tag, ink, symbols, labels, hatches, step_out)
         if labels is None:
             return spots
         aside.append((spots[-1][0] - 6, *spots[-1][1:]))
@@ -550,6 +552,33 @@ def test_a_tag_takes_the_next_spot_when_the_best_erases_more_line(monkeypatch):
     monkeypatch.setattr(SvgRenderer, "_tag_spots", across_the_line)
     ((_unit, tag, _items),) = unit_tags(fs, None, "vertical")
     assert aside and tag == aside[0], tag
+
+
+def test_a_tag_may_pass_over_a_label_still_to_move_on_its_way_clear():
+    """Check that tags on two rows of close valves end clear of each other."""
+    fs = Flowsheet("valve rows")
+    rows = {
+        200: [("HV-100", 200, "closed", ""), ("FV-101", 250, "open", "closed")]
+        + [("FV-102", 290, "open", "closed"), ("FV-103", 340, "open", "closed")],
+        275: [("FV-111", 245, "open", "open"), ("HV-112", 290, "open", "")],
+    }
+    for y, valves in rows.items():
+        before = fs.add(U.Feed(f"F{y}")).pin(port="outlet", x=100, y=y).outlet
+        for tag, x, normal, fail in valves:
+            valve = U.Valve(
+                tag, "control" if fail else "default", normal_position=normal, fail=fail
+            )
+            fs.add(valve).pin(port="inlet", x=x, y=y)
+            fs.connect(before, valve.inlet)
+            before = valve.outlet
+        fs.connect(before, fs.add(U.Product(f"P{y}")).pin(port="inlet", x=700, y=y).inlet)
+    svg = fs.to_svg(diagram="p&id")
+    tags = {u.tag: _tag_halo(svg, u.tag) for u in fs.units if u.kind == "valve"}
+    names = sorted(tags)
+    struck = [
+        (a, b) for i, a in enumerate(names) for b in names[i + 1 :] if overlaps(tags[a], tags[b])
+    ]
+    assert not struck, struck
 
 
 def test_a_tag_stepped_out_stays_nearer_its_own_unit():
