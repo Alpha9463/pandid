@@ -237,6 +237,26 @@ def test_a_spec_written_between_an_edit_and_route_routes_as_the_original() -> No
     assert _drawn(again) == _drawn(fs)
 
 
+@pytest.mark.parametrize("written", ["json", "sorted yaml", "yaml"])
+def test_a_layout_survives_a_faithful_rewrite_of_its_spec(written: str) -> None:
+    """Check that a spec rewritten as JSON or YAML, keys sorted or not, keeps its layout."""
+    fs = _bank()
+    pump = next(u for u in fs.units if u.name == "P-0")
+    pump.nozzle("suction", "W").nozzle("discharge", "E")
+    _frozen(fs, 5)
+    spec = fs.to_dict()
+    if written == "json":
+        text = json.loads(json.dumps(spec, indent=2, sort_keys=True))
+    else:
+        yaml = pytest.importorskip("yaml")
+        text = yaml.safe_load(yaml.safe_dump(spec, sort_keys=written == "sorted yaml"))
+    again = Flowsheet.from_dict(text)
+    again.route()
+
+    assert _broken(again) == []
+    assert _drawn(again) == _drawn(fs)
+
+
 @pytest.mark.parametrize("change", ["add a unit", "remove a unit", "edit a description"])
 def test_a_layout_drawn_for_another_spec_is_laid_out_afresh(change: str) -> None:
     """Check that a layout whose spec has changed is dropped and the sheet laid out afresh."""

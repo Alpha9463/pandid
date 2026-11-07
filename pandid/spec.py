@@ -2253,6 +2253,10 @@ def _intent(fs: Flowsheet) -> dict:
 def _checksum(spec: dict) -> str:
     """Return the checksum ``layout`` records of the rest of a spec.
 
+    The spec is hashed as JSON with its keys sorted and every number a
+    float, so a JSON or YAML file that keeps its values keeps its
+    checksum.
+
     Parameters
     ----------
     spec : dict
@@ -2261,9 +2265,31 @@ def _checksum(spec: dict) -> str:
     Returns
     -------
     str
-        Twelve hex digits of its SHA-256 as JSON.
+        Twelve hex digits of the SHA-256.
     """
-    return hashlib.sha256(json.dumps(spec, default=repr).encode()).hexdigest()[:12]
+    def canonical(value: Any) -> Any:
+        """Return a value with each sequence a list and each number a float.
+
+        Parameters
+        ----------
+        value : Any
+            Spec value.
+
+        Returns
+        -------
+        Any
+            The value to hash.
+        """
+        if isinstance(value, Mapping):
+            return {key: canonical(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [canonical(item) for item in value]
+        if _is_real(value):
+            return float(value) + 0.0
+        return value
+
+    text = json.dumps(canonical(spec), sort_keys=True, default=repr)
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
 def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
