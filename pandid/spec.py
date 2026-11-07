@@ -2065,10 +2065,10 @@ _FRAME_KEYS = {
 }
 _DRAWN_UNIT_KEYS = _FRAME_KEYS | {"stock_face", "nozzle_pitch", "beside_valve", "held"}
 _DRAWN_LINE_KEYS = {"points", "fallback"}
-_HELD_KEYS = {"main", "unkept", "unhung", "plain"}
+_HELD_KEYS = {"main", "unhung", "plain"}
 _GEOMETRY_KEYS = {"units", "lines", "manual", "settled", "unpriced_crossings"}
 _STATE_KEYS = {"geometry", "unhung", "switches", "stock", "beside"}
-_DRAWING_KEYS = {"state", "plain", "unkept", "switches", "unplaced"}
+_DRAWING_KEYS = {"state", "plain", "switches", "unplaced"}
 # A drawing's own switches, in _drawing() order; the shown drawing's,
 # which the sheet holds; and each switch's default.
 _DRAWING_SWITCHES = ("_plain_stale", "_layout_stale", "_route_stale", "_family_faces",
@@ -2392,15 +2392,13 @@ def _read_drawing(fs: Flowsheet, entry: Any, where: str) -> tuple:
     data = _mapping(entry, where)
     _check_keys(data, _DRAWING_KEYS, where)
     state = _read_state(fs, data.get("state", {}), f"{where}.state")
-    held = {key: None if data.get(key) is None
-            else _read_state(fs, data[key], f"{where}.{key}", state[0])
-            for key in ("plain", "unkept")}
+    plain = (None if data.get("plain") is None
+             else _read_state(fs, data["plain"], f"{where}.plain", state[0]))
     plain_stale, layout_stale, route_stale, family, added = _read_switches(
         data.get("switches", {}), _DRAWING_SWITCHES, f"{where}.switches")
     unplaced = [_find_unit(fs, _text(name, f"{where}.unplaced"), where)
                 for name in _sequence(data.get("unplaced", []), f"{where}.unplaced")]
-    return (state, held["plain"], plain_stale, held["unkept"], layout_stale, route_stale,
-            family, added, unplaced)
+    return (state, plain, plain_stale, layout_stale, route_stale, family, added, unplaced)
 
 
 def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
@@ -2464,9 +2462,8 @@ def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
     held = _mapping(data.get("held_drawings", {}), at)
     _check_keys(held, _HELD_KEYS, at)
     fs._main = None if held.get("main") is None else _read_drawing(fs, held["main"], f"{at}.main")
-    fs._unkept, fs._plain_state = (
-        None if held.get(key) is None else _read_state(fs, held[key], f"{at}.{key}")
-        for key in ("unkept", "plain"))
+    fs._plain_state = (None if held.get("plain") is None
+                       else _read_state(fs, held["plain"], f"{at}.plain"))
     fs._unhung = (None if held.get("unhung") is None
                   else _read_geometry(fs, held["unhung"], f"{at}.unhung"))
     redraw = data.get("redraw", False)
@@ -2826,12 +2823,10 @@ def _write_drawing(fs: Flowsheet, drawing: tuple) -> dict[str, Any]:
     dict[str, Any]
         The drawing entry.
     """
-    (state, plain, plain_stale, unkept, layout_stale, route_stale, family, added,
-     unplaced) = drawing
+    state, plain, plain_stale, layout_stale, route_stale, family, added, unplaced = drawing
     entry: dict[str, Any] = {"state": _write_state(fs, state)}
-    for key, held in (("plain", plain), ("unkept", unkept)):
-        if held is not None:
-            entry[key] = _write_state(fs, held, state[0])
+    if plain is not None:
+        entry["plain"] = _write_state(fs, plain, state[0])
     if values := _write_switches(_DRAWING_SWITCHES, (plain_stale, layout_stale, route_stale,
                                                      family, added)):
         entry["switches"] = values
@@ -2892,9 +2887,8 @@ def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
     held: dict[str, Any] = {}
     if fs._main is not None:
         held["main"] = _write_drawing(fs, fs._main)
-    for key, value in (("unkept", fs._unkept), ("plain", fs._plain_state)):
-        if value is not None:
-            held[key] = _write_state(fs, value)
+    if fs._plain_state is not None:
+        held["plain"] = _write_state(fs, fs._plain_state)
     if fs._unhung is not None:
         held["unhung"] = _write_geometry(fs, fs._unhung)
     if held:
