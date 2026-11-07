@@ -108,6 +108,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A balloon's face set by assignment, as in `tic.face = "N"`, counts as stated:
+  the spec writes it, and `route()` no longer turns the balloon to another face
+  or hangs it beside the valve it drives.
 - `route()` called again on a sheet that has not changed no longer draws it
   worse, sometimes with a line through a pump: it keeps a settled drawing as it
   is, and draws an unsettled one again only to keep a better one.
