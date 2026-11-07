@@ -597,28 +597,6 @@ def _by_hand(units: "list[Unit]") -> "list[Stream]":
             and port.stream.route.manual]
 
 
-def _overlaps_and_flaws(fs: "Flowsheet") -> Counter:
-    """Count a routed sheet's unit overlaps and all its counted flaws.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Routed sheet.
-
-    Returns
-    -------
-    Counter
-        ``unit-overlap`` and ``flaws``, the sum of what
-        :func:`~pandid.layout.control._flaws` counts.
-    """
-    from collections import Counter
-
-    from pandid.layout.control import _flaws
-
-    flaws = _flaws(fs)
-    return Counter({"unit-overlap": flaws["unit-overlap"], "flaws": sum(flaws.values())})
-
-
 def _beats(new: tuple, old: tuple) -> bool:
     """Return whether one routed drawing's score beats another's.
 
@@ -860,8 +838,10 @@ class Flowsheet:
         self._unheld: tuple | None = None
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes or held where a via() line met it,
-        # and moves its chain's room there.
+        # and moves its chain's room there, and whether a unit steps off
+        # such a balloon to its nearer clear side.
         self._pin_balloons = False
+        self._step_near = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -3929,15 +3909,21 @@ class Flowsheet:
             self._off_leaders = True
             settle_best()
 
-        def repinned() -> None:
+        def repinned(near: bool) -> None:
             """Lay out with each balloon pinned on both axes or held where
-            a via() line met it kept clear, and settle."""
-            self._pin_balloons = True
+            a via() line met it kept clear, and settle.
+
+            Parameters
+            ----------
+            near : bool
+                Step each unit off such a balloon to its nearer clear side.
+            """
+            self._pin_balloons, self._step_near = True, near
             try:
                 self.layout(self._engine)
                 settle_best()
             finally:
-                self._pin_balloons = False
+                self._pin_balloons = self._step_near = False
 
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
@@ -3956,12 +3942,17 @@ class Flowsheet:
                 keep_if_better(relaid, _flaws(self))
                 self._exit_tight = False
             if tries and fixed_balloons(self, {}):
-                flaws = _overlaps_and_flaws(self)
-                if flaws["unit-overlap"]:
-                    # Keep only a drawing with fewer overlaps and no more
-                    # flaws in all.
+                from functools import partial
+
+                # Step units right off fixed balloons first, then, where an
+                # overlap is left, to the nearer side.
+                for near in (False, True):
+                    flaws = _flaws(self)
+                    if not flaws["unit-overlap"]:
+                        break
+                    # Keep only a drawing with fewer overlaps.
                     flaws["unit-overlap"] -= 1
-                    keep_if_better(repinned, flaws, _overlaps_and_flaws)
+                    keep_if_better(partial(repinned, near), flaws)
             if tries and self._undercharged:
                 keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
             if tries and any(isinstance(u, Instrument) and nozzle_tap(u) for u in self.units):

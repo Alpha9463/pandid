@@ -115,9 +115,10 @@ These are removed in 0.4.0.
 
 ### Fixed
 
-- A balloon pinned with `pin(x=..., y=...)` where `route()` drew it no longer
-  has a unit laid over it by `layout()` or by a fresh build with the same pin,
-  so `validate()` no longer refuses the sheet with `unit-overlap`.
+- Where stepping a unit right off a balloon pinned with `pin(x=..., y=...)`
+  leaves it over the balloon, `route()` steps it to the nearer side and keeps
+  that drawing where no finding or clash grows, so fewer such sheets are
+  refused with `unit-overlap`.
 - A valve station pinned by `add_valve_station(x=..., y=...)` and read back from
   a spec keeps the turns and mirrors the author stated on its members, and no
   longer counts the ones the station gave them as stated.

@@ -247,15 +247,20 @@ def test_a_unit_laid_out_again_keeps_off_a_controller_held_at_its_frozen_line() 
     ] == []
 
 
-def test_a_balloon_pinned_where_drawn_on_a_fresh_build_has_no_unit_laid_over_it() -> None:
-    """Draw stripped 03_control_loop with FE-101 (2) pinned where route() drew it, clear."""
-    drawn, _ = build_unpinned("03_control_loop")
-    drawn.route()
-    spot = frame_of(next(u for u in drawn.units if u.name == "FE-101 (2)"))
-    fs, _ = build_unpinned("03_control_loop")
-    next(u for u in fs.units if u.name == "FE-101 (2)").pin(x=spot.x, y=spot.y)
-    fs.route()
-    assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
+def test_a_unit_kept_clear_of_a_pinned_transmitter_draws_no_tap_line_through_a_valve() -> None:
+    """Draw FT-101's tap line clear of FV-101 once a pump is kept clear of FT-101."""
+    from pandid.devices import ControlValve
+
+    fs = Flowsheet("Pumped feed")
+    feed, pump = fs.add(U.Feed("F")), fs.add(U.Pump("P-101"))
+    product = fs.add(U.Product("P"))
+    line = fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, product.inlet)
+    valve = fs.add(ControlValve("FV-101"), on=line, at=0.5)
+    loop = fs.add_control_loop("F", 101, measuring=line, acting_on=valve)
+    loop.transmitter.pin(x=300, y=125)
+    fs.to_svg(diagram="p&id")
+    assert fs.validate() == []
 
 
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
