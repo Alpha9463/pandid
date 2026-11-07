@@ -154,6 +154,17 @@ def test_a_bank_with_a_controller_hung_beside_its_valve_laid_out_again_draws_as_
     assert [s.route for s in fs.streams] == [s.route for s in fresh.streams]
 
 
+def test_a_line_frozen_on_a_bank_then_laid_out_again_still_meets_its_controller():
+    """Draw FIC-201's frozen output square and clear of units after layout()."""
+    fs, loops = _valved_bank(10, pumps=2)
+    line = loops[1].output
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    fs.layout()
+    fs.route()
+    assert _drawn_wrong(fs, line) == []
+
+
 @pytest.mark.parametrize("face", [None, "E"])
 def test_a_controller_on_a_stated_face_is_not_hung_beside_its_valve(face: str | None):
     """Offer spots beside its valve to a loop's controller only where no face is stated."""

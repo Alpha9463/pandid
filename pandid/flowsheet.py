@@ -2473,10 +2473,11 @@ class Flowsheet:
     def layout(self, engine=None) -> None:
         """Lay out every unit, replacing any previous frames.
 
-        Outside route(), first drop every route not drawn with ``via()``
-        and let go of each controller route() hung beside its valve that
-        no ``via()`` line meets, so the sheet is laid out from what the
-        author has stated, as a fresh build is.
+        Outside route(), first hold each balloon a ``via()`` line meets
+        where it is drawn, as route() does, then drop every route not
+        drawn with ``via()`` and let go of each controller route() hung
+        beside its valve that no ``via()`` line meets, so the sheet is
+        laid out from what the author has stated, as a fresh build is.
 
         Parameters
         ----------
@@ -2486,6 +2487,7 @@ class Flowsheet:
         from pandid.layout import ConstraintLayoutEngine, default_layout_engine
 
         if not self._in_route:
+            self._hold_typed()
             self._put_main()
         self._unhang()
         if not self._in_route:
