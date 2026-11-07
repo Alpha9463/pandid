@@ -3089,8 +3089,8 @@ class Flowsheet:
         """Place each balloon drawn past the sheet's top or left edge, on an
         axis a unit is pinned on, again on the sheet, holding every other
         balloon where it is drawn, kept only if fewer units are drawn past
-        the edge, no tap leaves its line and nothing route() is judged by
-        grows.
+        the edge, no tap leaves its line, nothing route() is judged by
+        grows and nothing more is drawn over a placed annotation.
 
         Parameters
         ----------
@@ -3103,6 +3103,7 @@ class Flowsheet:
             Whether the new places are kept.
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, pinned_axes
+        from pandid.layout.compact import covered
         from pandid.layout.control import _taps_off, place_control
         from pandid.layout.stages import is_control
         from pandid.routing.lanes import _score
@@ -3126,7 +3127,7 @@ class Flowsheet:
             if not any(is_control(u) for u in loose):
                 return False
             prior, unplaced = self._geometry(), list(self.unplaced_instruments)
-            before, taps = _score(self), _taps_off(self)
+            before, taps, notes = _score(self), _taps_off(self), covered(self)
             self._typed_at = {**held, **{id(u): (u.frame.x, u.frame.y, dict(u.frame.port_faces))
                                          for u in self.units if is_control(u) and u not in loose
                                          and u.frame is not None and u.pin_ is None}}
@@ -3138,7 +3139,7 @@ class Flowsheet:
                         break
                     router.route(self)
                 new = _score(self)
-                kept = (len(off()) < len(loose) and new[1] <= taps
+                kept = (len(off()) < len(loose) and new[1] <= taps and covered(self) <= notes
                         and not any(n > before[0][k] for k, n in new[0].items()))
             except Exception:
                 kept = False

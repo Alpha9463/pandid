@@ -440,9 +440,11 @@ def test_a_unit_pinned_where_drawn_moves_nothing_on_later_routes(stem: str, name
         assert _boxes(fs) == before
 
 
-def _vessel_at_the_top(face: str, count: int) -> Flowsheet:
-    """Return a vessel pinned at the sheet's top edge with balloons on one face."""
+def _vessel_at_the_top(face: str, count: int, note: tuple[float, float] | None = None) -> Flowsheet:
+    """Return a vessel pinned at the sheet's top edge with balloons on one face, and a note."""
     fs = Flowsheet("vessel")
+    if note is not None:
+        fs.add_annotation(notes(["CAUTION"], position=note))
     vessel = fs.add(U.Vessel("V-101").pin(x=300, y=0))
     pump = fs.add(U.Pump("P-101"))
     fs.connect(fs.add(U.Feed("Feed")).outlet, vessel.inlet)
@@ -475,3 +477,11 @@ def test_a_balloon_left_off_the_sheet_is_reported_and_draws() -> None:
     assert sorted(i.message.split()[0] for i in fs.validate() if i.code == "unit-off-sheet") == off
     assert [i.code for i in fs.validate() if i.severity == "error"] == []
     assert fs.to_svg(diagram="p&id")
+
+
+def test_a_balloon_kept_on_the_sheet_keeps_off_a_placed_note() -> None:
+    """Check that a balloon moved on the sheet is not drawn over a note placed there."""
+    fs = _vessel_at_the_top("E", 2, note=(435.0, 12.0))
+    fs.to_svg(diagram="p&id")
+
+    assert covered(fs) == set()
