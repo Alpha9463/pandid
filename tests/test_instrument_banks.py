@@ -176,8 +176,12 @@ def test_layout_after_a_line_is_frozen_draws_no_unit_over_a_balloon_it_held():
     line.via(list(line.route.waypoints))
     fs.layout()
     boxes = [(u.name, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    assert [(a, b) for i, (a, p) in enumerate(boxes) for b, q in boxes[i + 1:]
-            if boxes_overlap(p, q, -1.0)] == []
+    assert [
+        (a, b)
+        for i, (a, p) in enumerate(boxes)
+        for b, q in boxes[i + 1 :]
+        if boxes_overlap(p, q, -1.0)
+    ] == []
 
 
 @pytest.mark.parametrize("face", [None, "E"])

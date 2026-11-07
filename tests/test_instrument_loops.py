@@ -235,8 +235,11 @@ def test_a_unit_laid_out_again_keeps_off_a_controller_held_at_its_frozen_line() 
     fs.route()
     found = fs.validate()
     assert [i.message for i in found if i.code == "unit-overlap"] == []
-    assert [i.message for i in found if i.code in ("route-diagonal", "route-crosses-unit")
-            and i.message.startswith("stream S4 ")] == []
+    assert [
+        i.message
+        for i in found
+        if i.code in ("route-diagonal", "route-crosses-unit") and i.message.startswith("stream S4 ")
+    ] == []
 
 
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
