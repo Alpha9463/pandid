@@ -379,3 +379,109 @@ def test_a_tag_drawn_over_a_placed_table_counts() -> None:
 
     assert _touches_only_labels(fs, box)
     assert covered(fs)
+
+
+@pytest.mark.parametrize(
+    ("stem", "stripped"),
+    [("03_control_loop", False), ("03_control_loop", True), ("07_from_data", True)],
+    ids=["03-as-written", "03-stripped", "07-stripped"],
+)
+def test_route_draws_every_unit_on_the_sheet(stem: str, stripped: bool) -> None:
+    """Check that no unit is drawn at a negative coordinate, and that each pins where drawn."""
+    from _render_cases import gallery
+
+    fs, _ = build_unpinned(stem) if stripped else gallery.flowsheet(stem)
+    fs.route()
+    before = _boxes(fs)
+    assert [u.name for u in fs.units if frame_of(u).x < 0 or frame_of(u).y < 0] == []
+
+    for unit in fs.units:
+        unit.pin(x=frame_of(unit).x, y=frame_of(unit).y, port=None)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+    assert _boxes(fs) == before
+
+
+def _gauged() -> Flowsheet:
+    """Return the chain with a pressure gauge on the pump, past the band layout leaves."""
+    fs = _chain()
+    fs.add_instrument("PI", 102, sensing=_unit(fs, "P-101"), face="N")
+    return fs
+
+
+def test_a_balloon_pinned_where_the_closed_sheet_draws_it_moves_nothing() -> None:
+    """Check that pinning a balloon past a closed band where drawn keeps the band closed."""
+    fs = _gauged()
+    fs.route()
+    before = _boxes(fs)
+    gauge = _unit(fs, "PI-102")
+    gauge.pin(x=frame_of(gauge).x, y=frame_of(gauge).y)
+    for _ in range(2):
+        fs.route()
+
+        assert _boxes(fs) == before
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+@pytest.mark.parametrize(
+    ("stem", "name"), [("06_metering_skid", "FI-101"), ("08_line_numbers", "HV-101")]
+)
+def test_a_unit_pinned_where_drawn_moves_nothing_on_later_routes(stem: str, name: str) -> None:
+    """Check that one unit pinned where drawn leaves every unit where it was over two routes."""
+    fs, _ = build_unpinned(stem)
+    fs.route()
+    before = _boxes(fs)
+    unit = _unit(fs, name)
+    unit.pin(x=frame_of(unit).x, y=frame_of(unit).y)
+    for _ in range(2):
+        fs.route()
+
+        assert _boxes(fs) == before
+
+
+def _vessel_at_the_top(face: str, count: int, note: tuple[float, float] | None = None) -> Flowsheet:
+    """Return a vessel pinned at the sheet's top edge with balloons on one face, and a note."""
+    fs = Flowsheet("vessel")
+    if note is not None:
+        fs.add_annotation(notes(["CAUTION"], position=note))
+    vessel = fs.add(U.Vessel("V-101").pin(x=300, y=0))
+    pump = fs.add(U.Pump("P-101"))
+    fs.connect(fs.add(U.Feed("Feed")).outlet, vessel.inlet)
+    fs.connect(vessel.outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Product("Product")).inlet)
+    for k in range(count):
+        fs.add_instrument(["PI", "TI", "LI", "AI"][k], 101 + k, sensing=vessel, face=face)
+    fs.route()
+    return fs
+
+
+def test_a_balloon_kept_on_the_sheet_draws_no_tap_through_another() -> None:
+    """Check that a balloon moved on the sheet shares no tap and draws none through a balloon."""
+    from pandid.layout.control import _flaws
+
+    fs = _vessel_at_the_top("E", 2)
+    flaws = _flaws(fs)
+
+    assert (flaws["tap-through-unit"], flaws["line-on-line"]) == (0, 0)
+    assert [u.name for u in fs.units if frame_of(u).y < 0] == []
+    assert fs.to_svg(diagram="p&id")
+
+
+def test_a_balloon_left_off_the_sheet_is_reported_and_draws() -> None:
+    """Check that a balloon no clear spot on the sheet takes is reported, and the sheet draws."""
+    fs = _vessel_at_the_top("W", 4)
+    off = sorted(u.name for u in fs.units if frame_of(u).y < 0)
+
+    assert off == ["AI-104", "LI-103"]
+    assert sorted(i.message.split()[0] for i in fs.validate() if i.code == "unit-off-sheet") == off
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+    assert fs.to_svg(diagram="p&id")
+
+
+def test_a_balloon_kept_on_the_sheet_keeps_off_a_placed_note() -> None:
+    """Check that a balloon moved on the sheet is not drawn over a note placed there."""
+    fs = _vessel_at_the_top("E", 2, note=(435.0, 12.0))
+    fs.to_svg(diagram="p&id")
+
+    assert covered(fs) == set()

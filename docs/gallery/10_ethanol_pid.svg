@@ -181,7 +181,7 @@
     <symbol id="sym_valve_solenoid_ty" viewBox="0 0 24.5 22.25" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="4"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="4"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="4"/><g transform="translate(0, 20.2) scale(1, -1)"><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="2.25" stroke-linejoin="round">S</text></g><g transform="translate(0, 20.2) scale(1, -1)"><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">S</text></g></g></symbol>
     <symbol id="sym_vessel_horizontal_130x42_cf99ece5a" viewBox="0 0 130.0 42.0" overflow="visible"><path d="M 5.7692 42 L 124.231 42 A 5.7692 21 0 0 0 130 21 A 5.7692 21 0 0 0 124.231 0 L 5.7692 0 A 5.7692 21 0 0 0 0 21 A 5.7692 21 0 0 0 5.7692 42 Z M 5.7692 0 L 5.7692 42 M 124.231 0 L 124.231 42" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
-  <g id="drawing" transform="translate(44.52, 275.22) scale(0.870783)">
+  <g id="drawing" transform="translate(4.11, 229.35) scale(0.917744)">
   <g id="units">
     <use href="#sym_column_c94688fb2" x="470" y="300" width="100.0" height="200.0" />
     <use href="#sym_hex_straight_tubes_s130x40" x="1010" y="210" width="130" height="40" />
@@ -586,7 +586,7 @@
     <line x1="1260" y1="230" x2="1260" y2="175" stroke="black" stroke-width="1" />
     <line x1="595.62" y1="130" x2="595.62" y2="45" stroke="black" stroke-width="1" />
     <line x1="530.12" y1="130" x2="530.12" y2="45" stroke="black" stroke-width="1" />
-    <line x1="530.12" y1="23" x2="530.12" y2="-17" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="508.12" y1="45" x2="468.12" y2="45" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="520" y1="257.43" x2="600" y2="257.43" stroke="black" stroke-width="1" />
     <line x1="630" y1="430" x2="630" y2="392" stroke="black" stroke-width="1" />
     <line x1="1144.08" y1="301" x2="1204.08" y2="301" stroke="black" stroke-width="1" />
@@ -620,8 +620,8 @@
     <use href="#sym_instrument" x="508.12" y="23" width="44.0" height="44.0" />
     <text x="530.125" y="41.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PT</text>
     <text x="530.125" y="55.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">318</text>
-    <use href="#sym_instrument_sis" x="510.12" y="-37" width="40.0" height="40.0" />
-    <text x="530.125" y="-10.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">2</text>
+    <use href="#sym_instrument_sis" x="448.12" y="25" width="40.0" height="40.0" />
+    <text x="468.125" y="52.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">2</text>
     <use href="#sym_instrument" x="578" y="235.43" width="44.0" height="44.0" />
     <text x="600.0" y="253.425" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TT</text>
     <text x="600.0" y="267.425" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">302</text>
