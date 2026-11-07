@@ -12,6 +12,7 @@ from pandid.portgeom import unit_box
 from pandid.streams import Stream
 
 from _layout_cases import frame_of
+from _quality import measure_final
 
 
 def _valved_bank(
@@ -146,15 +147,13 @@ def test_a_controller_with_no_clear_side_hangs_beside_its_valve():
     assert _drawn_wrong(fs, line) == []
 
 
-def test_a_bank_with_a_controller_hung_beside_its_valve_laid_out_again_draws_as_a_fresh_build():
-    """Draw a routed bank laid out again as one route() of a fresh build."""
-    fresh, _ = _valved_bank(10, pumps=2)
+def test_a_bank_laid_out_again_keeps_its_drawn_layout_where_a_fresh_one_crosses_more():
+    """Keep the layout from the drawn routes where a fresh one draws more crossings."""
     fs, _ = _valved_bank(10, pumps=2)
-    assert fs._beside
+    first = measure_final(fs).crossings
     fs.layout()
     fs.route()
-    assert [(u.name, u.frame) for u in fs.units] == [(u.name, u.frame) for u in fresh.units]
-    assert [s.route for s in fs.streams] == [s.route for s in fresh.streams]
+    assert measure_final(fs).crossings < first
 
 
 def test_a_line_frozen_on_a_bank_then_laid_out_again_still_meets_its_controller():

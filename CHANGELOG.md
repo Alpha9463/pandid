@@ -108,10 +108,10 @@ These are removed in 0.4.0.
 
 ### Fixed
 
-- `layout()` on a routed sheet lays it out from what the author has stated, so
-  the `route()` after it draws what `route()` draws on a fresh build, balloons
-  set along their lines with `at=` and controllers hung beside their valve
-  included.
+- `layout()` on a routed sheet also lays it out from what the author has
+  stated, as a fresh build is, and keeps that layout where the `route()` after
+  it draws no worse than from the drawing's own routes, so a routed sheet laid
+  out again draws as a fresh build wherever that is no worse.
 - After `via()` freezes a line to a balloon, laying the sheet out again keeps
   units clear of the balloon where the line meets it, as of a pinned one, or
   places the balloon afresh where they cannot clear it, so `validate()` no

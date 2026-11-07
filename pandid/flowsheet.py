@@ -2474,26 +2474,73 @@ class Flowsheet:
     def layout(self, engine=None) -> None:
         """Lay out every unit, replacing any previous frames.
 
-        Outside route(), first hold each balloon a ``via()`` line meets
-        where it is drawn, as route() does, then drop every route not
-        drawn with ``via()`` and let go of each controller route() hung
-        beside its valve that no ``via()`` line meets, so the sheet is
-        laid out from what the author has stated, as a fresh build is.
-        Where the layout then draws a held balloon over another unit, let
-        go of it and lay the sheet out again.
+        On a routed sheet, outside route(), the sheet is laid out as the
+        last drawing leaves it, routes and controllers hung beside their
+        valve included, and routed; then laid out again from what the
+        author has stated, as a fresh build is, and routed. That second
+        layout drops every route not drawn with ``via()``, lets go of each
+        controller hung beside its valve that no ``via()`` line meets,
+        and first holds each balloon a ``via()`` line meets where it is
+        drawn, as route() does; where it then draws a held balloon over
+        another unit, it lets go of that balloon and lays the sheet out
+        again. It is kept only if no finding, clash, crossing, bend,
+        fallback route or tap off its line grows by it; otherwise the
+        first layout is.
 
         Parameters
         ----------
         engine : object or None, optional
             Engine with ``layout(fs)``; ``None`` uses the default.
         """
+        from pandid.routing.lanes import _score
+
+        if self._in_route or all(s.route is None or s.route.manual for s in self.streams):
+            self._lay_out(engine, afresh=not self._in_route)
+            return
+        before = self._drawing(), self._record()
+        starts = []
+        for afresh in (False, True):
+            self._put_drawing(before[0])
+            self._put_record(before[1])
+            self._lay_out(engine, afresh=afresh)
+            start = self._drawing(), self._record()
+            try:
+                self.route()
+                judged = _score(self)
+            except Exception:
+                judged = None
+            starts.append((start, judged))
+        (drawn, drawn_judged), (fresh, fresh_judged) = starts
+        keep = fresh_judged is not None and (drawn_judged is None or (
+            fresh_judged[1] <= drawn_judged[1]
+            and not any(n > drawn_judged[0][k] for k, n in fresh_judged[0].items())))
+        chosen = fresh if keep else drawn
+        self._put_drawing(chosen[0])
+        self._put_record(chosen[1])
+
+    def _lay_out(self, engine, afresh: bool) -> None:
+        """Lay out every unit, replacing any previous frames.
+
+        Parameters
+        ----------
+        engine : object or None
+            Engine with ``layout(fs)``; ``None`` uses the default.
+        afresh : bool
+            Lay the sheet out from what the author has stated: first hold
+            each balloon a ``via()`` line meets where it is drawn, drop
+            every route not drawn with ``via()`` and let go of each
+            controller route() hung beside its valve that no ``via()``
+            line meets; where the layout then draws a held balloon over
+            another unit, let go of it and lay the sheet out again.
+        """
         from pandid.layout import ConstraintLayoutEngine, default_layout_engine
 
-        if not self._in_route:
+        if afresh:
             self._hold_typed()
+        if not self._in_route:
             self._put_main()
         self._unhang()
-        if not self._in_route:
+        if afresh:
             self._beside = self._beside_by_hand()
             for st in self.streams:
                 if st.route is not None and not st.route.manual:
@@ -2508,13 +2555,36 @@ class Flowsheet:
         outer, self._laying_out = self._laying_out, True
         try:
             engine.layout(self)
-            if not self._in_route and self._release_clashing_holds():
+            if afresh and self._release_clashing_holds():
                 engine.layout(self)
         finally:
             self._laying_out = outer
         self._auto_laid = type(engine) is ConstraintLayoutEngine
         self._layout_stale = False
         self._route_stale = True
+
+    def _record(self) -> tuple:
+        """Return what route() records between calls, beside the drawing.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_record`.
+        """
+        return (self._given_then, self._stated_then, self._final, dict(self._typed_at),
+                self._main, set(self._hung), self._engine, self._auto_laid)
+
+    def _put_record(self, record: tuple) -> None:
+        """Put back what :meth:`_record` returned.
+
+        Parameters
+        ----------
+        record : tuple
+            What :meth:`_record` returned.
+        """
+        (self._given_then, self._stated_then, self._final, typed, self._main, hung,
+         self._engine, self._auto_laid) = record
+        self._typed_at, self._hung = dict(typed), set(hung)
 
     def route(self, router=None) -> None:
         """Route every stream, laying out first if needed.
