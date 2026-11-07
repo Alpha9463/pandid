@@ -2746,7 +2746,8 @@ class Flowsheet:
         note position since; then it starts from the closed drawing those
         were read against.
 
-        Where the drawing then has not settled, with the default router and
+        Where the drawing then has not settled and the sheet has no loop
+        from add_loop() or add_control_loop(), with the default router and
         layout engine, the sheet is laid out again from that drawing, as
         layout() lays it out from the routes drawn, and drawn again in the
         same way. The new drawing is kept only if no finding, clash,
@@ -2770,6 +2771,7 @@ class Flowsheet:
 
         if (not self._route_full(router) or self._in_route or self._laying_out
                 or self.route_converged or not self._auto_laid
+                or self.loops
                 or not (router is None or type(router) is DefaultRouter)):
             return
         drawn, judged = (self._drawing(), self._record()), _score(self)
