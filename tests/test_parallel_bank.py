@@ -6,11 +6,13 @@ from pandid import Flowsheet, ShellAndTubeExchanger, units as U
 from pandid.devices import ControlValve
 from pandid.streams import Stream
 from pandid.layout.attach import stream_path
+from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.control import _flaws, _shared, _taps_off
 from pandid.layout import layered, mounted
 from pandid.layout.layered import COL_GAP, LANE_PITCH
-from pandid.layout.mounted import ALONG
+from pandid.layout.mounted import ALONG, GAP
 from _quality import measure_final
+from pandid.portgeom import unit_box
 from pandid.render import symbols
 from pandid.route_geometry import stream_polyline
 from pandid.routing import lanes
@@ -224,8 +226,10 @@ def test_a_restored_drawing_shares_no_frame_with_the_one_it_was_saved_from():
     assert not saved & {id(u.frame) for u in fs.units}
 
 
-def _valved(n: int, at: float | None = None) -> tuple[Flowsheet, list[U.Valve], list[U.Pump]]:
-    """Return n pumps between SP and MX, each with a valve on its suction."""
+def _valved(
+    n: int, at: float | None = None, kind: type[U.Valve] = U.Valve
+) -> tuple[Flowsheet, list[U.Valve], list[U.Pump]]:
+    """Return n pumps between SP and MX, each with a ``kind`` valve on its suction."""
     fs = Flowsheet(f"Valved bank of {n}")
     sp = fs.add(U.Splitter("SP", n_outlets=n))
     mx = fs.add(U.Mixer("MX", n_inlets=n))
@@ -235,11 +239,11 @@ def _valved(n: int, at: float | None = None) -> tuple[Flowsheet, list[U.Valve], 
     for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
         pump = fs.add(U.Pump(f"P-{i}"))
         if at is None:
-            valve = fs.add(U.Valve(f"HV-{i}"))
+            valve = fs.add(kind(f"HV-{i}"))
             fs.connect(outlet, valve.inlet)
             fs.connect(valve.outlet, pump.suction)
         else:
-            valve = fs.add(U.Valve(f"HV-{i}"), on=fs.connect(outlet, pump.suction), at=at)
+            valve = fs.add(kind(f"HV-{i}"), on=fs.connect(outlet, pump.suction), at=at)
         fs.connect(pump.discharge, inlet)
         valves.append(valve)
         pumps.append(pump)
@@ -272,6 +276,16 @@ def _makeup() -> Flowsheet:
     fs.connect(fs.add(U.Feed("Return")).outlet, mx.inlets[1])
     fs.connect(mx.outlet, fs.add(U.Pump("P-1")).suction)
     return fs
+
+
+def test_control_valves_set_on_a_banks_laterals_keep_clear_of_each_other():
+    fs, valves, _ = _valved(3, at=0.5, kind=ControlValve)
+    fs.route()
+    assert not [i for i in fs.validate() if i.code == "unit-overlap"]
+    boxes = [unit_box(valve, valve.frame) for valve in valves]
+    for k, box in enumerate(boxes):
+        for other in boxes[k + 1 :]:
+            assert not boxes_overlap(box, other, GAP)
 
 
 @pytest.mark.parametrize("build", [lambda: _valved(4, at=0.3)[0], _makeup])

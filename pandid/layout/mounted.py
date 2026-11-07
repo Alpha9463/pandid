@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Callable, Iterator, Union
 
 from pandid.geometry import Frame
 from pandid.inline import _INLINE_KINDS
-from pandid.layout.conflicts import boxes_overlap
+from pandid.layout.conflicts import _BODY_TOL, boxes_overlap
 from pandid.layout.halo import balloon_pads, pinned_balloons
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.package import MARGIN as PACKAGE_MARGIN, boundary, tag_reach
@@ -766,12 +766,12 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> list[dict[Unit, Fra
 
 def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
            zones: list[Box], pipes: list[list[Point]], ends: tuple[Unit, ...] = (),
-           exit_gap: float = 0.0) -> bool:
+           exit_gap: float = 0.0, room: tuple[float, float] = (ALONG, GAP)) -> bool:
     """Return whether proposed frames keep clear of other units.
 
-    Each frame keeps :data:`ALONG` along the pipe or :data:`GAP` across
-    it from every obstacle and zone. Each signal exit keeps ``exit_gap``
-    from obstacles, zones and end units, and stays off pipes.
+    Each frame keeps ``room`` along the pipe or across it from every
+    obstacle and zone. Each signal exit keeps ``exit_gap`` from
+    obstacles, zones and end units, and stays off pipes.
 
     Parameters
     ----------
@@ -789,13 +789,15 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
         The pipe's own end units.
     exit_gap : float, default=0.0
         Clearance each signal exit keeps.
+    room : tuple[float, float], default=(ALONG, GAP)
+        Clearance each frame keeps along the pipe, then across it.
 
     Returns
     -------
     bool
         True if the frames are clear.
     """
-    dx, dy = (ALONG, GAP) if level else (GAP, ALONG)
+    dx, dy = room if level else room[::-1]
     boxes = [*(unit_box(other, other.frame) for other in obstacles if other.frame is not None),
              *zones]
     for unit, frame in frames.items():
@@ -1252,7 +1254,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     larger offset to the destination stands in. With ``fan`` set, a
     header lateral is set as :func:`_fanned` turns and packs it. Each
     element keeps clear of the ground of each package it has no unit
-    in.
+    in. Where no way keeps :data:`ALONG` along the pipe and the
+    elements would be drawn over a unit, each keeps :data:`GAP` all
+    round if it can.
 
     Parameters
     ----------
@@ -1315,7 +1319,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
 
-    def attempt(assigned: list[int], strict: bool) -> list[dict[Unit, Frame]] | None:
+    def attempt(assigned: list[int], strict: bool,
+                room: tuple[float, float] = (ALONG, GAP)) -> list[dict[Unit, Frame]] | None:
         """Return each element's frames on its assigned leg.
 
         Parameters
@@ -1324,6 +1329,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
             Leg index of each element.
         strict : bool
             Return None if a leg's elements cannot fit or find room.
+        room : tuple[float, float], default=(ALONG, GAP)
+            Clearance each element keeps from other units along the
+            pipe, then across it.
 
         Returns
         -------
@@ -1359,7 +1367,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                         continue
                     chosen = next(((at, frames) for frames in _frames_at(element, at, leg)
                                    if _clear(frames, others, level, fenced, pipes, (source, dest),
-                                             exit_gap)
+                                             exit_gap, room)
                                    and (turned is None or not any(
                                        boxes_overlap(box, end, GAP)
                                        for box in _footprint(turned, frames) for end in ends))),
@@ -1379,7 +1387,14 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     plans = _assign(run, legs, want, upright)
     placed = next((p for p in (attempt(plan, True) for plan in plans) if p is not None), None)
     roomy = placed is not None
-    for frames in placed if placed is not None else attempt(plans[0], False) or []:
+    if placed is None:
+        placed = attempt(plans[0], False) or []
+        drawn = [unit_box(unit, unit.frame) for unit in obstacles if unit.frame is not None]
+        if any(boxes_overlap(unit_box(unit, frame), box, -_BODY_TOL)
+               for frames in placed for unit, frame in frames.items() for box in drawn):
+            placed = next((p for p in (attempt(plan, True, (GAP, GAP)) for plan in plans)
+                           if p is not None), placed)
+    for frames in placed:
         _commit(frames, obstacles)
         if len(frames) > 1:
             zones.append(_bound(frames))
