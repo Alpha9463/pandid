@@ -1,6 +1,5 @@
 """Check controllers hung on a bank of pumps and balloons turned off blocked nozzles."""
 
-import copy
 import functools
 
 import pytest
@@ -219,7 +218,7 @@ def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
     exports to SVG and draw.io, nothing overlaps, no line crosses a unit and no
     frozen line is drawn on the slant.
     """
-    fs, loops = copy.deepcopy(_routed_bank(10))
+    fs, loops = _valved_bank(10)
     assert fs._beside and fs._main is not None and not fs._offers_family_faces()
     pump = next(u for u in fs.units if u.name == "P-1")
     process = next(s for s in fs.streams if s.source.owner is pump)
@@ -249,6 +248,23 @@ def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
             )
             assert [i.message for i in fs.validate() if i.code in codes] == []
             assert [m for s, _ in frozen for m in _drawn_wrong(fs, s)] == []
+
+
+def test_a_pin_after_a_controller_hangs_beside_its_valve_draws_no_line_through_a_unit():
+    """Pin FV-11 off where a bank with a hung controller draws it, and route again.
+
+    The P&ID exports to SVG and draw.io, nothing overlaps, and no line is drawn
+    through a unit.
+    """
+    fs, _ = _valved_bank(10)
+    assert fs._beside
+    next(u for u in fs.units if u.name == "FV-11").pin(x=430, y=230)
+    fs.route()
+    fs.to_svg(diagram="p&id")
+    fs.to_drawio(diagram="p&id")
+    codes = ("route-crosses-unit", "unit-overlap")
+
+    assert [i.message for i in fs.validate() if i.code in codes] == []
 
 
 def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
