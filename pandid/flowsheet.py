@@ -2479,6 +2479,8 @@ class Flowsheet:
         drawn with ``via()`` and let go of each controller route() hung
         beside its valve that no ``via()`` line meets, so the sheet is
         laid out from what the author has stated, as a fresh build is.
+        Where the layout then draws a held balloon over another unit, let
+        go of it and lay the sheet out again.
 
         Parameters
         ----------
@@ -2506,6 +2508,8 @@ class Flowsheet:
         outer, self._laying_out = self._laying_out, True
         try:
             engine.layout(self)
+            if not self._in_route and self._release_clashing_holds():
+                engine.layout(self)
         finally:
             self._laying_out = outer
         self._auto_laid = type(engine) is ConstraintLayoutEngine
@@ -2884,6 +2888,25 @@ class Flowsheet:
             finished, or route() has not run.
         """
         return self._stated_then is None or self._stated_then == self._stated()
+
+    def _release_clashing_holds(self) -> bool:
+        """Let go of each balloon held where a ``via()`` line met it that
+        is drawn over another unit.
+
+        Returns
+        -------
+        bool
+            Whether any balloon was let go.
+        """
+        from pandid.layout.conflicts import _BODY_TOL, boxes_overlap
+        from pandid.portgeom import unit_box
+
+        boxes = [(u, unit_box(u, u.frame)) for u in self.units if u.frame is not None]
+        clash = {id(u) for u, box in boxes if id(u) in self._typed_at
+                 and any(v is not u and boxes_overlap(box, other, -_BODY_TOL)
+                         for v, other in boxes)}
+        self._typed_at = {k: v for k, v in self._typed_at.items() if k not in clash}
+        return bool(clash)
 
     def _beside_by_hand(self) -> dict[int, tuple[tuple[float, float], tuple]]:
         """Return each controller route() hung beside its valve that a

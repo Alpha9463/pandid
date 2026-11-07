@@ -1,11 +1,14 @@
 """Check controllers hung on a bank of pumps and balloons turned off blocked nozzles."""
 
+import copy
 import functools
 
 import pytest
 
 from pandid import Flowsheet, units as U
+from pandid.layout.conflicts import boxes_overlap
 from pandid.loops import ControlLoop
+from pandid.portgeom import unit_box
 from pandid.streams import Stream
 
 from _layout_cases import frame_of
@@ -163,6 +166,18 @@ def test_a_line_frozen_on_a_bank_then_laid_out_again_still_meets_its_controller(
     fs.layout()
     fs.route()
     assert _drawn_wrong(fs, line) == []
+
+
+def test_layout_after_a_line_is_frozen_draws_no_unit_over_a_balloon_it_held():
+    """Let go of FT-201, held where S11 was frozen, once layout() lays SP over it."""
+    fs, loops = copy.deepcopy(_routed_bank(999))
+    line = loops[1].measurement
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    fs.layout()
+    boxes = [(u.name, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    assert [(a, b) for i, (a, p) in enumerate(boxes) for b, q in boxes[i + 1:]
+            if boxes_overlap(p, q, -1.0)] == []
 
 
 @pytest.mark.parametrize("face", [None, "E"])
