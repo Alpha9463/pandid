@@ -45,7 +45,7 @@ text.
 | `render(path, **options)` | Write SVG, draw.io, PDF or PNG according to the extension. |
 | `to_svg(**options)` / `show(**options)` | Return SVG text or open a browser preview. |
 | `validate(*, diagram=None, show_stream_table=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
-| `to_dict()` / `from_dict(spec)` | Serialize intent or build an equivalent sheet. |
+| `to_dict()` / `from_dict(spec)` | Serialize intent and the drawn layout, or build an equivalent sheet. |
 | `from_json(path)` / `from_yaml(path)` | Read a spec file; YAML needs `pandid[yaml]`. |
 | `line_list()` / `equipment_list()` / `instrument_index()` | Return a schedule as rows; see [Schedules](#schedules). |
 
@@ -434,7 +434,14 @@ from `fs.validate()`.
 ## Declaring a flowsheet as data
 
 `Flowsheet.from_dict()`, `from_json()` and `from_yaml()` load a spec.
-`to_dict()` writes only author intent, not computed routes or coordinates.
+`to_dict()` writes author intent and, once the sheet is drawn, a `layout:`
+section with where each unit, balloon and line is drawn, and `route_state`, the
+state `route()` holds for its next call, compressed and tagged with the engine
+version that wrote it. `from_dict()` starts from that layout, so the sheet
+draws as it was drawn, lines frozen with `via()` included, and an edit after
+reading it back draws as on the sheet that wrote it. Read by another engine
+version, the sheet still draws as saved and is laid out afresh once edited. The layout is not a pin: it records a checksum of the rest of the
+spec, and a spec edited since, or one without a `layout:`, is laid out afresh.
 YAML input requires the `yaml` extra. Invalid specs raise `SpecError` naming
 the entry. A minimal YAML sheet is:
 

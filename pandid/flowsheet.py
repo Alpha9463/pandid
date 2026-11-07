@@ -536,6 +536,14 @@ def _whole_number(value: Any, name: str) -> int:
     return int(value)
 
 
+# Layout and route switches a drawing is held with, in _state() order.
+_SWITCHES = (
+    "_free_faces", "_clear_taps", "_off_leaders", "_exit_tight", "_mounted_layout", "_widened",
+    "_stack_spans", "_rows_out", "_tees_away", "_fannable", "_far_branches", "_flags_off",
+    "_lanes", "_relaned", "_crowded_station", "_angle_valves", "_furniture_over",
+)
+
+
 def _copied(state: tuple) -> tuple:
     """Return a :meth:`Flowsheet._state` with its frames, taps and routes
     copied.
@@ -847,6 +855,9 @@ class Flowsheet:
         # each with its standoff and angle off the actuator and its
         # attachment then.
         self._beside: dict[int, tuple[tuple[float, float], tuple]] = {}
+        # What the author had given when the sheet was read from a spec
+        # without route()'s state, until edited.
+        self._unheld: tuple | None = None
         # Whether layout keeps equipment and furniture clear of each
         # balloon pinned on both axes or held where a via() line met it,
         # and moves its chain's room there.
@@ -2363,8 +2374,9 @@ class Flowsheet:
     def to_dict(self) -> dict:
         """Return the flowsheet's author intent as a JSON-safe spec.
 
-        ``Flowsheet.from_dict(fs.to_dict())`` rebuilds an equivalent
-        flowsheet.
+        Once the sheet is drawn, the spec also has a ``layout`` of where
+        it is drawn. ``Flowsheet.from_dict(fs.to_dict())`` rebuilds an
+        equivalent flowsheet, drawn as this one is.
 
         Returns
         -------
@@ -2516,6 +2528,8 @@ class Flowsheet:
         """
         from pandid.routing.lanes import _score
 
+        if not self._in_route:
+            self._forget_unheld(edited=False)
         if self._in_route or all(s.route is None or s.route.manual for s in self.streams):
             self._lay_out(engine, afresh=not self._in_route)
             return
@@ -2789,6 +2803,7 @@ class Flowsheet:
         plain = tries and getattr(router, "recover_exits", True)
         last = None
         if not self._in_route:
+            self._forget_unheld()
             if (plain and self._given_then is not None and self._given() == self._given_then
                     and not (self._layout_stale or self._route_stale)
                     and all(u.frame is not None for u in self.units)
@@ -2897,12 +2912,63 @@ class Flowsheet:
             stream-label enclosure is unknown.
         """
         from pandid.layout.attach import _attachment, is_attached
+        from pandid.spec import _intent
 
         try:
-            spec = json.dumps(self.to_dict(), default=repr)
+            spec = json.dumps(_intent(self), default=repr)
         except ValueError:
             return None
         return spec, [_attachment(u) for u in self.units if is_attached(u)]
+
+    def _drawn_from_spec(self, redraw: bool, restated: bool, final: bool, held: bool) -> None:
+        """Keep the frames, routes and held drawings a spec's ``layout``
+        gave the sheet as route() last left them.
+
+        Parameters
+        ----------
+        redraw : bool
+            Whether the sheet was edited since that route(), so that
+            route() draws it again.
+        restated : bool
+            Whether a drawing coordinate was stated since that route().
+        final : bool
+            Whether route() keeps the drawing while nothing changes.
+        held : bool
+            Whether the spec gave route()'s state too; without it the
+            sheet is laid out afresh once edited.
+        """
+        from pandid.layout.attach import is_attached
+        from pandid.layout.cycles import break_cycles
+
+        break_cycles(self)
+        self._layout_stale = self._route_stale = False
+        self._auto_laid, self._final = True, final
+        self.unplaced_instruments = [u for u in self.units
+                                     if is_attached(u) and u.frame is None]
+        self._given_then = None if redraw else self._given()
+        self._stated_then = () if restated else self._stated()
+        self._unheld = None if held else self._given()
+
+    def _forget_unheld(self, edited: bool = True) -> None:
+        """Clear the drawing of a sheet read without route()'s state, so
+        that it is laid out afresh.
+
+        Parameters
+        ----------
+        edited : bool, default=True
+            Clear it only once the author has edited the sheet.
+        """
+        if self._unheld is None or (edited and self._given() == self._unheld):
+            return
+        self._unheld = None
+        for unit in self.units:
+            unit.frame = None
+            if hasattr(unit, "tap"):
+                setattr(unit, "tap", None)
+        for stream in self.streams:
+            if stream.route is not None and not stream.route.manual:
+                stream.route = None
+        self._layout_stale = self._route_stale = True
 
     def _close_bands(self) -> None:
         """Move a drawing past the sheet's top or left edge onto it, then
@@ -3633,15 +3699,11 @@ class Flowsheet:
         tuple
             State for :meth:`_put_state`.
         """
-        return _copied((self._geometry(), self._unhung, self._free_faces,
-                        self._clear_taps, self._off_leaders,
-                        self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
-                        self._rows_out, self._tees_away, self._fannable,
-                        self._far_branches, self._flags_off,
+        return _copied((self._geometry(), self._unhung,
+                        tuple(getattr(self, name) for name in _SWITCHES),
                         tuple((u, u._stock_face, u._fit_pitch) for u in self.units
                               if hasattr(u, "_stock_face")),
-                        self._lanes, self._relaned, self._crowded_station,
-                        self._angle_valves, self._furniture_over, self._beside))
+                        self._beside))
 
     def _put_state(self, state: tuple) -> None:
         """Put back a copy of what :meth:`_state` returned.
@@ -3651,13 +3713,9 @@ class Flowsheet:
         state : tuple
             What :meth:`_state` returned.
         """
-        (geometry, self._unhung, self._free_faces, self._clear_taps,
-         self._off_leaders,
-         self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
-         self._rows_out, self._tees_away, self._fannable, self._far_branches,
-         self._flags_off, stock, self._lanes, self._relaned,
-         self._crowded_station, self._angle_valves, self._furniture_over,
-         self._beside) = _copied(state)
+        geometry, self._unhung, switches, stock, self._beside = _copied(state)
+        for name, value in zip(_SWITCHES, switches):
+            setattr(self, name, value)
         for u, flag, pitch in stock:
             u._stock_face, u._fit_pitch = flag, pitch
         self._put_geometry(geometry, keep_manual=True)
