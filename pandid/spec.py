@@ -2496,7 +2496,7 @@ def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
             ports = set(named.values())
             pin["port"] = (ports.pop() if len(ports) == 1 and len(named) == len(intent)
                            else dict(sorted(named.items())))
-        # A valve station sets its members' own turns and mirrors.
+        # Write a turn or mirror only where it is stated.
         if unit._turn_stated:
             pin["orientation"] = int(unit.pin_.orientation)
         if unit._mirror_stated:
