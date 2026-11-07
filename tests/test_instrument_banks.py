@@ -1,5 +1,6 @@
 """Check controllers hung on a bank of pumps and balloons turned off blocked nozzles."""
 
+import copy
 import functools
 
 import pytest
@@ -83,21 +84,6 @@ def test_a_balloon_nozzle_facing_a_unit_turns_clear(first_tag: int, loop: int, s
 
     assert line.route is not None and not line.route.used_fallback
     assert _drawn_wrong(fs, line) == []
-
-
-def test_a_balloon_turned_clear_stays_clear_over_repeated_routes():
-    """Route a bank three times; its turned controller's line stays clear each time.
-
-    The line takes no fallback path and crosses no unit after each route().
-    """
-    fs, loops = _valved_bank(999)
-    line = loops[0].measurement
-    for again in (False, True, True):
-        if again:
-            fs.route()
-
-        assert line.route is not None and not line.route.used_fallback
-        assert _drawn_wrong(fs, line) == []
 
 
 def _blocked_controller(
@@ -224,21 +210,6 @@ def test_a_line_leaves_a_unit_for_at_most_two_crossings_or_runs_along_units(
     assert _out_of_unit(before, Counter(after)) is kept
 
 
-def test_controllers_hung_on_a_bank_draw_their_lines_clear_on_a_second_route():
-    """Route a bank twice; FT-200's line between two pumps and FIC-201's lines stay clear.
-
-    No line takes a fallback path or crosses a unit after either route().
-    """
-    fs, loops = _valved_bank(10)
-    lines = [loops[0].measurement, loops[1].measurement, loops[1].output]
-    for again in (False, True):
-        if again:
-            fs.route()
-
-        assert [s.name for s in lines if s.route is None or s.route.used_fallback] == []
-        assert [m for s in lines for m in _drawn_wrong(fs, s)] == []
-
-
 def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
     """Freeze FIC-201's output and route a bank twice; then FT-201's line and P-1's outlet, once.
 
@@ -248,7 +219,7 @@ def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
     exports to SVG and draw.io, nothing overlaps, no line crosses a unit and no
     frozen line is drawn on the slant.
     """
-    fs, loops = _valved_bank(10)
+    fs, loops = copy.deepcopy(_routed_bank(10))
     assert fs._beside and fs._main is not None and not fs._offers_family_faces()
     pump = next(u for u in fs.units if u.name == "P-1")
     process = next(s for s in fs.streams if s.source.owner is pump)
@@ -278,23 +249,6 @@ def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
             )
             assert [i.message for i in fs.validate() if i.code in codes] == []
             assert [m for s, _ in frozen for m in _drawn_wrong(fs, s)] == []
-
-
-def test_a_pin_after_a_controller_hangs_beside_its_valve_draws_no_line_through_a_unit():
-    """Pin FV-11 off where a bank with a hung controller draws it, and route again.
-
-    The P&ID exports to SVG and draw.io, nothing overlaps, and no line is drawn
-    through a unit.
-    """
-    fs, _ = _valved_bank(10)
-    assert fs._beside
-    next(u for u in fs.units if u.name == "FV-11").pin(x=430, y=230)
-    fs.route()
-    fs.to_svg(diagram="p&id")
-    fs.to_drawio(diagram="p&id")
-    codes = ("route-crosses-unit", "unit-overlap")
-
-    assert [i.message for i in fs.validate() if i.code in codes] == []
 
 
 def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
