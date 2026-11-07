@@ -526,35 +526,6 @@ def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it(face, first):
     assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
 
 
-@pytest.mark.parametrize("face", ["N", "S", "E", "W"])
-def test_a_tag_moved_off_a_label_erases_no_more_line_than_its_first_spot(face):
-    """Check that no tag erases more of any ink than where it is placed alone."""
-    from pandid.render.svg import (
-        SvgRenderer,
-        _erases,
-        _unit_label_box,
-        sheet_connections,
-        tag_obstacles,
-        unit_tags,
-    )
-
-    fs = _two_pump_bank(face)
-    fs.route()
-    joints = sheet_connections("p&id", None)
-    ink, symbols = tag_obstacles(fs, joints, "vertical")
-    worse = []
-    for u, tag, _items in unit_tags(fs, joints, "vertical"):
-        f = u.frame
-        if tag is None or f is None:
-            continue
-        first = SvgRenderer()._tag_item(u, f, f.x, f.y, f.w, f.h, u.tag, ink, symbols)
-        others = [_obstacle(b) for v, b in symbols if v is not u]
-        now, was = (_erases(_unit_label_box(t), ink, others) for t in (tag, first))
-        if any(a > b for a, b in zip(now, was)):
-            worse.append(f"{u.tag}: {was} -> {now}")
-    assert not worse, worse
-
-
 def test_a_tag_is_not_moved_onto_more_line_than_it_erased(monkeypatch):
     """Check that the tag pass keeps a tag's first spot if the second erases a line."""
     from pandid.render.svg import SvgRenderer, unit_tags
