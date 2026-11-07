@@ -817,12 +817,6 @@ class Flowsheet:
         # Whether balloons keep to the sheet on each axis a unit is pinned
         # on.
         self._on_sheet = False
-        # The sheet as drawn without grown faces or lanes where route() kept
-        # them, whether layout() has run on the sheet since, and whether
-        # route() is running.
-        self._plain_state: tuple | None = None
-        self._plain_stale = False
-        self._routing = False
         # Gap a balloon hung from a balloon keeps from the tapped line, 0
         # for none, and whether any kept one since route() set it.
         self._keep_clear = 0.0
@@ -832,7 +826,8 @@ class Flowsheet:
         # attachment then.
         self._beside: dict[int, tuple[tuple[float, float], tuple]] = {}
         # Whether layout keeps equipment and furniture clear of each
-        # balloon pinned on both axes and moves its chain's room there.
+        # balloon pinned on both axes or held where a via() line met it,
+        # and moves its chain's room there.
         self._pin_balloons = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
@@ -2479,17 +2474,77 @@ class Flowsheet:
     def layout(self, engine=None) -> None:
         """Lay out every unit, replacing any previous frames.
 
+        On a routed sheet, outside route(), the sheet is laid out as the
+        last drawing leaves it, routes and controllers hung beside their
+        valve included, and routed; then laid out again from what the
+        author has stated, as a fresh build is, and routed. That second
+        layout drops every route not drawn with ``via()``, lets go of each
+        controller hung beside its valve that no ``via()`` line meets,
+        and first holds each balloon a ``via()`` line meets where it is
+        drawn, as route() does; where it then draws a held balloon over
+        another unit, it lets go of that balloon and lays the sheet out
+        again. It is kept only if no finding, clash, crossing, bend,
+        fallback route or tap off its line grows by it; otherwise the
+        first layout is.
+
         Parameters
         ----------
         engine : object or None, optional
             Engine with ``layout(fs)``; ``None`` uses the default.
         """
+        from pandid.routing.lanes import _score
+
+        if self._in_route or all(s.route is None or s.route.manual for s in self.streams):
+            self._lay_out(engine, afresh=not self._in_route)
+            return
+        before = self._drawing(), self._record()
+        starts = []
+        for afresh in (False, True):
+            self._put_drawing(before[0])
+            self._put_record(before[1])
+            self._lay_out(engine, afresh=afresh)
+            start = self._drawing(), self._record()
+            try:
+                self.route()
+                judged = _score(self)
+            except Exception:
+                judged = None
+            starts.append((start, judged))
+        (drawn, drawn_judged), (fresh, fresh_judged) = starts
+        keep = fresh_judged is not None and (drawn_judged is None or (
+            fresh_judged[1] <= drawn_judged[1]
+            and not any(n > drawn_judged[0][k] for k, n in fresh_judged[0].items())))
+        chosen = fresh if keep else drawn
+        self._put_drawing(chosen[0])
+        self._put_record(chosen[1])
+
+    def _lay_out(self, engine, afresh: bool) -> None:
+        """Lay out every unit, replacing any previous frames.
+
+        Parameters
+        ----------
+        engine : object or None
+            Engine with ``layout(fs)``; ``None`` uses the default.
+        afresh : bool
+            Lay the sheet out from what the author has stated: first hold
+            each balloon a ``via()`` line meets where it is drawn, drop
+            every route not drawn with ``via()`` and let go of each
+            controller route() hung beside its valve that no ``via()``
+            line meets; where the layout then draws a held balloon over
+            another unit, let go of it and lay the sheet out again.
+        """
         from pandid.layout import ConstraintLayoutEngine, default_layout_engine
 
+        if afresh:
+            self._hold_typed()
         if not self._in_route:
             self._put_main()
-        self._plain_stale = self._plain_stale or not self._routing
         self._unhang()
+        if afresh:
+            self._beside = self._beside_by_hand()
+            for st in self.streams:
+                if st.route is not None and not st.route.manual:
+                    st.route = None
         self._mounted_layout = self._exit_tight = self._stack_spans = self._rows_out = False
         self._tees_away = False
         self._fannable = self._far_branches = self._flags_off = False
@@ -2500,11 +2555,36 @@ class Flowsheet:
         outer, self._laying_out = self._laying_out, True
         try:
             engine.layout(self)
+            if afresh and self._release_clashing_holds():
+                engine.layout(self)
         finally:
             self._laying_out = outer
         self._auto_laid = type(engine) is ConstraintLayoutEngine
         self._layout_stale = False
         self._route_stale = True
+
+    def _record(self) -> tuple:
+        """Return what route() records between calls, beside the drawing.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_record`.
+        """
+        return (self._given_then, self._stated_then, self._final, dict(self._typed_at),
+                self._main, set(self._hung), self._engine, self._auto_laid)
+
+    def _put_record(self, record: tuple) -> None:
+        """Put back what :meth:`_record` returned.
+
+        Parameters
+        ----------
+        record : tuple
+            What :meth:`_record` returned.
+        """
+        (self._given_then, self._stated_then, self._final, typed, self._main, hung,
+         self._engine, self._auto_laid) = record
+        self._typed_at, self._hung = dict(typed), set(hung)
 
     def route(self, router=None) -> None:
         """Route every stream, laying out first if needed.
@@ -2563,13 +2643,13 @@ class Flowsheet:
         crossing, bend, fallback, finding, clash or tap off its line grows.
 
         Where a mixer's or splitter's face grows to hold its nozzles, or
-        laterals are laid on lanes, the sheet is also drawn as route() would
-        draw it without them, from its last such drawing: stock faces, no
-        lane gaps and no lanes, laid out again only where that drawing's
-        layout is stale. The grown faces and lanes are kept only if no
-        crossing, bend, fallback, finding, clash or tap off its line grows
-        by them; otherwise, and wherever lanes changed no route and no face
-        grew, the sheet is drawn without them.
+        laterals are laid on lanes, the sheet is also drawn as it would be
+        without them: stock faces, no lane gaps and no lanes, routed again
+        on its own layout where it came laid out so, else laid out again.
+        The grown faces and lanes are kept only if no crossing, bend,
+        fallback, finding, clash or tap off its line grows by them;
+        otherwise, and wherever lanes changed no route and no face grew,
+        the sheet is drawn without them.
 
         Where layout moves a counted block, tank or vessel connection off
         its declared face, the sheet is also laid out and drawn with every
@@ -2764,8 +2844,6 @@ class Flowsheet:
             self._put_drawing(drawn)
             self._spread, self._layout_stale = side, True
             if fit:
-                # Start from this layout, not the states held with stock faces.
-                self._plain_state = None
                 for u in headers:
                     u._fit_pitch = pitches[u]
             try:
@@ -2835,10 +2913,9 @@ class Flowsheet:
                 continue
             if self._main is None:
                 self._main = drawn
-            # The states held for the next route() lie before the bands
-            # closed; main's drawing holds them.
-            self._plain_state = self._unhung = None
-            self._plain_stale = False
+            # The sheet held as routed without hanging lies before the
+            # bands closed; main's drawing holds it.
+            self._unhung = None
 
     def _stated(self) -> tuple:
         """Return every drawing coordinate the author has stated.
@@ -2882,6 +2959,38 @@ class Flowsheet:
         """
         return self._stated_then is None or self._stated_then == self._stated()
 
+    def _release_clashing_holds(self) -> bool:
+        """Let go of each balloon held where a ``via()`` line met it that
+        is drawn over another unit.
+
+        Returns
+        -------
+        bool
+            Whether any balloon was let go.
+        """
+        from pandid.layout.conflicts import _BODY_TOL, boxes_overlap
+        from pandid.portgeom import unit_box
+
+        boxes = [(u, unit_box(u, u.frame)) for u in self.units if u.frame is not None]
+        clash = {id(u) for u, box in boxes if id(u) in self._typed_at
+                 and any(v is not u and boxes_overlap(box, other, -_BODY_TOL)
+                         for v, other in boxes)}
+        self._typed_at = {k: v for k, v in self._typed_at.items() if k not in clash}
+        return bool(clash)
+
+    def _beside_by_hand(self) -> dict[int, tuple[tuple[float, float], tuple]]:
+        """Return each controller route() hung beside its valve that a
+        ``via()`` line meets, at it or at its transmitter.
+
+        Returns
+        -------
+        dict[int, tuple]
+            Those entries of the controllers hung beside their valve.
+        """
+        units = {id(u): u for u in self.units}
+        return {k: v for k, v in self._beside.items() if k in units
+                and _by_hand([units[k], getattr(units[k], "host", None) or units[k]])}
+
     def _route_drawing(self, router=None) -> None:
         """Route the sheet as the face switches stand.
 
@@ -2902,9 +3011,7 @@ class Flowsheet:
 
         # A controller an earlier route() hung beside its valve stays there
         # while a via() line meets it or its transmitter.
-        units = {id(u): u for u in self.units}
-        drawn = {k: v for k, v in self._beside.items() if k in units
-                 and _by_hand([units[k], getattr(units[k], "host", None) or units[k]])}
+        drawn = self._beside_by_hand()
         if (drawn == self._beside or self._laying_out
                 or not (router is None or type(router) is DefaultRouter)):
             self._route_stepped(router)
@@ -3314,13 +3421,11 @@ class Flowsheet:
                 or not self._moved_family(added=False)):
             return
         kept, judged = self._state(), _score(self)
-        plain_state = self._plain_state, self._plain_stale
         self._family_faces, self._layout_stale = False, True
         self._route_lanes(router)
         if _beats(judged, _score(self)):
             self._family_faces = True
             self._put_state(kept)
-            self._plain_state, self._plain_stale = plain_state
 
     def _moved_family(self, added: bool) -> bool:
         """Return whether layout moved a family port.
@@ -3371,9 +3476,8 @@ class Flowsheet:
         tuple
             State for :meth:`_put_drawing`.
         """
-        return (self._state(), self._plain_state, self._plain_stale, self._layout_stale,
-                self._route_stale, self._family_faces, self._added_faces,
-                list(self.unplaced_instruments))
+        return (self._state(), self._layout_stale, self._route_stale, self._family_faces,
+                self._added_faces, list(self.unplaced_instruments))
 
     def _put_drawing(self, drawing: tuple) -> None:
         """Put back what :meth:`_drawing` returned.
@@ -3383,8 +3487,8 @@ class Flowsheet:
         drawing : tuple
             What :meth:`_drawing` returned.
         """
-        (state, self._plain_state, self._plain_stale, layout_stale, route_stale,
-         self._family_faces, self._added_faces, unplaced) = drawing
+        (state, layout_stale, route_stale, self._family_faces, self._added_faces,
+         unplaced) = drawing
         self._put_state(state)
         self._layout_stale, self._route_stale = layout_stale, route_stale
         self.unplaced_instruments = list(unplaced)
@@ -3423,46 +3527,39 @@ class Flowsheet:
         from pandid.routing import DefaultRouter
         from pandid.routing.lanes import _score
 
-        stale = self._layout_stale or any(u.frame is None for u in self.units)
-        # The sheet comes laid out as without grown faces or lane gaps.
-        plain_in = (not stale and not self._widened
-                    and not any(header_grows(u) for u in self.units))
-        held, held_stale = self._plain_state, self._plain_stale
-        self._plain_state, self._plain_stale, self._routing = None, False, True
-        try:
-            headers = [u for u in self.units if getattr(u, "_stock_face", False)]
-            for u in headers:
-                u._stock_face = False
-            if headers:
-                self._layout_stale = True
-            self._lanes, self._relaned = True, False
-            grown = [u for u in self.units if header_grows(u)]
-            start = self._state()
-            self._route_once(router)
-            laned = bool(grown) or self._relaned
-            if ((not (laned or self._widened) and held is None) or self._laying_out
-                    or not (router is None or type(router) is DefaultRouter)):
-                return
-            kept, judged = self._state(), _score(self)
-            # Draw the sheet without grown faces or lanes as route() would
-            # have from the last such drawing: routed again on its layout,
-            # or laid out again where that is stale or not yet drawn so.
-            self._put_state(start if held is None else held)
-            self._lanes = False
+        # Whether the sheet comes laid out as without grown faces or lane
+        # gaps.
+        plain_in = (not self._layout_stale and all(u.frame is not None for u in self.units)
+                    and not self._widened and not any(header_grows(u) for u in self.units))
+        headers = [u for u in self.units if getattr(u, "_stock_face", False)]
+        for u in headers:
+            u._stock_face = False
+        if headers:
+            self._layout_stale = True
+        self._lanes, self._relaned = True, False
+        grown = [u for u in self.units if header_grows(u)]
+        start = self._state()
+        self._route_once(router)
+        laned = bool(grown) or self._relaned
+        if (not (laned or self._widened) or self._laying_out
+                or not (router is None or type(router) is DefaultRouter)):
+            return
+        kept, judged = self._state(), _score(self)
+        # Draw stock faces without lanes from the sheet as it came: route
+        # its layout again where that is already plain, else lay it out.
+        self._put_state(start)
+        self._lanes = False
+        for u in grown:
+            u._stock_face = True
+        if not plain_in:
+            self.layout(self._engine)
+        self._route_once(router)
+        plain = _score(self)
+        if laned and not judged[0] - plain[0] and judged[1] <= plain[1]:
             for u in grown:
-                u._stock_face = True
-            if stale or (held_stale if held is not None else not plain_in):
-                self.layout(self._engine)
-            self._route_once(router)
-            plain = _score(self)
-            if laned and not judged[0] - plain[0] and judged[1] <= plain[1]:
-                self._plain_state = self._state()
-                for u in grown:
-                    u._stock_face = False
-                self._put_state(kept)
-                self._lanes = True
-        finally:
-            self._routing = False
+                u._stock_face = False
+            self._put_state(kept)
+            self._lanes = True
 
     def _relayout(self, router, split: bool, order: bool, tees: bool) -> bool:
         """Lay out and route the sheet again with stacks split, rows ordered
@@ -3493,7 +3590,6 @@ class Flowsheet:
 
         before, off, drawn = self._counted_flaws(), _taps_off(self), self._state()
         self._split_stacks, self._order_rows, self._face_tees = split, order, tees
-        self._routing = True
         try:
             self.layout(self._engine)
             self._route_once(router)
@@ -3502,7 +3598,7 @@ class Flowsheet:
         except Exception:
             kept = False
         finally:
-            self._split_stacks = self._order_rows = self._face_tees = self._routing = False
+            self._split_stacks = self._order_rows = self._face_tees = False
         if not kept:
             self._put_state(drawn)
         return kept
@@ -3572,7 +3668,7 @@ class Flowsheet:
                                           nozzle_tap, on_leader)
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
-        from pandid.layout.halo import pinned_balloons
+        from pandid.layout.halo import fixed_balloons
         from pandid.routing.lanes import _score
         from pandid.validate import geometry_issues
 
@@ -3754,8 +3850,8 @@ class Flowsheet:
             settle_best()
 
         def repinned() -> None:
-            """Lay out with each balloon pinned on both axes kept clear,
-            and settle."""
+            """Lay out with each balloon pinned on both axes or held where
+            a via() line met it kept clear, and settle."""
             self._pin_balloons = True
             try:
                 self.layout(self._engine)
@@ -3779,7 +3875,7 @@ class Flowsheet:
             if tries and self._exit_tight:
                 keep_if_better(relaid, _flaws(self))
                 self._exit_tight = False
-            if tries and pinned_balloons(self, {}):
+            if tries and fixed_balloons(self, {}):
                 flaws = _flaws(self)
                 if flaws["unit-overlap"]:
                     # Keep only a drawing with fewer overlaps.

@@ -1,14 +1,18 @@
 """Check controllers hung on a bank of pumps and balloons turned off blocked nozzles."""
 
+import copy
 import functools
 
 import pytest
 
 from pandid import Flowsheet, units as U
+from pandid.layout.conflicts import boxes_overlap
 from pandid.loops import ControlLoop
+from pandid.portgeom import unit_box
 from pandid.streams import Stream
 
 from _layout_cases import frame_of
+from _quality import measure_final
 
 
 def _valved_bank(
@@ -141,6 +145,42 @@ def test_a_controller_with_no_clear_side_hangs_beside_its_valve():
 
     assert line.route is not None and not line.route.used_fallback
     assert _drawn_wrong(fs, line) == []
+
+
+def test_a_bank_laid_out_again_keeps_its_drawn_layout_where_a_fresh_one_crosses_more():
+    """Keep the layout from the drawn routes where a fresh one draws more crossings."""
+    fs, _ = _valved_bank(10, pumps=2)
+    first = measure_final(fs).crossings
+    fs.layout()
+    fs.route()
+    assert measure_final(fs).crossings < first
+
+
+def test_a_line_frozen_on_a_bank_then_laid_out_again_still_meets_its_controller():
+    """Draw FIC-201's frozen output square and clear of units after layout()."""
+    fs, loops = _valved_bank(10, pumps=2)
+    line = loops[1].output
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    fs.layout()
+    fs.route()
+    assert _drawn_wrong(fs, line) == []
+
+
+def test_layout_after_a_line_is_frozen_draws_no_unit_over_a_balloon_it_held():
+    """Let go of FT-201, held where S11 was frozen, once a fresh layout lays SP over it."""
+    fs, loops = copy.deepcopy(_routed_bank(999))
+    line = loops[1].measurement
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    fs._lay_out(None, afresh=True)
+    boxes = [(u.name, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    assert [
+        (a, b)
+        for i, (a, p) in enumerate(boxes)
+        for b, q in boxes[i + 1 :]
+        if boxes_overlap(p, q, -1.0)
+    ] == []
 
 
 @pytest.mark.parametrize("face", [None, "E"])
