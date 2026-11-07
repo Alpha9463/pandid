@@ -5686,7 +5686,10 @@ class Mixer(Unit):
     """Mixer: combines several inlet streams into one outlet.
 
     Drawn as a triangle. From four inlets, the inlet face grows to keep
-    them 20 apart where the sheet draws no worse for it.
+    them 20 apart where the sheet draws no worse for it. Where valves or
+    fittings on its inlet lines are drawn over each other, it grows to
+    space the inlets the widest of them across its line plus a gap, kept
+    where the sheet draws no worse for it.
 
     Parameters
     ----------
@@ -5742,13 +5745,19 @@ class Mixer(Unit):
         self._add_port("outlet", "outlet", "process")
         # Whether the sheet draws the stock face for a face that would grow.
         self._stock_face = False
+        # Pitch the sheet spaces the nozzles at to fit the furniture on their
+        # lines, or 0.0.
+        self._fit_pitch = 0.0
 
 
 class Splitter(Unit):
     """Splitter: divides one inlet stream into several outlets.
 
     Drawn as a triangle. From four outlets, the outlet face grows to keep
-    them 20 apart where the sheet draws no worse for it.
+    them 20 apart where the sheet draws no worse for it. Where valves or
+    fittings on its outlet lines are drawn over each other, it grows to
+    space the outlets the widest of them across its line plus a gap, kept
+    where the sheet draws no worse for it.
 
     Parameters
     ----------
@@ -5805,6 +5814,9 @@ class Splitter(Unit):
         )
         # Whether the sheet draws the stock face for a face that would grow.
         self._stock_face = False
+        # Pitch the sheet spaces the nozzles at to fit the furniture on their
+        # lines, or 0.0.
+        self._fit_pitch = 0.0
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument: str) -> list[str]:

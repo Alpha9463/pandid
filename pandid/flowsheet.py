@@ -2638,11 +2638,13 @@ class Flowsheet:
         With the default router, where pipe furniture is then drawn over
         a unit, the sheet is drawn again with each such piece moved back
         along its pipe to the nearest spot that keeps it a gap clear of
-        other units, then on along it. The one with the fewest counts that
-        draws fewer overlaps is kept, only if no tap leaves its line and
-        no finding or clash but crossings, bends, fallback routes and tag
-        clashes grows; the next route() then starts from the drawing
-        before it.
+        other units, then on along it, then with each mixer and splitter
+        whose lines carry furniture grown to space its nozzles the widest
+        piece across its line plus that gap. The one with the fewest
+        counts that draws fewer overlaps is kept, only if no tap leaves
+        its line and no finding or clash but crossings, bends, fallback
+        routes and tag clashes grows; the next route() then starts from
+        the drawing before it.
 
         Last, with the default router and layout engine, a drawing that
         reaches past the sheet's top or left edge is moved onto the sheet
@@ -2729,7 +2731,7 @@ class Flowsheet:
                 else:
                     self._put_drawing(mains)
             if tries and self._furniture_over:
-                self._spread_if_better(router)
+                self._furniture_apart_if_better(router)
             if tries and self._auto_laid:
                 self._keep_on_sheet(router or DefaultRouter())
                 self._close_bands()
@@ -2745,12 +2747,13 @@ class Flowsheet:
             if not outer:
                 self._stated_then = self._stated()
 
-    def _spread_if_better(self, router=None) -> None:
+    def _furniture_apart_if_better(self, router=None) -> None:
         """Draw the sheet again with pipe furniture drawn over a unit moved
-        back along its pipe, then on along it, and keep the one with the
-        fewest counts that draws fewer overlaps, keeps every tap on its
-        line and grows no count but crossings, bends, fallback routes and
-        tag clashes; else put the drawing back.
+        back along its pipe, then on along it, then with each mixer and
+        splitter whose lines carry furniture spaced to fit it, and keep the
+        one with the fewest counts that draws fewer overlaps, keeps every
+        tap on its line and grows no count but crossings, bends, fallback
+        routes and tag clashes; else put the drawing back.
 
         Where one is kept, the next route() starts from the drawing before
         it.
@@ -2760,15 +2763,24 @@ class Flowsheet:
         router : object or None, optional
             Router with ``route(fs)``; ``None`` uses the default.
         """
+        from pandid.layout.mounted import lateral_pitch
         from pandid.routing.lanes import _score
+        from pandid.units import Mixer, Splitter
 
         drawn, (before, off) = self._drawing(), _score(self)
         traded = ("unit-overlap", "crossings", "bends", "fallback", "unit-on-tag",
                   "line-through-tag", "tap-through-tag")
+        pitches = {u: lateral_pitch(u) for u in self.units if isinstance(u, (Mixer, Splitter))}
+        headers = [u for u, pitch in pitches.items() if pitch]
         best: tuple[int, tuple] | None = None
-        for side in (-1, 1):
+        for side, fit in ((-1, False), (1, False), (0, True))[:3 if headers else 2]:
             self._put_drawing(drawn)
             self._spread, self._layout_stale = side, True
+            if fit:
+                # Start from this layout, not the states held with stock faces.
+                self._plain_state = self._unkept = self._stacked = None
+                for u in headers:
+                    u._fit_pitch = pitches[u]
             try:
                 self._route_drawing(router)
                 after, taps = _score(self)
@@ -3577,7 +3589,7 @@ class Flowsheet:
                         self._exit_tight, self._mounted_layout, self._widened, self._stack_spans,
                         self._rows_out, self._tees_away, self._fannable,
                         self._far_branches, self._flags_off,
-                        tuple((u, u._stock_face) for u in self.units
+                        tuple((u, u._stock_face, u._fit_pitch) for u in self.units
                               if hasattr(u, "_stock_face")),
                         self._lanes, self._relaned, self._crowded_station,
                         self._angle_valves, self._furniture_over, self._beside))
@@ -3597,8 +3609,8 @@ class Flowsheet:
          self._flags_off, stock, self._lanes, self._relaned,
          self._crowded_station, self._angle_valves, self._furniture_over,
          self._beside) = _copied(state)
-        for u, flag in stock:
-            u._stock_face = flag
+        for u, flag, pitch in stock:
+            u._stock_face, u._fit_pitch = flag, pitch
         self._put_geometry(geometry, keep_manual=True)
         self._layout_stale = False
 

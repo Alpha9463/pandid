@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from pandid.ports import Port
     from pandid.stations import StationAssembly
     from pandid.streams import Stream
-    from pandid.units import Unit
+    from pandid.units import Mixer, Splitter, Unit
 
     Element = Union[Unit, StationAssembly]
 
@@ -174,6 +174,43 @@ def _turns(unit: Unit) -> bool:
     placed = unit.pin_ or Pin()
     faces = {port_faces(unit, name, placed)[0] for name in ("inlet", "outlet")}
     return len(faces & {"N", "S"}) == 1 and len(faces & {"E", "W"}) == 1
+
+
+def lateral_pitch(header: Mixer | Splitter) -> float:
+    """Return the nozzle pitch the furniture on a header's lines needs.
+
+    That is the widest furniture across its line, among the devices
+    from each nozzle of the many-nozzle face to the first unit that is
+    no device, plus :data:`GAP`.
+
+    Parameters
+    ----------
+    header : Mixer or Splitter
+        Header to measure.
+
+    Returns
+    -------
+    float
+        Pitch, or 0.0 where no line carries furniture.
+    """
+    from pandid.geometry import Pin
+    from pandid.portgeom import port_offset
+    from pandid.units import Mixer
+
+    mixer = isinstance(header, Mixer)
+    across = 0.0
+    for port in header.inlets if isinstance(header, Mixer) else header.outlets:
+        stream = port.stream
+        while stream is not None:
+            device = stream.source.owner if mixer else stream.dest.owner
+            if not _device(device):
+                break
+            placed = device.pin_ or Pin()
+            width, height = resolve_size(device, placed)
+            (ax, ay), (bx, by) = (port_offset(device, name, placed) for name in ("inlet", "outlet"))
+            across = max(across, width if abs(by - ay) > abs(bx - ax) else height)
+            stream = device.ports["inlet" if mixer else "outlet"].stream
+    return across + GAP if across else 0.0
 
 
 def _members(element: Element) -> list[Unit]:

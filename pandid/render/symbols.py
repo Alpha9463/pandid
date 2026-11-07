@@ -1152,13 +1152,13 @@ JUNCTION_END = 15.0
 
 
 @lru_cache(maxsize=None)
-def junction_symbol(kind: str, count: int = 0) -> Symbol:
+def junction_symbol(kind: str, count: int = 0, pitch: float = JUNCTION_PITCH) -> Symbol:
     """Return a mixer or splitter triangle.
 
     The stock triangle has a :data:`JUNCTION_SIZE` face, with its
     nozzles :data:`JUNCTION_PITCH` apart within :data:`JUNCTION_EXTENT`
-    of it. A grown one holds ``count`` nozzles :data:`JUNCTION_PITCH`
-    apart, with :data:`JUNCTION_END` beyond each end.
+    of it. A grown one holds ``count`` nozzles ``pitch`` apart, with
+    :data:`JUNCTION_END` beyond each end.
 
     Parameters
     ----------
@@ -1166,6 +1166,8 @@ def junction_symbol(kind: str, count: int = 0) -> Symbol:
         ``"mixer"`` or ``"splitter"``.
     count : int, default=0
         Nozzles to grow the face for; 0 for the stock triangle.
+    pitch : float, default=JUNCTION_PITCH
+        Spacing of the nozzles on a grown face.
 
     Returns
     -------
@@ -1173,7 +1175,7 @@ def junction_symbol(kind: str, count: int = 0) -> Symbol:
         Triangle pointing east for a mixer, west for a splitter.
     """
     w = JUNCTION_SIZE
-    h = (count - 1) * JUNCTION_PITCH + 2 * JUNCTION_END if count else JUNCTION_SIZE
+    h = (count - 1) * pitch + 2 * JUNCTION_END if count else JUNCTION_SIZE
     mixer = kind == "mixer"
     points = f"0,0 {w:g},{h / 2:g} 0,{h:g}" if mixer else f"0,{h / 2:g} {w:g},0 {w:g},{h:g}"
     return Symbol(
@@ -1182,7 +1184,7 @@ def junction_symbol(kind: str, count: int = 0) -> Symbol:
         width=w, height=h,
         ports={"outlet": (w, h / 2)} if mixer else {"inlet": (0.0, h / 2)},
         port_series=(PortSeries("in_" if mixer else "out_", "W" if mixer else "E",
-                                pitch=JUNCTION_PITCH,
+                                pitch=pitch if count else JUNCTION_PITCH,
                                 extent=1.0 if count else JUNCTION_EXTENT),),
         # Each face length is its own <defs> entry.
         id_suffix=f"_{h:g}" if count else "",
@@ -1193,9 +1195,10 @@ def header_grows(unit) -> bool:
     """Return whether a mixer or splitter is drawn with a grown face.
 
     The face grows where the stock face would set its nozzles closer
-    than :data:`MIN_NOZZLE_PITCH`, unless the unit has a stated
-    ``width`` or ``height``, its drawing is registered again, or the
-    sheet keeps it stock.
+    than :data:`MIN_NOZZLE_PITCH`, unless the sheet keeps it stock, or
+    closer than the pitch the sheet fits it to its lines at; never
+    where the unit has a stated ``width`` or ``height`` or its drawing
+    is registered again.
 
     Parameters
     ----------
@@ -1210,13 +1213,19 @@ def header_grows(unit) -> bool:
     if unit.kind not in ("mixer", "splitter") or getattr(unit, "variant", "default") != "default":
         return False
     count = len(unit.inlets if unit.kind == "mixer" else unit.outlets)
-    return (count > 1 and JUNCTION_EXTENT * JUNCTION_SIZE / (count - 1) < MIN_NOZZLE_PITCH
-            and unit.width is None and unit.height is None and not unit._stock_face
+    if count < 2 or unit.width is not None or unit.height is not None:
+        return False
+    stock = min(JUNCTION_PITCH, JUNCTION_EXTENT * JUNCTION_SIZE / (count - 1))
+    return ((stock < MIN_NOZZLE_PITCH and not unit._stock_face
+             or stock < unit._fit_pitch)
             and default_registry.get(unit.kind) is junction_symbol(unit.kind))
 
 
 def _junction(unit) -> Symbol:
     """Return a mixer's or splitter's drawing, grown if it grows.
+
+    A grown face spaces its nozzles :data:`JUNCTION_PITCH` apart, or
+    the pitch the sheet fits it to its lines at where that is more.
 
     Parameters
     ----------
@@ -1230,7 +1239,8 @@ def _junction(unit) -> Symbol:
     """
     if not header_grows(unit):
         return default_registry.get(unit.kind)
-    return junction_symbol(unit.kind, len(unit.inlets if unit.kind == "mixer" else unit.outlets))
+    return junction_symbol(unit.kind, len(unit.inlets if unit.kind == "mixer" else unit.outlets),
+                           max(JUNCTION_PITCH, unit._fit_pitch))
 
 
 def _face_local(face: str, x: float, y: float, width: float, height: float
