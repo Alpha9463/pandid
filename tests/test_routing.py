@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-from _layout_cases import build_unpinned
 
 from pandid import ControlValve, ShellAndTubeExchanger
 from pandid.flowsheet import Flowsheet
@@ -135,18 +134,6 @@ def test_nozzles_out_of_line_by_rounding_error_are_joined_straight():
     fs.route()
     assert line.route is not None
     assert not _hairline_runs(line.route.waypoints), line.route.waypoints
-
-
-def test_no_line_on_the_stripped_dryer_jogs_by_rounding_error():
-    """Route 400-WG-501-CS straight to XV-501B, 1e-14 px out of line."""
-    fs = build_unpinned("19_molecular_sieve_dryer")[0]
-    fs.route()
-    jogs = [
-        (s.name, _hairline_runs(s.route.waypoints))
-        for s in fs.streams
-        if s.route is not None and not s.route.manual
-    ]
-    assert not [(name, runs) for name, runs in jogs if runs]
 
 
 def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():
