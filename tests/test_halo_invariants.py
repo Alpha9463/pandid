@@ -539,7 +539,7 @@ def test_a_tag_is_not_moved_onto_more_line_than_it_erased(monkeypatch):
     fs.route()
     place = SvgRenderer._tag_item
 
-    def across_the_line(self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None):
+    def across_the_line(self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None, hatches=()):
         """Place the tag as usual alone, and across its outlet line after."""
         if labels is None:
             return place(self, u, f, x, y, w, h, tag, ink, symbols)

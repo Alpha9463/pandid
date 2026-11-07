@@ -2923,42 +2923,11 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
     return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
 
 
-def tag_obstacles(fs, joints: "str | None", direction: str) -> "tuple[list, list]":
-    """Return the lines and marks the tag pass keeps labels off.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out and routed flowsheet.
-    joints : str or None
-        Sheet joint default, whose flange marks the labels avoid.
-    direction : str
-        ``jump_direction``.
-
-    Returns
-    -------
-    tuple[list, list]
-        The drawn lines as :class:`_Ink`, pneumatic hatches among them,
-        then ``(unit, box)`` for every symbol, flange mark, quadrant code
-        and package edge, ``unit`` ``None`` for a mark.
-    """
-    ink = _ink(fs, direction)
-    # A hatch stroke is ink of its signal line.
-    ink += [_Ink(*b, "h", b[1], "tap", "") for b in hatch_boxes(fs)]
-    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    symbols += [(None, b) for b in flange_boxes(fs, joints)]
-    symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
-                if b is not None]
-    symbols += [(None, b) for b in package_edges(fs)]
-    return ink, symbols
-
-
 def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """Place each unit's tag and its ``NC`` and fail-position letters.
 
     The labels keep clear of the drawn lines, the symbols, the flange
-    marks, the pneumatic hatches, the quadrant codes, the package frames
-    and each other.
+    marks, the quadrant codes, the package frames and each other.
 
     Parameters
     ----------
@@ -2976,7 +2945,13 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
         the tag item or ``None``, and every label item, tag first.
     """
     sheet = SvgRenderer()
-    ink, symbols = tag_obstacles(fs, joints, direction)
+    ink = _ink(fs, direction)
+    hatches = hatch_boxes(fs)
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
+                if b is not None]
+    symbols += [(None, b) for b in package_edges(fs)]
 
     from pandid.render.drawio import label_box
 
@@ -3059,7 +3034,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             x, y, w, h = f.x, f.y, f.w, f.h
             others = [o for k, o in shown.items() if k != id(u)]
             labels = None if alone else [b for o in others for b in o[0]]
-            tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels)
+            tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels, hatches)
                    if u.tag else None)
             tag_box = None if tag is None else _unit_label_box(tag)
             items = [] if tag is None else [tag]
@@ -4253,7 +4228,8 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None):
+    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None,
+                  hatches=()):
         """Return the equipment tag item, moved clear of drawn ink.
 
         The tag slides up to half the face along its side, then along
@@ -4264,8 +4240,8 @@ class SvgRenderer:
         Given ``labels``, the tag then also tries every side, free sides
         first, sliding until its near end reaches the corner, then steps
         out from the face, staying nearer its own symbol than any other
-        tagged one. It takes the spot that erases least, then covers
-        fewest labels.
+        tagged one and off every pneumatic hatch. It takes the spot that
+        erases least, then covers fewest labels.
 
         Parameters
         ----------
@@ -4283,6 +4259,8 @@ class SvgRenderer:
             ``(unit, box)`` for every symbol and owner-less mark.
         labels : sequence of tuple, optional
             Halo boxes of other labels.
+        hatches : sequence of tuple, optional
+            Boxes of the pneumatic hatch strokes.
 
         Returns
         -------
@@ -4362,7 +4340,8 @@ class SvgRenderer:
                     spot = (sx, sy, anchor, baseline, side, tag)
                     halo = _unit_label_box(spot)
                     assert halo is not None
-                    if out and any(_box_gap(halo, b) <= _box_gap(halo, own) for b in rivals):
+                    if out and (any(_box_gap(halo, b) <= _box_gap(halo, own) for b in rivals)
+                                or any(boxes_overlap(halo, b) for b in hatches)):
                         continue
                     cost = score(spot)
                     if cost < least:
