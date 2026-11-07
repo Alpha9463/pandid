@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
+  balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
+  sheet read back draws as it was drawn, a line frozen with `via()` included.
+  A spec edited since it was written is laid out afresh.
 - `fs.package("PK-301", [p301a, p301b, f301], description="Dosing Package",
   reference="VENDOR DWG 4711")` draws a package unit as a dash-dot boundary
   frame round its units, tagged outside its upper-left corner, and lists it in

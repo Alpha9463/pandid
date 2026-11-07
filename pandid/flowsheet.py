@@ -2346,8 +2346,9 @@ class Flowsheet:
     def to_dict(self) -> dict:
         """Return the flowsheet's author intent as a JSON-safe spec.
 
-        ``Flowsheet.from_dict(fs.to_dict())`` rebuilds an equivalent
-        flowsheet.
+        Once the sheet is drawn, the spec also has a ``layout`` of where
+        it is drawn. ``Flowsheet.from_dict(fs.to_dict())`` rebuilds an
+        equivalent flowsheet, drawn as this one is.
 
         Returns
         -------
@@ -2742,12 +2743,43 @@ class Flowsheet:
             stream-label enclosure is unknown.
         """
         from pandid.layout.attach import _attachment, is_attached
+        from pandid.spec import _intent
 
         try:
-            spec = json.dumps(self.to_dict(), default=repr)
+            spec = json.dumps(_intent(self), default=repr)
         except ValueError:
             return None
         return spec, [_attachment(u) for u in self.units if is_attached(u)]
+
+    def _drawn_from_spec(self, redraw: bool, valves_on_pipes: bool, angle_valves: bool,
+                         settled: bool) -> None:
+        """Keep the frames and routes a spec's ``layout`` gave the sheet
+        as route() last left them.
+
+        Parameters
+        ----------
+        redraw : bool
+            Whether the sheet was edited since that route(), so that
+            route() draws it again.
+        valves_on_pipes : bool
+            Whether the layout set valves and fittings on their pipes.
+        angle_valves : bool
+            Whether the layout found a line carrying an angle valve.
+        settled : bool
+            Whether that route() settled its attached instruments.
+        """
+        from pandid.layout.attach import is_attached
+        from pandid.layout.cycles import break_cycles
+
+        break_cycles(self)
+        self._layout_stale = self._route_stale = False
+        self._auto_laid = self._final = True
+        self.route_converged = settled
+        self._mounted_layout, self._angle_valves = valves_on_pipes, angle_valves
+        self.unplaced_instruments = [u for u in self.units
+                                     if is_attached(u) and u.frame is None]
+        self._given_then = None if redraw else self._given()
+        self._stated_then = () if redraw else self._stated()
 
     def _close_bands(self) -> None:
         """Move a drawing past the sheet's top or left edge onto it, then

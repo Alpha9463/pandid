@@ -61,12 +61,37 @@ The format::
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
     annotations: [{type: equipment_table, align: top-right}]
 
+    layout:                    # where the drawn sheet drew everything
+      checksum: 3f9a1c07b2e4   # of the rest of the spec
+      valves_on_pipes: true
+      units:
+        Raw Feed: {x: 40, y: 250, col: 0, row: 0}
+        FV-101: {x: 398.75, y: 89.5, orientation: 90, label_pos: bottom}
+        FIC-101: {x: 395.4, y: 0.8, port_faces: {sig_out: S},
+                  tap: [420.0, 110.5], beside_valve: {offset: 122, angle: 135}}
+      lines:                   # one per stream, in order
+        - [[140, 275], [250, 275]]
+        - {points: [[300, 275], [300, 120]], fallback: true}
+
 Units are addressed by name. Each drawing of a repeated symbol is an
 entry with the tag, addressed in list order as ``I-1``, ``I-1 (2)``.
+
+:func:`to_dict` writes ``layout`` once the sheet is drawn. Each unit
+has its corner, grid cell, turn, mirror, label side and chosen faces;
+a balloon its tap point, ``beside_valve`` where it hangs off the valve
+it drives and ``held`` where a ``via()`` line was typed against it; a
+mixer or splitter ``stock_face`` where its face is not grown. Each
+line has its points, and ``fallback`` where no clean path was found.
+``redraw`` marks a sheet edited since it was routed, ``valves_on_pipes``
+and ``angle_valves`` what its layout found, and ``settled: false`` a
+sheet whose balloons did not settle. :func:`from_dict` starts the sheet
+from ``layout`` while ``checksum`` is the rest of the spec's, and
+otherwise lays it out afresh.
 """
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 import re
@@ -645,7 +670,7 @@ _TOP_KEYS = {
     "line_numbering_scheme", "line_number_start", "loop_number_start",
     "valve_station_tag_scheme", "auto_faces", "components", "units", "loops",
     "instruments", "streams", "stations", "packages", "stream_table_sections",
-    "stream_table", "stream_labels", "title_block", "annotations",
+    "stream_table", "stream_labels", "title_block", "annotations", "layout",
 }
 # Sheet settings: Flowsheet keyword and spec key, default, reader.
 _SHEET_SETTINGS: tuple[tuple[str, Any, Callable[[Any, str], Any]], ...] = (
@@ -842,6 +867,8 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         fs.title_block = _read_title_block(data["title_block"], "title_block")
     for i, entry in enumerate(_sequence(data.get("annotations", []), "annotations")):
         fs.add_annotation(_read_annotation(fs, entry, f"annotations[{i}]"))
+    if "layout" in data:
+        _read_layout(fs, data["layout"], "layout")
     return fs
 
 
@@ -1601,15 +1628,57 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
     if "tabulate" in data:
         stream.tabulate = _flag(data["tabulate"], f"{where}.tabulate")
     if "via" in data:
-        points = []
-        for i, item in enumerate(_sequence(data["via"], f"{where}.via")):
-            at = f"{where}.via[{i}]"
-            pair = _sequence(item, at)
-            if len(pair) != 2:
-                raise SpecError(f"{at}: a waypoint is [x, y], got {pair!r}")
-            points.append((_number(pair[0], f"{at}.x"), _number(pair[1], f"{at}.y")))
-        stream.via(points)
+        stream.via(_points(data["via"], f"{where}.via"))
     return stream
+
+
+def _point(value: Any, where: str) -> tuple[float, float]:
+    """Read one ``[x, y]`` point.
+
+    Parameters
+    ----------
+    value : Any
+        The ``[x, y]`` pair.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    tuple[float, float]
+        The point, its numbers as given.
+
+    Raises
+    ------
+    SpecError
+        If it is not a pair of finite numbers.
+    """
+    pair = _sequence(value, where)
+    if len(pair) != 2:
+        raise SpecError(f"{where}: a point is [x, y], got {pair!r}")
+    return _number(pair[0], f"{where}.x"), _number(pair[1], f"{where}.y")
+
+
+def _points(value: Any, where: str) -> list[tuple[float, float]]:
+    """Read a list of ``[x, y]`` points.
+
+    Parameters
+    ----------
+    value : Any
+        The list.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        The points.
+
+    Raises
+    ------
+    SpecError
+        If it is not a list of points.
+    """
+    return [_point(item, f"{where}[{i}]") for i, item in enumerate(_sequence(value, where))]
 
 
 def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
@@ -1966,6 +2035,108 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         raise _fail_from(e, where) from None  # e.g. a bad align=
 
 
+_LAYOUT_KEYS = {
+    "checksum", "redraw", "valves_on_pipes", "angle_valves", "settled", "units", "lines",
+}
+_DRAWN_UNIT_KEYS = {
+    "x", "y", "col", "row", "orientation", "mirrored", "label_pos", "port_faces", "tap",
+    "stock_face", "beside_valve", "held",
+}
+_DRAWN_LINE_KEYS = {"points", "fallback"}
+
+
+def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
+    """Draw a sheet as a ``layout:`` entry has it.
+
+    The entry is left unread where its ``checksum`` is not the rest of
+    the spec's, or it does not name every unit that is not attached and
+    one line per stream; the sheet is then laid out afresh.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet read from the rest of the spec.
+    entry : Any
+        The ``layout:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
+    from pandid.geometry import Frame, Route
+    from pandid.layout.attach import _attachment, is_attached
+    from pandid.portgeom import resolve_size
+    from pandid.render.svg import LABEL_POSITIONS
+
+    data = _mapping(entry, where)
+    _check_keys(data, _LAYOUT_KEYS, where)
+    units = _mapping(data.get("units", {}), f"{where}.units")
+    lines = _sequence(data.get("lines", []), f"{where}.lines")
+    named = {unit.name: unit for unit in fs.units}
+    if (data.get("checksum") != _checksum(_intent(fs)) or not units.keys() <= named.keys()
+            or len(lines) != len(fs.streams)
+            or any(u.name not in units for u in fs.units if not is_attached(u))):
+        return
+    flips = {flip: flags for flags, flip in _MIRROR_NAMES.items()}
+    for name, value in units.items():
+        unit, at = named[name], f"{where}.units.{name}"
+        drawn = _mapping(value, at)
+        _check_keys(drawn, _DRAWN_UNIT_KEYS, at)
+        for key in ("x", "y"):
+            if key not in drawn:
+                raise SpecError(f"{at} needs {key!r}, where the unit is drawn")
+        turn = _number(drawn.get("orientation", 0.0), f"{at}.orientation")
+        if turn not in (0, 90, 180, 270):
+            raise SpecError(f"{at}.orientation must be 0, 90, 180 or 270, got {turn!r}")
+        flip = drawn.get("mirrored", "")
+        if flip and flip not in flips:
+            raise SpecError(f"{at}.mirrored must be 'x', 'y' or 'xy', got {flip!r}")
+        side = drawn.get("label_pos")
+        if side is not None and side not in LABEL_POSITIONS:
+            raise SpecError(f"{at}.label_pos must be one of {list(LABEL_POSITIONS)}, got {side!r}")
+        faces = dict(_mapping(drawn.get("port_faces", {}), f"{at}.port_faces"))
+        for port, face in faces.items():
+            if port not in unit.ports or face not in ("N", "S", "E", "W"):
+                raise SpecError(f"{at}.port_faces: {port!r}: {face!r} names no port of "
+                                f"{unit.name!r} on a face 'N', 'S', 'E' or 'W'")
+        if hasattr(unit, "_stock_face"):
+            setattr(unit, "_stock_face", _flag(drawn.get("stock_face", False), f"{at}.stock_face"))
+        mirrored, mirror_y = flips.get(flip, (False, False))
+        frame = Frame(x=_number(drawn["x"], f"{at}.x"), y=_number(drawn["y"], f"{at}.y"),
+                      w=0.0, h=0.0,
+                      col=_integer(drawn["col"], f"{at}.col") if "col" in drawn else None,
+                      row=_integer(drawn["row"], f"{at}.row") if "row" in drawn else None,
+                      orientation=turn, mirrored=mirrored, mirror_y=mirror_y,
+                      label_pos=side, port_faces=faces)
+        frame.w, frame.h = resolve_size(unit, frame)
+        unit.frame = frame
+        if "tap" in drawn:
+            setattr(unit, "tap", _point(drawn["tap"], f"{at}.tap"))
+        if "beside_valve" in drawn:
+            hung = _mapping(drawn["beside_valve"], f"{at}.beside_valve")
+            _check_keys(hung, {"offset", "angle"}, f"{at}.beside_valve")
+            standoff = (_number(hung.get("offset"), f"{at}.beside_valve.offset"),
+                        _number(hung.get("angle"), f"{at}.beside_valve.angle"))
+            fs._beside[id(unit)] = (standoff, _attachment(unit))
+        if _flag(drawn.get("held", False), f"{at}.held"):
+            fs._typed_at[id(unit)] = (frame.x, frame.y, dict(faces))
+    for i, (stream, line) in enumerate(zip(fs.streams, lines)):
+        at = f"{where}.lines[{i}]"
+        drawn = (_mapping(line, at) if isinstance(line, Mapping)
+                 else {"points": line, "fallback": False})
+        _check_keys(drawn, _DRAWN_LINE_KEYS, at)
+        points = _points(drawn.get("points"), f"{at}.points")
+        if stream.route is None or not stream.route.manual:
+            stream.route = Route(points, used_fallback=_flag(drawn.get("fallback", False),
+                                                             f"{at}.fallback"))
+    fs._drawn_from_spec(**{key: _flag(data.get(key, default), f"{where}.{key}")
+                           for key, default in (("redraw", False), ("valves_on_pipes", False),
+                                                ("angle_valves", False), ("settled", True))})
+
+
 # Writing: Flowsheet -> spec
 
 _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
@@ -1974,7 +2145,35 @@ _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
 def to_dict(fs: Flowsheet) -> dict:
     """Write a flowsheet as a spec that :func:`from_dict` reads back.
 
-    It writes author intent only, and leaves out most default values.
+    It writes author intent, leaving out most default values, and
+    ``layout`` where the sheet is drawn.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to write.
+
+    Returns
+    -------
+    dict
+        The spec.
+
+    Raises
+    ------
+    SpecError
+        If a naming scheme is callable or a unit class is not built in.
+    ValueError
+        If the stream-label enclosure is unknown.
+    """
+    spec = _intent(fs)
+    layout = _write_layout(fs, spec)
+    if layout is not None:
+        spec["layout"] = layout
+    return spec
+
+
+def _intent(fs: Flowsheet) -> dict:
+    """Write a flowsheet's author intent as a spec, without ``layout``.
 
     Parameters
     ----------
@@ -2049,6 +2248,87 @@ def to_dict(fs: Flowsheet) -> dict:
     if fs.annotations:
         spec["annotations"] = [_write_annotation(a) for a in fs.annotations]
     return spec
+
+
+def _checksum(spec: dict) -> str:
+    """Return the checksum ``layout`` records of the rest of a spec.
+
+    Parameters
+    ----------
+    spec : dict
+        What :func:`_intent` wrote.
+
+    Returns
+    -------
+    str
+        Twelve hex digits of its SHA-256 as JSON.
+    """
+    return hashlib.sha256(json.dumps(spec, default=repr).encode()).hexdigest()[:12]
+
+
+def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
+    """Write where a drawn sheet draws each unit and line.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to write.
+    spec : dict
+        What :func:`_intent` wrote for it.
+
+    Returns
+    -------
+    dict[str, Any] or None
+        The ``layout`` entry, or None unless every line is routed and
+        nothing is stale.
+    """
+    from pandid.layout.attach import _attachment
+
+    if fs._layout_stale or fs._route_stale or any(s.route is None for s in fs.streams):
+        return None
+    units: dict[str, Any] = {}
+    for unit in fs.units:
+        frame = unit.frame
+        if frame is None:
+            continue
+        entry = units[unit.name] = {"x": frame.x, "y": frame.y}
+        for key in ("col", "row", "label_pos"):
+            if getattr(frame, key) is not None:
+                entry[key] = getattr(frame, key)
+        if frame.orientation:
+            entry["orientation"] = frame.orientation
+        mirror = _MIRROR_NAMES.get((frame.mirrored, frame.mirror_y))
+        if mirror:
+            entry["mirrored"] = mirror
+        if frame.port_faces:
+            entry["port_faces"] = dict(frame.port_faces)
+        tap = getattr(unit, "tap", None)
+        if tap is not None:
+            entry["tap"] = list(tap)
+        if getattr(unit, "_stock_face", False):
+            entry["stock_face"] = True
+        (offset, angle), attachment = fs._beside.get(id(unit), ((None, None), None))
+        if attachment is not None and attachment == _attachment(unit):
+            entry["beside_valve"] = {"offset": offset, "angle": angle}
+        if id(unit) in fs._typed_at:
+            entry["held"] = True
+    lines: list[Any] = []
+    for stream in fs.streams:
+        route = stream.route
+        assert route is not None
+        points = [list(point) for point in route.waypoints]
+        lines.append({"points": points, "fallback": True} if route.used_fallback else points)
+    layout: dict[str, Any] = {"checksum": _checksum(spec)}
+    if fs._given_then is None or fs._given_then != fs._given():
+        layout["redraw"] = True
+    if fs._mounted_layout:
+        layout["valves_on_pipes"] = True
+    if fs._angle_valves:
+        layout["angle_valves"] = True
+    if not fs.route_converged:
+        layout["settled"] = False
+    layout.update(units=units, lines=lines)
+    return layout
 
 
 def _write_common(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
