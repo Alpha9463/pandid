@@ -2679,9 +2679,11 @@ class Flowsheet:
             return flaws, off
 
         tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
+        # Only a default-configured router's drawing is kept as unchanged.
+        plain = tries and getattr(router, "recover_exits", True)
         last = None
         if not self._in_route:
-            if (tries and self._given_then is not None and self._given() == self._given_then
+            if (plain and self._given_then is not None and self._given() == self._given_then
                     and not (self._layout_stale or self._route_stale)
                     and all(u.frame is not None for u in self.units)
                     and all(s.route is not None for s in self.streams)):
@@ -2718,7 +2720,7 @@ class Flowsheet:
                 self._put_drawing(last[0])
                 self._main = last[1]
             if not outer:
-                self._given_then = self._given() if tries else None
+                self._given_then = self._given() if plain else None
                 self._final = last is not None or (
                     self.route_converged and not _taps_off(self))
         finally:
