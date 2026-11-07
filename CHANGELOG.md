@@ -113,6 +113,10 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- Where its drawing does not settle and the sheet declares no loop, `route()`
+  also lays the sheet out again from that drawing and draws it again, and keeps
+  the new drawing where it is better, so a bank of tapped pumps is drawn on the
+  first `route()` as well as after `layout()`.
 - A valve station pinned by `add_valve_station(x=..., y=...)` and read back from
   a spec keeps the turns and mirrors the author stated on its members, and no
   longer counts the ones the station gave them as stated.
