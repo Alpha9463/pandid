@@ -3356,6 +3356,20 @@ def test_a_transmitter_moved_to_another_line_after_routing_taps_it():
     assert ft.tap is not None and ft.tap[1] == pytest.approx(500)
 
 
+def test_a_pin_where_drawn_after_another_edit_leaves_that_edit_drawn():
+    """Route, move FT-101 to line B, pin TIC-101 where it is drawn, and route again.
+
+    FT-101 taps line B.
+    """
+    fs, lines, ft, tic = _two_lines()
+    fs.route()
+    ft.host = lines[1]
+    tic.pin(x=frame_of(tic).x, y=frame_of(tic).y)
+    fs.route()
+
+    assert ft.tap is not None and ft.tap[1] == pytest.approx(500)
+
+
 @pytest.mark.parametrize("field", ["host", "at", "face", "offset", "angle", "relation"])
 def test_an_attachment_set_after_routing_is_drawn_as_set(field: str):
     """Route a sheet, set one attachment field of a balloon, and route again.

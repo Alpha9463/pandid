@@ -2513,13 +2513,13 @@ class Flowsheet:
 
         Where route() last finished with the default router and since
         then neither the sheet's :meth:`to_dict` spec nor a balloon's
-        attachment has changed, nor has it been laid out or edited in a way
-        that redraws it, route() with
-        the default router keeps the drawing as it is if it settled with
-        every tap on its line or was already drawn again; otherwise it
-        draws the sheet again and keeps the new drawing only if no
-        finding, clash, crossing, fallback route or tap off its line grows
-        and one falls.
+        attachment has changed but for pins at the places the units are
+        drawn, nor has it been laid out or edited in a way that redraws it,
+        route() with the default router keeps the drawing as it is if it
+        settled with every tap on its line or was already drawn again;
+        otherwise it draws the sheet again and keeps the new drawing only
+        if no finding, clash, crossing, fallback route or tap off its line
+        grows and one falls.
 
         Attached instruments are placed and the sheet re-routed until
         neither moves, up to
@@ -2646,9 +2646,7 @@ class Flowsheet:
         annotation. The next route() or layout() starts from the drawing
         before it, unless the author has stated a pin, ``via()`` route or
         note position since; then it starts from the closed drawing those
-        were read against. Where the only change since the last route() is
-        pins at the places the units are drawn, the drawing is kept as it
-        is.
+        were read against.
 
         Parameters
         ----------
@@ -2681,8 +2679,6 @@ class Flowsheet:
             return flaws, off
 
         tries = not self._laying_out and (router is None or type(router) is DefaultRouter)
-        if tries and not self._in_route and self._pinned_as_drawn():
-            return
         last = None
         if not self._in_route:
             if (tries and self._given_then is not None and self._given() == self._given_then
@@ -2802,26 +2798,6 @@ class Flowsheet:
                       if s.route is not None and s.route.manual),
                 tuple((a, a.position) for a in self.annotations
                       if getattr(a, "position", None) is not None))
-
-    def _pinned_as_drawn(self) -> bool:
-        """Return whether the only change since route() is pins the drawing
-        honours.
-
-        Returns
-        -------
-        bool
-            True if the layout and routes are fresh, and what
-            :meth:`_stated` returns differs from what it returned when
-            route() last finished only in pins, each new one at the place
-            its unit is drawn.
-        """
-        then = self._stated_then
-        if then is None or self._layout_stale or self._route_stale:
-            return False
-        pins, *rest = self._stated()
-        new = [pin for pin in pins if pin not in then[0]]
-        return (bool(new) and rest == list(then[1:])
-                and all(u._drawn_as(pin, ports, {}) for u, pin, ports in new))
 
     def _hold_typed(self) -> None:
         """Hold each unpinned balloon a ``via()`` line meets where the
