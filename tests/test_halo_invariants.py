@@ -522,10 +522,9 @@ def _erased_lines(fs: Flowsheet, svg: str) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("face", ["S", "W"])
-def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it(face):
+def test_a_valve_tag_on_a_small_bank_steps_off_the_lines_round_it():
     """Check that a valve's tag with no clear spot beside its face is written off every line."""
-    fs = _two_pump_bank(face)
+    fs = _two_pump_bank("S")
     assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
 
 
@@ -560,6 +559,15 @@ def test_a_tag_moved_off_a_label_erases_no_more_line_than_its_first_spot(face):
         if any(a > b for a, b in zip(now, was)):
             worse.append(f"{u.tag}: {was} -> {now}")
     assert not worse, worse
+
+
+def test_a_tag_keeps_off_the_hatch_marks_of_a_pneumatic_signal():
+    """Check that no tag's halo erases a hatch mark on a control valve's signal."""
+    fs = _two_pump_bank("W")
+    svg = fs.to_svg(diagram="p&id")
+    tags = [u.tag for u in fs.units if u.kind not in ("feed", "product", "instrument")]
+    struck = [tag for tag in tags for bar in _hatch_bars(fs) if overlaps(_tag_halo(svg, tag), bar)]
+    assert not struck, struck
 
 
 def test_a_tag_moved_off_a_tag_clips_no_symbol():

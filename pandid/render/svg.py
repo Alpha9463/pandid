@@ -423,10 +423,7 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
         held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         held += flanges + [_obstacle(b) for b in labels]
         # The hatch strokes stand off a pneumatic line, outside its ink.
-        pad = _ink_pad(LineWeight.DETAIL)
-        held += [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
-                 for s in fs.streams if s.kind == "pneumatic"
-                 for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+        held += hatch_boxes(fs)
         for pair in pairs:
             box, codes, prefers, placed = pair
             if not any(boxes_overlap(b, f) for b in map(_unit_label_box, placed)
@@ -1841,6 +1838,25 @@ def _hatch_strokes(points) -> list:
     return out
 
 
+def hatch_boxes(fs) -> "list[tuple[float, float, float, float]]":
+    """Return the box each pneumatic hatch stroke inks.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed flowsheet.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        ``(x0, y0, x1, y1)`` of each stroke, grown by its half pen.
+    """
+    pad = _ink_pad(LineWeight.DETAIL)
+    return [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
+            for s in fs.streams if s.kind == "pneumatic"
+            for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+
+
 #: Joint markings where lines meet what they serve.
 #:
 #: * ``"none"`` -- no marks.
@@ -2911,7 +2927,8 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     """Place each unit's tag and its ``NC`` and fail-position letters.
 
     The labels keep clear of the drawn lines, the symbols, the flange
-    marks, the quadrant codes, the package frames and each other.
+    marks, the pneumatic hatches, the quadrant codes, the package frames
+    and each other.
 
     Parameters
     ----------
@@ -2935,6 +2952,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
+    symbols += [(None, b) for b in hatch_boxes(fs)]
 
     from pandid.render.drawio import label_box
 
