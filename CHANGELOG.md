@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
+  balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
+  sheet read back draws as it was drawn, a line frozen with `via()` included,
+  and an edit made on it draws as on the sheet that wrote it. A spec edited
+  since it was written is laid out afresh.
 - `fs.package("PK-301", [p301a, p301b, f301], description="Dosing Package",
   reference="VENDOR DWG 4711")` draws a package unit as a dash-dot boundary
   frame round its units, tagged outside its upper-left corner, and lists it in
@@ -108,6 +113,12 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A valve station pinned by `add_valve_station(x=..., y=...)` and read back from
+  a spec keeps the turns and mirrors the author stated on its members, and no
+  longer counts the ones the station gave them as stated.
+- A balloon's face set by assignment, as in `tic.face = "N"`, counts as stated:
+  the spec writes it, and `route()` no longer turns the balloon to another face
+  or hangs it beside the valve it drives.
 - `layout()` on a routed sheet also lays it out from what the author has
   stated, as a fresh build is, and keeps that layout where the `route()` after
   it draws no worse than from the drawing's own routes, so a routed sheet laid

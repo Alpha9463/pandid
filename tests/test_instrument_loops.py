@@ -82,11 +82,16 @@ def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
     first = _centre(lic)
     assert math.dist(first, (ax, ay)) == pytest.approx(100.0, abs=1.0)
     assert lic.host is None
-    assert fs.to_dict() == spec
+    assert _model(fs) == spec
     fs.layout()
     fs.route()
     assert _centre(lic) == pytest.approx(first)
-    assert fs.to_dict() == spec
+    assert _model(fs) == spec
+
+
+def _model(fs: Flowsheet) -> dict:
+    """Return the sheet's spec without the layout it is drawn with."""
+    return {key: value for key, value in fs.to_dict().items() if key != "layout"}
 
 
 def test_a_controller_driving_no_actuator_is_not_hung():
