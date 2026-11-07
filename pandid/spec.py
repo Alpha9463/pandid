@@ -80,7 +80,8 @@ entry with the tag, addressed in list order as ``I-1``, ``I-1 (2)``.
 has its corner, grid cell, turn, mirror, label side and chosen faces;
 a balloon its tap point, ``beside_valve`` where it hangs off the valve
 it drives and ``held`` where a ``via()`` line was typed against it; a
-mixer or splitter ``stock_face`` where its face is not grown. Each
+mixer or splitter ``stock_face`` where its face is not grown and
+``nozzle_pitch`` where it is grown to fit the valves on its lines. Each
 line has its points, and ``fallback`` where no clean path was found.
 ``redraw`` marks a sheet edited since it was routed, ``valves_on_pipes``
 and ``angle_valves`` what its layout found, and ``settled: false`` a
@@ -2084,7 +2085,7 @@ _LAYOUT_KEYS = {
 }
 _DRAWN_UNIT_KEYS = {
     "x", "y", "col", "row", "orientation", "mirrored", "label_pos", "port_faces", "tap",
-    "stock_face", "beside_valve", "held",
+    "stock_face", "nozzle_pitch", "beside_valve", "held",
 }
 _DRAWN_LINE_KEYS = {"points", "fallback"}
 
@@ -2148,6 +2149,8 @@ def _read_layout(fs: Flowsheet, entry: Any, where: str) -> None:
                                 f"{unit.name!r} on a face 'N', 'S', 'E' or 'W'")
         if hasattr(unit, "_stock_face"):
             setattr(unit, "_stock_face", _flag(drawn.get("stock_face", False), f"{at}.stock_face"))
+            setattr(unit, "_fit_pitch", _number(drawn.get("nozzle_pitch", 0.0),
+                                                f"{at}.nozzle_pitch"))
         mirrored, mirror_y = flips.get(flip, (False, False))
         frame = Frame(x=_number(drawn["x"], f"{at}.x"), y=_number(drawn["y"], f"{at}.y"),
                       w=0.0, h=0.0,
@@ -2377,6 +2380,8 @@ def _write_layout(fs: Flowsheet, spec: dict) -> dict[str, Any] | None:
             entry["tap"] = list(tap)
         if getattr(unit, "_stock_face", False):
             entry["stock_face"] = True
+        if getattr(unit, "_fit_pitch", 0.0):
+            entry["nozzle_pitch"] = getattr(unit, "_fit_pitch")
         (offset, angle), attachment = fs._beside.get(id(unit), ((None, None), None))
         if attachment is not None and attachment == _attachment(unit):
             entry["beside_valve"] = {"offset": offset, "angle": angle}

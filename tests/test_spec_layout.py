@@ -103,7 +103,25 @@ def _turned() -> Flowsheet:
     return fs
 
 
-@pytest.mark.parametrize("make", [_turned, lambda: _bank(pumps=2)], ids=["turned", "two-pump bank"])
+def _spaced() -> Flowsheet:
+    """Return four pumps with a control valve on each discharge, which spaces the mixer."""
+    fs = Flowsheet("spaced header")
+    sp = fs.add(U.Splitter("SP", n_outlets=4))
+    mx = fs.add(U.Mixer("MX", n_inlets=4))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        fs.connect(outlet, pump.suction)
+        fs.add(ControlValve(f"HV-{i}"), on=fs.connect(pump.discharge, inlet), at=0.5)
+    return fs
+
+
+@pytest.mark.parametrize(
+    "make",
+    [_turned, lambda: _bank(pumps=2), _spaced],
+    ids=["turned", "two-pump bank", "spaced header"],
+)
 def test_a_sheet_read_back_has_the_frames_taps_and_lines_drawn(
     make: Callable[[], Flowsheet],
 ) -> None:
