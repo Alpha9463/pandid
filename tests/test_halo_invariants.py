@@ -493,22 +493,19 @@ def test_no_halo_lands_on_another_halo(drawn, name):
     assert not struck, f"{name}: halos overlap at " + "; ".join(struck)
 
 
+def test_a_tag_moved_off_a_label_erases_no_line():
+    """Check that tags kept off each other on a crowded bank erase no line."""
+    from test_instruments import _valved_bank
+
+    fs, _loops = _valved_bank(100, controller_face="E")
+    assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
+
+
 def _two_pump_bank(face: str, first: int = 100) -> Flowsheet:
     """Build two pumps in parallel, a flow loop on each one's valved suction."""
-    from pandid.devices import ControlValve
+    from test_instruments import _valved_bank
 
-    fs = Flowsheet("two valved pumps")
-    sp = fs.add(U.Splitter("SP", n_outlets=2))
-    mx = fs.add(U.Mixer("MX", n_inlets=2))
-    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
-    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
-    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
-        pump = fs.add(U.Pump(f"P-{i}"))
-        line = fs.connect(outlet, pump.suction)
-        fs.connect(pump.discharge, inlet)
-        valve = fs.add(ControlValve(f"FV-{first + i}"), on=line, at=0.5)
-        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve, controller_face=face)
-    return fs
+    return _valved_bank(first, controller_face=face, route=False, pumps=2)[0]
 
 
 def _erased_lines(fs: Flowsheet, svg: str) -> list[str]:

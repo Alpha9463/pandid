@@ -2718,6 +2718,43 @@ def test_a_second_route_starts_from_the_drawing_before_balloons_were_kept_furthe
     assert _taps_off(fs) == set()
 
 
+def test_routing_an_unchanged_sheet_again_keeps_a_drawing_it_would_make_worse() -> None:
+    """Route balloon chains by a vessel that do not settle twice more.
+
+    Routing again would draw a tap through a unit, so each route() keeps the first drawing.
+    """
+    chains: list[tuple[float, float, float, str, float, float]] = [
+        (0.5, 60, 180, "S", 50, 270),
+        (0.8, 50, 45, "W", 25, 90),
+    ]
+    fs = _chains_by_a_vessel((600, 200), chains, vessel=(220, 200))
+    assert not fs.route_converged
+    first = fs.to_svg(check=False)
+    for _ in range(2):
+        fs.route()
+
+        assert fs.to_svg(check=False) == first
+
+
+def test_a_third_route_of_an_unchanged_sheet_draws_as_the_second() -> None:
+    """Route balloon chains by a vessel that each route() would draw better, three times.
+
+    The second route() keeps its better drawing, and the third draws as the second.
+    """
+    chains: list[tuple[float, float, float, str, float, float]] = [
+        (0.7, 35, 270, "S", 100, 180),
+        (0.5, 50, 180, "N", 50, 90),
+    ]
+    fs = _chains_by_a_vessel((500, 200), chains, vessel=(220, 200))
+    first = fs.to_svg(check=False)
+    fs.route()
+    second = fs.to_svg(check=False)
+    fs.route()
+
+    assert second != first
+    assert fs.to_svg(check=False) == second
+
+
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
 
@@ -2980,16 +3017,17 @@ def _valved_bank(
     controller_face: str | None = None,
     controller_on_line: bool = False,
     route: bool = True,
+    pumps: int = 3,
 ) -> tuple[Flowsheet, list[ControlLoop]]:
-    """Build three pumps in parallel, each with a flow loop on its valved suction line.
+    """Build pumps in parallel, each with a flow loop on its valved suction line.
 
     Route the bank unless ``route`` is False.
     """
     from pandid.devices import ControlValve
 
     fs = Flowsheet("valved loops")
-    sp = fs.add(U.Splitter("SP", n_outlets=3))
-    mx = fs.add(U.Mixer("MX", n_inlets=3))
+    sp = fs.add(U.Splitter("SP", n_outlets=pumps))
+    mx = fs.add(U.Mixer("MX", n_inlets=pumps))
     fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
     fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
     pairs = []
@@ -3275,6 +3313,111 @@ def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
     assert fs._stated() == stated
 
 
+def _two_lines() -> tuple[Flowsheet, list[Stream], U.Instrument, U.Instrument]:
+    """Return line A above line B, FT-101 measuring A and TIC-101 on FT-101's S face."""
+    fs = Flowsheet("two lines")
+    lines = []
+    for tag, y in (("A", 200), ("B", 500)):
+        feed = fs.add(U.Feed("F" + tag)).pin(port="outlet", x=100, y=y)
+        product = fs.add(U.Product("P" + tag)).pin(port="inlet", x=600, y=y)
+        lines.append(fs.connect(feed.outlet, product.inlet, name=tag))
+    ft = fs.add_instrument("FT", 101, sensing=lines[0], at=0.5)
+    tic = fs.add_instrument("TIC", 101, near=ft, face="S")
+    return fs, lines, ft, tic
+
+
+def _attachment_set(field: str) -> tuple[Flowsheet, Callable[[], None]]:
+    """Return an unrouted sheet and the edit that sets one balloon's attachment field."""
+    if field == "relation":
+        fs, loops = _valved_bank(10, route=False, pumps=2)
+        controller = loops[0].controller
+        return fs, lambda: setattr(controller, "relation", "sensing")
+    fs, lines, ft, tic = _two_lines()
+    edits: dict[str, Callable[[], None]] = {
+        "host": lambda: setattr(ft, "host", lines[1]),
+        "at": lambda: setattr(ft, "at", 0.3),
+        "face": lambda: setattr(tic, "face", "E"),
+        "offset": lambda: setattr(ft, "offset", 90),
+        "angle": lambda: setattr(ft, "angle", 270),
+    }
+    return fs, edits[field]
+
+
+def test_a_transmitter_moved_to_another_line_after_routing_taps_it():
+    """Route FT-101 on line A, make line B its host, and route again.
+
+    FT-101 taps line B.
+    """
+    fs, lines, ft, _ = _two_lines()
+    fs.route()
+    ft.host = lines[1]
+    fs.route()
+
+    assert ft.tap is not None and ft.tap[1] == pytest.approx(500)
+
+
+def test_a_pin_where_drawn_after_another_edit_leaves_that_edit_drawn():
+    """Route, move FT-101 to line B, pin TIC-101 where it is drawn, and route again.
+
+    FT-101 taps line B.
+    """
+    fs, lines, ft, tic = _two_lines()
+    fs.route()
+    ft.host = lines[1]
+    tic.pin(x=frame_of(tic).x, y=frame_of(tic).y)
+    fs.route()
+
+    assert ft.tap is not None and ft.tap[1] == pytest.approx(500)
+
+
+@pytest.mark.parametrize("field", ["host", "at", "face", "offset", "angle", "relation"])
+def test_an_attachment_set_after_routing_is_drawn_as_set(field: str):
+    """Route a sheet, set one attachment field of a balloon, and route again.
+
+    The sheet draws as the same sheet does with the field set before its first route().
+    """
+    fs, edit = _attachment_set(field)
+    fs.route()
+    edit()
+    fs.route()
+    fresh, edit_fresh = _attachment_set(field)
+    edit_fresh()
+    fresh.route()
+
+    assert fs.to_svg(check=False) == fresh.to_svg(check=False)
+
+
+def test_a_face_set_without_attach_after_routing_is_drawn():
+    """Route a two-pump bank, set FIC-201's face to N directly, and route again.
+
+    FIC-201 is drawn above FT-201.
+    """
+    fs, loops = _valved_bank(10, pumps=2)
+    loops[1].controller.face = "N"
+    fs.route()
+
+    assert frame_of(loops[1].controller).cy < frame_of(loops[1].transmitter).cy
+
+
+def test_a_line_drawn_by_hand_after_routing_is_kept_clear_on_the_next_route():
+    """Route, type a signal line across the transmitter's spot, and route again.
+
+    The transmitter keeps off the line.
+    """
+    fs = Flowsheet("held line")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    product = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
+    fs.add_instrument("FT", 101).attach(fs.connect(feed.outlet, product.inlet), at=0.5)
+    first = fs.add_instrument("XI", 1).pin(x=100, y=213)
+    second = fs.add_instrument("XI", 2).pin(x=600, y=213)
+    signal = fs.connect(first.sig_out, second.sig_in, kind="electric")
+    fs.route()
+    signal.via([(200, 235), (500, 235)])
+    fs.route()
+
+    assert [i.message for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
 def test_a_line_drawn_by_hand_before_routing_is_kept_clear_on_every_route():
     """Type a signal line across a transmitter's spot, then route three times.
 
@@ -3320,8 +3463,8 @@ def test_a_balloon_keeps_off_a_balloon_pinned_later_on_both_axes():
     assert [i.message for i in fs.validate() if i.code == "unit-overlap"] == []
 
 
-def test_a_valve_pinned_where_drawn_after_a_hang_routes():
-    """Route a bank at k = 99, then pin FV-100 where it is drawn and route again.
+def test_a_valve_pinned_by_where_drawn_after_a_hang_routes():
+    """Route a bank at k = 99, then pin FV-100 1 px left of where it is drawn and route again.
 
     The first route() hangs a controller and draws FT-201's line to FIC-201 and
     FIC-202's output with no fallback path and through no unit. The second
@@ -3333,7 +3476,7 @@ def test_a_valve_pinned_where_drawn_after_a_hang_routes():
         assert line.route is not None and not line.route.used_fallback
         assert _drawn_wrong(fs, line) == []
     valve = next(u for u in fs.units if u.name == "FV-100")
-    valve.pin(x=frame_of(valve).x, y=frame_of(valve).y)
+    valve.pin(x=frame_of(valve).x - 1, y=frame_of(valve).y)
     fs.route()
     fs.to_svg(diagram="p&id")
     fs.to_drawio(diagram="p&id")

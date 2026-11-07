@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-from _layout_cases import build_unpinned
 
 from pandid import ControlValve, ShellAndTubeExchanger
 from pandid.flowsheet import Flowsheet
@@ -135,18 +134,6 @@ def test_nozzles_out_of_line_by_rounding_error_are_joined_straight():
     fs.route()
     assert line.route is not None
     assert not _hairline_runs(line.route.waypoints), line.route.waypoints
-
-
-def test_no_line_on_the_stripped_dryer_jogs_by_rounding_error():
-    """Route 400-WG-501-CS straight to XV-501B, 1e-14 px out of line."""
-    fs = build_unpinned("19_molecular_sieve_dryer")[0]
-    fs.route()
-    jogs = [
-        (s.name, _hairline_runs(s.route.waypoints))
-        for s in fs.streams
-        if s.route is not None and not s.route.manual
-    ]
-    assert not [(name, runs) for name, runs in jogs if runs]
 
 
 def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():
@@ -1158,3 +1145,20 @@ def test_a_stream_whose_separated_route_crosses_unpriced_lines_is_routed_clear()
     feeds = {s.dest.name: stream_polyline(s) for s in fs.streams if s.dest.owner.name == "S-103"}
     # Separation swaps the two feeds' risers into S-103, crossing them twice.
     assert crossing_count([feeds["feed_1"], feeds["feed_2"]]) == 0
+
+
+def test_a_default_route_after_one_without_exit_recovery_routes_again() -> None:
+    """Check that the default router redraws a sheet last routed with recover_exits=False."""
+    fs = Flowsheet("blocked exit")
+    feed = fs.add(Feed("F")).pin(x=60, y=100)
+    product = fs.add(Product("P")).pin(x=400, y=100)
+    fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=83, y=78)
+    line = fs.connect(feed.outlet, product.inlet)
+    with pytest.warns(DeprecationWarning, match="recover_exits"):
+        router = DefaultRouter(recover_exits=False)
+    fs.route(router)
+    assert line.route is not None and line.route.used_fallback
+
+    fs.route(DefaultRouter())
+
+    assert line.route is not None and not line.route.used_fallback

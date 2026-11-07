@@ -622,7 +622,8 @@ class Unit:
         Product they place the flag's port unless ``port=None``. On an
         attached Instrument, ``x`` and ``y`` are absolute on their axes,
         and a ``col`` or ``row`` pin is reported as ``pin-not-honored``.
-        A pin the unit is already drawn at leaves the drawing as it is.
+        A pin the unit is already drawn at leaves the layout as it is, and
+        route() takes it as no change to the sheet.
 
         Parameters
         ----------
@@ -717,14 +718,21 @@ class Unit:
 
             for port_name, face in self._port_faces.items():
                 self._check_face(port_name, face, port_faces(self, port_name, candidate))
-        if self._drawn_as(candidate, ports, {k: fields[k] for k in fields if k not in ("x", "y")}):
-            # The drawing already honours the pin, so its layout stands.
+        fs = self.flowsheet
+        # The drawing already honours the pin, so its layout stands, and
+        # route() takes the sheet as unchanged if it was.
+        drawn = self._drawn_as(candidate, ports, {k: fields[k] for k in fields if k not in ("x", "y")})
+        unchanged = (drawn and fs is not None and fs._given_then is not None
+                     and fs._given() == fs._given_then)
+        if drawn:
             self.__dict__.update(_pin_ports=ports, _pin=candidate)
         else:
             self._pin_ports = ports
             self._pin = candidate
         self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
         self._mirror_stated = self._mirror_stated or mirrored is not _UNCHANGED
+        if fs is not None and unchanged:
+            fs._given_then = fs._given()
         return self
 
     def _drawn_as(self, pin: Pin, ports: dict[str, str], stated: dict[str, Any]) -> bool:
