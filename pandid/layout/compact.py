@@ -11,6 +11,7 @@ hand and placed annotations stay where the author put them.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from pandid.layout.layered import COL_GAP, ROW_GAP
@@ -213,6 +214,37 @@ def _held(fs: Flowsheet, k: int) -> tuple[list[Span], list[Span]]:
         if tap is not None and u.frame is not None and is_attached(u):
             held.append(extent(tap_route(u, tap, (u.frame.cx, u.frame.cy))))
     return sorted(held), fixed
+
+
+def onto_sheet(fs: Flowsheet) -> tuple[list[Cut], list[Cut]]:
+    """Return the cuts that move a drawing past the sheet's top or left
+    edge onto the sheet, by whole pixels.
+
+    An axis with a unit pinned on it, any ``via()`` waypoint or any
+    annotation placed by ``position`` is left as drawn.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    tuple[list[Cut], list[Cut]]
+        A cut across x, then down y, that moves the whole drawing; each
+        list empty where the drawing is on the sheet on that axis.
+    """
+    stated = bool(placed(fs)) or any(s.route is not None and s.route.manual
+                                     for s in fs.streams)
+    out: list[list[Cut]] = []
+    for k in (0, 1):
+        held, fixed = _held(fs, k)
+        corners = [(u.frame.x, u.frame.y)[k] for u in fs.units if u.frame is not None]
+        low = min([a for a, _ in held] + corners, default=0.0)
+        # A cut of negative width ending at the drawing's edge moves all of it.
+        out.append([] if low >= 0.0 or fixed or stated
+                   else [(low - 1.0, low, -float(math.ceil(-low)), True)])
+    return out[0], out[1]
 
 
 def empty_bands(fs: Flowsheet, pinned: bool = False) -> tuple[list[Cut], list[Cut]]:
