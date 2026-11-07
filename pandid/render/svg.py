@@ -3024,8 +3024,8 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     placed: dict = {}
     shown: dict = {}
     # Place each unit's labels alone, then again off the others as they
-    # stand, keeping the first placement if the second is worse in either
-    # drawing.
+    # stand, taking the first spot no worse in either drawing than the
+    # first placement.
     for alone in (True, False):
         for u in fs.units:
             f = u.frame
@@ -3034,22 +3034,24 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
             x, y, w, h = f.x, f.y, f.w, f.h
             others = [o for k, o in shown.items() if k != id(u)]
             labels = None if alone else [b for o in others for b in o[0]]
-            tag = (sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols, labels, hatches)
-                   if u.tag else None)
-            tag_box = None if tag is None else _unit_label_box(tag)
-            items = [] if tag is None else [tag]
-            # NC marking (ISO 15519-1 11.4.5).
-            if closed_marking(u, default_registry) == "NC":
-                items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
-            # Fail position (ISA-5.1 Table 5.4.4).
-            letters = fail_marking(u)
-            if letters:
-                items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
-                                                    ink, symbols))
-            now = drawn(u, tag, items)
-            if alone or not worse(u, now, shown[id(u)], others):
-                placed[id(u)] = (u, tag, items)
-                shown[id(u)] = now
+            spots = (sheet._tag_spots(u, f, x, y, w, h, u.tag, ink, symbols, labels, hatches)
+                     if u.tag else [None])
+            for tag in spots:
+                tag_box = None if tag is None else _unit_label_box(tag)
+                items = [] if tag is None else [tag]
+                # NC marking (ISO 15519-1 11.4.5).
+                if closed_marking(u, default_registry) == "NC":
+                    items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
+                # Fail position (ISA-5.1 Table 5.4.4).
+                letters = fail_marking(u)
+                if letters:
+                    items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
+                                                        ink, symbols))
+                now = drawn(u, tag, items)
+                if alone or not worse(u, now, shown[id(u)], others):
+                    placed[id(u)] = (u, tag, items)
+                    shown[id(u)] = now
+                    break
     return list(placed.values())
 
 
@@ -4228,9 +4230,9 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None,
-                  hatches=()):
-        """Return the equipment tag item, moved clear of drawn ink.
+    def _tag_spots(self, u, f, x, y, u_width, u_height, tag, ink, symbols=(), labels=None,
+                   hatches=()):
+        """Return the spots to try for an equipment tag, best first.
 
         The tag slides up to half the face along its side, then along
         the other free sides. The first placement that erases nothing
@@ -4240,8 +4242,9 @@ class SvgRenderer:
         Given ``labels``, the tag then also tries every side, free sides
         first, sliding until its near end reaches the corner, then steps
         out from the face, staying nearer its own symbol than any other
-        tagged one and off every pneumatic hatch. It takes the spot that
-        erases least, then covers fewest labels.
+        tagged one and off every pneumatic hatch. It ranks the spots that
+        score better than the first placement, erasing least then
+        covering fewest labels, and the first placement last.
 
         Parameters
         ----------
@@ -4264,17 +4267,17 @@ class SvgRenderer:
 
         Returns
         -------
-        tuple
-            Label item.
+        list[tuple]
+            Label items, best first.
         """
         from pandid.layout.labels import LABEL_SIDES, free_label_sides
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)
         if box is None or not (ink or symbols):
-            return item
+            return [item]
         if getattr(u, "label_pos", None) or default_registry.for_unit(u).label_pos:
-            return item
+            return [item]
         # Test only ink near the unit.
         pad = max(u_width, u_height) + (box[2] - box[0]) + _TAG_STEP_OUT
         window = (x - pad, y - pad, x + u_width + pad, y + u_height + pad)
@@ -4300,7 +4303,7 @@ class SvgRenderer:
                     if damage == clear:
                         break
         if labels is None:
-            return best
+            return [best]
         covered = [b for b in labels if boxes_overlap(b, window)]
 
         def score(spot) -> "tuple[int, int, int, int]":
@@ -4326,11 +4329,12 @@ class SvgRenderer:
                   and v.kind not in ("feed", "product", "instrument")
                   and boxes_overlap(b, window)]
         least = score(best)
+        if least == (0, 0, 0, 0):
+            return [best]
+        better = []
         sides = free + [s for s in LABEL_SIDES if s not in free]
         for out in [k * _TAG_OUT_STEP for k in range(int(_TAG_STEP_OUT // _TAG_OUT_STEP) + 1)]:
             for side in sides:
-                if least == (0, 0, 0, 0):
-                    return best
                 lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
                 nx, ny = _OUTWARD[side]
                 edgewise = side in ("left", "right")
@@ -4345,10 +4349,8 @@ class SvgRenderer:
                         continue
                     cost = score(spot)
                     if cost < least:
-                        best, least = spot, cost
-                        if least == (0, 0, 0, 0):
-                            break
-        return best
+                        better.append((cost, len(better), spot))
+        return [spot for _cost, _n, spot in sorted(better)] + [best]
 
     def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):
         """Return the ``NC`` label above and right of the symbol.

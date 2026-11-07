@@ -537,15 +537,16 @@ def test_a_tag_is_not_moved_onto_more_line_than_it_erased(monkeypatch):
     fs.connect(feed.outlet, valve.inlet)
     fs.connect(valve.outlet, prod.inlet)
     fs.route()
-    place = SvgRenderer._tag_item
+    place = SvgRenderer._tag_spots
 
     def across_the_line(self, u, f, x, y, w, h, tag, ink, symbols=(), labels=None, hatches=()):
-        """Place the tag as usual alone, and across its outlet line after."""
+        """Rank a spot across the outlet line first once other labels are known."""
+        spots = place(self, u, f, x, y, w, h, tag, ink, symbols, labels, hatches)
         if labels is None:
-            return place(self, u, f, x, y, w, h, tag, ink, symbols)
-        return (x + w + 10, y + h / 2, "start", "middle", "right", tag)
+            return spots
+        return [(x + w + 10, y + h / 2, "start", "middle", "right", tag), *spots]
 
-    monkeypatch.setattr(SvgRenderer, "_tag_item", across_the_line)
+    monkeypatch.setattr(SvgRenderer, "_tag_spots", across_the_line)
     ((_unit, tag, _items),) = unit_tags(fs, None, "vertical")
     assert tag is not None and tag[4] != "right", tag
 
