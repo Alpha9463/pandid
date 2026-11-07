@@ -721,13 +721,12 @@ class Flowsheet:
         # Whether layout leaves two units unstacked where another unit in
         # their column is pinned to a row between theirs, whether the last
         # layout stacked any such pair, whether layout moves units pinned
-        # by row alone into row order, whether the last layout drew any out
-        # of it, and the drawing route() held where it kept either change.
+        # by row alone into row order, and whether the last layout drew any
+        # out of it.
         self._split_stacks = False
         self._stack_spans = False
         self._order_rows = False
         self._rows_out = False
-        self._stacked: tuple | None = None
         # Whether layout turns each free tee's branch toward the unit it
         # serves, and whether the last layout drew one facing away.
         self._face_tees = False
@@ -2495,7 +2494,6 @@ class Flowsheet:
         self._tees_away = False
         self._fannable = self._far_branches = self._flags_off = False
         self._crowded_station = self._angle_valves = False
-        self._stacked = None
         if engine is None:
             engine = default_layout_engine
         self._engine = engine
@@ -2589,8 +2587,6 @@ class Flowsheet:
         terms. Then, where a tee's branch leaves the run on the side away
         from the unit it serves, the sheet is laid out and routed again
         with each such branch turned toward it, kept on the same terms.
-        Where any of these is kept, the next route() starts from the
-        drawing before them.
 
         Last, with the default router, each balloon hung from a balloon is
         placed again an arrowhead clear of the line its chain taps, and,
@@ -2782,7 +2778,7 @@ class Flowsheet:
                 self._main = drawn
             # The states held for the next route() lie before the bands
             # closed; main's drawing holds them.
-            self._plain_state = self._stacked = self._unkept = self._unhung = None
+            self._plain_state = self._unkept = self._unhung = None
             self._plain_stale = False
 
     def _stated(self) -> tuple:
@@ -2846,11 +2842,6 @@ class Flowsheet:
         from pandid.routing import DefaultRouter
 
         self._put_unkept()
-        # Start a repeated call from the stacked drawing held last time.
-        held, self._stacked = self._stacked, None
-        if held is not None and not (self._layout_stale
-                                     or any(u.frame is None for u in self.units)):
-            self._put_state(held)
         # A controller an earlier route() hung beside its valve stays there
         # while a via() line meets it or its transmitter.
         units = {id(u): u for u in self.units}
@@ -2897,12 +2888,10 @@ class Flowsheet:
         self._route_faces(router)
         if ((self._stack_spans or self._rows_out or self._tees_away) and not self._laying_out
                 and (router is None or type(router) is DefaultRouter)):
-            first = self._state()
             split = self._stack_spans and self._relayout(router, True, False, False)
             order = self._rows_out and self._relayout(router, split, True, False)
-            tees = self._tees_away and self._relayout(router, split, order, True)
-            if split or order or tees:
-                self._stacked = first
+            if self._tees_away:
+                self._relayout(router, split, order, True)
             self._stack_spans = self._rows_out = self._tees_away = self._route_stale = False
         if not self._laying_out and (router is None or type(router) is DefaultRouter):
             unkept = self._state()
@@ -3340,8 +3329,8 @@ class Flowsheet:
         tuple
             State for :meth:`_put_drawing`.
         """
-        return (self._state(), self._plain_state, self._plain_stale, self._stacked,
-                self._unkept, self._layout_stale, self._route_stale, self._family_faces,
+        return (self._state(), self._plain_state, self._plain_stale, self._unkept,
+                self._layout_stale, self._route_stale, self._family_faces,
                 self._added_faces, list(self.unplaced_instruments))
 
     def _put_drawing(self, drawing: tuple) -> None:
@@ -3352,8 +3341,7 @@ class Flowsheet:
         drawing : tuple
             What :meth:`_drawing` returned.
         """
-        (state, self._plain_state, self._plain_stale, self._stacked, self._unkept,
-         layout_stale, route_stale, self._family_faces, self._added_faces,
+        (state, self._plain_state, self._plain_stale, self._unkept, layout_stale, route_stale, self._family_faces, self._added_faces,
          unplaced) = drawing
         self._put_state(state)
         self._layout_stale, self._route_stale = layout_stale, route_stale
