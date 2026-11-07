@@ -143,6 +143,17 @@ def test_a_controller_with_no_clear_side_hangs_beside_its_valve():
     assert _drawn_wrong(fs, line) == []
 
 
+def test_a_bank_with_a_controller_hung_beside_its_valve_laid_out_again_draws_as_a_fresh_build():
+    """Draw a routed bank laid out again as one route() of a fresh build."""
+    fresh, _ = _valved_bank(10, pumps=2)
+    fs, _ = _valved_bank(10, pumps=2)
+    assert fs._beside
+    fs.layout()
+    fs.route()
+    assert [(u.name, u.frame) for u in fs.units] == [(u.name, u.frame) for u in fresh.units]
+    assert [s.route for s in fs.streams] == [s.route for s in fresh.streams]
+
+
 @pytest.mark.parametrize("face", [None, "E"])
 def test_a_controller_on_a_stated_face_is_not_hung_beside_its_valve(face: str | None):
     """Offer spots beside its valve to a loop's controller only where no face is stated."""

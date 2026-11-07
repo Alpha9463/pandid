@@ -2473,9 +2473,10 @@ class Flowsheet:
     def layout(self, engine=None) -> None:
         """Lay out every unit, replacing any previous frames.
 
-        Outside route(), first drop every route not drawn with ``via()``,
-        so the sheet is laid out from what the author has stated, as a
-        fresh build is.
+        Outside route(), first drop every route not drawn with ``via()``
+        and let go of each controller route() hung beside its valve that
+        no ``via()`` line meets, so the sheet is laid out from what the
+        author has stated, as a fresh build is.
 
         Parameters
         ----------
@@ -2488,6 +2489,7 @@ class Flowsheet:
             self._put_main()
         self._unhang()
         if not self._in_route:
+            self._beside = self._beside_by_hand()
             for st in self.streams:
                 if st.route is not None and not st.route.manual:
                     st.route = None
@@ -2880,6 +2882,19 @@ class Flowsheet:
         """
         return self._stated_then is None or self._stated_then == self._stated()
 
+    def _beside_by_hand(self) -> dict[int, tuple[tuple[float, float], tuple]]:
+        """Return each controller route() hung beside its valve that a
+        ``via()`` line meets, at it or at its transmitter.
+
+        Returns
+        -------
+        dict[int, tuple]
+            Those entries of the controllers hung beside their valve.
+        """
+        units = {id(u): u for u in self.units}
+        return {k: v for k, v in self._beside.items() if k in units
+                and _by_hand([units[k], getattr(units[k], "host", None) or units[k]])}
+
     def _route_drawing(self, router=None) -> None:
         """Route the sheet as the face switches stand.
 
@@ -2900,9 +2915,7 @@ class Flowsheet:
 
         # A controller an earlier route() hung beside its valve stays there
         # while a via() line meets it or its transmitter.
-        units = {id(u): u for u in self.units}
-        drawn = {k: v for k, v in self._beside.items() if k in units
-                 and _by_hand([units[k], getattr(units[k], "host", None) or units[k]])}
+        drawn = self._beside_by_hand()
         if (drawn == self._beside or self._laying_out
                 or not (router is None or type(router) is DefaultRouter)):
             self._route_stepped(router)
