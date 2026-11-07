@@ -400,8 +400,9 @@ def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]
     not pinned on both axes, in x-then-y order, steps below a box it
     comes within ``LANE`` of, up to one step more than there are boxes.
     It steps right instead if its y is pinned, or if the box is in
-    ``fixed`` and its x is free. The boxes are ``fixed``, the fully
-    pinned units and the units before.
+    ``fixed`` and its x is free; off a box in ``fixed`` it steps left
+    instead where that is the shorter step and clear of every box. The
+    boxes are ``fixed``, the fully pinned units and the units before.
 
     Parameters
     ----------
@@ -458,8 +459,15 @@ def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]
             s = slot(u)
             if axis == "y" and not (hit in fixed and free(u, "x")):
                 s.y = (s.y or 0.0) + hit[3] + LANE - a[1]
-            else:
-                s.x = (s.x or 0.0) + hit[2] + LANE - a[0]
+                continue
+            right, left = hit[2] + LANE - a[0], hit[0] - LANE - a[2]
+            x = s.x or 0.0
+            if hit in fixed and -left < right:
+                # Off a fixed balloon, take the nearer side where it is clear.
+                s.x = x + left
+                if not any(boxes_overlap(box(u), b, LANE) for b in [*fixed, *map(box, placed)]):
+                    continue
+            s.x = x + right
         placed.append(u)
 
 
