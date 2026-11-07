@@ -112,6 +112,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A valve station pinned by `add_valve_station(x=..., y=...)` and read back from
+  a spec keeps the turns and mirrors the author stated on its members, and no
+  longer counts the ones the station gave them as stated.
 - A balloon's face set by assignment, as in `tic.face = "N"`, counts as stated:
   the spec writes it, and `route()` no longer turns the balloon to another face
   or hangs it beside the valve it drives.
