@@ -374,7 +374,8 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     Returns
     -------
     Counter[str]
-        Each validate() finding by code but ``unit-off-sheet``, plus
+        Each validate() finding by code but ``unit-off-sheet`` and
+        ``tap-crosses-unit``, which it counts itself, plus
         units on tag halos, lines through tag halos, line segments
         through units other than balloons on that line and the end of a
         line leaving its own nozzle straight out of the face, tap lines
@@ -426,7 +427,8 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         """
         return any(segment_crosses_box(a, b, box) for a, b in zip(points, points[1:]))
 
-    flaws = Counter(i.code for i in fs.validate() if i.code != "unit-off-sheet")
+    flaws = Counter(i.code for i in fs.validate()
+                    if i.code not in ("unit-off-sheet", "tap-crosses-unit"))
     halos = _halos(fs)
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     flaws["unit-on-tag"] = sum(boxes_overlap(box, h, -_BODY_TOL)

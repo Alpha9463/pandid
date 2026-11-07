@@ -369,7 +369,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
                     s.col = pin.col
                 if pin is not None and pin.row is not None:
                     s.row = pin.row
-    _clear_pins(units, fixed_balloons(fs, pads) if fs._pin_balloons else [])
+    _clear_pins(units, fixed_balloons(fs, pads) if fs._pin_balloons else [], fs._step_near)
     for unit in units:
         s = slot(unit)
         unit.frame = Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, col=s.col, row=s.row,
@@ -392,16 +392,18 @@ def _rank(layers: dict[int, list[_Node]]) -> None:
                 row += 1
 
 
-def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]]
-                ) -> None:
+def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]],
+                near: bool = False) -> None:
     """Step units off fixed boxes, fully pinned units and units before.
 
     If any unit has an x or y pin or ``fixed`` is not empty, each unit
     not pinned on both axes, in x-then-y order, steps below a box it
     comes within ``LANE`` of, up to one step more than there are boxes.
     It steps right instead if its y is pinned, or if the box is in
-    ``fixed`` and its x is free. The boxes are ``fixed``, the fully
-    pinned units and the units before.
+    ``fixed`` and its x is free; with ``near``, off a box in ``fixed``
+    it steps left instead where that is the shorter step and clear of
+    every box. The boxes are ``fixed``, the fully pinned units and the
+    units before.
 
     Parameters
     ----------
@@ -409,6 +411,8 @@ def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]
         Units with set slots.
     fixed : list[tuple[float, float, float, float]]
         Further boxes to keep off, as left, top, right, bottom.
+    near : bool, default=False
+        Step off a box in ``fixed`` to the nearer clear side.
     """
     def free(u: Unit, axis: str) -> bool:
         """Return whether a unit is unpinned on one axis.
@@ -458,8 +462,15 @@ def _clear_pins(units: list[Unit], fixed: list[tuple[float, float, float, float]
             s = slot(u)
             if axis == "y" and not (hit in fixed and free(u, "x")):
                 s.y = (s.y or 0.0) + hit[3] + LANE - a[1]
-            else:
-                s.x = (s.x or 0.0) + hit[2] + LANE - a[0]
+                continue
+            right, left = hit[2] + LANE - a[0], hit[0] - LANE - a[2]
+            x = s.x or 0.0
+            if near and hit in fixed and -left < right:
+                # Off a fixed balloon, take the nearer side where it is clear.
+                s.x = x + left
+                if not any(boxes_overlap(box(u), b, LANE) for b in [*fixed, *map(box, placed)]):
+                    continue
+            s.x = x + right
         placed.append(u)
 
 

@@ -183,6 +183,30 @@ def test_layout_after_a_line_is_frozen_draws_no_unit_over_a_balloon_it_held():
     ] == []
 
 
+def test_a_bank_drawn_with_a_transmitter_pinned_where_route_drew_it_lays_no_unit_over_it():
+    """Step SP to the nearer side of FT-201, pinned where route() drew it on a two-pump bank."""
+    fs, _ = _valved_bank(10, route=False, pumps=2)
+    next(u for u in fs.units if u.name == "FT-201").pin(x=351.62, y=127.62)
+    fs.route()
+    assert [i.message for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_units_laid_out_clear_of_a_pinned_balloon_keep_their_order():
+    """Step SP to the nearer side of FT-201, pinned where the closed sheet drew it, clear of all."""
+    fs, _ = _valved_bank(999, route=False)
+    ft = next(u for u in fs.units if u.name == "FT-201")
+    ft.pin(x=345.78, y=158.23)
+    fs._pin_balloons = fs._step_near = True
+    fs.layout()
+    boxes = [(u.name, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    assert [
+        (a, b)
+        for i, (a, p) in enumerate(boxes)
+        for b, q in boxes[i + 1 :]
+        if boxes_overlap(p, q, -1.0)
+    ] == []
+
+
 @pytest.mark.parametrize("face", [None, "E"])
 def test_a_controller_on_a_stated_face_is_not_hung_beside_its_valve(face: str | None):
     """Offer spots beside its valve to a loop's controller only where no face is stated."""
