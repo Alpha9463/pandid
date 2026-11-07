@@ -503,7 +503,7 @@ def test_a_tag_moved_off_a_label_erases_no_line():
 
 def _two_pump_bank(face: str) -> Flowsheet:
     """Build two pumps in parallel, a flow loop on each one's valved suction."""
-    from test_instruments import _valved_bank
+    from test_instrument_banks import _valved_bank
 
     return _valved_bank(100, controller_face=face, route=False, pumps=2)[0]
 
