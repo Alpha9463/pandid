@@ -224,6 +224,7 @@ GRAVITY_FIXED = {
     ("flotation_cell", "default"),
     ("mixer_settler", "default"),
     ("deaerator", "default"),
+    ("pump", "vertical_turbine"),
 }
 
 
