@@ -101,6 +101,11 @@ The names depend on the class and variant. Common patterns are:
 - `Feed.outlet` connects to a unit's inlet; `Product.inlet` receives its output.
 - Pumps, compressors and fans use `suction` and `discharge`; valves use
   `inlet`, `outlet` and a signal `actuator`.
+- A machine that takes a driver has a `drive`: pumps, compressors, fans,
+  conveyors, crushers, mills and feeders. A `Motor` (`variant="ac"` or `"dc"`
+  for ISO items 20.7 and 20.8) turns it through its `shaft`:
+  `fs.connect(motor.shaft, pump.drive)`. The motor is drawn beside the
+  machine, on the side its `drive` faces, joined by a short straight shaft.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`
@@ -248,10 +253,11 @@ Validation reports `gravity-turned` when one is rotated away from it.
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
-`software` or `capillary`. When omitted, a signal line to a valve with a
-diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
-electric; two energy/utility ports make an energy stream; other process ports
-make a material stream. `add_control_loop()` infers its output line the same way
+`software`, `capillary` or `mechanical`. When omitted, a signal line to a valve
+with a diaphragm actuator, or with none drawn, is pneumatic and any other signal
+line is electric; two energy/utility ports make an energy stream; a driver's
+`shaft` to a machine's `drive` makes a mechanical one, drawn without a number;
+other process ports make a material stream. `add_control_loop()` infers its output line the same way
 unless `output_kind=` is given. On a PFD, `validate()` reports
 `energy-carrier-missing` until the label drawn on an energy line names its
 carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
@@ -485,7 +491,8 @@ variants. Exit codes: `0` success, `1` rejected sheet, `2` invalid command,
 
 Subclass `Unit` with a unique `kind` and a `PORTS` list. Each port is
 `(name, direction, role)`; directions are `inlet` or `outlet`. Roles include
-`process`, `feed`, `product`, `energy`, `utility`, `vapor`, `liquid` and `signal`.
+`process`, `feed`, `product`, `energy`, `utility`, `vapor`, `liquid`, `signal`,
+and `shaft` and `drive` for the two ends of a shaft.
 
 ```python
 from pandid import Unit

@@ -4,6 +4,8 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterable, List, Set, Tuple
 
+from pandid.streams import SHAFT_ROLES
+
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
@@ -316,8 +318,10 @@ class VisibilityGraph:
         self.port_projs: Dict[Tuple[str, str], Tuple[float, float]] = {}
 
         # Put nozzles that differ by rounding error on one track.
+        # A shaft is drawn straight, so its ends take no tracks.
         anchors = {(u.name, name): port_anchor(u, u.frame, name)
-                   for u in fs.units if u.frame is not None for name in u.ports}
+                   for u in fs.units if u.frame is not None
+                   for name, port in u.ports.items() if port.role not in SHAFT_ROLES}
         on_x = _snap_tracks((a[0] for a in anchors.values()), SNAP)
         on_y = _snap_tracks((a[1] for a in anchors.values()), SNAP)
 
@@ -364,6 +368,8 @@ class VisibilityGraph:
             y_set.add(f.y + u_height + margin)
 
             for name in u.ports:
+                if (u.name, name) not in anchors:
+                    continue
                 ax, ay, o_dir = anchors[(u.name, name)]
                 ax, ay = on_x[ax], on_y[ay]
                 self.port_anchors[(u.name, name)] = (ax, ay)

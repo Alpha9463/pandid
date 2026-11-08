@@ -276,7 +276,8 @@ def _flag(port: Port | None) -> bool:
     return port is not None and port.owner.kind in ("feed", "product")
 
 
-def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None:
+def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link],
+                    drivers: dict[Unit, Pad] | None = None) -> None:
     """Give every unit a frame by layered drawing, keeping pins.
 
     With ``fs._pin_balloons`` set, units step off each fixed balloon
@@ -296,6 +297,8 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
         Units to place, each with its slot seeded from its pin.
     links : list[Link]
         Pipes between the units.
+    drivers : dict[Unit, Pad] or None, optional
+        Room each machine keeps for the drivers hung on it.
     """
     if not units:
         return
@@ -321,6 +324,8 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
         if inside is not None and group.get(seg.link.dest.owner) == inside:
             pkg.update((n, inside) for n in (seg.left, seg.right) if not n.members)
     pads = balloon_pads(fs)
+    for host, room in (drivers or {}).items():
+        pads[host] = Pad(*map(max, pads.get(host, Pad()), room))
     for node in nodes:
         _shape(node, stacked, pads)
     _order(layers, segs, pkg)
