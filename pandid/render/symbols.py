@@ -3462,8 +3462,9 @@ TUMBLING_MILLS = {
 #: from the shell's ends.
 _BALL_R, _BALL_PITCH, _ROD_GAP, _MEDIA_INSET = M / 2, 1.5 * M, 0.75 * M, M
 
-#: Least shell length and diameter a tumbling mill is drawn with.
-_MILL_LEAST = (2 * M, 3 * M)
+#: Least shell length and diameter a tumbling mill is drawn with: the
+#: media's inset at each end and a module of media between.
+_MILL_LEAST = (2 * _MEDIA_INSET + M, 3 * M)
 
 
 def tumbling_mill_too_small(variant: str, width: float, height: float) -> ValueError:
@@ -4756,9 +4757,13 @@ _OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
 STOCKPILE_W, STOCKPILE_H = 10 * M, 4 * M
 _PILE_OVER, _PILE_GAP, _PILE_DOTS = M, 1.5 * M, 0.25 * M
 
+#: Least height of a pile: slopes long enough for the break and a module
+#: of solid slope either side of it.
+_PILE_LEAST_H = (_PILE_GAP + 2 * M) * math.sqrt(0.5)
 
-def stockpile_too_narrow(width: float, height: float) -> ValueError:
-    """Return the refusal of a box too narrow for its pile.
+
+def stockpile_too_small(width: float, height: float) -> ValueError:
+    """Return the refusal of a box too small for its pile.
 
     Parameters
     ----------
@@ -4768,13 +4773,15 @@ def stockpile_too_narrow(width: float, height: float) -> ValueError:
     Returns
     -------
     ValueError
-        The refusal, naming the least width.
+        The refusal, naming the least height and the least width.
     """
-    least = 2 * (_PILE_OVER + height)
+    tall = max(height, _PILE_LEAST_H)
+    least = 2 * (_PILE_OVER + tall)
     return ValueError(
-        f"a box {width:g} wide is too small to draw a stockpile {height:g} high on its "
-        f"slopes of one in one, which needs a width of at least {least:g}; give "
-        f"width={least:g} or more, or a smaller height"
+        f"a box {width:g} x {height:g} is too small to draw a stockpile on slopes of "
+        f"one in one, which needs a height of at least {_PILE_LEAST_H:.4g} for each "
+        f"slope's dotted break and a width of at least {least:g} for a height of "
+        f"{tall:.4g}; give height= and width= at least that, or leave them unset"
     )
 
 
@@ -4796,12 +4803,13 @@ def stockpile_symbol(width: float | None = None, height: float | None = None) ->
     Raises
     ------
     ValueError
-        If the box is too narrow for the pile's slopes.
+        If the box is too low for the slopes' breaks, or too narrow for
+        the slopes.
     """
     w = float(STOCKPILE_W if width is None else width)
     h = float(STOCKPILE_H if height is None else height)
-    if h <= 0 or w < 2 * (_PILE_OVER + h):
-        raise stockpile_too_narrow(w, h)
+    if h < _PILE_LEAST_H or w < 2 * (_PILE_OVER + h):
+        raise stockpile_too_small(w, h)
     unit = math.sqrt(0.5)
     strokes, dots = [f"M 0 {_n(h)} L {_n(w)} {_n(h)}"], []
     for toe, way in ((_PILE_OVER, 1.0), (w - _PILE_OVER, -1.0)):
