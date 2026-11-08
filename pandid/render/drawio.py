@@ -476,6 +476,9 @@ OWN_OUTLINE = frozenset({
     ("motor", "general"), ("motor", "ac"), ("motor", "dc"),
     ("gearbox", "default"), ("generator", "general"), ("generator", "ac"),
     ("generator", "dc"), ("diesel_engine", "default"),
+    ("membrane", "default"), ("membrane", "ro"), ("membrane", "nf"), ("membrane", "uf"),
+    ("membrane", "mf"), ("pig_trap", "launcher"), ("pig_trap", "receiver"),
+    ("separator", "boot"), ("separator", "three_phase"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what

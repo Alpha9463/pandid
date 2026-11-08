@@ -46,6 +46,8 @@ __all__ = [
     "Deaerator",
     "Silo",
     "Stockpile",
+    "MembraneModule",
+    "PigTrap",
     "MixerSettler",
     "Crystallizer",
     "Absorber",
@@ -5251,6 +5253,65 @@ class Stockpile(Unit):
     PORTS = [("feed", "inlet", "feed"), ("reclaim", "outlet", "process")]
 
 
+class MembraneModule(Unit):
+    """Membrane module: a housing split by its membrane.
+
+    ``feed`` enters the west end of the feed channel and the
+    ``concentrate`` leaves its east end; the ``permeate`` leaves the
+    channel beyond the membrane, from the top at the east end. Variants
+    ``"ro"``, ``"nf"``, ``"uf"`` and ``"mf"`` letter the grade in the
+    feed channel; ``"default"`` letters none. The module is built to
+    the box it is given. Parameters are those of :class:`Unit`.
+    """
+
+    feed: Port
+    concentrate: Port
+    permeate: Port
+
+    kind = "membrane"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("concentrate", "outlet", "process"),
+        ("permeate", "outlet", "process"),
+    ]
+
+
+class PigTrap(_VariantPorted):
+    """Pig launcher or receiver: a barrel behind a closure.
+
+    ``"launcher"`` (the default) has its closure at the west end and
+    sends the pig out of ``main`` at the east end, driven by the line
+    into ``kicker``. ``"receiver"`` is drawn the other way round: the
+    pig arrives at ``main`` and the line leaves at ``kicker``. Each has
+    ``closure`` on the closure, ``vent`` and ``relief`` on top of the
+    barrel and ``drain`` under it, and is built to the box it is given.
+    ``validate`` reports a turned trap as ``gravity-turned``.
+    Parameters are those of :class:`Unit`.
+    """
+
+    main: Port
+    kicker: Port
+    closure: Port
+    vent: Port
+    relief: Port
+    drain: Port
+
+    kind = "pig_trap"
+    VARIANT_ALIASES = {"default": "launcher"}
+    PORTS: list[tuple[str, str, str]] = []
+    # The barrel's other nozzles, the same on either end.
+    _BARREL = [
+        ("closure", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
+    _DEFAULT_PORTS = [("kicker", "inlet", "process"), ("main", "outlet", "process"), *_BARREL]
+    _VARIANT_PORTS = {
+        "receiver": [("main", "inlet", "process"), ("kicker", "outlet", "process"), *_BARREL],
+    }
+
+
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
     """Return the feed port names ``feed_1`` to ``feed_n``.
 
@@ -5755,8 +5816,11 @@ class Separator(_SeriesFamilies):
 
     The phase separators (``"default"``, ``"horizontal"``,
     ``"knockout"``, ``"scrubber"``, ``"venturi_scrubber"``) have
-    ``vapor`` and ``liquid`` draws. The mechanical separators and dust
-    collectors have ``overflow`` (high) and ``underflow`` (apex).
+    ``vapor`` and ``liquid`` draws. The horizontal drums ``"boot"``,
+    with a water boot, and ``"three_phase"``, with a weir, add a
+    ``water`` draw: under the boot, or ahead of the weir. The
+    mechanical separators and dust collectors have ``overflow`` (high)
+    and ``underflow`` (apex).
     ``validate`` reports a turned separator as ``gravity-turned``.
 
     Parameters
@@ -5765,8 +5829,8 @@ class Separator(_SeriesFamilies):
         Tag.
     n_feeds : int, default=1
         Number of feeds, ``feed_1`` to ``feed_n`` down the wall; with
-        one, ``feed`` is an alias for ``feed_1``. ``"horizontal"``
-        takes one.
+        one, ``feed`` is an alias for ``feed_1``. ``"horizontal"``,
+        ``"boot"`` and ``"three_phase"`` take one.
     variant : str, default="default"
         Body.
     characteristic : str, optional
@@ -5821,7 +5885,15 @@ class Separator(_SeriesFamilies):
         ("overflow", "outlet", "process"),
         ("underflow", "outlet", "process"),
     ]
+    # The two liquid phases and the vapour of a three-phase drum.
+    _THREE_PHASE = [
+        ("vapor", "outlet", "vapor"),
+        ("liquid", "outlet", "liquid"),
+        ("water", "outlet", "liquid"),
+    ]
     _VARIANT_PORTS = {
+        "boot": _THREE_PHASE,
+        "three_phase": _THREE_PHASE,
         "cyclone": _OVER_AND_UNDER,
         "gravity": _OVER_AND_UNDER,
         "electrostatic": _OVER_AND_UNDER,
@@ -5839,6 +5911,8 @@ class Separator(_SeriesFamilies):
         "electromagnetic": {"overflow": "vapor", "underflow": "liquid"},
         # The artwork names its single feed "feed".
         "horizontal": {"feed_1": "feed"},
+        "boot": {"feed_1": "feed"},
+        "three_phase": {"feed_1": "feed"},
     }
 
     _CHARACTERISTICS = ("gravity", "electrostatic", "electromagnetic")
@@ -5848,6 +5922,10 @@ class Separator(_SeriesFamilies):
         "horizontal": "Separator(variant='default'), the upright drum, takes as many as "
                       "you like, and a Mixer ahead of the drum draws the junction where "
                       "two feeds really do combine before they enter",
+        "boot": "A Mixer ahead of the drum draws the junction where two feeds combine "
+                "before they enter",
+        "three_phase": "A Mixer ahead of the drum draws the junction where two feeds "
+                       "combine before they enter",
     }
 
     COMPOSITION = {"characteristic": None}
