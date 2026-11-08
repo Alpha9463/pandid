@@ -141,7 +141,7 @@ def test_the_device_classes_draw_their_actuator_on_any_body():
 
 
 def test_a_device_class_draws_no_other_actuator():
-    with pytest.raises(ValueError, match=r"build Valve\('XV-1', actuator='motor'\)"):
+    with pytest.raises(ValueError, match=r"build MotorOperatedValve\('XV-1'\)"):
         devices.SolenoidValve("XV-1", actuator="motor")
 
 
@@ -215,7 +215,7 @@ def test_a_closed_pneumatic_butterfly_main_drew_still_draws_with_a_warning(build
     """Draw it lettered NC, as main did, and warn that fail='closed' replaces it."""
     with pytest.warns(DeprecationWarning) as caught:
         valve = build()
-    assert any("so use fail='closed'" in str(w.message) for w in caught)
+    assert any("so use fail= alone" in str(w.message) for w in caught)
     assert valve.normal_position == "closed"
     fs = Flowsheet("nc")
     fs.add(valve).pin(x=100, y=100)
@@ -225,7 +225,7 @@ def test_a_closed_pneumatic_butterfly_main_drew_still_draws_with_a_warning(build
 
 def test_closing_a_pneumatic_butterfly_later_warns_too():
     valve = U.Valve("XV-1", variant="butterfly", actuator="diaphragm")
-    with pytest.warns(DeprecationWarning, match="use fail='closed'"):
+    with pytest.warns(DeprecationWarning, match="use fail= alone"):
         valve.normal_position = "closed"
     assert valve.normal_position == "closed"
 
@@ -327,3 +327,60 @@ def test_draw_io_draws_each_actuator_s_own_mark(actuator):
     assert _DRAWIO_MARKS[actuator] in outline
     letters = re.findall(r'<text str="(\w)"', outline)
     assert letters == [_DRAWIO_LETTERS[actuator]] if actuator in _DRAWIO_LETTERS else not letters
+
+
+# --- advice that keeps what the author typed ---------------------------------
+
+
+def test_a_class_refusal_names_the_class_with_every_other_argument():
+    """Name the class that draws the actuator, keeping the body and the fail position."""
+    with pytest.raises(ValueError) as caught:
+        devices.SolenoidValve("XV-1", variant="ball", actuator="motor", fail="closed")
+    assert "MotorOperatedValve('XV-1', variant='ball', fail='closed')" in str(caught.value)
+    with pytest.raises(ValueError) as caught:
+        devices.ControlValve("XV-2", variant="globe", actuator="piston", description="Vent")
+    assert "Valve('XV-2', variant='globe', actuator='piston', description='Vent')" in str(
+        caught.value
+    )
+
+
+def test_two_actuators_name_both_choices():
+    with pytest.raises(ValueError, match="actuator='motor', or variant='control' alone"):
+        U.Valve("V-1", variant="control", actuator="motor")
+
+
+def test_the_knife_refusal_keeps_the_rest_of_the_call():
+    with pytest.raises(ValueError, match="drop actuator='handwheel'"):
+        U.Valve("V-1", variant="knife", actuator="handwheel", normal_position="closed")
+
+
+def test_a_closed_pneumatic_butterfly_that_fails_open_keeps_both_letters():
+    """Draw NC and FO as main did, and advise keeping fail='open' rather than reversing it."""
+    with pytest.warns(DeprecationWarning) as caught:
+        valve = U.Valve(
+            "XV-1", variant="butterfly", actuator="diaphragm", normal_position="closed", fail="open"
+        )
+    advice = next(str(w.message) for w in caught if "normal_position='closed'" in str(w.message))
+    assert "keep a fail position already given" in advice
+    svg = _drawn_sheet(valve)
+    assert ">NC</text>" in svg and ">FO</text>" in svg
+
+
+def test_the_nc_refusal_keeps_a_fail_position_already_given():
+    with pytest.raises(ValueError, match="keep a fail position already given"):
+        U.Valve("CV-1", actuator="diaphragm", normal_position="closed", fail="open")
+
+
+def _drawn_sheet(valve: U.Valve) -> str:
+    fs = Flowsheet("one valve")
+    fs.add(valve).pin(x=100, y=100)
+    return fs.to_svg()
+
+
+def test_a_body_the_class_cannot_draw_names_the_call_with_its_actuator():
+    """Name a three-way body with the class's actuator, keeping the rest of the call."""
+    with pytest.raises(ValueError) as caught:
+        devices.ControlValve("FV-1", variant="three_way", fail="closed")
+    assert "Valve('FV-1', variant='three_way', actuator='diaphragm', fail='closed')" in str(
+        caught.value
+    )

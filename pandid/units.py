@@ -1370,7 +1370,8 @@ _MANUAL_VARIANT = Deprecation(
 #: Deprecation of showing NC the one diaphragm valve that took it.
 _CLOSED_PNEUMATIC_BUTTERFLY = Deprecation(
     what="normal_position='closed' on a butterfly valve with a diaphragm actuator",
-    instead="fail='closed'",
+    instead=("fail= alone: keep a fail position already given, or add fail='closed' if "
+             "the valve fails shut"),
     removed_in="0.4.0",
     note="PIP PIC001 4.2.2.10 bars a control valve from being shown NC",
 )
@@ -1409,8 +1410,8 @@ def _check_stem(name: str, variant: str, actuator: str) -> None:
 
     if (variant, actuator) == ("knife", "handwheel"):
         raise ValueError(
-            f"{name}: the knife body draws its own handwheel on its stem; build "
-            f"Valve({name!r}, variant='knife')."
+            f"{name}: the knife body draws its own handwheel on its stem, so drop "
+            f"actuator='handwheel' and keep the rest of the call."
         )
     if actuator and variant not in STEM_FOOT:
         # Raise the registry's own error for an unregistered variant.
@@ -1418,8 +1419,44 @@ def _check_stem(name: str, variant: str, actuator: str) -> None:
         raise ValueError(
             f"{name}: variant {variant!r} takes no actuator: a check, relief, psv or "
             f"regulator valve is worked by the process, and a bleed valve is drawn "
-            f"with no stem. Bodies that take one: {', '.join(STEM_FOOT)}."
+            f"with no stem. Drop actuator={actuator!r}, or name a body that takes "
+            f"one: {', '.join(STEM_FOOT)}."
         )
+
+
+def _actuated_call(name: str, variant: str, actuator: str, typed: "dict[str, Any]") -> str:
+    """Return the call that draws a valve with an actuator, as typed.
+
+    The device class that draws the actuator on the body is named, else
+    :class:`Valve` with ``actuator=``.
+
+    Parameters
+    ----------
+    name : str
+        Tag.
+    variant : str
+        Body.
+    actuator : str
+        Actuator, or ``""``.
+    typed : dict[str, Any]
+        The author's other keyword arguments.
+
+    Returns
+    -------
+    str
+        The call, such as ``"MotorOperatedValve('XV-1', variant='ball')"``.
+    """
+    from pandid import devices
+
+    owner = next((getattr(devices, c) for c in devices.__all__
+                  if getattr(getattr(devices, c), "ACTUATOR", "") == actuator != ""
+                  and variant in getattr(devices, c).VARIANTS), None)
+    args = {"variant": variant} if variant != "default" else {}
+    if owner is None:
+        args["actuator"] = actuator
+    args.update(typed)
+    shown = "".join(f", {key}={value!r}" for key, value in args.items())
+    return f"{'Valve' if owner is None else owner.__name__}({name!r}{shown})"
 
 
 class Valve(_NormallyPositioned):
@@ -1495,7 +1532,10 @@ class Valve(_NormallyPositioned):
         fail: str = "",
         **options: Unpack[_UnitOptions],
     ):
-        variant, self._actuator, retired = self._resolve(name, variant, actuator)
+        typed = {"normal_position": normal_position, "fail": fail, **options}
+        variant, self._actuator, retired = self._resolve(name, variant, actuator, {
+            key: value for key, value in typed.items()
+            if value not in (None, "") and (key, value) != ("normal_position", "open")})
         super().__init__(name, variant=variant, normal_position=normal_position, **options)
         # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
@@ -1507,8 +1547,8 @@ class Valve(_NormallyPositioned):
         if self._closed_pneumatic_butterfly():
             _CLOSED_PNEUMATIC_BUTTERFLY.warn(self, where=name)
 
-    def _resolve(self, name: str, variant: str,
-                 actuator: str | None) -> "tuple[str, str, Deprecation | None]":
+    def _resolve(self, name: str, variant: str, actuator: str | None,
+                 typed: "dict[str, Any]") -> "tuple[str, str, Deprecation | None]":
         """Return the body, the actuator and a retired spelling's deprecation.
 
         Parameters
@@ -1519,6 +1559,8 @@ class Valve(_NormallyPositioned):
             Body, or a retired body-and-actuator variant.
         actuator : str or None
             Actuator, ``""`` for none, or ``None`` for :attr:`ACTUATOR`.
+        typed : dict[str, Any]
+            The author's other keyword arguments, for messages.
 
         Returns
         -------
@@ -1540,8 +1582,9 @@ class Valve(_NormallyPositioned):
                 raise ValueError(
                     f"{name}: variant {variant!r} draws a {fitted!r} actuator, so it "
                     f"cannot also take actuator={actuator!r} -- one valve, two "
-                    f"actuators. Name the body and its actuator: variant={body!r}, "
-                    f"actuator={actuator!r}."
+                    f"actuators. Keep the rest of the call and choose one: "
+                    f"variant={body!r}, actuator={actuator!r}, or variant={variant!r} "
+                    f"alone."
                 )
             variant, actuator = body, fitted
         if actuator is None:
@@ -1557,7 +1600,15 @@ class Valve(_NormallyPositioned):
             wanted = f"a {actuator!r} actuator" if actuator else "no actuator"
             raise ValueError(
                 f"{name}: {type(self).__name__} draws a {self.ACTUATOR!r} actuator. "
-                f"For {wanted}, build Valve({name!r}, actuator={actuator!r})."
+                f"For {wanted}, build {_actuated_call(name, variant, actuator, typed)}."
+            )
+        if self.VARIANTS and variant not in self.VARIANTS and self.ACTUATOR:
+            raise ValueError(
+                f"{name}: {type(self).__name__} draws "
+                f"{', '.join(repr(v) for v in self.VARIANTS)}, not {variant!r}"
+                f"{suggest(variant, self.VARIANTS)}. A different device is a different "
+                f"class, so {variant!r} belongs to whichever class draws it: with its "
+                f"{actuator!r} actuator, {_actuated_call(name, variant, actuator, typed)}."
             )
         if self.VARIANTS and variant not in self.VARIANTS:
             raise self._unknown_variant(name, variant)
@@ -1683,9 +1734,10 @@ class Valve(_NormallyPositioned):
             f"{self.name}: PIP PIC001 clause 4.2.2.10 bars a control valve and "
             f"a relief valve from being shown NC, and {drawn} draws one. A "
             f"darkened control valve on an issued sheet reads as a block valve "
-            f"someone has closed. Say where the valve fails instead "
-            f"(fail='closed'), or put the normally closed mark on the hand valve "
-            f"that actually isolates the line."
+            f"someone has closed. Drop normal_position='closed' and say where the "
+            f"valve fails with fail= alone: keep a fail position already given, or "
+            f"add fail='closed' if it fails shut. Or put the normally closed mark "
+            f"on the hand valve that actually isolates the line."
         )
 
 
