@@ -2164,43 +2164,23 @@ def _sized(name="R-1", **kw) -> Flowsheet:
     return fs
 
 
-class _HandPlaced(U.Unit):
-    """A stirred body whose motor is placed by hand for the body's own box."""
-
-    kind = "reactor"
-
-
-def _hand_placed(name="M-301", **kw) -> Flowsheet:
-    """Return a sheet of one body carrying a motor placed for its own box."""
-    from pandid.render.iso_parts import agitator_overlays
-
-    fs = Flowsheet("aspect")
-    unit = fs.add(_HandPlaced(name, **kw))
-    setattr(unit, "overlays", agitator_overlays("agitator", "reactor", "default"))
-    return fs
-
-
-def test_a_stirred_reactor_in_the_box_that_shipped_a_stretch_draws_its_motor_round():
-    """Check that an 80x100 stirred reactor, once 70% out of aspect, is drawn round and quiet."""
-    assert _found(_sized("M-301", n_feeds=2, width=80, height=100), "symbol-out-of-aspect") == []
-
-
-def test_a_motor_not_placed_for_its_box_is_reported_with_a_cure():
-    """Check that a motor drawn for another box is reported out of aspect, naming the cure."""
-    found = _found(_hand_placed(width=80, height=100), "symbol-out-of-aspect")
+def test_the_box_that_shipped_a_seventy_percent_stretch_is_reported():
+    """Check that an 80x100 stirred reactor is reported 70% out of aspect with a cure."""
+    found = _found(_sized("M-301", n_feeds=2, width=80, height=100), "symbol-out-of-aspect")
     assert len(found) == 1
     assert found[0].severity == "warning"
-    assert "80x100" in found[0].message and "62x130" in found[0].message
-    assert "68% out of shape" in found[0].message
+    assert "M-301" in found[0].message
+    assert "80x100" in found[0].message and "62x131.778" in found[0].message
+    assert "70% out of shape" in found[0].message
     assert "ISO item 20.6 C0082" in found[0].message
-    assert "M-301.width = 47.69" in found[0].message
+    assert "M-301.width = 47.05" in found[0].message
 
 
 def test_the_width_the_message_offers_is_the_one_that_silences_it():
     """Check that the width the message suggests silences symbol-out-of-aspect."""
-    fs = _hand_placed(width=80, height=100)
+    fs = _sized("M-301", n_feeds=2, width=80, height=100)
     sym = default_registry.for_unit(fs.units[0])
-    fixed = _hand_placed(width=sym.width / sym.height * 100, height=100)
+    fixed = _sized("M-301", n_feeds=2, width=sym.width / sym.height * 100, height=100)
     assert _found(fixed, "symbol-out-of-aspect") == []
 
 
@@ -2212,9 +2192,9 @@ def test_a_box_of_the_symbols_own_shape_is_quiet(width, height):
 
 
 def test_a_quarter_turn_is_not_a_stretch():
-    """Check that a quarter-turned body with swapped size is not out of aspect."""
-    fs = _hand_placed("R-1")
-    rx = fs.units[0]
+    """Check that a quarter-turned reactor with swapped size is not out of aspect."""
+    fs = Flowsheet("turned")
+    rx = fs.add(U.Reactor("R-1", n_feeds=2))
     sym = default_registry.for_unit(rx)
     rx.pin(x=100, y=100, orientation=90)
     rx.width, rx.height = sym.height, sym.width
@@ -2265,7 +2245,7 @@ def test_it_answers_before_anything_is_laid_out():
     """Check that model_issues() reports symbol-out-of-aspect before layout."""
     from pandid.validate import model_issues
 
-    fs = _hand_placed(width=80, height=100)
+    fs = _sized("M-301", n_feeds=2, width=80, height=100)
     assert all(u.frame is None for u in fs.units)
     assert [i.code for i in model_issues(fs)].count("symbol-out-of-aspect") == 1
 

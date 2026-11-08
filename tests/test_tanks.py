@@ -205,19 +205,8 @@ def test_the_sheet_draws_the_open_top_tank_open():
         (Tank("TK-2", variant="flat_roof", agitator="turbine", width=70, height=200), True),
         (Tank("TK-3", variant="open_top", agitator="propeller", width=200, height=100), False),
         (Vessel("V-1", agitator="anchor", width=120, height=150), False),
-        (Reactor("R-1"), False),
-        (Reactor("R-2", width=150, height=120), False),
-        (Reactor("R-3", variant="jacketed", agitator="turbine", width=80, height=170), False),
     ],
-    ids=[
-        "flat-roof",
-        "tall-flat-roof",
-        "wide-open-top",
-        "wide-vessel",
-        "reactor",
-        "wide-reactor",
-        "tall-jacketed-reactor",
-    ],
+    ids=["flat-roof", "tall-flat-roof", "wide-open-top", "wide-vessel"],
 )
 def test_the_sheet_draws_a_round_motor_over_the_roof_on_a_shaft_into_the_body(unit, roof):
     """Check the item 1.27 marks: a 2 M motor 1 M above the body, its shaft running into it."""
@@ -314,26 +303,25 @@ def test_a_stirred_body_reassigned_to_a_variant_that_cannot_carry_it_is_refused(
 
 
 @pytest.mark.parametrize(
-    ("unit", "drawn"),
+    "unit",
     [
-        (Reactor("R-1", width=150, height=120), (150, 90)),
-        (Reactor("R-2", variant="jacketed", agitator="anchor", width=80, height=170), (80, 140)),
+        Reactor("R-1"),
+        Reactor("R-2", width=150, height=120),
+        Reactor("R-3", variant="jacketed", agitator="anchor", width=80, height=170),
     ],
-    ids=["wide-reactor", "tall-jacketed-reactor"],
+    ids=["reactor", "wide-reactor", "tall-jacketed-reactor"],
 )
-def test_draw_io_draws_a_stirred_reactor_under_a_round_motor_on_its_shaft(unit, drawn):
-    """Check that the export draws a reactor's body under its 2 M motor, not stretched over it."""
+def test_draw_io_draws_a_stirred_reactor_under_its_motor_inside_its_cell(unit):
+    """Check that the export draws a reactor's body under its motor, not stretched over it."""
     cells, cid = _exported(unit)
     stencil = _outline(cells, cid)
-    w, h = _geometry(cells[cid])[2:]
+    _, _, _, h = _geometry(cells[cid])
     scale = h / float(stencil.get("h", "nan"))
-    top = min(float(step.get("y", "nan")) for step in stencil.iter() if step.get("y") is not None)
-    bottom = max(
-        float(step.get("y", "nan")) for step in stencil.iter() if step.get("y") is not None
-    )
-    assert (top * scale, (bottom - top) * scale) == pytest.approx(
-        (MOTOR_D + MOTOR_GAP, drawn[1]), abs=0.05
-    )
+    ys = [float(step.get("y", "nan")) for step in stencil.iter() if step.get("y") is not None]
     motor = cells[f"{cid}-p{len(unit.__dict__['overlays']) - 1}"]
     assert "shape=ellipse" in (motor.get("style") or "")
-    assert _geometry(motor) == pytest.approx(((w - MOTOR_D) / 2, 0, MOTOR_D, MOTOR_D))
+    _, top, _, tall = _geometry(motor)
+    # The motor heads the cell, and the body hangs below it to the cell's foot.
+    assert top == pytest.approx(0, abs=0.01)
+    assert min(ys) * scale > top + tall
+    assert max(ys) * scale == pytest.approx(h, abs=0.05)

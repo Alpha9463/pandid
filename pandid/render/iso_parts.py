@@ -585,11 +585,15 @@ def _part(group: int, name: str, registry=None):
     return registry.part(group, name)
 
 
-#: Motor diameter, and its gap above the body (item 1.27 X8006).
+# Motor diameter as a fraction of shell width, and its gap above the
+# crown as a fraction of body height (item 1.27 X8006).
+_MOTOR_WIDTH, _MOTOR_GAP = 1 / 3, 1 / 9
+
+#: Motor diameter, and its gap above the body, on a body drawn to size
+#: (item 1.27 X8006).
 MOTOR_D, MOTOR_GAP = 2 * M, M
 
-# Stirrer x and width as fractions of the body, and its foot on a body
-# with no west wall band (item 1.27).
+# Stirrer x, width and foot as fractions of the body (item 1.27).
 _AGITATOR_X, _AGITATOR_W, _AGITATOR_FOOT = 0.26, 0.48, 0.76
 
 
@@ -598,9 +602,10 @@ def agitator_overlays(name: str, kind: str, variant: str,
                       foot: "float | None" = None) -> tuple:
     """Return an agitator and its motor placed on a vertical body.
 
-    The motor is :data:`MOTOR_D` across and :data:`MOTOR_GAP` above the
-    body at the size the body is drawn; the stirrer is drawn in
-    proportion to the body and reaches ``foot``.
+    The stirrer is drawn in proportion to the body. On a body drawn
+    at ``drawn``, the motor is :data:`MOTOR_D` across and
+    :data:`MOTOR_GAP` above it, and the stirrer reaches ``foot``;
+    otherwise the motor is a third of the body's width.
 
     Parameters
     ----------
@@ -611,11 +616,11 @@ def agitator_overlays(name: str, kind: str, variant: str,
     variant : str
         Body variant.
     drawn : tuple[float, float], optional
-        Width and height the body is drawn at; its own size if omitted.
+        Width and height the body is drawn at.
     foot : float, optional
-        Depth the stirrer reaches, as a fraction of the body's height;
-        the foot of the body's west wall band if omitted, or 0.76 of
-        the body on a body with no such band.
+        Depth the stirrer reaches on a body drawn at ``drawn``, as a
+        fraction of its height; the foot of the body's west wall band
+        if omitted.
 
     Returns
     -------
@@ -633,10 +638,14 @@ def agitator_overlays(name: str, kind: str, variant: str,
     _part(28, name)
     _part(20, "motor")
     body = default_registry.get(kind, variant)
-    w, h = (body.width, body.height) if drawn is None else drawn
-    if foot is None:
-        foot = body.bands.get("W", (0.0, _AGITATOR_FOOT * body.height))[1] / body.height
-    width, height, gap = MOTOR_D / w, MOTOR_D / h, MOTOR_GAP / h
+    if drawn is None:
+        # The height that keeps the motor round on this body.
+        width, height, gap = _MOTOR_WIDTH, _MOTOR_WIDTH * body.width / body.height, _MOTOR_GAP
+        foot = _AGITATOR_FOOT
+    else:
+        width, height, gap = MOTOR_D / drawn[0], MOTOR_D / drawn[1], MOTOR_GAP / drawn[1]
+        if foot is None:
+            foot = body.bands.get("W", (0.0, _AGITATOR_FOOT * body.height))[1] / body.height
     return (
         # The shaft reaches up to the motor.
         Overlay(28, name, _AGITATOR_X, -gap, _AGITATOR_W, foot + gap),

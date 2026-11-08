@@ -1828,54 +1828,6 @@ def _built_to_size(unit: "Unit") -> bool:
             and default_registry.get(unit.kind, unit.variant) is vessel_shell(unit.variant))
 
 
-def _stated_size(unit: "Unit") -> "tuple[float | None, float | None]":
-    """Return a unit's stated width and height on its drawing's axes.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit to read.
-
-    Returns
-    -------
-    tuple[float or None, float or None]
-        Width and height, swapped by a quarter turn.
-    """
-    turn = getattr(unit, "_pin", None)
-    if int(getattr(turn, "orientation", 0) or 0) in (90, 270):
-        return unit.height, unit.width
-    return unit.width, unit.height
-
-
-def drawn_overlays(unit: "Unit") -> tuple:
-    """Return a unit's parts, a motor and its agitator placed for its box.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit drawn at its symbol's size.
-
-    Returns
-    -------
-    tuple[Overlay, ...]
-        Its parts; a motor and its agitator are placed for the body
-        drawn under the motor in the box the unit is given.
-
-    Raises
-    ------
-    ValueError
-        If the stated height leaves no room for the body under the
-        motor.
-    """
-    from pandid.render.symbols import default_registry
-
-    overlays = tuple(getattr(unit, "overlays", ()) or ())
-    if not any(o.group == 20 for o in overlays):
-        return overlays
-    natural = default_registry.get(unit.kind, unit.variant)
-    return _stirred_at(unit, overlays, _body_drawn(unit, natural, _stated_size(unit)))
-
-
 def _body_drawn(unit: "Unit", natural: "Symbol",
                 size: "tuple[float | None, float | None]") -> "tuple[float, float]":
     """Return the size a unit's body is drawn at, under its motor.
@@ -1883,7 +1835,7 @@ def _body_drawn(unit: "Unit", natural: "Symbol",
     Parameters
     ----------
     unit : Unit
-        Unit drawn at its symbol's size.
+        Tank or evaporator drawn at its symbol's size.
     natural : Symbol
         Its body at its own size.
     size : tuple[float or None, float or None]
@@ -1922,7 +1874,7 @@ def _stirred_at(unit: "Unit", overlays: tuple, drawn: "tuple[float, float]",
     Parameters
     ----------
     unit : Unit
-        Unit whose parts are placed.
+        Tank, vessel or evaporator.
     overlays : tuple[Overlay, ...]
         Its parts.
     drawn : tuple[float, float]
@@ -1981,7 +1933,10 @@ def _drawn_parts(unit: "Unit", overlays: tuple, faces: "dict[str, str] | None" =
     from pandid.render.symbols import default_registry
 
     manholes, sockets = getattr(unit, "manholes", ()), getattr(unit, "sockets", ())
-    size = _stated_size(unit)
+    # A quarter turn swaps the stated sizes onto the drawing's axes.
+    turn = getattr(unit, "_pin", None)
+    quarter = int(getattr(turn, "orientation", 0) or 0) in (90, 270)
+    size = (unit.height, unit.width) if quarter else (unit.width, unit.height)
     natural = default_registry.get(unit.kind, unit.variant)
     if not _built_to_size(unit):
         overlays = _stirred_at(unit, overlays, _body_drawn(unit, natural, size))
@@ -2804,8 +2759,10 @@ def _stirrer(kind: str, name: str, variant: str) -> tuple:
         unregistered.
     """
     from pandid.render.iso_parts import agitator_overlays
+    from pandid.render.symbols import default_registry
 
-    return agitator_overlays(name, kind, variant)
+    body = default_registry.get(kind, variant)
+    return agitator_overlays(name, kind, variant, (body.width, body.height))
 
 
 class Vessel(_MultiPortVessel):
@@ -5296,7 +5253,7 @@ class _SeriesFamilies(_Families):
         from pandid.render.symbols import default_registry, series_symbol
 
         on = self._faces if faces is None else faces
-        overlays = drawn_overlays(self)
+        overlays = tuple(getattr(self, "overlays", ()) or ())
         sym = self._series_symbol()
         if sym is None or all(
                 (series := sym.series_for(name)) is not None and series.face == face
