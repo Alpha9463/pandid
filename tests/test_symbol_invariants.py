@@ -792,6 +792,8 @@ def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, varian
 
     unit = cls("X-1", variant=variant)
     for name, want in _ROLE_FACE.items():
+        if name not in unit.ports:
+            continue
         got = port_faces(unit, name)
         assert got == [want], (
             f"{kind}/{variant}.{name} is piped from {got} as drawn; the role puts it on {want}"
@@ -1577,8 +1579,10 @@ def test_variants_lists_a_kinds_catalogue_default_first():
         "conical_bottom",
         "conical_ends",
         "dished_roof_conical_bottom",
+        "flat_roof",
         "floating_roof",
         "gas_holder",
+        "open_top",
         "sphere",
     ]
 

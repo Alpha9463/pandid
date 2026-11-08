@@ -1051,6 +1051,8 @@ _NUMBERED_WHOLE_DRAWINGS = {
     # Group 1, VESSELS AND TANKS.
     "silo/bunker": "2064",
     "silo/default": "X2062",
+    "tank/flat_roof": "301",
+    "tank/open_top": "2061",
     "boiler/default": "2532",
     "furnace/general": "2533",
     "furnace/combustion_chamber": "X8106",

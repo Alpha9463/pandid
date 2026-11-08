@@ -1484,6 +1484,11 @@ class GasHolder(Tank):
 
     VARIANTS = ("default", "gas_holder")
     VARIANT_ALIASES = {"default": "gas_holder"}
+    PORTS = [
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
 
     vent: Port
     relief: Port

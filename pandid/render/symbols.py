@@ -4122,6 +4122,60 @@ _BUNKER = Symbol(
 )
 
 
+# ISO 10628-2 items 1.1 and 1.2: rectangular tanks 8 M wide, filled a
+# module above the floor on either wall and drawn off the middle of the
+# floor, with the drain 2 M in from the west wall. The walls and floor
+# are held a module off each end for families.
+_RECT_W = 8 * M
+_RECT_FILL = {"W": (0.0, -M), "E": (_RECT_W, -M)}
+
+
+def _rect_tank(name: str, height: float, closed: bool, iso_reg: str) -> Symbol:
+    """Return a rectangular tank, closed by a flat roof or open.
+
+    Parameters
+    ----------
+    name : str
+        Suffix of the group id.
+    height : float
+        Wall height.
+    closed : bool
+        Draw the roof, with the vent and relief a quarter in from each
+        wall and a fill in its middle.
+    iso_reg : str
+        Registration number of the row.
+
+    Returns
+    -------
+    Symbol
+        The tank.
+    """
+    fill = {face: (x, height + y) for face, (x, y) in _RECT_FILL.items()}
+    roof = {"vent": (2 * M, 0.0), "relief": (6 * M, 0.0)} if closed else {}
+    outline = (f'<rect x="0" y="0" width="{_RECT_W:g}" height="{height:g}" {_OUTLINE}/>'
+               if closed else
+               f'<path d="M 0 0 L 0 {height:g} L {_RECT_W:g} {height:g} L {_RECT_W:g} 0" {_INK}/>')
+    walls = (M, height - M)
+    return Symbol(
+        svg=f'<g id="sym_tank_{name}">{outline}</g>',
+        width=_RECT_W, height=height,
+        ports={"inlet": fill["W"], "outlet": (4 * M, height), **roof, "drain": (2 * M, height)},
+        port_faces={"inlet": {**fill, **({"N": (4 * M, 0.0)} if closed else {})}},
+        bands={"W": walls, "E": walls, "S": (M, _RECT_W - M),
+               **({"N": (M, _RECT_W - M)} if closed else {})},
+        family_faces={"outlet": dict(fill)},
+        gravity_fixed=True,
+        iso_reg=iso_reg,
+    )
+
+
+# Item 1.1, 301, tank, vessel: 12 M tall under a flat roof.
+_FLAT_ROOF_TANK = _rect_tank("flat_roof", 12 * M, True, "301")
+
+# Item 1.2, 2061, container, tank, cistern: 6 M tall, open at the top.
+_OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
+
+
 # Mixer-settler: a closed box whose west compartment is the mixer. The
 # dispersion overflows the partition into the settler, and the light
 # phase overflows the weir into the launder at the east end.
@@ -4860,6 +4914,8 @@ class SymbolRegistry:
         self._register_flotation_cell()
         self.register("silo", _SILO)
         self.register("silo", _BUNKER, "bunker")
+        self.register("tank", _FLAT_ROOF_TANK, "flat_roof")
+        self.register("tank", _OPEN_TOP_TANK, "open_top")
         self.register("mixer_settler", _MIXER_SETTLER)
         self.register("deaerator", _DEAERATOR)
         self._register_kilns()

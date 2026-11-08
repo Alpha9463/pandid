@@ -2733,10 +2733,13 @@ class Tank(_MultiPortVessel):
     """Storage tank.
 
     Variants are ``"default"`` (dished roof), ``"conical"``,
-    ``"floating_roof"``, ``"sphere"``, ``"conical_bottom"``,
-    ``"conical_ends"``, ``"dished_roof_conical_bottom"`` and
-    ``"gas_holder"``. A tank has :class:`Vessel`'s ports and
-    ``inputs``/``outputs`` families.
+    ``"flat_roof"``, ``"open_top"``, ``"floating_roof"``,
+    ``"sphere"``, ``"conical_bottom"``, ``"conical_ends"``,
+    ``"dished_roof_conical_bottom"`` and ``"gas_holder"``.
+    ``"flat_roof"`` and ``"open_top"`` are the closed and the open
+    rectangular tank of ISO 10628-2 items 1.1 and 1.2. A tank has
+    :class:`Vessel`'s ports and ``inputs``/``outputs`` families; an
+    open top has no ``vent`` or ``relief``.
 
     Flat-floored variants fill low on the west shell and
     hopper-bottomed ones at the crown; :meth:`nozzle` moves an inlet to
@@ -2775,16 +2778,20 @@ class Tank(_MultiPortVessel):
     outlets: tuple[Port, ...]
     inlet: Port
     outlet: Port
+    # Absent on "open_top".
     vent: Port
     relief: Port
     drain: Port
 
     kind = "tank"
-    PORTS = [
+    # __init__ adds the variant's ports.
+    PORTS: list[tuple[str, str, str]] = []
+    _DEFAULT_PORTS = [
         ("vent", "outlet", "vapor"),
         ("relief", "outlet", "process"),
         ("drain", "outlet", "liquid"),
     ]
+    _VARIANT_PORTS = {"open_top": [("drain", "outlet", "liquid")]}
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -2795,6 +2802,8 @@ class Tank(_MultiPortVessel):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
         self._init_connections(inputs, outputs)
 
 
