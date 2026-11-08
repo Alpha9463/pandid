@@ -3599,7 +3599,7 @@ _FAN_R = 3 * M
 
 
 def _fan_chord(sign: int) -> str:
-    """Return one chord of item 17.1, clipped to the circle.
+    """Return one chord of items 16.1 and 17.1, clipped to the circle.
 
     The chord runs through the grid points (-1.5 M, -2.5 M) and
     (2.5 M, -1.5 M) from the centre, mirrored below the axis.
@@ -3643,6 +3643,44 @@ _FAN_GENERAL = Symbol(
     width=2 * _FAN_R, height=2 * _FAN_R,
     ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
     iso_reg="X8164",
+)
+
+
+def _screw_flight(sign: int) -> str:
+    """Return one screw of item 16.8, a zigzag across the centre.
+
+    Its corners are 2/3 M apart along the axis and alternate between
+    the axis and 2/3 M off it, with a half step at each end.
+
+    Parameters
+    ----------
+    sign : int
+        ``-1`` for the screw above the axis, ``1`` for the one below.
+
+    Returns
+    -------
+    str
+        Path data for the screw.
+    """
+    step = 2 * M / 3
+    # Corners k = -2..2; the upper screw is off the axis at even k, the
+    # lower one at odd k.
+    corners = [(k * step, sign * step * ((k + (sign < 0)) % 2)) for k in range(-2, 3)]
+    ends = [(-2.5 * step, sign * step / 2), (2.5 * step, sign * step / 2)]
+    points = [ends[0], *corners, ends[1]]
+    return "M " + " L ".join(f"{_FAN_R + x:.4f} {_FAN_R + y:.4f}" for x, y in points) + " "
+
+
+# Item 16.8, X8161, the screw compressor: item 16.1's circle and chords
+# with two meshing screws across the centre.
+_COMPRESSOR_SCREW = Symbol(
+    svg='<g id="sym_compressor_screw">'
+        f'<circle cx="{_FAN_R:g}" cy="{_FAN_R:g}" r="{_FAN_R:g}" {_OUTLINE}/>'
+        f'<path d="{_fan_chord(-1)}{_fan_chord(1)}{_screw_flight(-1)}{_screw_flight(1)}" '
+        f'{_INK}/></g>',
+    width=2 * _FAN_R, height=2 * _FAN_R,
+    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
+    iso_reg="X8161",
 )
 
 # Centrifugal fan: a scroll round the eye, discharging east along its
@@ -5035,12 +5073,17 @@ class SymbolRegistry:
         self._register_steam_trap()
         self._register_flow_elements()
         self._register_fans()
+        self._register_compressors()
 
     def _register_fans(self):
         """Register the general, centrifugal and axial fans."""
         self.register("blower", _FAN_GENERAL, "general")
         self.register("blower", _FAN_CENTRIFUGAL, "centrifugal")
         self.register("blower", _FAN_AXIAL, "axial")
+
+    def _register_compressors(self):
+        """Register the screw compressor, ISO 10628-2 item 16.8 (X8161)."""
+        self.register("compressor", _COMPRESSOR_SCREW, "screw")
 
     def _register_steam_trap(self):
         """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""

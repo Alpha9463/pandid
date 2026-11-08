@@ -83,6 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
   or thermal mass flowmeter, a flume and a weir:
   `FlowElement("FE-101", variant="magnetic")`.
+- `ScrewCompressor` draws the ISO 10628-2 screw compressor, and
+  `RotaryCompressor` stays the two-rotor lobe machine.
 
 ### Changed
 

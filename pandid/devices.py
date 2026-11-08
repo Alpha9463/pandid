@@ -41,6 +41,7 @@ __all__ = [
     "CentrifugalCompressor",
     "ReciprocatingCompressor",
     "RotaryCompressor",
+    "ScrewCompressor",
     "LiquidRingCompressor",
     "CentrifugalFan",
     "AxialFan",
@@ -225,13 +226,30 @@ class ReciprocatingCompressor(Compressor):
 
 
 class RotaryCompressor(Compressor):
-    """Rotary compressor: screws or lobes.
+    """Rotary lobe compressor: two rotors in a casing.
+
+    For a screw machine, use :class:`ScrewCompressor`.
 
     Parameters are those of :class:`~pandid.units.Compressor`.
     """
 
     VARIANTS = ("default", "rotary")
     VARIANT_ALIASES = {"default": "rotary"}
+
+    suction: Port
+    discharge: Port
+
+
+class ScrewCompressor(Compressor):
+    """Screw compressor: two meshing screws.
+
+    ISO 10628-2 item 16.8, X8161.
+
+    Parameters are those of :class:`~pandid.units.Compressor`.
+    """
+
+    VARIANTS = ("default", "screw")
+    VARIANT_ALIASES = {"default": "screw"}
 
     suction: Port
     discharge: Port
