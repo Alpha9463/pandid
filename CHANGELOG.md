@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and says how to clear it: an `at=` for a valve alone on its line, the `at=`
   bounds that keep the line's order where other items share it, or the end or
   neighbour to move where pinned ends leave no room.
+- `validate()` warns `tap-crosses-unit` when a balloon's tap line is drawn
+  through a unit other than its own, and names the pin that moves it clear.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
   the sheet's schedules as rows, ready for `csv.DictWriter` or pandas.
 - `Document([fs1, fs2]).validate()` checks a set of sheets against each other:
@@ -113,6 +115,10 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- Where stepping a unit right off a balloon pinned with `pin(x=..., y=...)`
+  leaves it over the balloon, `route()` steps it to the nearer side and keeps
+  that drawing where no finding or clash grows, so fewer such sheets are
+  refused with `unit-overlap`.
 - A valve station pinned by `add_valve_station(x=..., y=...)` and read back from
   a spec keeps the turns and mirrors the author stated on its members, and no
   longer counts the ones the station gave them as stated.
