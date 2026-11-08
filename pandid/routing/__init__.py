@@ -239,26 +239,12 @@ def _fallback_path(
                          else (anchor[0], anchor[1] + sign * d)
                          for d in steps if 0.0 < d < reach]
 
-    def length(pts: list[tuple[float, float]]) -> float:
-        """Return a route's length.
-
-        Parameters
-        ----------
-        pts : list[tuple[float, float]]
-            Route waypoints.
-
-        Returns
-        -------
-        float
-            Sum of the segments' lengths.
-        """
-        return sum(abs(a[0] - b[0]) + abs(a[1] - b[1]) for a, b in zip(pts, pts[1:]))
-
     across = through(start_proj, goal_proj, (goal_proj[0], start_proj[1]))
     down = through(start_proj, goal_proj, (start_proj[0], goal_proj[1]))
     drawn = down if score(down) < score(across) else across
     if lanes is None or score(drawn)[0] == 0:
         return drawn
+    from pandid.routing.metrics import path_length
     from pandid.routing.visibility import EDGE_TOL, Rect
 
     xs, ys = lanes
@@ -276,7 +262,7 @@ def _fallback_path(
         if not any(o.x_min <= x <= o.x_max and o.y_min <= y <= o.y_max for x, y in (start, goal)))]
     clear = [r for r in routes if not any(o.intersects_segment(a[0], a[1], b[0], b[1])
                                           for a, b in zip(r, r[1:]) for o in kept_off)]
-    return min(clear, key=lambda r: (score(r)[1], len(r), length(r))) if clear else drawn
+    return min(clear, key=lambda r: (score(r)[1], len(r), path_length(r))) if clear else drawn
 
 
 def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, float]], manual: bool) -> None:

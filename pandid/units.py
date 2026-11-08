@@ -1674,8 +1674,8 @@ def _recompose(unit: "Unit", old: str) -> None:
                     f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
                     f"instead"
                 )
-            _compose_onto(unit, *unit._composition)
             unit._check_parts()
+            _compose_onto(unit, *unit._composition)
             added = current[len(built):]
             if added:
                 drawn = _placed(stated, unit.variant) + added
@@ -2145,6 +2145,21 @@ class _Families(Unit):
     _listed: frozenset[str]
     _stated: set[str]
 
+    def _registry_symbol(self):
+        """Return the variant's registered symbol.
+
+        Returns
+        -------
+        Symbol or None
+            The symbol, or ``None`` for an unregistered variant.
+        """
+        from pandid.render.symbols import default_registry
+
+        try:
+            return default_registry.get(self.kind, self.variant)
+        except ValueError:
+            return None
+
     def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return the faces a family port may take, its own face first.
 
@@ -2391,8 +2406,19 @@ class _MultiPortVessel(_FaceFamilies):
 
     _VARIANT_BUILDS = True
 
-    # Variants an agitator may hang in.
+    # Variants an agitator may hang in, and the agitator hung.
     _STIRRABLE: tuple[str, ...] = ()
+    agitator: str | None = None
+
+    def _check_parts(self) -> None:
+        """Refuse an agitator on a variant that cannot carry one.
+
+        Raises
+        ------
+        ValueError
+            If the unit has an agitator and its variant cannot carry one.
+        """
+        _refuse_agitator(self)
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
@@ -2417,13 +2443,10 @@ class _MultiPortVessel(_FaceFamilies):
         Symbol or None
             The symbol, or ``None`` for an unregistered variant.
         """
-        from pandid.render.symbols import default_registry, stirred
+        from pandid.render.symbols import stirred
 
-        try:
-            sym = default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-        return stirred(sym) if getattr(self, "agitator", None) else sym
+        sym = super()._registry_symbol()
+        return stirred(sym) if sym is not None and getattr(self, "agitator", None) else sym
 
     def _home_face(self, role: str) -> str:
         """Return the face the artwork draws a role's port on.
@@ -2704,13 +2727,13 @@ class _MultiPortVessel(_FaceFamilies):
             self.kind, self.variant, tuple(on.items()), parts, ports, size), scale)
 
 
-def _refuse_agitator(unit: "Tank | Vessel") -> None:
+def _refuse_agitator(unit: "_MultiPortVessel") -> None:
     """Refuse an agitator on a variant that cannot carry one.
 
     Parameters
     ----------
-    unit : Tank or Vessel
-        Unit with its ``agitator`` set.
+    unit : _MultiPortVessel
+        Tank or vessel with its ``agitator`` set.
 
     Raises
     ------
@@ -2857,7 +2880,7 @@ class Vessel(_MultiPortVessel):
     ):
         super().__init__(name, variant=variant, **options)
         self.agitator = agitator
-        _refuse_agitator(self)
+        self._check_parts()
         self.manholes = _on_walls(self, "manholes", manholes)
         self.sockets = _on_walls(self, "sockets", sockets)
         self._init_connections(inputs, outputs)
@@ -2965,7 +2988,7 @@ class Tank(_MultiPortVessel):
     ):
         super().__init__(name, variant=variant, **options)
         self.agitator = agitator
-        _refuse_agitator(self)
+        self._check_parts()
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
         self._init_connections(inputs, outputs)
@@ -3212,8 +3235,9 @@ class Fitting(_NormallyPositioned):
     plate a metering orifice draws too), ``rotameter``,
     ``rupture_disc``, ``sight_glass``,
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``,
-    ``bellows``, ``blind``, ``damper``, ``spool``, ``static_mixer``
-    (ISO 10628-2 item 12.2 X2673), ``rotary_mixer`` (item 12.1
+    ``bellows``, ``blind``, ``paddle_blind`` (ISO 10628-2 item 24.9),
+    ``paddle_spacer`` (item 24.10), ``damper``, ``spool``,
+    ``static_mixer`` (item 12.2 X2673), ``rotary_mixer`` (item 12.1
     X2672), ``mixing_path`` (item 12.3 X8184), ``steam_trap`` (item
     24.15, 2181), ``hose``, ``coupling``, ``clamped_coupling``,
     ``flange`` (the default) and the flame arrestors
@@ -4823,11 +4847,11 @@ class Crystallizer(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import draft_tube_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: draft_tube_overlays(name)))
+                             lambda name, _body: hung_agitator("crystallizer", name)))
 
 
 class FlotationCell(Unit):
@@ -4885,11 +4909,11 @@ class FlotationCell(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import flotation_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: flotation_overlays(name)))
+                             lambda name, _body: hung_agitator("flotation_cell", name)))
 
 
 class Silo(_VariantPorted):
@@ -4974,11 +4998,11 @@ class MixerSettler(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import mixer_settler_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: mixer_settler_overlays(name)))
+                             lambda name, _body: hung_agitator("mixer_settler", name)))
 
 
 class Deaerator(Unit):
@@ -5119,24 +5143,9 @@ class _SeriesFamilies(_Families):
     :meth:`nozzle` or layout, to a face the series also offers.
     """
 
-    def _series_symbol(self):
-        """Return the variant's registered symbol, or None.
-
-        Returns
-        -------
-        Symbol or None
-            The symbol, or ``None`` for an unregistered variant.
-        """
-        from pandid.render.symbols import default_registry
-
-        try:
-            return default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-
     def _init_families(self) -> None:
         """Put each series member on its series' face."""
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.port_series if sym is not None else ()
         self._faces = {name: s.face for name in self.ports for s in series if s.matches(name)}
         self._listed, self._stated = frozenset(), set()
@@ -5156,7 +5165,7 @@ class _SeriesFamilies(_Families):
         list[str]
             Faces on the unit's own axes.
         """
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.series_for(port_name) if sym is not None else None
         faces = [] if series is None else [series.face, *(added and [s.face for s in series.also] or [])]
         home = self._faces[port_name]
@@ -5206,7 +5215,7 @@ class _SeriesFamilies(_Families):
             self.symbol(faces)
         except ValueError as exc:
             return str(exc)
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None:
             return None
         for name, face in faces.items():
@@ -5243,7 +5252,7 @@ class _SeriesFamilies(_Families):
 
         on = self._faces if faces is None else faces
         overlays = tuple(getattr(self, "overlays", ()) or ())
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None or all(
                 (series := sym.series_for(name)) is not None and series.face == face
                 for name, face in on.items()):

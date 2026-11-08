@@ -493,6 +493,37 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     }[face.upper()]
 
 
+def axial_tap(unit: "Unit", frame, face: str) -> tuple[float, float] | None:
+    """Return where a tap from a face starts on a drawing along its axis.
+
+    A symbol with ``axial_taps`` is drawn along its own vertical centre
+    line, so a tap from its own W or E face starts at the box's centre.
+
+    Parameters
+    ----------
+    unit : Unit
+        Placed unit.
+    frame : Frame
+        Its placement.
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"`` as drawn.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        The box's centre, or None if the tap stays on the face.
+    """
+    if not getattr(_placed_sym(unit, frame), "axial_taps", False):
+        return None
+    rot, mirrored, mirror_y = _xform(frame)
+    own = next((f for f in COMPASS_FACES
+                if drawn_side(f, rot, mirrored, mirror_y) == face.upper()), None)
+    if own not in ("W", "E"):
+        return None
+    x0, y0, x1, y1 = unit_box(unit, frame)
+    return ((x0 + x1) / 2, (y0 + y1) / 2)
+
+
 def face_wall(unit: "Unit", frame, face: str) -> tuple[float, float] | None:
     """Return the stretch of a drawn face its outline runs straight along.
 
