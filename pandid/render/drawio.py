@@ -2213,7 +2213,7 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
     # Per family: id letter, stroke length, and each mark's arc length,
     # rotation and stroke offsets. A further quarter turn makes a flange
     # bar cross the run.
-    marks = signal_marks(points) if s.kind in MARKED_KINDS else []
+    spots = signal_marks(points) if s.kind in MARKED_KINDS else []
     strokes = _svg.HATCH_ALONG if s.kind == "pneumatic" else (0.0,)
     along, across = _svg.HATCH_ARM
     # A hydraulic stroke's foot, centred half its length on from the
@@ -2222,13 +2222,13 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
         (m.along, 0.0 if m.horizontal else 90.0,
          [(fit.length(_svg.HYDRAULIC_FOOT / 2 - along), fit.length(across)) if m.horizontal
           else (fit.length(-across), fit.length(_svg.HYDRAULIC_FOOT / 2 - along))])
-        for m in marks]
+        for m in spots]
     families = (
         ("h", _HATCH_LEN, [
             (m.along, _HATCH_ANGLE if m.horizontal else _HATCH_ANGLE + 90.0,
              [(fit.length(off), 0.0) if m.horizontal else (0.0, fit.length(off))
               for off in strokes])
-            for m in marks]),
+            for m in spots]),
         ("t", _svg.HYDRAULIC_FOOT, feet),
         ("f", _svg.FLANGE_TICK, [
             (m.along, m.angle + 90.0,
