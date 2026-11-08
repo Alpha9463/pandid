@@ -144,7 +144,7 @@ from pandid.stations import (
     DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP, DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
-from pandid.units import Instrument, Unit, _Boundary
+from pandid.units import _IMPLIED_DISPLAY, Instrument, Unit, _Boundary
 
 
 class SpecError(ValueError):
@@ -3222,7 +3222,7 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
     entry.pop("variant", None)
     if inst.symbol_type != "default":
         entry["variant"] = inst.symbol_type
-    if inst.display != "field":
+    if inst.display != "field" or inst.symbol_type in _IMPLIED_DISPLAY:
         entry["display"] = inst.display
     if inst.quadrants:
         by_name = {name: list(codes) for name, letter in _QUADRANT_KEYS.items()
