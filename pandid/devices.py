@@ -223,6 +223,7 @@ class ProgressiveCavityPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ReciprocatingPump(Pump):
@@ -238,6 +239,7 @@ class ReciprocatingPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class DiaphragmPump(Pump):
@@ -253,6 +255,7 @@ class DiaphragmPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class LobePump(Pump):
@@ -266,6 +269,7 @@ class LobePump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class VerticalTurbinePump(Pump):
@@ -282,6 +286,7 @@ class VerticalTurbinePump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class CentrifugalCompressor(Compressor):

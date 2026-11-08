@@ -251,6 +251,11 @@ _DRIVES = {
     ("pump", "peristaltic"): (60.0, 32.0),
     ("pump", "submersible"): (51.77, 0.0),
     ("pump", "vacuum"): (49.5, 0.0),
+    **{
+        ("pump", variant): (30.0, 0.0)
+        for variant in ("diaphragm", "lobe", "progressive_cavity", "reciprocating")
+        + ("vertical_turbine",)
+    },
     ("compressor", "default"): (30.0, 0.0),
     ("compressor", "reciprocating"): (54.5, 13.0),
     ("compressor", "rotary"): (41.0, 45.5),

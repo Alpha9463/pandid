@@ -3736,7 +3736,8 @@ _PUMP_OUTLINE = (
     f'<path d="M {_PUMP_R:g} 0 L {2 * _PUMP_R:g} {_PUMP_R:g} L {_PUMP_R:g} {2 * _PUMP_R:g}" '
     f'{_INK}/>'
 )
-_PUMP_PORTS = {"suction": (0.0, _PUMP_R), "discharge": (2 * _PUMP_R, _PUMP_R)}
+_PUMP_PORTS = {"suction": (0.0, _PUMP_R), "discharge": (2 * _PUMP_R, _PUMP_R),
+               "drive": (_PUMP_R, 0.0)}
 
 
 def _group_15_pump(variant: str, mark: str, iso_reg: str = "") -> Symbol:
@@ -3854,7 +3855,8 @@ _PUMP_VERTICAL_TURBINE = Symbol(
         f'<path d="M 0 {_VTP_BOWL_Y:g} L {_PUMP_R:g} {_VTP_BOWL_Y - _PUMP_R:g} '
         f'L {2 * _PUMP_R:g} {_VTP_BOWL_Y:g}" {_INK}/></g>',
     width=2 * _PUMP_R, height=_VTP_H,
-    ports={"suction": (_PUMP_R, _VTP_H), "discharge": (2 * _PUMP_R, VTP_HEAD_H / 2)},
+    ports={"suction": (_PUMP_R, _VTP_H), "discharge": (2 * _PUMP_R, VTP_HEAD_H / 2),
+           "drive": (_PUMP_R, 0.0)},
     gravity_fixed=True,
 )
 
