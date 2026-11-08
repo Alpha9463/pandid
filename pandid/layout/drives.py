@@ -76,15 +76,13 @@ def _hang(shaft: "Stream", host: Frame) -> Frame:
     return Frame(x=ax + dx * SHAFT - px, y=ay + dy * SHAFT - py, w=w, h=h, port_faces=faces)
 
 
-def driver_pads(fs: "Flowsheet", shafts: "list[Stream]") -> "dict[Unit, Pad]":
+def driver_pads(shafts: "list[Stream]") -> "dict[Unit, Pad]":
     """Return the room each machine keeps for the drivers hung on it.
 
     Parameters
     ----------
-    fs : Flowsheet
-        Sheet with seeded slots.
     shafts : list[Stream]
-        Shafts from :func:`hung`.
+        Shafts from :func:`hung`, each machine with a seeded slot.
 
     Returns
     -------

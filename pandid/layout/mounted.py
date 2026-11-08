@@ -1656,7 +1656,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
         *(Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
                _chain_width(run) + _fence(run, group), _column_room(run, fs._upright_stations),
                fs._fan_out and _off_header(run))
-          for run in laid)], driver_pads(fs, shafts))
+          for run in laid)], driver_pads(shafts))
     place_drivers(shafts)
     retained += drivers
     for unit in members:
