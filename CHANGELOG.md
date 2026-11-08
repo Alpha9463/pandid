@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every balloon symbol, computer, SIS, logic and interlock included, takes
   `display="central"` or `display="subsidiary"` and draws one or two location
   bars across it: `fs.add_instrument("UY", 301, variant="logic", display="central")`.
+- Signal lines take `kind="hydraulic"`, drawn with a footed stroke at each mark,
+  and `kind="wireless"`, drawn as a wave: `fs.connect(ft, fic, kind="wireless")`.
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,

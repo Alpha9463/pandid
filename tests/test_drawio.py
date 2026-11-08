@@ -41,7 +41,7 @@ from pandid.render.svg import (
     boundary_flag,
     drawing_bounds,
     impulse_tap,
-    pneumatic_marks,
+    signal_marks,
     sheet_connections,
     stream_hops,
     stream_polyline,
@@ -555,7 +555,7 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
     fs = _pneumatic_sheet()
     root = _model(fs, check=False)
     cells = {c.get("id"): c for c in root.findall("mxCell")}
-    marks = pneumatic_marks(stream_polyline(fs.streams[0]))
+    marks = signal_marks(stream_polyline(fs.streams[0]))
     assert marks, "the fixture stopped exercising the hatch"
     hatches = [c for c in cells.values() if c.get("parent") == "s0"]
     # Two strokes per mark, in the same places the sheet strokes them.

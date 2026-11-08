@@ -1706,7 +1706,11 @@ class DrawioRenderer:
                 f"strokeColor={s.color or _LINE_INK}",
                 f"strokeWidth={fit.length(_stream_rung(signal).width):g}",
             ]
-            if n in hops:
+            wireless = s.kind == "wireless"
+            if wireless:
+                # The wave's crests are a curved edge's control points.
+                keys.append("curved=1")
+            if n in hops and not wireless:
                 # draw.io's jumpSize for a hop of HOP_R on this line, at least 1.
                 weight = fit.length(_stream_rung(signal).width)
                 size = max(1, round(2.0 * (fit.length(HOP_R) - weight) + 2.0))
@@ -1740,7 +1744,7 @@ class DrawioRenderer:
                             keys.append("horizontal=0")
 
             style = ";".join(keys) + ";"
-            waypoints = points[1:-1]
+            waypoints = (_svg.wave_points(points) if wireless else points)[1:-1]
             along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
                 *(['            <Array as="points">',
@@ -2162,7 +2166,7 @@ _LABEL_SIDE = {
 }
 
 
-# The pneumatic cross-hatch
+# The pneumatic and hydraulic marks
 
 # Hatch stroke angle on a horizontal run, in clockwise degrees, and
 # stroke length.
@@ -2171,10 +2175,11 @@ _HATCH_LEN = round(2 * math.hypot(*_svg.HATCH_ARM), 2)
 
 
 def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
-    """Return the pneumatic cross-hatches and the flanged-joint marks on one line.
+    """Return the signal marks and the flanged-joint marks on one line.
 
-    Each hatch is two strokes and each flange two bars, every one a
-    ``line`` child vertex of the edge placed by arc length.
+    A pneumatic mark is two strokes, a hydraulic mark a stroke and its
+    foot, and each flange two bars, every one a ``line`` child vertex
+    of the edge placed by arc length.
 
     Parameters
     ----------
@@ -2194,9 +2199,9 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
     Returns
     -------
     list[str]
-        XML lines for the hatch cells, then the flange cells.
+        XML lines for the mark cells, then the flange cells.
     """
-    from pandid.render.svg import pneumatic_marks
+    from pandid.render.svg import MARKED_KINDS, signal_marks
 
     total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
                 for (ax, ay), (bx, by) in zip(points, points[1:]))
@@ -2206,12 +2211,23 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
     # Per family: id letter, stroke length, and each mark's arc length,
     # rotation and stroke offsets. A further quarter turn makes a flange
     # bar cross the run.
+    marks = signal_marks(points) if s.kind in MARKED_KINDS else []
+    strokes = _svg.HATCH_ALONG if s.kind == "pneumatic" else (0.0,)
+    along, across = _svg.HATCH_ARM
+    # A hydraulic stroke's foot, centred half its length on from the
+    # stroke's first end.
+    feet = [] if s.kind != "hydraulic" else [
+        (m.along, 0.0 if m.horizontal else 90.0,
+         [(fit.length(_svg.HYDRAULIC_FOOT / 2 - along), fit.length(across)) if m.horizontal
+          else (fit.length(-across), fit.length(_svg.HYDRAULIC_FOOT / 2 - along))])
+        for m in marks]
     families = (
         ("h", _HATCH_LEN, [
             (m.along, _HATCH_ANGLE if m.horizontal else _HATCH_ANGLE + 90.0,
              [(fit.length(off), 0.0) if m.horizontal else (0.0, fit.length(off))
-              for off in _svg.HATCH_ALONG])
-            for m in (pneumatic_marks(points) if s.kind == "pneumatic" else [])]),
+              for off in strokes])
+            for m in marks]),
+        ("t", _svg.HYDRAULIC_FOOT, feet),
         ("f", _svg.FLANGE_TICK, [
             (m.along, m.angle + 90.0,
              [(math.cos(math.radians(m.angle)) * step, math.sin(math.radians(m.angle)) * step)

@@ -247,8 +247,10 @@ Validation reports `gravity-turned` when one is rotated away from it.
 
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
-units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
-`software` or `capillary`. When omitted, a signal line to a valve with a
+units. `kind` may be `material`, `energy`, `electric`, `pneumatic`,
+`hydraulic`, `wireless`, `data`, `software` or `capillary`. A hydraulic line
+carries a footed stroke at each mark (ISO 15519-2 A.1.08) and a wireless line is
+drawn as a wave. When omitted, a signal line to a valve with a
 diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
 electric; two energy/utility ports make an energy stream; other process ports
 make a material stream. `add_control_loop()` infers its output line the same way
