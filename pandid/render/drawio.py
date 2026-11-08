@@ -834,7 +834,9 @@ def _function_block(cid: str, item, origin: "tuple[float, float]",
     """
     from pandid.render.svg import _FUNCTION_TYPE, _unit_label_box
 
-    box = None if item is None else _unit_label_box(item)
+    if item is None:
+        return []
+    box = _unit_label_box(item)
     if box is None:
         return []
     x0, y0, x1, y1 = fit.box(box)
