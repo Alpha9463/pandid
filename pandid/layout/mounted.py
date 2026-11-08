@@ -21,6 +21,7 @@ from pandid.package import MARGIN as PACKAGE_MARGIN, boundary, tag_reach
 from pandid.portgeom import port_point, resolve_size, unit_box
 from pandid.routing.metrics import path_length
 from pandid.routing.visibility import MARGIN
+from pandid.streams import MECHANICAL
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -1642,8 +1643,8 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
                            for run in mounted_runs(fs, True) for element in run.elements)
     laid = mounted_runs(fs) if fs._corner_valves else runs
     members = {unit for run in laid for element in run.elements for unit in _members(element)}
-    shafts = hung(fs)
-    drivers = [shaft.source.owner for shaft in shafts]
+    hangs = hung(fs)
+    drivers = [hang.end.owner for hang in hangs]
     retained = [unit for unit in process_units(fs) if unit not in members and unit not in drivers]
     shown = set(retained)
     loose = [a for a in fs._station_assemblies if not members.intersection(a.station.members)]
@@ -1656,8 +1657,11 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
         *(Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
                _chain_width(run) + _fence(run, group), _column_room(run, fs._upright_stations),
                fs._fan_out and _off_header(run))
-          for run in laid)], driver_pads(shafts))
-    place_drivers(shafts)
+          for run in laid),
+        *(Link(s.source, s.dest) for s in fs.streams
+          if s.kind == MECHANICAL and s.source.owner in shown and s.dest.owner in shown)],
+        driver_pads(hangs))
+    place_drivers(hangs)
     retained += drivers
     for unit in members:
         placed = slot(unit)
