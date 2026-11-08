@@ -91,6 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
   or thermal mass flowmeter, a flume and a weir:
   `FlowElement("FE-101", variant="magnetic")`.
+- `PaddleBlind` and `PaddleSpacer` draw the ISO 10628-2 paddle blind and
+  spacer, a solid or bored disc on a handle, beside the spectacle blind.
 
 ### Changed
 

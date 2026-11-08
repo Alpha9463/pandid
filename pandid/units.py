@@ -3036,8 +3036,9 @@ class Fitting(_NormallyPositioned):
     plate a metering orifice draws too), ``rotameter``,
     ``rupture_disc``, ``sight_glass``,
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``,
-    ``bellows``, ``blind``, ``damper``, ``spool``, ``static_mixer``
-    (ISO 10628-2 item 12.2 X2673), ``rotary_mixer`` (item 12.1
+    ``bellows``, ``blind``, ``paddle_blind`` (ISO 10628-2 item 24.9),
+    ``paddle_spacer`` (item 24.10), ``damper``, ``spool``,
+    ``static_mixer`` (item 12.2 X2673), ``rotary_mixer`` (item 12.1
     X2672), ``mixing_path`` (item 12.3 X8184), ``steam_trap`` (item
     24.15, 2181), ``hose``, ``coupling``, ``clamped_coupling``,
     ``flange`` (the default) and the flame arrestors

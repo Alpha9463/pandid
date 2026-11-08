@@ -306,6 +306,13 @@ KIND_MAP = {
     # the tie hangs below.
     ("fitting", "blind"):          ("piping", "Open Figure 8 Blind",
                                     {"inlet": ("W", 30.0), "outlet": ("E", 30.0)}),
+    # Paddle blind and paddle spacer, ISO 10628-2 items 24.9 and 24.10: one
+    # disc on a handle, solid or bored; the run passes through the disc at
+    # y = 10.
+    ("fitting", "paddle_blind"):   ("piping", "Blank",
+                                    {"inlet": ("W", 10.0), "outlet": ("E", 10.0)}),
+    ("fitting", "paddle_spacer"):  ("piping", "Spacer",
+                                    {"inlet": ("W", 10.0), "outlet": ("E", 10.0)}),
 
     # --- Variants (style choices within a class; same ports) ---
     # Heat exchanger styles.
@@ -774,8 +781,8 @@ HALF_SCALE_FITTINGS = (
     # piping.xml: the in-line devices
     "strainer_y", "strainer_basket", "strainer_duplex",
     "bellows", "damper", "spool",
-    # ...and the spectacle blind, on the same module.
-    "blind",
+    # ...and the spectacle blind, paddle blind and spacer, on the same module.
+    "blind", "paddle_blind", "paddle_spacer",
 )
 
 # Three valves.xml shapes are off that file's module, so each takes its own

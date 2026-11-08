@@ -112,6 +112,8 @@ __all__ = [
     "MotorOperatedValve",
     "CheckValve",
     "SpectacleBlind",
+    "PaddleBlind",
+    "PaddleSpacer",
     "SteamTrap",
     "FlowElement",
     "StirredTankReactor",
@@ -1457,6 +1459,38 @@ class SpectacleBlind(Fitting):
 
     VARIANTS = ("default", "blind")
     VARIANT_ALIASES = {"default": "blind"}
+
+    inlet: Port
+    outlet: Port
+
+
+class PaddleBlind(Fitting):
+    """Paddle blind: a solid disc on a handle, blanking the line.
+
+    ISO 10628-2 item 24.9. For the bored disc that keeps the line open,
+    use :class:`PaddleSpacer`.
+
+    Parameters are those of :class:`~pandid.units.Fitting`.
+    """
+
+    VARIANTS = ("default", "paddle_blind")
+    VARIANT_ALIASES = {"default": "paddle_blind"}
+
+    inlet: Port
+    outlet: Port
+
+
+class PaddleSpacer(Fitting):
+    """Paddle spacer: a bored disc on a handle, keeping the line open.
+
+    ISO 10628-2 item 24.10. For the solid disc that blanks the line,
+    use :class:`PaddleBlind`.
+
+    Parameters are those of :class:`~pandid.units.Fitting`.
+    """
+
+    VARIANTS = ("default", "paddle_spacer")
+    VARIANT_ALIASES = {"default": "paddle_spacer"}
 
     inlet: Port
     outlet: Port

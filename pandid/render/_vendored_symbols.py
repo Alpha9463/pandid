@@ -693,6 +693,22 @@ def register_vendored(registry):
         id_suffix='_closed',
     ), 'blind')
 
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_paddle_blind"><g transform="scale(0.5)"><ellipse cx="10.0" cy="10.0" rx="10.0" ry="10.0" fill="#111" stroke="#111" stroke-width="4.0"/><path d="M 10.0 20.0 L 10.0 60.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=10.0, height=30.0,
+        ports={'inlet': (0.0, 5.0), 'outlet': (10.0, 5.0)},
+        drawio_shape='mxgraph.pid.piping.blank',
+        trim=True,
+    ), 'paddle_blind')
+
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_paddle_spacer"><g transform="scale(0.5)"><ellipse cx="10.0" cy="10.0" rx="10.0" ry="10.0" fill="white" stroke="#111" stroke-width="4.0"/><path d="M 10.0 20.0 L 10.0 60.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=10.0, height=30.0,
+        ports={'inlet': (0.0, 5.0), 'outlet': (10.0, 5.0)},
+        drawio_shape='mxgraph.pid.piping.spacer',
+        trim=True,
+    ), 'paddle_spacer')
+
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_shell_tube"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=60.0,
