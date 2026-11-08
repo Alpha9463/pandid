@@ -364,3 +364,22 @@ def test_a_primary_elements_balloon_in_a_spec_refuses_taps_and_element(key, valu
     }
     with pytest.raises(SpecError, match=f"unknown key '{key}'"):
         Flowsheet.from_dict(spec)
+
+
+def test_two_taps_on_a_stirred_vessels_side_are_fractions_of_the_shell():
+    """Take taps= of the shell alone, not of the shell and the motor above it."""
+    fs = Flowsheet("stirred gauge")
+    drum = fs.add(units.Vessel("D", agitator="turbine")).pin(x=200, y=200)
+    fs.add_instrument("LG", 1, sensing=drum, face="E", taps=(0.2, 0.7))
+    fs.add_instrument("ST", 2, sensing=drum, face="N")
+    fs.route()
+    x0, y0, _x1, y1 = _box(drum)
+    # The shell is the box's bottom 62 x 100: the motor stands on it.
+    assert y1 - y0 > _SHELL_H, "the premise: the motor grows the box"
+    top = y1 - _SHELL_H
+    starts = sorted(line[0] for line in _polylines(_taps_group(fs.to_svg(check=False))))
+    flat = [v for xy in starts for v in xy]
+    # The speed transmitter still taps the motor's top.
+    assert flat == pytest.approx(
+        [x0 + _SHELL_W / 2, y0, x0 + _SHELL_W, top + 20.0, x0 + _SHELL_W, top + 70.0]
+    )

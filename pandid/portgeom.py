@@ -442,12 +442,12 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     return x0, top, x1, bottom
 
 
-def body_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
+def body_box(unit: "Unit", frame, bare: bool = False) -> tuple[float, float, float, float]:
     """Return the box a unit is drawn in, without the parts on its walls.
 
     The supports, manholes and sockets of ISO 10628-2 group 26 drawn
     beyond the body grow the unit's box; this box leaves them out and
-    keeps every other part, such as a stirrer's motor.
+    keeps every other part, such as a stirrer's motor, unless ``bare``.
 
     Parameters
     ----------
@@ -455,6 +455,8 @@ def body_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
         Unit to measure.
     frame : Frame or _Slot
         Its placement.
+    bare : bool, default=False
+        Leave out every part, for the body alone.
 
     Returns
     -------
@@ -462,7 +464,7 @@ def body_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
         ``(x_min, y_min, x_max, y_max)``.
     """
     sym = _placed_sym(unit, frame)
-    if not any(o.group == 26 for o in sym.overlays):
+    if not any(bare or o.group == 26 for o in sym.overlays):
         return unit_box(unit, frame)
 
     def reach(parts) -> tuple[float, float, float, float]:
@@ -483,7 +485,7 @@ def body_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
                 max([1.0, *(o.x + o.w for o in parts)]), max([1.0, *(o.y + o.h for o in parts)]))
 
     lx, ly, hx, hy = reach(sym.overlays)
-    kept = reach(o for o in sym.overlays if o.group != 26)
+    kept = reach(o for o in sym.overlays if not bare and o.group != 26)
     rot, mirrored, mirror_y = _xform(frame)
     corners = [_to_box(sym, (fx - lx) / (hx - lx) * sym.width, (fy - ly) / (hy - ly) * sym.height,
                        frame.w, frame.h, rot, mirrored, mirror_y)[0]

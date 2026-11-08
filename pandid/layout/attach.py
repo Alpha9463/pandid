@@ -266,8 +266,8 @@ def tap_points(inst: "Instrument") -> list[Point]:
     host, taps = inst.host, getattr(inst, "taps", None)
     if taps is None or host is None or isinstance(host, Stream) or host.frame is None:
         return []
-    # Fractions of the shell, clear of the parts drawn beyond it.
-    x0, y0, x1, y1 = body_box(host, host.frame)
+    # Fractions of the bare body, as the wall the taps are checked on.
+    x0, y0, x1, y1 = body_box(host, host.frame, bare=True)
     face = inst.face or "E"
     return [{"N": (x0 + t * (x1 - x0), y0), "S": (x0 + t * (x1 - x0), y1),
              "W": (x0, y0 + t * (y1 - y0)), "E": (x1, y0 + t * (y1 - y0))}[face]
