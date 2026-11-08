@@ -301,6 +301,7 @@ def tap_route(inst, tap, centre):
         Points from the tap to the balloon centre.
     """
     from pandid.layout.attach import _anchor
+    from pandid.routing.separation import SPACING
     from pandid.streams import Stream
 
     (tx, ty), (cx, cy) = tap, centre
@@ -311,20 +312,125 @@ def tap_route(inst, tap, centre):
     rx, ry = anchor[1]
     nx, ny = ry, -rx
     across = abs(nx) > abs(ny)
-    # A pipe has no outside, so its balloon is always ahead.
-    if isinstance(inst.host, Stream) or (cx - tx) * nx + (cy - ty) * ny > 0:
+    # A pipe has no outside, so its balloon is always ahead. Two taps'
+    # lines go round to a balloon level with the face, not along it.
+    ahead = (cx - tx) * nx + (cy - ty) * ny
+    if isinstance(inst.host, Stream) or ahead > (0.01 if _pair(inst) else 0.0):
         if abs(cx - tx) < 0.01 or abs(cy - ty) < 0.01:
             return [tap, centre]
+        lane = _pair_lane(inst, tap, centre, across)
+        if lane:
+            # Turned short of the centre or past it, apart from its pair.
+            if across:
+                return [tap, (cx + nx * lane, ty), (cx + nx * lane, cy), centre]
+            return [tap, (tx, cy + ny * lane), (cx, cy + ny * lane), centre]
         return [tap, (cx, ty) if across else (tx, cy), centre]
-    sx, sy = tx + nx * M, ty + ny * M
     x0, y0, x1, y1 = unit_box(inst.host, inst.host.frame)
     if across:
         y = cy if not y0 < cy < y1 else (y0 - M if cy - y0 < y1 - cy else y1 + M)
-        bends = [(sx, sy), (sx, y), (cx, y)]
+        # Of two taps, the one farther from the run round the unit
+        # keeps outside the other's lines.
+        h = _pair_rank(inst, tap, y, 1) * SPACING / 2
+        sx = tx + nx * (M + h)
+        side = -1 if y < (y0 + y1) / 2 else 1
+        # The outer line turns last where it turns back towards the unit.
+        xt = cx + (1 if cx > sx else -1) * (1 if (cy - y) * side < 0 else -1) * h
+        y += side * h
+        bends = [(sx, ty), (sx, y), (xt, y), (xt, cy)]
     else:
         x = cx if not x0 < cx < x1 else (x0 - M if cx - x0 < x1 - cx else x1 + M)
-        bends = [(sx, sy), (x, sy), (x, cy)]
+        h = _pair_rank(inst, tap, x, 0) * SPACING / 2
+        sy = ty + ny * (M + h)
+        side = -1 if x < (x0 + x1) / 2 else 1
+        yt = cy + (1 if cy > sy else -1) * (1 if (cx - x) * side < 0 else -1) * h
+        x += side * h
+        bends = [(tx, sy), (x, sy), (x, yt), (cx, yt)]
+    bends = [b for i, b in enumerate(bends) if i == 0 or b != bends[i - 1]]
     return [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
+
+
+def _pair_lane(inst, tap, centre, across: bool) -> float:
+    """Return how far past the balloon's centre one of two taps turns.
+
+    Where both taps lie on one side of the balloon, beyond its outline,
+    their lines would share the run into it. The farther tap's line
+    then turns half a routing spacing past the centre and the nearer's
+    half a spacing short of it, so the two run apart and do not cross.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Balloon.
+    tap : tuple[float, float]
+        One of its tap points.
+    centre : tuple[float, float]
+        Its centre.
+    across : bool
+        Whether the face is upright, so the line leaves it level.
+
+    Returns
+    -------
+    float
+        Distance along the face's outward normal, ``0.0`` for a single
+        tap or a pair that meets only inside the balloon.
+    """
+    from pandid.routing.separation import SPACING
+
+    k = 1 if across else 0
+    taps = _pair(inst)
+    if not taps or inst.frame is None:
+        return 0.0
+    a, b = (p[k] - centre[k] for p in taps)
+    reach = (inst.frame.h if across else inst.frame.w) / 2
+    if a * b <= 0 or min(abs(a), abs(b)) <= reach:
+        return 0.0
+    return _pair_rank(inst, tap, centre[k], k) * SPACING / 2
+
+
+def _pair(inst) -> "list[tuple[float, float]]":
+    """Return a balloon's two taps, or nothing for one.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Balloon.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Both tap points, or an empty list.
+    """
+    from pandid.layout.attach import tap_points
+
+    taps = tap_points(inst)
+    return taps if len(taps) == 2 else []
+
+
+def _pair_rank(inst, tap, level: float, k: int) -> int:
+    """Return whether a tap's line runs inside or outside its pair's.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Balloon.
+    tap : tuple[float, float]
+        One of its tap points.
+    level : float
+        Coordinate on axis ``k`` both lines turn towards.
+    k : int
+        ``0`` for x, ``1`` for y.
+
+    Returns
+    -------
+    int
+        ``1`` for the tap farther from ``level``, ``-1`` for the
+        nearer, ``0`` for a single tap.
+    """
+    taps = _pair(inst)
+    if not taps:
+        return 0
+    far = max(abs(p[k] - level) for p in taps)
+    return 1 if abs(tap[k] - level) >= far - 1e-9 else -1
 
 
 #: Tap-end marks, in modules: (ISO 15519-2 A.4.10) the well's reach in

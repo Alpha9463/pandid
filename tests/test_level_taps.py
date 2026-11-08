@@ -400,6 +400,45 @@ def test_a_tap_off_the_placed_wall_is_an_error():
 # --- round 3: separate impulse lines, and where a fluid element anchors -------
 
 
+def _runs(line: list[tuple[float, float]]) -> list[tuple[tuple[float, float], ...]]:
+    """Return a polyline's straight runs."""
+    return list(zip(line, line[1:]))
+
+
+def _shared(a, b, box) -> float:
+    """Return how far two runs lie on one another outside a box."""
+    (p, q), (r, s) = a, b
+    level = abs(p[1] - q[1]) < 0.01 and abs(r[1] - s[1]) < 0.01 and abs(p[1] - r[1]) < 0.01
+    upright = abs(p[0] - q[0]) < 0.01 and abs(r[0] - s[0]) < 0.01 and abs(p[0] - r[0]) < 0.01
+    if not (level or upright):
+        return 0.0
+    k = 0 if level else 1
+    lo = max(min(p[k], q[k]), min(r[k], s[k]))
+    hi = min(max(p[k], q[k]), max(r[k], s[k]))
+    inside_lo, inside_hi = box[k], box[k + 2]
+    outside = max(0.0, hi - lo) - max(0.0, min(hi, inside_hi) - max(lo, inside_lo))
+    return outside
+
+
+@pytest.mark.parametrize("angle", [45.0, 135.0, 90.0, -90.0])
+def test_a_dp_cells_two_impulse_lines_never_share_a_run(angle):
+    """Keep the two impulse lines apart all the way to the balloon's outline."""
+    fs = Flowsheet("dp")
+    d = fs.add(units.Vessel("D"))
+    lt = fs.add_instrument("LT", 1, sensing=d, face="E", taps=(0.3, 0.7), offset=90, angle=angle)
+    fs.route()
+    one, two = _polylines(_taps_group(fs.to_svg(check=False)))
+    box = _box(lt)
+    assert max(_shared(a, b, box) for a in _runs(one) for b in _runs(two)) == 0.0
+    root = ET.fromstring(fs.to_drawio(check=False))
+    edges = [c for c in root.iter("mxCell") if re.fullmatch(r"t\d+", c.get("id") or "")]
+    bends = [
+        [(float(p.get("x", 0)), float(p.get("y", 0))) for p in e.iter("mxPoint")] for e in edges
+    ]
+    # draw.io bends each line at its own corners.
+    assert len(bends) == 2 and bends[0] != bends[1]
+
+
 @pytest.mark.parametrize(
     "letters,element",
     [
