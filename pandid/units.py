@@ -4557,11 +4557,11 @@ class Crystallizer(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import draft_tube_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: draft_tube_overlays(name)))
+                             lambda name, _body: hung_agitator("crystallizer", name)))
 
 
 class FlotationCell(Unit):
@@ -4619,11 +4619,11 @@ class FlotationCell(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import flotation_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: flotation_overlays(name)))
+                             lambda name, _body: hung_agitator("flotation_cell", name)))
 
 
 class Silo(_VariantPorted):
@@ -4708,11 +4708,11 @@ class MixerSettler(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import mixer_settler_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: mixer_settler_overlays(name)))
+                             lambda name, _body: hung_agitator("mixer_settler", name)))
 
 
 class Deaerator(Unit):

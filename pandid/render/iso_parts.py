@@ -1057,11 +1057,15 @@ def rake_overlays(name: str) -> tuple:
     return (Overlay(28, name, _RAKE_X, 0.0, _RAKE_W, _RAKE_FOOT),)
 
 
-def draft_tube_overlays(name: str) -> tuple:
-    """Return a group-28 agitator hung down a crystallizer's draft tube.
+def hung_agitator(kind: str, name: str) -> tuple:
+    """Return a group-28 agitator hung down the middle of a unit's
+    agitated chamber: a crystallizer's draft tube, a flotation cell's
+    tank or a mixer-settler's mixer.
 
     Parameters
     ----------
+    kind : str
+        ``"crystallizer"``, ``"flotation_cell"`` or ``"mixer_settler"``.
     name : str
         Group-28 agitator name.
 
@@ -1075,61 +1079,18 @@ def draft_tube_overlays(name: str) -> tuple:
     ValueError
         If ``name`` is not a registered group-28 part.
     """
-    from pandid.render.symbols import (
-        CRYST_AGITATOR_FOOT, CRYST_AGITATOR_W, CRYST_H, CRYST_W, Overlay)
+    from pandid.render import symbols as s
+    room, width, foot, body_w, body_h = {
+        "crystallizer": (s.CRYST_W, s.CRYST_AGITATOR_W, s.CRYST_AGITATOR_FOOT,
+                         s.CRYST_W, s.CRYST_H),
+        "flotation_cell": (s.FLOT_TANK_W, s.FLOT_AGITATOR_W, s.FLOT_AGITATOR_FOOT,
+                           s.FLOT_W, s.FLOT_H),
+        "mixer_settler": (s.MS_MIXER_W, s.MS_AGITATOR_W, s.MS_AGITATOR_FOOT,
+                          s.MS_W, s.MS_H),
+    }[kind]
     _part(28, name)
-    width = CRYST_AGITATOR_W / CRYST_W
-    return (Overlay(28, name, (1 - width) / 2, 0.0, width, CRYST_AGITATOR_FOOT / CRYST_H),)
-
-
-def flotation_overlays(name: str) -> tuple:
-    """Return a group-28 agitator hung down a flotation cell's tank.
-
-    Parameters
-    ----------
-    name : str
-        Group-28 agitator name.
-
-    Returns
-    -------
-    tuple[Overlay]
-        The agitator.
-
-    Raises
-    ------
-    ValueError
-        If ``name`` is not a registered group-28 part.
-    """
-    from pandid.render.symbols import (
-        FLOT_AGITATOR_FOOT, FLOT_AGITATOR_W, FLOT_H, FLOT_TANK_W, FLOT_W, Overlay)
-    _part(28, name)
-    left = (FLOT_TANK_W - FLOT_AGITATOR_W) / 2 / FLOT_W
-    return (Overlay(28, name, left, 0.0, FLOT_AGITATOR_W / FLOT_W, FLOT_AGITATOR_FOOT / FLOT_H),)
-
-
-def mixer_settler_overlays(name: str) -> tuple:
-    """Return a group-28 agitator hung in a mixer-settler's mixer.
-
-    Parameters
-    ----------
-    name : str
-        Group-28 agitator name.
-
-    Returns
-    -------
-    tuple[Overlay]
-        The agitator.
-
-    Raises
-    ------
-    ValueError
-        If ``name`` is not a registered group-28 part.
-    """
-    from pandid.render.symbols import (
-        MS_AGITATOR_FOOT, MS_AGITATOR_W, MS_H, MS_MIXER_W, MS_W, Overlay)
-    _part(28, name)
-    left = (MS_MIXER_W - MS_AGITATOR_W) / 2 / MS_W
-    return (Overlay(28, name, left, 0.0, MS_AGITATOR_W / MS_W, MS_AGITATOR_FOOT / MS_H),)
+    return (s.Overlay(28, name, (room - width) / 2 / body_w, 0.0, width / body_w,
+                      foot / body_h),)
 
 
 #: Group-11 crusher and mill body box, in grid modules.
