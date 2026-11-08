@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
 - `element=` draws a thermowell, radar, vibrating-fork or electrode mark at a
   balloon's tap end: `fs.add_instrument("TT", 101, sensing=line, element="thermowell")`.
+- `CheckValve` draws the lift and swing checks of ISO 10628-2 (items 22.2 to
+  22.4), a ball check, a dual-plate check, a stop-check and a foot valve:
+  `CheckValve("NRV-101", variant="swing")`.
 - `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
   and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
   `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with

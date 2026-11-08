@@ -847,9 +847,10 @@ def test_flipping_a_valve_turns_its_actuator_over_with_it():
 
     for variant in _valve_variants():
         valve = U.Valve("V-1", variant=variant).pin(mirrored="y")
-        # The PSV's pilot connection is on the side of its bonnet, and a
-        # top-to-bottom flip leaves an east face where it was.
-        want = "E" if variant == "relief" else "S"
+        # The PSV's pilot connection is on the side of its bonnet, and the
+        # foot valve's on the side of its upright body, so a top-to-bottom
+        # flip leaves an east face where it was.
+        want = "E" if variant in ("relief", "foot") else "S"
         assert port_faces(valve, "actuator") == [want], variant
 
 

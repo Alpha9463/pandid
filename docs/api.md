@@ -105,7 +105,10 @@ The names depend on the class and variant. Common patterns are:
   `"solenoid"`, `"hydraulic"` or `"handwheel"`, drawn on the body's stem, as in
   `Valve("XV-101", variant="ball", actuator="piston")`. `ControlValve`,
   `SolenoidValve` and `MotorOperatedValve` draw their own actuator on the body
-  `variant=` names.
+  `variant=` names. A `CheckValve` has `inlet` and `outlet` only, and
+  `variant=` picks its form: `"lift"`, `"swing"`, `"swing_form_2"`, `"ball"`,
+  `"dual_plate"`, `"stop"` or `"foot"`, the foot valve drawn upright over its
+  strainer.
 - A machine that takes a driver has a `drive`: pumps, compressors, fans,
   conveyors, crushers, mills and feeders. A `Motor` (`variant="ac"` or `"dc"`
   for ISO items 20.7 and 20.8) turns it through its `shaft`:

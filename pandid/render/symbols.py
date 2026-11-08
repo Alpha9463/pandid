@@ -4317,6 +4317,149 @@ _STEAM_TRAP = Symbol(
 )
 
 
+# Check valves of ISO 10628-2 group 22 and the forms practice draws, on
+# the 24.5 x 15 body of the other valves, the check dot centred on the
+# body's inlet-side top corner.
+
+#: Body of a check valve.
+CHECK_W, CHECK_H = 24.5, 15.0
+
+#: Radius of the check dot and of the dot on a seat.
+CHECK_DOT_R = 3.75
+
+#: Radius of a ball check's ball.
+CHECK_BALL_R = 5.0
+
+#: Stop-check handwheel: the stem's rise above the body, and the bar.
+STOP_RISE, STOP_BAR = 1.25, 7.5
+
+#: Foot valve's strainer, and the stub between it and the body.
+FOOT_STRAINER_W, FOOT_STRAINER_H = 10.0, 20.0
+FOOT_STUB = 5.0
+
+# Dash of the strainer's screen, as on the vendored strainer.
+_SCREEN_DASH = 'stroke-dasharray="4 4"'
+
+# The body's corner in the symbol's box: the check dot overhangs it.
+_CK = CHECK_DOT_R
+
+# The body's crossing.
+_CK_X, _CK_Y = _CK + CHECK_W / 2, _CK + CHECK_H / 2
+
+_CHECK_PORTS = {"inlet": (_CK, _CK_Y), "outlet": (_CK + CHECK_W, _CK_Y),
+                "actuator": (_CK_X, 0.0)}
+
+
+def _check_dot(cx: float, cy: float) -> str:
+    """Return a filled check dot.
+
+    Parameters
+    ----------
+    cx, cy : float
+        Centre.
+
+    Returns
+    -------
+    str
+        SVG ``<circle>``.
+    """
+    return (f'<circle cx="{_n(cx)}" cy="{_n(cy)}" r="{_n(CHECK_DOT_R)}" '
+            f'fill="#111" stroke="#111" stroke-width="2"/>')
+
+
+# The two cones (item 22.1), and the box of a swing check's Form 2
+# (item 22.4).
+_CHECK_CONES = (f'<path d="M {_n(_CK)} {_n(_CK + CHECK_H)} L {_n(_CK)} {_n(_CK)} '
+                f'L {_n(_CK + CHECK_W)} {_n(_CK + CHECK_H)} L {_n(_CK + CHECK_W)} {_n(_CK)} Z" '
+                f'{_OUTLINE}/>')
+_CHECK_BOX = (f'<rect x="{_n(_CK)}" y="{_n(_CK)}" width="{_n(CHECK_W)}" '
+              f'height="{_n(CHECK_H)}" {_OUTLINE}/>')
+_CHECK_CORNER = _check_dot(_CK, _CK)
+
+
+def _check(variant: str, *marks: str, iso_reg: str = "") -> Symbol:
+    """Return a check valve: its body, its marks and the check dot.
+
+    Parameters
+    ----------
+    variant : str
+        Registry variant, for the artwork's id.
+    *marks : str
+        SVG elements, body first.
+    iso_reg : str, default=""
+        ISO 10628-2 registration number, or empty.
+
+    Returns
+    -------
+    Symbol
+        The check valve, piped west to east.
+    """
+    return Symbol(
+        svg=f'<g id="sym_valve_{variant}">{"".join(marks)}{_CHECK_CORNER}</g>',
+        width=_CK + CHECK_W, height=_CK + CHECK_H,
+        ports=dict(_CHECK_PORTS),
+        trim=True,
+        iso_reg=iso_reg,
+    )
+
+
+# Item 22.2, check valve globe type: a dot on the seat.
+_CHECK_LIFT = _check("lift_check", _CHECK_CONES, _check_dot(_CK_X, _CK_Y), iso_reg="X2113")
+
+# Item 22.3, swing check valve Form 1: the disc across the seat dot.
+_CHECK_SWING = _check(
+    "swing_check", _CHECK_CONES, _check_dot(_CK_X, _CK_Y),
+    f'<path d="M {_n(_CK_X)} {_n(_CK)} L {_n(_CK_X)} {_n(_CK + CHECK_H)}" {_INK}/>',
+    iso_reg="X8078")
+
+# Item 22.4, swing check valve Form 2: the disc swung across a box.
+_CHECK_SWING_FORM_2 = _check(
+    "swing_check_form_2", _CHECK_BOX,
+    f'<path d="M {_n(_CK)} {_n(_CK)} L {_n(_CK + CHECK_W)} {_n(_CK + CHECK_H)}" {_INK}/>',
+    iso_reg="X8165")
+
+# Ball check: item 22.1 with item 21.6's ball on the seat.
+_CHECK_BALL = _check(
+    "ball_check", _CHECK_CONES,
+    f'<circle cx="{_n(_CK_X)}" cy="{_n(_CK_Y)}" r="{_n(CHECK_BALL_R)}" {_OUTLINE}/>')
+
+# Dual-plate check: item 22.4's box with two plates swung open from the
+# pin on its axis.
+_CHECK_DUAL_PLATE = _check(
+    "dual_plate_check", _CHECK_BOX,
+    f'<path d="M {_n(_CK + CHECK_W)} {_n(_CK)} L {_n(_CK_X)} {_n(_CK_Y)} '
+    f'L {_n(_CK + CHECK_W)} {_n(_CK + CHECK_H)}" {_INK}/>')
+
+# Stop-check: item 22.2 with a handwheel on a stem from the seat.
+_CHECK_STOP = _check(
+    "stop_check", _CHECK_CONES, _check_dot(_CK_X, _CK_Y),
+    f'<path d="M {_n(_CK_X)} {_n(_CK_Y)} L {_n(_CK_X)} {_n(_CK - STOP_RISE)} '
+    f'L {_n(_CK_X + STOP_BAR)} {_n(_CK - STOP_RISE)}" {_INK}/>')
+
+# Foot valve: item 22.1 upright, flow rising, on a stub over a strainer
+# (item 24.6) the sump drains in through.
+_FOOT_X = _CK + CHECK_H / 2
+_FOOT_STRAINER_X = _FOOT_X - FOOT_STRAINER_W / 2
+_FOOT_STRAINER_Y = CHECK_W + FOOT_STUB
+_FOOT_H = _FOOT_STRAINER_Y + FOOT_STRAINER_H
+_CHECK_FOOT = Symbol(
+    svg='<g id="sym_valve_foot">'
+        f'<path d="M {_n(_CK + CHECK_H)} {_n(CHECK_W)} L {_n(_CK)} {_n(CHECK_W)} '
+        f'L {_n(_CK + CHECK_H)} 0 L {_n(_CK)} 0 Z" {_OUTLINE}/>'
+        f'<path d="M {_n(_FOOT_X)} {_n(CHECK_W)} L {_n(_FOOT_X)} {_n(_FOOT_STRAINER_Y)}" {_INK}/>'
+        f'<rect x="{_n(_FOOT_STRAINER_X)}" y="{_n(_FOOT_STRAINER_Y)}" '
+        f'width="{_n(FOOT_STRAINER_W)}" height="{_n(FOOT_STRAINER_H)}" {_OUTLINE}/>'
+        f'<path d="M {_n(_FOOT_STRAINER_X)} {_n(_FOOT_STRAINER_Y)} '
+        f'L {_n(_FOOT_STRAINER_X + FOOT_STRAINER_W)} {_n(_FOOT_H)}" {_INK} {_SCREEN_DASH}/>'
+        + _check_dot(_CK, CHECK_W) + '</g>',
+    width=_CK + CHECK_H, height=_FOOT_H,
+    ports={"inlet": (_FOOT_X, _FOOT_H), "outlet": (_FOOT_X, 0.0),
+           "actuator": (_CK + CHECK_H, CHECK_W / 2)},
+    trim=True,
+    gravity_fixed=True,
+)
+
+
 # Primary flow elements drawn in a box on the run, the size of the
 # vendored ones.
 
@@ -6143,6 +6286,7 @@ class SymbolRegistry:
         self._register_kilns()
         self._register_steam_trap()
         self._register_flow_elements()
+        self._register_check_valves()
         self._register_fans()
         self._register_pumps()
         self._register_compressors()
@@ -6179,6 +6323,16 @@ class SymbolRegistry:
     def _register_steam_trap(self):
         """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""
         self.register("fitting", _STEAM_TRAP, "steam_trap")
+
+    def _register_check_valves(self):
+        """Register the check valve forms of ISO 10628-2 group 22 and practice."""
+        self.register("valve", _CHECK_LIFT, "lift_check")
+        self.register("valve", _CHECK_SWING, "swing_check")
+        self.register("valve", _CHECK_SWING_FORM_2, "swing_check_form_2")
+        self.register("valve", _CHECK_BALL, "ball_check")
+        self.register("valve", _CHECK_DUAL_PLATE, "dual_plate_check")
+        self.register("valve", _CHECK_STOP, "stop_check")
+        self.register("valve", _CHECK_FOOT, "foot")
 
     def _register_flow_elements(self):
         """Register the hand-drawn primary flow elements."""

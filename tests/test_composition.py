@@ -1094,6 +1094,10 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "kneader/default": "X8134",
     # Group 24, item 24.15: the steam trap.
     "fitting/steam_trap": "2181",
+    # Group 22, CHECK VALVE.
+    "valve/lift_check": "X2113",
+    "valve/swing_check": "X8078",
+    "valve/swing_check_form_2": "X8165",
     # Group 7, SCREENING DEVICES, SIEVES AND RAKES.
     "screening_device/general": "X8123",
     "screening_device/coarse_rake": "X8026",

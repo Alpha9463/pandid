@@ -1625,14 +1625,41 @@ class PressureRegulator(Valve):
 class CheckValve(Valve):
     """Check valve: passes flow one way and shuts against the other.
 
-    Its ports are ``inlet`` and ``outlet``. A normally closed one is
-    marked ``NC`` (PIP PIC001 4.2.2.8).
+    ``variant=`` is its form: ``lift``, ``swing`` and ``swing_form_2``
+    (ISO 10628-2 items 22.2 to 22.4), ``ball``, ``dual_plate``,
+    ``stop`` (a stop-check, with a handwheel) or ``foot`` (upright over
+    its strainer). Its ports are ``inlet`` and ``outlet``. A normally
+    closed one is marked ``NC`` (PIP PIC001 4.2.2.8).
 
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    VARIANTS = ("default", "check")
-    VARIANT_ALIASES = {"default": "check"}
+    VARIANTS = (
+        "default",
+        "lift",
+        "swing",
+        "swing_form_2",
+        "ball",
+        "dual_plate",
+        "stop",
+        "foot",
+        "check",
+        "lift_check",
+        "swing_check",
+        "swing_check_form_2",
+        "ball_check",
+        "dual_plate_check",
+        "stop_check",
+    )
+    VARIANT_ALIASES = {
+        "default": "check",
+        "lift": "lift_check",
+        "swing": "swing_check",
+        "swing_form_2": "swing_check_form_2",
+        "ball": "ball_check",
+        "dual_plate": "dual_plate_check",
+        "stop": "stop_check",
+    }
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port
