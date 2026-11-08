@@ -376,3 +376,66 @@ def test_each_marker_is_drawn_as_stated_in_svg_and_drawio(kind: str) -> None:
     # Leave out the line's own number, S1.
     assert (lines, shapes, {t for t in texts if t[3] != line.name}) == expected
     assert _drawio_marker(fs.to_drawio()) == expected
+
+
+def _overlap(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
+    """Return whether two boxes, as left, top, right, bottom, share area."""
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def test_a_docked_note_keeps_off_a_limit_above_its_line() -> None:
+    """Dock a top-left notes box clear of a limit's diamond and parties, in SVG and draw.io."""
+    fs = Flowsheet("Docked")
+    feed, product = fs.add(Feed("F")), fs.add(Product("P"))
+    line = fs.connect(feed.outlet, product.inlet)
+    line.mark("battery limit", at=0.5, before="VENDOR", after="OWNER")
+    fs.add_annotation(
+        notes(["Tie in to the owner's header", "Hydrotest by vendor"], align="top-left")
+    )
+    svg = fs.to_svg(diagram="p&id")
+    found = re.search(
+        r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" '
+        r'stroke="black" stroke-width="1.5"/>\s*<text[^>]*>NOTES<',
+        svg,
+    )
+    assert found is not None
+    x, y, w, h = map(float, found.groups())
+    sheet_note = (x, y, x + w, y + h)
+    points = re.search(r'<polygon points="([^"]+)" fill="none"', svg)
+    assert points is not None
+    xs, ys = zip(*(map(float, p.split(",")) for p in points.group(1).split()))
+    assert not _overlap(sheet_note, (min(xs), min(ys), max(xs), max(ys)))
+    for word in ("VENDOR", "OWNER"):
+        at = re.search(rf'<text x="([-\d.]+)" y="([-\d.]+)"[^>]*>{word}<', svg)
+        assert at is not None
+        assert float(at.group(2)) - 5 > sheet_note[3]
+
+    root = ET.fromstring(fs.to_drawio())
+    cells = {c.get("id"): c for c in root.iter("mxCell")}
+    note = next(c for c in cells.values() if c.get("value") == "NOTES")
+    geo = note.find("mxGeometry")
+    assert geo is not None
+    nx, ny, nw, nh = (float(geo.get(k, "nan")) for k in ("x", "y", "width", "height"))
+    edge, source = cells["s0"], cells[cells["s0"].get("source")]
+    style = dict(kv.split("=", 1) for kv in (edge.get("style") or "").split(";") if "=" in kv)
+    src = source.find("mxGeometry")
+    assert src is not None
+    ex = float(src.get("x", "nan")) + float(style["exitX"]) * float(src.get("width", "nan"))
+    ey = float(src.get("y", "nan")) + float(style["exitY"]) * float(src.get("height", "nan"))
+    (drawn,) = line_markers(fs)
+    total = math.dist(drawn.start, drawn.end)
+    for cell in cells.values():
+        if cell.get("parent") != "s0":
+            continue
+        child = cell.find("mxGeometry")
+        offset = child.find("mxPoint") if child is not None else None
+        assert child is not None and offset is not None
+        left = ex + (float(child.get("x", "nan")) + 1) / 2 * total + float(offset.get("x", "nan"))
+        top = ey + float(offset.get("y", "nan"))
+        box = (
+            left,
+            top,
+            left + float(child.get("width", "nan")),
+            top + float(child.get("height", "nan")),
+        )
+        assert not _overlap((nx, ny, nx + nw, ny + nh), box), cell.get("id")
