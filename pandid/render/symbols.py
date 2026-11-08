@@ -498,6 +498,9 @@ class Symbol:
         Whether the artwork may be scaled unevenly to fill a box.
     bare_run : bool
         The artwork is only pipe; a stream ending here has no arrowhead.
+    axial_taps : bool
+        The artwork is drawn along its vertical centre line, so a tap
+        from its W or E face starts at the box's centre.
     gravity_fixed : bool
         The function depends on gravity; turning it is reported.
     directional : bool
@@ -538,6 +541,7 @@ class Symbol:
     id_suffix: str = ""
     stretchable: bool = True
     bare_run: bool = False
+    axial_taps: bool = False
     gravity_fixed: bool = False
     directional: bool = False
     drawio_shape: str = ""

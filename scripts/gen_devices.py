@@ -343,6 +343,16 @@ DEVICES = {
     ``normal_position="open"`` puts the ring in the line;
     ``normal_position="closed"`` puts the solid disc in it.
 """),
+    ("fitting", "paddle_blind"): ("PaddleBlind", """Paddle blind: a solid disc on a handle, blanking the line.
+
+    ISO 10628-2 item 24.9. For the bored disc that keeps the line open,
+    use :class:`PaddleSpacer`.
+"""),
+    ("fitting", "paddle_spacer"): ("PaddleSpacer", """Paddle spacer: a bored disc on a handle, keeping the line open.
+
+    ISO 10628-2 item 24.10. For the solid disc that blanks the line,
+    use :class:`PaddleBlind`.
+"""),
     ("fitting", "steam_trap"): ("SteamTrap", """Steam trap: drains condensate from a steam line.
 
     ISO 10628-2 item 24.15.
