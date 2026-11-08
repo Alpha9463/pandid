@@ -3074,6 +3074,13 @@ def _rounded(segments) -> list:
         lambda: devices.FlowElement("FE-2", variant="ultrasonic_clamp_on"),
         lambda: devices.FlowElement("FE-3", variant="thermal_mass"),
         lambda: devices.FlowElement("FE-4", variant="flume"),
+        lambda: devices.CheckValve("NRV-1", variant="lift"),
+        lambda: devices.CheckValve("NRV-2", variant="swing"),
+        lambda: devices.CheckValve("NRV-3", variant="swing_form_2"),
+        lambda: devices.CheckValve("NRV-4", variant="ball"),
+        lambda: devices.CheckValve("NRV-5", variant="dual_plate"),
+        lambda: devices.CheckValve("NRV-6", variant="stop"),
+        lambda: devices.CheckValve("NRV-7", variant="foot"),
     ],
     ids=[
         "silo",
@@ -3097,6 +3104,13 @@ def _rounded(segments) -> list:
         "ultrasonic_clamp_on",
         "thermal_mass",
         "flume",
+        "lift_check",
+        "swing_check",
+        "swing_form_2_check",
+        "ball_check",
+        "dual_plate_check",
+        "stop_check",
+        "foot_check",
     ],
 )
 def test_a_drawing_exported_as_its_outline_traces_the_sheets_artwork(build):

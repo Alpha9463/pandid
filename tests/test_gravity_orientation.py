@@ -225,6 +225,7 @@ GRAVITY_FIXED = {
     ("mixer_settler", "default"),
     ("deaerator", "default"),
     ("pump", "vertical_turbine"),
+    ("valve", "foot"),
 }
 
 

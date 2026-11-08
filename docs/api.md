@@ -100,7 +100,10 @@ The names depend on the class and variant. Common patterns are:
 
 - `Feed.outlet` connects to a unit's inlet; `Product.inlet` receives its output.
 - Pumps, compressors and fans use `suction` and `discharge`; valves use
-  `inlet`, `outlet` and a signal `actuator`.
+  `inlet`, `outlet` and a signal `actuator`. A `CheckValve` has `inlet` and
+  `outlet` only, and `variant=` picks its form: `"lift"`, `"swing"`,
+  `"swing_form_2"`, `"ball"`, `"dual_plate"`, `"stop"` or `"foot"`, the foot
+  valve drawn upright over its strainer.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`

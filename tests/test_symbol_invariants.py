@@ -1951,6 +1951,7 @@ def test_the_valves_the_run_does_not_cross_are_out_of_scope():
     assert sorted(set(default_registry.variants("valve")) - set(_STRAIGHT_VALVES)) == [
         "angle",
         "bleed",
+        "foot",
         "psv",
         "relief",
     ]

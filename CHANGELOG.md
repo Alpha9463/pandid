@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `CheckValve` draws the lift and swing checks of ISO 10628-2 (items 22.2 to
+  22.4), a ball check, a dual-plate check, a stop-check and a foot valve:
+  `CheckValve("NRV-101", variant="swing")`.
 - `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
   and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
   `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with

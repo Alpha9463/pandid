@@ -319,8 +319,11 @@ DEVICES = {
 """),
     ("valve", "check"): ("CheckValve", """Check valve: passes flow one way and shuts against the other.
 
-    Its ports are ``inlet`` and ``outlet``. A normally closed one is
-    marked ``NC`` (PIP PIC001 4.2.2.8).
+    ``variant=`` is its form: ``lift``, ``swing`` and ``swing_form_2``
+    (ISO 10628-2 items 22.2 to 22.4), ``ball``, ``dual_plate``,
+    ``stop`` (a stop-check, with a handwheel) or ``foot`` (upright over
+    its strainer). Its ports are ``inlet`` and ``outlet``. A normally
+    closed one is marked ``NC`` (PIP PIC001 4.2.2.8).
 """),
 
     # --- In-line fittings ---------------------------------------------
@@ -378,6 +381,11 @@ OWNS = {
         "default": "control", "butterfly_pneumatic": "butterfly_pneumatic",
     },
     "ReliefValve": {"default": "relief", "psv": "psv"},
+    "CheckValve": {
+        "default": "check", "lift": "lift_check", "swing": "swing_check",
+        "swing_form_2": "swing_check_form_2", "ball": "ball_check",
+        "dual_plate": "dual_plate_check", "stop": "stop_check", "foot": "foot",
+    },
     "FlowElement": {
         "default": "venturi", "venturi": "venturi", "flow_nozzle": "flow_nozzle",
         "coriolis": "coriolis", "vortex": "vortex", "ultrasonic": "ultrasonic",
@@ -898,7 +906,7 @@ def _wrap(open_bracket: str, entries: list[str], close_bracket: str) -> str:
 
 
 def _dict(mapping: dict[str, str]) -> str:
-    """Return a string mapping as a one-line dict literal.
+    """Return a string mapping as a dict literal, wrapped if over one line.
 
     Parameters
     ----------
@@ -910,7 +918,9 @@ def _dict(mapping: dict[str, str]) -> str:
     str
         Dict literal.
     """
-    return "{" + ", ".join(f"{_q(k)}: {_q(v)}" for k, v in mapping.items()) + "}"
+    entries = [f"{_q(k)}: {_q(v)}" for k, v in mapping.items()]
+    flat = "{" + ", ".join(entries) + "}"
+    return flat if len(flat) + len("    VARIANT_ALIASES = ") <= 99 else _wrap("{", entries, "}")
 
 
 def _ports_source(ports: list[tuple[str, str, str]]) -> str:
