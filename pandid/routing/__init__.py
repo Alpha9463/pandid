@@ -595,8 +595,11 @@ class DefaultRouter:
             return True
 
         for stream in fs.streams:
-            if stream.kind == MECHANICAL and not (stream.route and stream.route.manual):
-                stream.route = Route()
+            ends = (stream.source, stream.dest)
+            if (stream.kind == MECHANICAL and not (stream.route and stream.route.manual)
+                    and all(p.owner.frame is not None for p in ends)):
+                stream.route = Route(waypoints=[
+                    resolve_port(p.owner, p.owner.frame, p.name).point for p in ends])
                 routed.append(stream)
             elif (stream.route and stream.route.manual) or route_one(stream, None):
                 routed.append(stream)

@@ -4,7 +4,7 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterable, List, Set, Tuple
 
-from pandid.streams import SHAFT_ROLES
+from pandid.streams import MECHANICAL, SHAFT_ROLES
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -303,7 +303,7 @@ class VisibilityGraph:
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
         from pandid.package import frame as package_frame
-        from pandid.portgeom import COMPASS, port_anchor, unit_box
+        from pandid.portgeom import COMPASS, port_anchor, port_point, unit_box
         from pandid.route_geometry import SNAP
 
         margin = MARGIN
@@ -396,6 +396,15 @@ class VisibilityGraph:
             if box is not None:
                 x_set.update((box[0] - margin, box[2] + margin))
                 y_set.update((box[1] - margin, box[3] + margin))
+
+        # A level or upright shaft blocks the lanes across it.
+        for stream in fs.streams:
+            ends = (stream.source, stream.dest)
+            if stream.kind != MECHANICAL or any(p.owner.frame is None for p in ends):
+                continue
+            (x1, y1), (x2, y2) = (port_point(p.owner, p.owner.frame, p.name) for p in ends)
+            if x1 == x2 or y1 == y2:
+                self.obstacles.append(Rect(min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)))
 
         for stream in fs.streams:
             src, dst = stream.source, stream.dest
