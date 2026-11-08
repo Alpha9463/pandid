@@ -2012,7 +2012,7 @@ def flanged_joint(port, want: str) -> bool:
         if want != "flanged" or kind not in _INLINE_BODIES:
             return False
         own = default_registry.get(kind, getattr(port.owner, "variant", "default")).drawio_shape
-        return own is None or own != default_registry.get("fitting", "flange").drawio_shape
+        return own != default_registry.get("fitting", "flange").drawio_shape
     return True
 
 
