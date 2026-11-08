@@ -281,3 +281,22 @@ def test_draw_io_draws_a_stirred_tank_under_a_round_motor_on_its_shaft():
     assert "agitators.agitator_(turbine)" in (stirrer.get("style") or "")
     x, y, w, _ = _geometry(stirrer)
     assert (x + w / 2, y) == pytest.approx((35, MOTOR_D))
+
+
+@pytest.mark.parametrize(
+    ("make", "variant"),
+    [
+        (lambda: Tank("TK-101", agitator="turbine"), "floating_roof"),
+        (lambda: Vessel("V-101", agitator="anchor"), "horizontal"),
+    ],
+    ids=["tank-to-floating-roof", "vessel-to-drum"],
+)
+def test_a_stirred_body_reassigned_to_a_variant_that_cannot_carry_it_is_refused(make, variant):
+    """Check that reassigning the variant refuses as the constructor does, and keeps the old one."""
+    unit = make()
+    with pytest.raises(ValueError, match=f"variant {variant!r} cannot carry agitator="):
+        unit.variant = variant
+    assert unit.variant == "default"
+    fs = Flowsheet("Kept")
+    fs.add(unit)
+    fs.to_svg()
