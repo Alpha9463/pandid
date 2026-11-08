@@ -3,10 +3,12 @@
 import xml.etree.ElementTree as ET
 
 import pytest
-from marks import _STENCILS, assert_inked
+from marks import _STENCILS, assert_inked, off_ink, svg_ink
 from test_symbol_invariants import _IDENTITY, _apply, _compose, _parse_transform, _script
 
 from pandid import Feed, Fitting, Flowsheet, PaddleBlind, PaddleSpacer, Product
+from pandid.portgeom import axial_tap, unit_box
+from pandid.render.svg import tap_lines
 from pandid.render.symbols import default_registry
 
 #: The disc on its handle, as both rows draw it in a 10 x 30 box: the
@@ -96,3 +98,33 @@ def test_a_line_through_each_draws_clean(tmp_path):
     fs.render(str(tmp_path / "b.svg"), diagram="p&id")
     assert fs.validate() == []
     fs.render(str(tmp_path / "b.drawio"), diagram="p&id")
+
+
+@pytest.mark.parametrize("variant", ["blind", "orifice", "paddle_blind", "paddle_spacer"])
+@pytest.mark.parametrize("face", ["E", "W"])
+def test_a_tap_from_the_side_of_a_disc_on_a_handle_starts_on_its_ink(variant: str, face: str):
+    """Check a side balloon's tap starts on the drawing, not beside the handle."""
+    fs = Flowsheet("Tap")
+    fitting = fs.add(Fitting("X-1", variant=variant))
+    fs.connect(fs.add(Feed("Feed")).outlet, fitting.inlet)
+    fs.connect(fitting.outlet, fs.add(Product("Product")).inlet)
+    fs.add_instrument("PI", 1, sensing=fitting, face=face)
+    fs.route()
+    [(_, (tx, ty), _)] = tap_lines(fs)
+    x0, y0, _, _ = unit_box(fitting, fitting.frame)
+    assert not off_ink([(tx - x0, ty - y0)], svg_ink(fitting))
+
+
+def test_a_turned_disc_on_a_handle_takes_side_taps_on_its_turned_axis():
+    """Check a blind turned a quarter takes the axis tap from N and S, not E and W."""
+    fs = Flowsheet("Turned")
+    blind = fs.add(Fitting("X-1", variant="blind")).pin(orientation=90)
+    fs.connect(fs.add(Feed("Feed")).outlet, blind.inlet)
+    fs.connect(blind.outlet, fs.add(Product("Product")).inlet)
+    fs.route()
+    x0, y0, x1, y1 = unit_box(blind, blind.frame)
+    centre = ((x0 + x1) / 2, (y0 + y1) / 2)
+    assert axial_tap(blind, blind.frame, "N") == centre
+    assert axial_tap(blind, blind.frame, "S") == centre
+    assert axial_tap(blind, blind.frame, "E") is None
+    assert axial_tap(blind, blind.frame, "W") is None

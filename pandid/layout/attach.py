@@ -196,7 +196,7 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     tuple[Point, Point] or None
         Tap point and direction, or None if the host is unplaced.
     """
-    from pandid.portgeom import face_point
+    from pandid.portgeom import axial_tap, face_point
     from pandid.streams import Stream
 
     host = inst.host
@@ -212,7 +212,7 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
     fs = inst.flowsheet
     moved = nozzle_tap(inst) if fs is not None and fs._clear_taps else None
-    return (moved or (px, py)), (-ny, nx)
+    return (moved or axial_tap(host, host.frame, face or "E") or (px, py)), (-ny, nx)
 
 
 def nozzle_tap(inst: "Instrument") -> Point | None:

@@ -505,6 +505,7 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 5.0), 'outlet': (10.0, 5.0)},
         drawio_shape='mxgraph.pid.fittings.orifice_plate',
         trim=True,
+        axial_taps=True,
     ), 'orifice')
 
     registry.register('fitting', Symbol(
@@ -682,6 +683,7 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 15.0), 'outlet': (10.0, 15.0)},
         drawio_shape='mxgraph.pid.piping.open_figure_8_blind',
         trim=True,
+        axial_taps=True,
     ), 'blind')
 
     registry.register_closed('fitting', Symbol(
@@ -691,6 +693,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.piping.closed_figure_8_blind',
         trim=True,
         id_suffix='_closed',
+        axial_taps=True,
     ), 'blind')
 
     registry.register('fitting', Symbol(
@@ -699,6 +702,7 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 5.0), 'outlet': (10.0, 5.0)},
         drawio_shape='mxgraph.pid.piping.blank',
         trim=True,
+        axial_taps=True,
     ), 'paddle_blind')
 
     registry.register('fitting', Symbol(
@@ -707,6 +711,7 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 5.0), 'outlet': (10.0, 5.0)},
         drawio_shape='mxgraph.pid.piping.spacer',
         trim=True,
+        axial_taps=True,
     ), 'paddle_spacer')
 
     registry.register('hex', Symbol(

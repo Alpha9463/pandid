@@ -682,6 +682,17 @@ GRAVITY_FIXED = {
     ("thickener", "default"): "open rim over a raked cone; the solids settle into it",
 }
 
+# Discs on a handle, drawn along their vertical centre line, as
+# ``Symbol.axial_taps``: a balloon tapping one from the side starts on the
+# drawing, not on the box edge beside the handle.
+# (kind, variant) -> what is drawn along the centre line
+AXIAL_TAPS = {
+    ("fitting", "blind"):         "two discs on a handle",
+    ("fitting", "orifice"):       "a bored disc on a handle",
+    ("fitting", "paddle_blind"):  "a solid disc on a handle",
+    ("fitting", "paddle_spacer"): "an open disc on a handle",
+}
+
 # Symbols whose arrowhead states a direction of flow that a mirror would reverse,
 # as ``Symbol.directional``.
 DIRECTIONAL = {
@@ -1030,7 +1041,8 @@ def render() -> str:
         )
     # Refuse a table entry for a symbol KIND_MAP does not draw.
     tables = {"CLOSED_SHAPES": CLOSED_SHAPES, "GRAVITY_FIXED": GRAVITY_FIXED,
-              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES,
+              "DIRECTIONAL": DIRECTIONAL, "AXIAL_TAPS": AXIAL_TAPS,
+              "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES,
               "SERIES_FACES": SERIES_FACES}
     for table_name, table in tables.items():
         orphans = sorted(key for key in table if key not in KIND_MAP)
@@ -1124,6 +1136,8 @@ def render() -> str:
             # must not be turned.
             if (kind, variant) in GRAVITY_FIXED:
                 lines.append("        gravity_fixed=True,")
+            if (kind, variant) in AXIAL_TAPS:
+                lines.append("        axial_taps=True,")
             if (kind, variant) in DIRECTIONAL:
                 if "<text" in inner:
                     raise SystemExit(
