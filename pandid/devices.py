@@ -97,6 +97,10 @@ __all__ = [
     "ImpactMill",
     "RollerMill",
     "VibratingMill",
+    "BallMill",
+    "RodMill",
+    "SAGMill",
+    "AGMill",
     "ScrewConveyor",
     "RotaryValveFeeder",
     "RotaryTableFeeder",
@@ -115,6 +119,8 @@ __all__ = [
     "MotorOperatedValve",
     "CheckValve",
     "SpectacleBlind",
+    "PaddleBlind",
+    "PaddleSpacer",
     "SteamTrap",
     "FlowElement",
     "StirredTankReactor",
@@ -133,6 +139,7 @@ class CentrifugalPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class GearPump(Pump):
@@ -146,6 +153,7 @@ class GearPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ScrewPump(Pump):
@@ -159,6 +167,7 @@ class ScrewPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class PeristalticPump(Pump):
@@ -174,6 +183,7 @@ class PeristalticPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class SubmersiblePump(Pump):
@@ -190,6 +200,7 @@ class SubmersiblePump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class VacuumPump(Pump):
@@ -205,6 +216,7 @@ class VacuumPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ProgressiveCavityPump(Pump):
@@ -220,6 +232,7 @@ class ProgressiveCavityPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ReciprocatingPump(Pump):
@@ -235,6 +248,7 @@ class ReciprocatingPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class DiaphragmPump(Pump):
@@ -250,6 +264,7 @@ class DiaphragmPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class LobePump(Pump):
@@ -263,6 +278,7 @@ class LobePump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class VerticalTurbinePump(Pump):
@@ -279,6 +295,7 @@ class VerticalTurbinePump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class CentrifugalCompressor(Compressor):
@@ -291,6 +308,7 @@ class CentrifugalCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ReciprocatingCompressor(Compressor):
@@ -304,6 +322,7 @@ class ReciprocatingCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class RotaryCompressor(Compressor):
@@ -319,6 +338,7 @@ class RotaryCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ScrewCompressor(Compressor):
@@ -334,6 +354,7 @@ class ScrewCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class LiquidRingCompressor(Compressor):
@@ -347,6 +368,7 @@ class LiquidRingCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class CentrifugalFan(Blower):
@@ -363,6 +385,7 @@ class CentrifugalFan(Blower):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class AxialFan(Blower):
@@ -376,6 +399,7 @@ class AxialFan(Blower):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ShellAndTubeExchanger(HeatExchanger):
@@ -1063,6 +1087,7 @@ class JawCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ConeCrusher(Crusher):
@@ -1078,6 +1103,7 @@ class ConeCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class HammerCrusher(Crusher):
@@ -1093,6 +1119,7 @@ class HammerCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ImpactCrusher(Crusher):
@@ -1108,6 +1135,7 @@ class ImpactCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RollerCrusher(Crusher):
@@ -1123,6 +1151,7 @@ class RollerCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class HammerMill(Mill):
@@ -1138,6 +1167,7 @@ class HammerMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ImpactMill(Mill):
@@ -1153,6 +1183,7 @@ class ImpactMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RollerMill(Mill):
@@ -1168,6 +1199,7 @@ class RollerMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class VibratingMill(Mill):
@@ -1183,6 +1215,79 @@ class VibratingMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
+
+
+class BallMill(Mill):
+    """Ball mill: a long drum tumbling a charge of steel balls.
+
+    Drawn on a trunnion at each end, with two rows
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "ball")
+    VARIANT_ALIASES = {"default": "ball"}
+
+    feed: Port
+    discharge: Port
+    drive: Port
+
+
+class RodMill(Mill):
+    """Rod mill: a long drum tumbling a charge of steel rods.
+
+    Drawn on a trunnion at each end, with three
+    rods along the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "rod")
+    VARIANT_ALIASES = {"default": "rod"}
+
+    feed: Port
+    discharge: Port
+    drive: Port
+
+
+class SAGMill(Mill):
+    """SAG mill: a short, wide drum tumbling ore with a few steel balls.
+
+    Drawn on a trunnion at each end, with one row
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "sag")
+    VARIANT_ALIASES = {"default": "sag"}
+
+    feed: Port
+    discharge: Port
+    drive: Port
+
+
+class AGMill(Mill):
+    """AG mill: a short, wide drum tumbling ore on itself.
+
+    Drawn on a trunnion at each end, with no
+    grinding media. ``feed`` enters the west trunnion and ``discharge``
+    leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "ag")
+    VARIANT_ALIASES = {"default": "ag"}
+
+    feed: Port
+    discharge: Port
+    drive: Port
 
 
 class ScrewConveyor(Conveyor):
@@ -1200,6 +1305,7 @@ class ScrewConveyor(Conveyor):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RotaryValveFeeder(Feeder):
@@ -1215,6 +1321,7 @@ class RotaryValveFeeder(Feeder):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RotaryTableFeeder(Feeder):
@@ -1230,6 +1337,7 @@ class RotaryTableFeeder(Feeder):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class MeteringFeeder(Feeder):
@@ -1245,6 +1353,7 @@ class MeteringFeeder(Feeder):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class CoarseRakeScreen(ScreeningDevice):
@@ -1503,6 +1612,38 @@ class SpectacleBlind(Fitting):
 
     VARIANTS = ("default", "blind")
     VARIANT_ALIASES = {"default": "blind"}
+
+    inlet: Port
+    outlet: Port
+
+
+class PaddleBlind(Fitting):
+    """Paddle blind: a solid disc on a handle, blanking the line.
+
+    ISO 10628-2 item 24.9. For the bored disc that keeps the line open,
+    use :class:`PaddleSpacer`.
+
+    Parameters are those of :class:`~pandid.units.Fitting`.
+    """
+
+    VARIANTS = ("default", "paddle_blind")
+    VARIANT_ALIASES = {"default": "paddle_blind"}
+
+    inlet: Port
+    outlet: Port
+
+
+class PaddleSpacer(Fitting):
+    """Paddle spacer: a bored disc on a handle, keeping the line open.
+
+    ISO 10628-2 item 24.10. For the solid disc that blanks the line,
+    use :class:`PaddleBlind`.
+
+    Parameters are those of :class:`~pandid.units.Fitting`.
+    """
+
+    VARIANTS = ("default", "paddle_spacer")
+    VARIANT_ALIASES = {"default": "paddle_spacer"}
 
     inlet: Port
     outlet: Port

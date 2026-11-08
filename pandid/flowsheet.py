@@ -23,7 +23,8 @@ from pandid.stations import (
     DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
 from pandid.inline import _INLINE_KINDS
-from pandid.streams import LINE_NUMBER_FIELDS, PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
+from pandid.streams import (LINE_NUMBER_FIELDS, MECHANICAL, PROCESS_KINDS, SHAFT_ROLES,
+                            SIGNAL_KINDS, STREAM_KINDS, Stream)
 
 if TYPE_CHECKING:
     from collections import Counter
@@ -146,7 +147,8 @@ def _inferred_kind(src: "Port", dst: "Port") -> str:
 
     Two signal ports imply ``"pneumatic"`` when one is the actuator of
     a valve drawn with a diaphragm or with no actuator, else
-    ``"electric"``; two energy or utility ports imply ``"energy"``.
+    ``"electric"``; two energy or utility ports imply ``"energy"``; a
+    driver's shaft to a machine's drive implies ``"mechanical"``.
 
     Parameters
     ----------
@@ -156,8 +158,11 @@ def _inferred_kind(src: "Port", dst: "Port") -> str:
     Returns
     -------
     str
-        ``"pneumatic"``, ``"electric"``, ``"energy"`` or ``"material"``.
+        ``"pneumatic"``, ``"electric"``, ``"energy"``, ``"mechanical"``
+        or ``"material"``.
     """
+    if (src.role, dst.role) == ("shaft", "drive"):
+        return MECHANICAL
     if src.role == "signal":
         from pandid.render.symbols import variant_actuator
 
@@ -481,8 +486,12 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
     Raises
     ------
     ValueError
-        If only one port is a signal port, or the kind is wrong.
+        If only one port is a signal port, a shaft does not run from a
+        driver's shaft to a machine's drive, or the kind is wrong.
     """
+    if kind == MECHANICAL or {src.role, dst.role} & SHAFT_ROLES:
+        _check_shaft(src, dst, kind)
+        return
     signal_ends = [p for p in (src, dst) if p.role == "signal"]
     if len(signal_ends) == 1:
         signal = signal_ends[0]
@@ -502,6 +511,51 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
             f"{_spell(src)} to {_spell(dst)} is process piping; kind must be one "
             f"of {sorted(PROCESS_KINDS)}, got {kind!r}"
         )
+
+
+def _check_shaft(src: "Port", dst: "Port", kind: str) -> None:
+    """Check that a shaft runs from a driver's shaft to a machine's drive.
+
+    Parameters
+    ----------
+    src, dst : Port
+        Source and destination ports, one of them a shaft or a drive, or
+        joined with ``kind="mechanical"``.
+    kind : str
+        Stream kind.
+
+    Raises
+    ------
+    ValueError
+        If the ports are not a shaft and a drive, or the kind is not
+        ``"mechanical"``.
+    """
+    if (src.role, dst.role) == ("shaft", "drive"):
+        if kind != MECHANICAL:
+            raise ValueError(
+                f"{_spell(src)} to {_spell(dst)} is a shaft, drawn as a mechanical "
+                f"link; leave kind unset, or give kind='mechanical'")
+        return
+    if src.role == "shaft":
+        drive = dst.owner.ports.get("drive")
+        if drive is not None and drive.role != "drive":
+            raise ValueError(
+                f"{dst.owner.name} is drawn with its own motor (ISO 10628-2 item 1.27), "
+                f"and {_spell(drive)} is that motor's power connection, so "
+                f"{src.owner.name} would draw a second motor on it. Leave "
+                f"{src.owner.name} off the sheet")
+        cure = (f"fs.connect({_spell(src)}, {_spell(drive)})" if drive is not None
+                else f"{dst.owner.name} takes no driver")
+        raise ValueError(
+            f"{_spell(src)} is a driver's shaft, and a shaft turns a machine "
+            f"through its drive: {cure}")
+    if dst.role == "drive":
+        raise ValueError(
+            f"{_spell(dst)} takes a driver's shaft, such as a Motor's: "
+            f"fs.connect(<driver>.shaft, {_spell(dst)})")
+    raise ValueError(
+        f"kind='mechanical' is a shaft from a driver's shaft to a machine's drive, "
+        f"and {_spell(src)} to {_spell(dst)} is not one; leave kind unset")
 
 
 # Lets add() return the subclass it was given.
@@ -538,7 +592,7 @@ def _whole_number(value: Any, name: str) -> int:
 
 # Layout and route switches a drawing is held with, in _state() order.
 _SWITCHES = (
-    "_free_faces", "_clear_taps", "_off_leaders", "_exit_tight", "_mounted_layout", "_widened",
+    "_free_faces", "_clear_taps", "_axial_taps", "_off_leaders", "_exit_tight", "_mounted_layout", "_widened",
     "_stack_spans", "_rows_out", "_tees_away", "_fannable", "_far_branches", "_flags_off",
     "_lanes", "_relaned", "_crowded_station", "_angle_valves", "_furniture_over",
 )
@@ -780,6 +834,9 @@ class Flowsheet:
         # Whether a balloon drawn from a face the author named taps the face
         # beside a nozzle a line leaves from its middle.
         self._clear_taps = False
+        # Whether a balloon tapping the side of a drawing laid along its
+        # axis starts its tap at the drawing's centre.
+        self._axial_taps = False
         # Whether a route that finds no path is drawn round the units in
         # its way where it can.
         self._clear_fallback = False
@@ -2092,8 +2149,10 @@ class Flowsheet:
             ``"pneumatic"`` for a signal line to the actuator of a valve
             drawn with a diaphragm or with no actuator, ``"electric"``
             for another signal line, ``"energy"`` between two energy or
-            utility ports, else ``"material"``. An energy line names its
-            carrier with ``service``, which its line number draws.
+            utility ports, ``"mechanical"`` from a driver's ``shaft`` to
+            a machine's ``drive``, else ``"material"``. An energy line
+            names its carrier with ``service``, which its line number
+            draws.
         name : str or None, optional
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False
@@ -2240,6 +2299,7 @@ class Flowsheet:
                 raise ValueError(
                     "both units must be added to this flowsheet before connecting"
                 )
+        kind = kind if stated else _inferred_kind(src, dst)
         _check_signal_pairing(src, dst, kind)
         # Refuse a connected port unless its pool has another.
         for port in (src, dst):
@@ -2248,7 +2308,7 @@ class Flowsheet:
                     f"port {port.owner.name}.{port.name} is already connected"
                     f"{self._taken(port)}"
                 )
-        return src, dst, _inferred_kind(src, dst) if not stated else kind
+        return src, dst, kind
 
     def _taken(self, port: "Port") -> str:
         """Return what already uses a connected port, and what to do.
@@ -3773,15 +3833,15 @@ class Flowsheet:
             If the default router's path search exceeds its budget.
         """
         # Start from main's faces for unfaced balloons, taps and balloons.
-        self._free_faces = self._clear_taps = self._off_leaders = False
+        self._free_faces = self._clear_taps = self._axial_taps = self._off_leaders = False
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         from pandid.routing import DefaultRouter
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import (MAX_PLACEMENT_PASSES, TOUCHING, _chained, free_face,
-                                          nozzle_tap, on_leader)
+        from pandid.layout.attach import (MAX_PLACEMENT_PASSES, TOUCHING, _chained,
+                                          axial_start, free_face, nozzle_tap, on_leader)
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
         from pandid.layout.halo import fixed_balloons
@@ -3868,8 +3928,8 @@ class Flowsheet:
                 when omitted.
             """
             prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
-            free, clear, leaders = (self._free_faces, self._clear_taps,
-                                    self._off_leaders)
+            free, clear, axial, leaders = (self._free_faces, self._clear_taps,
+                                           self._axial_taps, self._off_leaders)
             try:
                 redo()
                 kept = _taps_off(self) <= off and not any(
@@ -3877,8 +3937,8 @@ class Flowsheet:
             except Exception:
                 kept = False
             if not kept:
-                self._free_faces, self._clear_taps, self._off_leaders = (
-                    free, clear, leaders)
+                self._free_faces, self._clear_taps, self._axial_taps, self._off_leaders = (
+                    free, clear, axial, leaders)
                 self._put_geometry(prior, keep_manual=False)
                 self._unhung = unhung
 
@@ -3959,6 +4019,13 @@ class Flowsheet:
             self._clear_taps = True
             settle_best()
 
+        def axial() -> None:
+            """Settle the sheet with each side tap on a drawing laid along
+            its axis started at its centre
+            (:func:`~pandid.layout.attach.axial_start`)."""
+            self._axial_taps = True
+            settle_best()
+
         def off_leaders() -> None:
             """Settle the sheet with each balloon hung from a balloon kept
             off that balloon's tap line."""
@@ -4013,6 +4080,8 @@ class Flowsheet:
                 keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
             if tries and any(isinstance(u, Instrument) and nozzle_tap(u) for u in self.units):
                 keep_if_better(cleared, _score(self)[0], lambda fs: _score(fs)[0])
+            if tries and any(isinstance(u, Instrument) and axial_start(u) for u in self.units):
+                keep_if_better(axial, _score(self)[0], lambda fs: _score(fs)[0])
             if tries and on_leader(self):
                 score = _score(self)[0]
                 # Keep only a drawing with fewer tap lines through units.
@@ -4207,18 +4276,16 @@ class Flowsheet:
         return list(groups.values())
 
     def _named_runs(self) -> "dict[str, list[Stream]]":
-        """Group non-signal streams by name for the stream table.
+        """Group material and energy streams by name for the stream table.
 
         Returns
         -------
         dict[str, list[Stream]]
             Segments per name, in order of first appearance.
         """
-        from pandid.streams import SIGNAL_KINDS
-
         runs: dict[str, list[Stream]] = {}
         for s in self.streams:
-            if s.kind not in SIGNAL_KINDS:
+            if s.kind in PROCESS_KINDS:
                 runs.setdefault(s.name, []).append(s)
         return runs
 

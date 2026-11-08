@@ -37,8 +37,14 @@ PROCESS_KINDS = frozenset({"material", "energy"})
 SIGNAL_KINDS = frozenset({"electric", "pneumatic", "hydraulic", "wireless", "data",
                           "capillary", "software"})
 
+#: The kind of a shaft from a driver's ``shaft`` to a machine's ``drive``.
+MECHANICAL = "mechanical"
+
+#: Port roles at the two ends of a shaft.
+SHAFT_ROLES = frozenset({"shaft", "drive"})
+
 #: Every kind ``connect()`` accepts.
-STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS
+STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS | {MECHANICAL}
 
 #: Treatments drawn along a pipe: ``tracing``, ``insulated``, ``jacketed``.
 TREATMENTS = ("tracing", "insulated", "jacketed")

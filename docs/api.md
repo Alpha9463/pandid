@@ -101,6 +101,19 @@ The names depend on the class and variant. Common patterns are:
 - `Feed.outlet` connects to a unit's inlet; `Product.inlet` receives its output.
 - Pumps, compressors and fans use `suction` and `discharge`; valves use
   `inlet`, `outlet` and a signal `actuator`.
+- A machine that takes a driver has a `drive`: pumps, compressors, fans,
+  conveyors, crushers, mills and feeders. A `Motor` (`variant="ac"` or `"dc"`
+  for ISO items 20.7 and 20.8) turns it through its `shaft`:
+  `fs.connect(motor.shaft, pump.drive)`. The motor is drawn beside the
+  machine, on the side its `drive` faces, joined by a short straight shaft.
+- Other drivers turn a machine the same way: a `Turbine` and a `DieselEngine`
+  through their `shaft`, and a `Gearbox` between a driver and its machine,
+  taking the driver at its `drive` and turning the machine with its `shaft`.
+  A `Generator` (`variant="ac"` or `"dc"`) is driven at its `drive`:
+  `fs.connect(turbine.shaft, generator.drive)`. A unit whose only lines are
+  shafts is drawn beside its partner; two piped machines on one shaft, such as
+  a turbine and the compressor it drives, are stacked where their shaft ends
+  face each other, and the shaft is drawn straight wherever they do.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`
@@ -110,6 +123,12 @@ The names depend on the class and variant. Common patterns are:
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
+- A tumbling mill, `BallMill`, `RodMill`, `SAGMill` or `AGMill`
+  (`Mill("ML-101", variant="ball")` and so on), takes `feed` through its west
+  trunnion and gives `discharge` through its east one. A `Stockpile` is
+  stacked at `feed`, on top, and reclaimed at `reclaim`, under it. Both are
+  built to the `width` and `height` they are given: a longer mill carries more
+  balls, and a wider pile has a flat top.
 - A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
   `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
   heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
@@ -256,12 +275,13 @@ Validation reports `gravity-turned` when one is rotated away from it.
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`,
-`hydraulic`, `wireless`, `data`, `software` or `capillary`. A hydraulic line
-carries a footed stroke at each mark (ISO 15519-2 A.1.08) and a wireless line is
-drawn as a wave. When omitted, a signal line to a valve with a
+`hydraulic`, `wireless`, `data`, `software`, `capillary` or `mechanical`. A
+hydraulic line carries a footed stroke at each mark (ISO 15519-2 A.1.08) and a
+wireless line is drawn as a wave. When omitted, a signal line to a valve with a
 diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
-electric; two energy/utility ports make an energy stream; other process ports
-make a material stream. `add_control_loop()` infers its output line the same way
+electric; two energy/utility ports make an energy stream; a driver's `shaft` to a
+machine's `drive` makes a mechanical one, drawn without a number; other process
+ports make a material stream. `add_control_loop()` infers its output line the same way
 unless `output_kind=` is given. On a PFD, `validate()` reports
 `energy-carrier-missing` until the label drawn on an energy line names its
 carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
@@ -534,7 +554,8 @@ variants. Exit codes: `0` success, `1` rejected sheet, `2` invalid command,
 
 Subclass `Unit` with a unique `kind` and a `PORTS` list. Each port is
 `(name, direction, role)`; directions are `inlet` or `outlet`. Roles include
-`process`, `feed`, `product`, `energy`, `utility`, `vapor`, `liquid` and `signal`.
+`process`, `feed`, `product`, `energy`, `utility`, `vapor`, `liquid`, `signal`,
+and `shaft` and `drive` for the two ends of a shaft.
 
 ```python
 from pandid import Unit

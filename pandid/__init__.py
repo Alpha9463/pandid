@@ -49,7 +49,11 @@ Example, a pumped product cooler with a flow control loop::
 
 Ports:
     Feed / Product              outlet / inlet
-    Pump, Compressor            suction, discharge
+    Pump, Compressor            suction, discharge, drive
+    Motor, DieselEngine         shaft: fs.connect(motor.shaft, pump.drive)
+    Gearbox                     drive, shaft
+    Generator                   drive: fs.connect(turbine.shaft, generator.drive)
+    Turbine                     inlet, outlet, shaft
     Valve, ControlValve         inlet, outlet, actuator (signal)
     HeatExchanger, Condenser,
     ShellAndTubeExchanger       tube_in, tube_out, shell_in, shell_out

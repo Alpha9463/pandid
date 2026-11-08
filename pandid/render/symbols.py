@@ -21,7 +21,7 @@ from pandid._checks import suggest
 from pandid.portgeom import outward_dir
 from pandid.render.iso_parts import _DASH_LONG, _SQ2
 from pandid.render.weights import M, LineWeight
-from pandid.streams import SIGNAL_KINDS
+from pandid.streams import PROCESS_KINDS
 
 # Placements closer than this are the same point.
 _COINCIDENT = 0.5
@@ -57,14 +57,14 @@ def wears_arrowhead(stream, registry) -> bool:
     Returns
     -------
     bool
-        False for a signal or a stream ending at a bare run.
+        False for a signal, a shaft or a stream ending at a bare run.
 
     Raises
     ------
     ValueError
         If the destination unit's symbol cannot be resolved.
     """
-    if stream.kind in SIGNAL_KINDS:
+    if stream.kind not in PROCESS_KINDS:
         return False
     return not registry.for_unit(stream.dest.owner).bare_run
 
@@ -498,6 +498,9 @@ class Symbol:
         Whether the artwork may be scaled unevenly to fill a box.
     bare_run : bool
         The artwork is only pipe; a stream ending here has no arrowhead.
+    axial_taps : bool
+        The artwork is drawn along its vertical centre line, so a tap
+        from its W or E face starts at the box's centre.
     gravity_fixed : bool
         The function depends on gravity; turning it is reported.
     directional : bool
@@ -538,6 +541,7 @@ class Symbol:
     id_suffix: str = ""
     stretchable: bool = True
     bare_run: bool = False
+    axial_taps: bool = False
     gravity_fixed: bool = False
     directional: bool = False
     drawio_shape: str = ""
@@ -791,7 +795,8 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
     """Return a belt conveyor symbol built to its run and roller size.
 
     ``feed`` is the tail roller, also offered on top; ``discharge`` is
-    the head roller, also offered underneath.
+    the head roller, also offered underneath; ``drive`` is on top of the
+    head roller.
 
     Parameters
     ----------
@@ -821,7 +826,7 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
     )
     return Symbol(
         svg=svg, width=float(length), height=height,
-        ports={"feed": (0.0, r), "discharge": (float(length), r)},
+        ports={"feed": (0.0, r), "discharge": (float(length), r), "drive": (head, 0.0)},
         port_faces={"feed": {"N": (tail, 0.0)},
                     "discharge": {"S": (head, height)}},
         id_suffix=suffix,
@@ -902,6 +907,7 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
     """Return a closed screw conveyor symbol (ISO 10628-2 item 18.5).
 
     Turns repeat at :data:`SCREW_PITCH` and the flight follows the bore.
+    ``drive`` is on the casing's crown above the discharge spout.
 
     Parameters
     ----------
@@ -939,7 +945,8 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
     return Symbol(
         svg=svg, width=float(length), height=height,
         ports={"feed": (SCREW_MODULE, 0.0),
-               "discharge": (length - SCREW_MODULE, height)},
+               "discharge": (length - SCREW_MODULE, height),
+               "drive": (length - SCREW_MODULE, 0.0)},
         port_faces={"feed": {"W": (0.0, axis)},
                     "discharge": {"E": (float(length), axis)}},
         id_suffix=suffix,
@@ -2582,6 +2589,34 @@ def series_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     return replace(base, port_series=(*split, *kept))
 
 
+def _named(unit, build: "Callable[..., Symbol]", *args) -> Symbol:
+    """Return ``build(*args)``, naming the unit in a refusal.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit drawn.
+    build : Callable[..., Symbol]
+        Builder.
+    *args
+        Its arguments.
+
+    Returns
+    -------
+    Symbol
+        The drawing.
+
+    Raises
+    ------
+    ValueError
+        If the builder refuses, with the unit's name first.
+    """
+    try:
+        return build(*args)
+    except ValueError as exc:
+        raise ValueError(f"{unit.name}: {exc}") from None
+
+
 # Builders of symbols drawn per unit, by (kind, variant). A ``None``
 # variant matches every variant.
 _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
@@ -3385,9 +3420,11 @@ _CRUSHER_OUTLINE = (
 # Foot of the mill's corner chord on the sloping wall (item 11.8).
 _MILL_CHORD_X, _MILL_CHORD_Y = 100 / 13, 300 / 13
 
-# Group-11 ports: feed above the top edge, discharge below the bottom.
+# Group-11 ports: feed above the top edge, discharge below the bottom,
+# drive halfway down the east wall.
 _CRUSHER_PORTS = {"feed": (_CRUSHER_W / 2, 0.0),
-                  "discharge": (_CRUSHER_W / 2, _CRUSHER_H)}
+                  "discharge": (_CRUSHER_W / 2, _CRUSHER_H),
+                  "drive": (_CRUSHER_W * 0.9, _CRUSHER_H / 2)}
 
 
 # One group-11 body: the shared trapezoid plus its marks.
@@ -3408,6 +3445,125 @@ _MILL_CHAMFERS = (
 
 # Vibration mill drum, ISO item 11.12 X8054: a 4 M circle.
 _VIBRATION_DRUM = f'<circle cx="{_CRUSHER_W / 2:g}" cy="{_CRUSHER_H / 2:g}" r="20" {_INK}/>'
+
+
+# Tumbling mills: a drum on a trunnion at each end, fed through the
+# west trunnion and discharged through the east one. The trunnions,
+# the conical heads and the grinding media keep their own size; the
+# shell takes the rest of the box.
+
+#: Trunnion length and diameter, and the length of each conical head.
+_TRUNNION_L, _TRUNNION_D, _MILL_HEAD = M, 2 * M, M
+
+#: Each tumbling mill's natural shell length and diameter.
+TUMBLING_MILLS = {
+    "ball": (8 * M, 4 * M),
+    "rod": (10 * M, 4 * M),
+    "sag": (4 * M, 6 * M),
+    "ag": (4 * M, 6 * M),
+}
+
+#: Grinding ball radius and pitch, rod spacing, and the media's inset
+#: from the shell's ends.
+_BALL_R, _BALL_PITCH, _ROD_GAP, _MEDIA_INSET = M / 2, 1.5 * M, 0.75 * M, M
+
+#: Least shell length and diameter a tumbling mill is drawn with.
+_MILL_LEAST = (2 * M, 3 * M)
+
+
+def tumbling_mill_too_small(variant: str, width: float, height: float) -> ValueError:
+    """Return the refusal of a box too small for a tumbling mill.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`TUMBLING_MILLS`.
+    width, height : float
+        The box.
+
+    Returns
+    -------
+    ValueError
+        The refusal, naming the least box.
+    """
+    least_w = _MILL_LEAST[0] + 2 * (_TRUNNION_L + _MILL_HEAD)
+    return ValueError(
+        f"a box {width:g} x {height:g} is too small to draw a {variant!r} mill's "
+        f"trunnions, heads and charge, which need a box at least {least_w:g} wide and "
+        f"{_MILL_LEAST[1]:g} tall; give width= and height= at least that, or leave them "
+        f"unset"
+    )
+
+
+@lru_cache(maxsize=None)
+def tumbling_mill_symbol(variant: str, width: float | None = None,
+                         height: float | None = None) -> Symbol:
+    """Return a tumbling mill built to a box.
+
+    Parameters
+    ----------
+    variant : str
+        ``"ball"``, ``"rod"``, ``"sag"`` or ``"ag"``.
+    width, height : float, optional
+        Box; the variant's natural size where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The drum, its trunnions and its charge, its drive on the
+        shell's crown.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the trunnions, heads and charge.
+    """
+    length, diameter = TUMBLING_MILLS[variant]
+    ends = _TRUNNION_L + _MILL_HEAD
+    w = float(length + 2 * ends if width is None else width)
+    h = float(diameter if height is None else height)
+    if w - 2 * ends < _MILL_LEAST[0] or h < _MILL_LEAST[1]:
+        raise tumbling_mill_too_small(variant, w, h)
+    x0, x1, c, t = ends, w - ends, h / 2, _TRUNNION_D / 2
+    tw = w - _TRUNNION_L
+    outline = (
+        f"M 0 {_n(c - t)} L {_n(_TRUNNION_L)} {_n(c - t)} L {_n(x0)} 0 L {_n(x1)} 0 "
+        f"L {_n(tw)} {_n(c - t)} L {_n(w)} {_n(c - t)} L {_n(w)} {_n(c + t)} "
+        f"L {_n(tw)} {_n(c + t)} L {_n(x1)} {_n(h)} L {_n(x0)} {_n(h)} "
+        f"L {_n(_TRUNNION_L)} {_n(c + t)} L 0 {_n(c + t)} Z "
+        f"M {_n(_TRUNNION_L)} {_n(c - t)} L {_n(_TRUNNION_L)} {_n(c + t)} "
+        f"M {_n(tw)} {_n(c - t)} L {_n(tw)} {_n(c + t)} "
+        f"M {_n(x0)} 0 L {_n(x0)} {_n(h)} M {_n(x1)} 0 L {_n(x1)} {_n(h)}"
+    )
+    lo, hi = x0 + _MEDIA_INSET, x1 - _MEDIA_INSET
+    media = ""
+    if variant == "rod":
+        media = f'<path d="{" ".join(f"M {_n(lo)} {_n(y)} L {_n(hi)} {_n(y)}" for y in (h - _BALL_R - k * _ROD_GAP for k in range(3)))}" {_DETAIL}/>'
+    elif variant in ("ball", "sag"):
+        # A ball mill's charge is two staggered rows, a SAG mill's one.
+        rows = 2 if variant == "ball" else 1
+        balls = []
+        for row in range(rows):
+            start = lo + row * _BALL_PITCH / 2
+            count = int((hi - start) / _BALL_PITCH + 1e-9) + 1
+            y = h - _BALL_R - row * 2 * _BALL_R
+            balls += [f'<circle cx="{_n(start + i * _BALL_PITCH)}" cy="{_n(y)}" '
+                      f'r="{_n(_BALL_R)}" {_DETAIL}/>' for i in range(count)]
+        media = "".join(balls)
+    natural = (w, h) == (length + 2 * ends, diameter)
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    return Symbol(
+        svg=f'<g id="sym_mill_{variant}{suffix}"><path d="{outline}" {_OUTLINE}/>{media}</g>',
+        width=w, height=h,
+        ports={"feed": (0.0, c), "discharge": (w, c), "drive": ((x0 + x1) / 2, 0.0)},
+        id_suffix=suffix,
+        gravity_fixed=True,
+    )
+
+
+for _variant in TUMBLING_MILLS:
+    _BUILT_TO_SIZE[("mill", _variant)] = lambda unit: _named(
+        unit, tumbling_mill_symbol, unit.variant, unit.width, unit.height)
 
 
 # Stack inlet on the tapering west wall, 8 M down.
@@ -3544,7 +3700,7 @@ _Z_ELEVATOR = Symbol(
 
 # The 4 M circle of items 19.1 C2056 and 19.2 X8067.
 _FEEDER_CIRCLE = 40.0
-_FEEDER_CIRCLE_PORTS = {"feed": (20.0, 0.0), "discharge": (20.0, 40.0)}
+_FEEDER_CIRCLE_PORTS = {"feed": (20.0, 0.0), "discharge": (20.0, 40.0), "drive": (40.0, 20.0)}
 
 
 # A group-19 circle body: the shared rim plus its mark.
@@ -3607,6 +3763,94 @@ _SPRAY_NOZZLE = Symbol(
     ports={"inlet": (0.0, _SPRAY_PORT_Y)},
     port_faces={"inlet": {"E": (_SPRAY_W, _SPRAY_PORT_Y)}},
     iso_reg="2037",
+)
+
+
+# ISO 10628-2 items 20.6 to 20.8, the electric motor: a 4 M circle with
+# an M in one stroke and, for AC or DC, a tilde or a bar under it.
+_MOTOR_LETTER = (f"M {1.25 * M:g} {3 * M:g} L {1.25 * M:g} {M:g} L {2 * M:g} {2 * M:g} "
+                 f"L {2.75 * M:g} {M:g} L {2.75 * M:g} {3 * M:g} ")
+_MOTOR_TILDE = (f"M {M:g} {3.5 * M:g} A {0.75 * M:g} {0.75 * M:g} 0 0 1 {2 * M:g} {3.5 * M:g} "
+                f"A {0.75 * M:g} {0.75 * M:g} 0 0 0 {3 * M:g} {3.5 * M:g}")
+_MOTOR_BAR = f"M {M:g} {3.5 * M:g} L {3 * M:g} {3.5 * M:g}"
+# The shaft leaves whichever side faces the machine.
+_MOTOR_SHAFT = {"N": (2 * M, 0.0), "S": (2 * M, 4 * M), "E": (4 * M, 2 * M), "W": (0.0, 2 * M)}
+
+
+def _motor(name: str, reg: str, mark: str = "", kind: str = "motor",
+           letter: str = _MOTOR_LETTER, port: str = "shaft") -> Symbol:
+    """Return an electric machine, its shaft end offered on every side.
+
+    Parameters
+    ----------
+    name : str
+        Variant name.
+    reg : str
+        ISO registration number.
+    mark : str, default=""
+        Path data for the supply mark under the letter.
+    kind : str, default="motor"
+        Unit kind, for the drawing's id.
+    letter : str, default=_MOTOR_LETTER
+        Path data for the letter in the rim.
+    port : str, default="shaft"
+        The port at the shaft's end.
+
+    Returns
+    -------
+    Symbol
+        A 4 M square symbol.
+    """
+    return Symbol(
+        svg=f'<g id="sym_{kind}_{name}">'
+            f'<circle cx="{2 * M:g}" cy="{2 * M:g}" r="{2 * M:g}" {_OUTLINE}/>'
+            f'<path d="{letter}{mark}" {_INK}/></g>',
+        width=4 * M, height=4 * M,
+        ports={port: _MOTOR_SHAFT["S"]},
+        port_faces={port: dict(_MOTOR_SHAFT)},
+        stretchable=False,
+        iso_reg=reg,
+    )
+
+
+# The G of ISO 10628-2 items 20.2 to 20.5 in one stroke, its bar turned
+# in at mid-height.
+_G_LETTER = (f"M {2.5 * M:g} {M:g} L {1.75 * M:g} {M:g} "
+             f"A {0.25 * M:g} {0.25 * M:g} 0 0 0 {1.5 * M:g} {1.25 * M:g} "
+             f"L {1.5 * M:g} {2.75 * M:g} "
+             f"A {0.25 * M:g} {0.25 * M:g} 0 0 0 {1.75 * M:g} {3 * M:g} "
+             f"L {2.5 * M:g} {3 * M:g} L {2.5 * M:g} {2 * M:g} L {2 * M:g} {2 * M:g} ")
+
+# Item 20.2, the gearbox: a 4 M square with the G. Its two shaft ends
+# are offered on every side, the input a half module before the middle
+# and the output a half module after it.
+_GEAR_IN = {"N": (1.5 * M, 0.0), "S": (1.5 * M, 4 * M), "W": (0.0, 1.5 * M), "E": (4 * M, 1.5 * M)}
+_GEAR_OUT = {"N": (2.5 * M, 0.0), "S": (2.5 * M, 4 * M), "W": (0.0, 2.5 * M), "E": (4 * M, 2.5 * M)}
+_GEARBOX = Symbol(
+    svg='<g id="sym_gearbox">'
+        f'<rect x="0" y="0" width="{4 * M:g}" height="{4 * M:g}" {_OUTLINE}/>'
+        f'<path d="{_G_LETTER.strip()}" {_INK}/></g>',
+    width=4 * M, height=4 * M,
+    ports={"drive": _GEAR_IN["W"], "shaft": _GEAR_OUT["E"]},
+    port_faces={"drive": dict(_GEAR_IN), "shaft": dict(_GEAR_OUT)},
+    stretchable=False,
+    iso_reg="X8167",
+)
+
+# A diesel engine, as practice draws one: a 6 M by 4 M block with a D
+# in one stroke, its shaft end offered on every side.
+_ENGINE_W, _ENGINE_H = 6 * M, 4 * M
+_ENGINE_SHAFT = {"N": (_ENGINE_W / 2, 0.0), "S": (_ENGINE_W / 2, _ENGINE_H),
+                 "E": (_ENGINE_W, _ENGINE_H / 2), "W": (0.0, _ENGINE_H / 2)}
+_DIESEL_ENGINE = Symbol(
+    svg='<g id="sym_diesel_engine">'
+        f'<rect x="0" y="0" width="{_ENGINE_W:g}" height="{_ENGINE_H:g}" {_OUTLINE}/>'
+        f'<path d="M {2.25 * M:g} {M:g} L {2.75 * M:g} {M:g} '
+        f'A {M:g} {M:g} 0 0 1 {2.75 * M:g} {3 * M:g} L {2.25 * M:g} {3 * M:g} Z" {_INK}/></g>',
+    width=_ENGINE_W, height=_ENGINE_H,
+    ports={"shaft": _ENGINE_SHAFT["E"]},
+    port_faces={"shaft": dict(_ENGINE_SHAFT)},
+    stretchable=False,
 )
 
 
@@ -3726,7 +3970,7 @@ _FAN_GENERAL = Symbol(
         f'A {_FAN_REAR_R:g} {_FAN_REAR_R:g} 0 0 1 {_FAN_R - M:g} {_FAN_R + 1.5 * M:g}" '
         f'{_INK}/></g>',
     width=2 * _FAN_R, height=2 * _FAN_R,
-    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
+    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R), "drive": (_FAN_R, 0.0)},
     iso_reg="X8164",
 )
 
@@ -3764,7 +4008,7 @@ _COMPRESSOR_SCREW = Symbol(
         f'<path d="{_fan_chord(-1)}{_fan_chord(1)}{_screw_flight(-1)}{_screw_flight(1)}" '
         f'{_INK}/></g>',
     width=2 * _FAN_R, height=2 * _FAN_R,
-    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
+    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R), "drive": (_FAN_R, 0.0)},
     iso_reg="X8161",
 )
 
@@ -3782,7 +4026,8 @@ _FAN_CENTRIFUGAL = Symbol(
         f'A {_SCROLL_R:g} {_SCROLL_R:g} 0 1 1 {_SCROLL_R:g} 0 Z" {_OUTLINE}/>'
         f'<circle cx="{_SCROLL_R:g}" cy="{_SCROLL_R:g}" r="{_SCROLL_EYE_R:g}" {_INK}/></g>',
     width=_SCROLL_W, height=2 * _SCROLL_R,
-    ports={"suction": (0.0, _SCROLL_R), "discharge": (_SCROLL_W, _SCROLL_OUTLET_H / 2)},
+    ports={"suction": (0.0, _SCROLL_R), "discharge": (_SCROLL_W, _SCROLL_OUTLET_H / 2),
+           "drive": (_SCROLL_R, 0.0)},
 )
 
 # Axial fan: a two-bladed propeller across a casing on the run.
@@ -3800,7 +4045,8 @@ _FAN_AXIAL = Symbol(
             for tip in (_AXIAL_H / 2 - _AXIAL_BLADE, _AXIAL_H / 2 + _AXIAL_BLADE))
         + f'" {_INK}/></g>',
     width=_AXIAL_W, height=_AXIAL_H,
-    ports={"suction": (0.0, _AXIAL_H / 2), "discharge": (_AXIAL_W, _AXIAL_H / 2)},
+    ports={"suction": (0.0, _AXIAL_H / 2), "discharge": (_AXIAL_W, _AXIAL_H / 2),
+           "drive": (_AXIAL_W / 2, 0.0)},
 )
 
 
@@ -3812,7 +4058,8 @@ _PUMP_OUTLINE = (
     f'<path d="M {_PUMP_R:g} 0 L {2 * _PUMP_R:g} {_PUMP_R:g} L {_PUMP_R:g} {2 * _PUMP_R:g}" '
     f'{_INK}/>'
 )
-_PUMP_PORTS = {"suction": (0.0, _PUMP_R), "discharge": (2 * _PUMP_R, _PUMP_R)}
+_PUMP_PORTS = {"suction": (0.0, _PUMP_R), "discharge": (2 * _PUMP_R, _PUMP_R),
+               "drive": (_PUMP_R, 0.0)}
 
 
 def _group_15_pump(variant: str, mark: str, iso_reg: str = "") -> Symbol:
@@ -3930,7 +4177,8 @@ _PUMP_VERTICAL_TURBINE = Symbol(
         f'<path d="M 0 {_VTP_BOWL_Y:g} L {_PUMP_R:g} {_VTP_BOWL_Y - _PUMP_R:g} '
         f'L {2 * _PUMP_R:g} {_VTP_BOWL_Y:g}" {_INK}/></g>',
     width=2 * _PUMP_R, height=_VTP_H,
-    ports={"suction": (_PUMP_R, _VTP_H), "discharge": (2 * _PUMP_R, VTP_HEAD_H / 2)},
+    ports={"suction": (_PUMP_R, _VTP_H), "discharge": (2 * _PUMP_R, VTP_HEAD_H / 2),
+           "drive": (_PUMP_R, 0.0)},
     gravity_fixed=True,
 )
 
@@ -4597,6 +4845,88 @@ _FLAT_ROOF_TANK = _rect_tank("flat_roof", 12 * M, True, "301")
 
 # Item 1.2, 2061, container, tank, cistern: 6 M tall, open at the top.
 _OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
+
+
+# ISO 10628-2 item 1.29, 2065, open bulk storage: a pile 4 M high on
+# slopes of one in one over a base line reaching a module past each toe,
+# each slope broken mid-way by a gap 1.5 M long with two dots in it. A
+# wider pile keeps its height and slopes and gains a flat top.
+STOCKPILE_W, STOCKPILE_H = 10 * M, 4 * M
+_PILE_OVER, _PILE_GAP, _PILE_DOTS = M, 1.5 * M, 0.25 * M
+
+
+def stockpile_too_narrow(width: float, height: float) -> ValueError:
+    """Return the refusal of a box too narrow for its pile.
+
+    Parameters
+    ----------
+    width, height : float
+        The box.
+
+    Returns
+    -------
+    ValueError
+        The refusal, naming the least width.
+    """
+    least = 2 * (_PILE_OVER + height)
+    return ValueError(
+        f"a box {width:g} wide is too small to draw a stockpile {height:g} high on its "
+        f"slopes of one in one, which needs a width of at least {least:g}; give "
+        f"width={least:g} or more, or a smaller height"
+    )
+
+
+@lru_cache(maxsize=None)
+def stockpile_symbol(width: float | None = None, height: float | None = None) -> Symbol:
+    """Return an open stockpile built to a box.
+
+    Parameters
+    ----------
+    width, height : float, optional
+        Box; 10 M by 4 M where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The pile on its base line, fed at the top centre and reclaimed
+        under it.
+
+    Raises
+    ------
+    ValueError
+        If the box is too narrow for the pile's slopes.
+    """
+    w = float(STOCKPILE_W if width is None else width)
+    h = float(STOCKPILE_H if height is None else height)
+    if h <= 0 or w < 2 * (_PILE_OVER + h):
+        raise stockpile_too_narrow(w, h)
+    unit = math.sqrt(0.5)
+    strokes, dots = [f"M 0 {_n(h)} L {_n(w)} {_n(h)}"], []
+    for toe, way in ((_PILE_OVER, 1.0), (w - _PILE_OVER, -1.0)):
+        # Points up the slope from its middle: the gap's ends, then the dots.
+        mx, my = toe + way * h / 2, h / 2
+        low, high, *marks = [(mx + way * d * unit, my - d * unit) for d in
+                             (-_PILE_GAP / 2, _PILE_GAP / 2, -_PILE_DOTS, _PILE_DOTS)]
+        strokes += [f"M {_n(toe)} {_n(h)} L {_n(low[0])} {_n(low[1])}",
+                    f"M {_n(high[0])} {_n(high[1])} L {_n(toe + way * h)} 0"]
+        dots += marks
+    strokes.append(f"M {_n(_PILE_OVER + h)} 0 L {_n(w - _PILE_OVER - h)} 0")
+    natural = (w, h) == (STOCKPILE_W, STOCKPILE_H)
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    ink = "".join(f'<circle cx="{_n(x)}" cy="{_n(y)}" r="1" fill="#111" stroke="none"/>'
+                  for x, y in dots)
+    return Symbol(
+        svg=f'<g id="sym_stockpile{suffix}"><path d="{" ".join(strokes)}" {_INK}/>{ink}</g>',
+        width=w, height=h,
+        ports={"feed": (w / 2, 0.0), "reclaim": (w / 2, h)},
+        id_suffix=suffix,
+        gravity_fixed=True,
+        iso_reg="2065",
+    )
+
+
+_BUILT_TO_SIZE[("stockpile", "default")] = lambda unit: _named(
+    unit, stockpile_symbol, unit.width, unit.height)
 
 
 # Mixer-settler: a closed box whose west compartment is the mixer. The
@@ -5360,8 +5690,18 @@ class SymbolRegistry:
         self.register("silo", _BUNKER, "bunker")
         self.register("tank", _FLAT_ROOF_TANK, "flat_roof")
         self.register("tank", _OPEN_TOP_TANK, "open_top")
+        self.register("stockpile", stockpile_symbol())
         self.register("mixer_settler", _MIXER_SETTLER)
         self.register("deaerator", _DEAERATOR)
+        self.register("motor", _motor("general", "C0082"), "general")
+        self.register("motor", _motor("ac", "X8157", _MOTOR_TILDE), "ac")
+        self.register("motor", _motor("dc", "X8158", _MOTOR_BAR), "dc")
+        self.register("gearbox", _GEARBOX)
+        for name, reg, mark in (("general", "C0079", ""), ("ac", "X8154", _MOTOR_TILDE),
+                                ("dc", "X8155", _MOTOR_BAR)):
+            self.register("generator", _motor(name, reg, mark, "generator", _G_LETTER,
+                                              "drive"), name)
+        self.register("diesel_engine", _DIESEL_ENGINE)
         self._register_kilns()
         self._register_steam_trap()
         self._register_flow_elements()
@@ -5423,6 +5763,8 @@ class SymbolRegistry:
         self.register("crushing_machine", general)
         self.register("crusher", crusher)
         self.register("mill", mill)
+        for variant in TUMBLING_MILLS:
+            self.register("mill", tumbling_mill_symbol(variant), variant)
 
         for kind, body, marks in (
             ("crusher", crusher, (("hammer", "X8045"), ("impact", "X8046"),
@@ -5511,13 +5853,14 @@ class SymbolRegistry:
         self.register("feeder", Symbol(
             svg=f'<g id="sym_feeder_rotary_table">{_FEEDER_TABLE}</g>',
             width=_FEEDER_TABLE_W, height=_FEEDER_TABLE_H,
-            ports={"feed": (25.0, 0.0), "discharge": (25.0, 60.0)},
+            ports={"feed": (25.0, 0.0), "discharge": (25.0, 60.0), "drive": (0.0, 37.5)},
             gravity_fixed=True, iso_reg="C0074",
         ), "rotary_table")
         self.register("feeder", Symbol(
             svg=f'<g id="sym_feeder_metering">{_METER}</g>',
             width=_METER_W, height=_METER_H,
-            ports={"feed": (0.0, _METER_BEAM_Y), "discharge": (_METER_W, _METER_BEAM_Y)},
+            ports={"feed": (0.0, _METER_BEAM_Y), "discharge": (_METER_W, _METER_BEAM_Y),
+                   "drive": (_METER_W / 2, _METER_H)},
             gravity_fixed=True, iso_reg="C0035",
         ), "metering")
         self.register("spray_nozzle", _SPRAY_NOZZLE)

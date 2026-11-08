@@ -45,6 +45,7 @@ __all__ = [
     "FlotationCell",
     "Deaerator",
     "Silo",
+    "Stockpile",
     "MixerSettler",
     "Crystallizer",
     "Absorber",
@@ -78,13 +79,20 @@ __all__ = [
     "SprayNozzle",
     "ScreeningDevice",
     "Kneader",
+    "Motor",
+    "Gearbox",
+    "Generator",
+    "DieselEngine",
     "Instrument",
     "Block",
 ]
 
-# Port roles. "signal" ports carry signal lines, the rest carry fluid;
-# "draw" is a column side draw.
+# Port roles. "signal" ports carry signal lines, "shaft" and "drive"
+# the shaft from a driver to its machine, the rest carry fluid; "draw"
+# is a column side draw.
 _VALID_ROLES = {
+    "shaft",
+    "drive",
     "process",
     "feed",
     "product",
@@ -1259,13 +1267,16 @@ class _FluidMover(Unit):
 
     suction: Port
     discharge: Port
+    drive: Port
 
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
 
 class Pump(_FluidMover):
     """Centrifugal or positive-displacement pump.
 
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`.
     Parameters are those of :class:`Unit`.
     """
 
@@ -1275,6 +1286,7 @@ class Pump(_FluidMover):
 class Compressor(_FluidMover):
     """Gas compressor.
 
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`.
     Parameters are those of :class:`Unit`.
     """
 
@@ -1674,8 +1686,8 @@ def _recompose(unit: "Unit", old: str) -> None:
                     f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
                     f"instead"
                 )
-            _compose_onto(unit, *unit._composition)
             unit._check_parts()
+            _compose_onto(unit, *unit._composition)
             added = current[len(built):]
             if added:
                 drawn = _placed(stated, unit.variant) + added
@@ -2145,6 +2157,21 @@ class _Families(Unit):
     _listed: frozenset[str]
     _stated: set[str]
 
+    def _registry_symbol(self):
+        """Return the variant's registered symbol.
+
+        Returns
+        -------
+        Symbol or None
+            The symbol, or ``None`` for an unregistered variant.
+        """
+        from pandid.render.symbols import default_registry
+
+        try:
+            return default_registry.get(self.kind, self.variant)
+        except ValueError:
+            return None
+
     def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return the faces a family port may take, its own face first.
 
@@ -2391,8 +2418,19 @@ class _MultiPortVessel(_FaceFamilies):
 
     _VARIANT_BUILDS = True
 
-    # Variants an agitator may hang in.
+    # Variants an agitator may hang in, and the agitator hung.
     _STIRRABLE: tuple[str, ...] = ()
+    agitator: str | None = None
+
+    def _check_parts(self) -> None:
+        """Refuse an agitator on a variant that cannot carry one.
+
+        Raises
+        ------
+        ValueError
+            If the unit has an agitator and its variant cannot carry one.
+        """
+        _refuse_agitator(self)
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
@@ -2417,13 +2455,10 @@ class _MultiPortVessel(_FaceFamilies):
         Symbol or None
             The symbol, or ``None`` for an unregistered variant.
         """
-        from pandid.render.symbols import default_registry, stirred
+        from pandid.render.symbols import stirred
 
-        try:
-            sym = default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-        return stirred(sym) if getattr(self, "agitator", None) else sym
+        sym = super()._registry_symbol()
+        return stirred(sym) if sym is not None and getattr(self, "agitator", None) else sym
 
     def _home_face(self, role: str) -> str:
         """Return the face the artwork draws a role's port on.
@@ -2704,13 +2739,13 @@ class _MultiPortVessel(_FaceFamilies):
             self.kind, self.variant, tuple(on.items()), parts, ports, size), scale)
 
 
-def _refuse_agitator(unit: "Tank | Vessel") -> None:
+def _refuse_agitator(unit: "_MultiPortVessel") -> None:
     """Refuse an agitator on a variant that cannot carry one.
 
     Parameters
     ----------
-    unit : Tank or Vessel
-        Unit with its ``agitator`` set.
+    unit : _MultiPortVessel
+        Tank or vessel with its ``agitator`` set.
 
     Raises
     ------
@@ -2857,7 +2892,7 @@ class Vessel(_MultiPortVessel):
     ):
         super().__init__(name, variant=variant, **options)
         self.agitator = agitator
-        _refuse_agitator(self)
+        self._check_parts()
         self.manholes = _on_walls(self, "manholes", manholes)
         self.sockets = _on_walls(self, "sockets", sockets)
         self._init_connections(inputs, outputs)
@@ -2965,7 +3000,7 @@ class Tank(_MultiPortVessel):
     ):
         super().__init__(name, variant=variant, **options)
         self.agitator = agitator
-        _refuse_agitator(self)
+        self._check_parts()
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
         self._init_connections(inputs, outputs)
@@ -2978,7 +3013,8 @@ class Blower(_FluidMover):
     """Fan or blower.
 
     ``"general"`` (the default) draws ISO 10628-2 item 17.1;
-    ``"centrifugal"`` and ``"axial"`` draw those fans. Parameters are
+    ``"centrifugal"`` and ``"axial"`` draw those fans. ``drive`` takes
+    the shaft of a driver, such as a :class:`Motor`. Parameters are
     those of :class:`Unit`.
     """
 
@@ -3212,8 +3248,9 @@ class Fitting(_NormallyPositioned):
     plate a metering orifice draws too), ``rotameter``,
     ``rupture_disc``, ``sight_glass``,
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``,
-    ``bellows``, ``blind``, ``damper``, ``spool``, ``static_mixer``
-    (ISO 10628-2 item 12.2 X2673), ``rotary_mixer`` (item 12.1
+    ``bellows``, ``blind``, ``paddle_blind`` (ISO 10628-2 item 24.9),
+    ``paddle_spacer`` (item 24.10), ``damper``, ``spool``,
+    ``static_mixer`` (item 12.2 X2673), ``rotary_mixer`` (item 12.1
     X2672), ``mixing_path`` (item 12.3 X8184), ``steam_trap`` (item
     24.15, 2181), ``hose``, ``coupling``, ``clamped_coupling``,
     ``flange`` (the default) and the flame arrestors
@@ -3376,14 +3413,18 @@ class Flare(Unit):
 class Turbine(Unit):
     """Steam or gas turbine, or expander.
 
-    Parameters are those of :class:`Unit`.
+    ``shaft`` turns the machine it drives, from under the casing's wide
+    end: ``fs.connect(turbine.shaft, generator.drive)``. Parameters are
+    those of :class:`Unit`.
     """
 
     inlet: Port
     outlet: Port
+    shaft: Port
 
     kind = "turbine"
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
+             ("shaft", "outlet", "shaft")]
 
 
 class _VariantPorted(Unit):
@@ -3531,7 +3572,8 @@ class Kiln(Unit):
 class Feeder(Unit):
     """Proportional or metering feeder, ISO 10628-2 group 19.
 
-    Solids enter at ``feed`` and leave metered at ``discharge``.
+    Solids enter at ``feed`` and leave metered at ``discharge``;
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`.
     Variants, by ISO item: ``"general"`` (19.1, the default),
     ``"rotary_valve"`` (19.2), ``"rotary_table"`` (19.3) and
     ``"metering"`` (19.4). Drawn one way up; ``validate`` reports a
@@ -3541,10 +3583,12 @@ class Feeder(Unit):
 
     feed: Port
     discharge: Port
+    drive: Port
 
     kind = "feeder"
     VARIANT_ALIASES = {"default": "general"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
 
 class SprayNozzle(Unit):
@@ -3601,19 +3645,89 @@ class Kneader(Unit):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
+class Motor(Unit):
+    """Electric motor, ISO 10628-2 items 20.6 to 20.8.
+
+    ``shaft`` turns the machine it is connected to,
+    ``fs.connect(motor.shaft, pump.drive)``, and the sheet draws the
+    motor beside that machine, on the side its ``drive`` faces, joined
+    by a short straight shaft. Variants, by ISO item: ``"general"``
+    (20.6, the default), ``"ac"`` (20.7) and ``"dc"`` (20.8).
+    Parameters are those of :class:`Unit`.
+    """
+
+    shaft: Port
+
+    kind = "motor"
+    VARIANT_ALIASES = {"default": "general"}
+    PORTS = [("shaft", "outlet", "shaft")]
+
+
+class Gearbox(Unit):
+    """Gearbox between a driver and its machine, ISO 10628-2 item 20.2.
+
+    ``drive`` takes the driver's shaft and ``shaft`` turns the machine:
+    ``fs.connect(motor.shaft, gearbox.drive)`` and
+    ``fs.connect(gearbox.shaft, pump.drive)``. The sheet draws the train
+    in line beside the machine. Parameters are those of :class:`Unit`.
+    """
+
+    drive: Port
+    shaft: Port
+
+    kind = "gearbox"
+    PORTS = [("drive", "inlet", "drive"), ("shaft", "outlet", "shaft")]
+
+
+class Generator(Unit):
+    """Electric generator, ISO 10628-2 items 20.3 to 20.5.
+
+    ``drive`` takes the shaft of its driver,
+    ``fs.connect(turbine.shaft, generator.drive)``, and the sheet draws
+    the generator beside it on a short straight shaft. Variants, by ISO
+    item: ``"general"`` (20.3, the default), ``"ac"`` (20.4) and
+    ``"dc"`` (20.5). Parameters are those of :class:`Unit`.
+    """
+
+    drive: Port
+
+    kind = "generator"
+    VARIANT_ALIASES = {"default": "general"}
+    PORTS = [("drive", "inlet", "drive")]
+
+
+class DieselEngine(Unit):
+    """Diesel engine driving a machine through its shaft.
+
+    ``shaft`` turns the machine it is connected to,
+    ``fs.connect(engine.shaft, generator.drive)``, and the sheet draws
+    the engine beside it on a short straight shaft. Parameters are those
+    of :class:`Unit`.
+    """
+
+    shaft: Port
+
+    kind = "diesel_engine"
+    PORTS = [("shaft", "outlet", "shaft")]
+
+
 class CrushingMachine(Unit):
     """General size-reduction machine, ISO 10628-2 item 11.1 X8084.
 
-    ``feed`` enters the top and ``discharge`` leaves the bottom. Drawn
-    one way up; ``validate`` reports a turned machine as
-    ``gravity-turned``. Parameters are those of :class:`Unit`.
+    ``feed`` enters the top, ``discharge`` leaves the bottom and
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`, on
+    the east side. Drawn one way up; ``validate`` reports a turned
+    machine as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
     """
 
     feed: Port
     discharge: Port
+    drive: Port
 
     kind = "crushing_machine"
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
 
 class Crusher(CrushingMachine):
@@ -3634,7 +3748,10 @@ class Mill(CrushingMachine):
 
     Variants, by ISO item: ``"default"`` (general, 11.8), ``"hammer"``
     (11.9), ``"impact"`` (11.10), ``"roller"`` (11.11) and
-    ``"vibration"`` (11.12). Drawn one way up; ``validate`` reports a
+    ``"vibration"`` (11.12). The tumbling mills ``"ball"``, ``"rod"``,
+    ``"sag"`` and ``"ag"`` are drums on a trunnion at each end, fed
+    through the west one and discharged through the east one, built to
+    the box they are given. Drawn one way up; ``validate`` reports a
     turned mill as ``gravity-turned``. Parameters are those of
     :class:`Unit`.
     """
@@ -3650,7 +3767,9 @@ class Conveyor(Unit):
     built to ``length`` and ``diameter``. A belt's ``feed`` is the tail
     roller and ``discharge`` the head; a screw is fed through a top
     spout near the tail and discharges through a bottom spout near the
-    head.
+    head. ``drive`` takes the shaft of a driver, such as a
+    :class:`Motor`: on top of a belt's head roller, and on a screw's
+    head end.
 
     Parameters
     ----------
@@ -3676,9 +3795,11 @@ class Conveyor(Unit):
 
     feed: Port
     discharge: Port
+    drive: Port
 
     kind = "conveyor"
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
     _length: float
     _diameter: float
@@ -4823,11 +4944,11 @@ class Crystallizer(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import draft_tube_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: draft_tube_overlays(name)))
+                             lambda name, _body: hung_agitator("crystallizer", name)))
 
 
 class FlotationCell(Unit):
@@ -4885,11 +5006,11 @@ class FlotationCell(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import flotation_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: flotation_overlays(name)))
+                             lambda name, _body: hung_agitator("flotation_cell", name)))
 
 
 class Silo(_VariantPorted):
@@ -4974,11 +5095,11 @@ class MixerSettler(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import mixer_settler_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: mixer_settler_overlays(name)))
+                             lambda name, _body: hung_agitator("mixer_settler", name)))
 
 
 class Deaerator(Unit):
@@ -5002,6 +5123,24 @@ class Deaerator(Unit):
         ("steam", "inlet", "utility"),
         ("outlet", "outlet", "liquid"),
     ]
+
+
+class Stockpile(Unit):
+    """Open stockpile of bulk solids, ISO 10628-2 item 1.29 2065.
+
+    Solids are stacked at ``feed``, on top of the pile, and reclaimed at
+    ``reclaim``, under it. The pile is 4 M high on slopes of one in one;
+    a ``width`` wider than the pile's base gives it a flat top, and a
+    ``height`` raises it on the same slopes. ``validate`` reports a
+    turned stockpile as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
+    """
+
+    feed: Port
+    reclaim: Port
+
+    kind = "stockpile"
+    PORTS = [("feed", "inlet", "feed"), ("reclaim", "outlet", "process")]
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
@@ -5119,24 +5258,9 @@ class _SeriesFamilies(_Families):
     :meth:`nozzle` or layout, to a face the series also offers.
     """
 
-    def _series_symbol(self):
-        """Return the variant's registered symbol, or None.
-
-        Returns
-        -------
-        Symbol or None
-            The symbol, or ``None`` for an unregistered variant.
-        """
-        from pandid.render.symbols import default_registry
-
-        try:
-            return default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-
     def _init_families(self) -> None:
         """Put each series member on its series' face."""
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.port_series if sym is not None else ()
         self._faces = {name: s.face for name in self.ports for s in series if s.matches(name)}
         self._listed, self._stated = frozenset(), set()
@@ -5156,7 +5280,7 @@ class _SeriesFamilies(_Families):
         list[str]
             Faces on the unit's own axes.
         """
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.series_for(port_name) if sym is not None else None
         faces = [] if series is None else [series.face, *(added and [s.face for s in series.also] or [])]
         home = self._faces[port_name]
@@ -5206,7 +5330,7 @@ class _SeriesFamilies(_Families):
             self.symbol(faces)
         except ValueError as exc:
             return str(exc)
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None:
             return None
         for name, face in faces.items():
@@ -5243,7 +5367,7 @@ class _SeriesFamilies(_Families):
 
         on = self._faces if faces is None else faces
         overlays = tuple(getattr(self, "overlays", ()) or ())
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None or all(
                 (series := sym.series_for(name)) is not None and series.face == face
                 for name, face in on.items()):
