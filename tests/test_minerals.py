@@ -102,7 +102,8 @@ def test_a_longer_mill_keeps_its_trunnions_and_balls_and_gets_more_of_them():
 def test_a_mill_box_too_small_for_its_drum_is_refused():
     """Check that a box with no room for the trunnions, heads and charge is refused."""
     with pytest.raises(
-        ValueError, match="ML-101: a box 50 x 40 is too small to draw a .ball. mill"
+        ValueError,
+        match="ML-101: a box 50 x 40 is too small to draw a .ball. mill.*at least 70 wide",
     ):
         fs = Flowsheet("Small")
         fs.add(BallMill("ML-101", width=50))
@@ -159,7 +160,8 @@ def test_a_wider_stockpile_keeps_its_slopes_and_gains_a_flat_top():
 def test_a_stockpile_too_narrow_for_its_slopes_is_refused():
     """Check that a box narrower than the pile's slopes need is refused, naming the least."""
     with pytest.raises(
-        ValueError, match="SP-101: a box 100 wide is too small to draw a stockpile 60 high"
+        ValueError,
+        match="SP-101: a box 100 x 60 is too small to draw a stockpile.*width of at least 140",
     ):
         fs = Flowsheet("Narrow")
         fs.add(Stockpile("SP-101", width=100, height=60))
@@ -183,3 +185,28 @@ def test_a_stockpile_between_two_belts_feeds_a_ball_mill():
     fs.to_svg(diagram="p&id")
     assert [i for i in fs.validate() if i.severity == "error"] == []
     assert {"SP-101", "ML-101"} <= {row["tag"] for row in fs.equipment_list()}
+
+
+@pytest.mark.parametrize("cls", [BallMill, RodMill, SAGMill, AGMill])
+def test_a_mill_whose_shell_leaves_its_media_no_length_is_refused(cls):
+    """Check that a shell no longer than the media's inset at each end is refused."""
+    fs = Flowsheet("Short")
+    fs.add(cls("ML-101", width=60))
+    with pytest.raises(ValueError, match="ML-101: a box 60 x [0-9]+ is too small to draw"):
+        fs.to_svg()
+
+
+def test_the_shortest_rod_mill_draws_rods_with_length():
+    """Check that the shortest rod mill drawn carries three rods a module long."""
+    assert_inked(
+        RodMill("ML-101", width=70), [(x, y) for y in (35, 27.5, 20) for x in (30, 35, 40)]
+    )
+
+
+@pytest.mark.parametrize("height", [5, 20])
+def test_a_stockpile_too_low_for_its_break_is_refused(height):
+    """Check that a pile too low for its slopes' dotted break is refused, naming the least."""
+    fs = Flowsheet("Low")
+    fs.add(Stockpile("SP-101", height=height))
+    with pytest.raises(ValueError, match=f"SP-101: a box 100 x {height} is too small to draw"):
+        fs.to_svg()

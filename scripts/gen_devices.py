@@ -180,6 +180,27 @@ DEVICES = {
     ("separator", "scrubber"): ("Scrubber", """Wet scrubber: a wash liquid cleans a gas."""),
     ("separator", "venturi_scrubber"): ("VenturiScrubber", """Venturi scrubber: wash injected into an accelerating throat."""),
     ("separator", "knockout"): ("KnockoutDrum", """Knock-out drum: an upright drum with a demister pad."""),
+    ("separator", "boot"): ("BootedDrum", """Booted drum: a horizontal drum with a water boot under its east end.
+
+    ``feed`` enters the west head, ``vapor`` leaves the top, ``liquid``
+    the bottom and ``water`` the boot.
+"""),
+    ("separator", "three_phase"): ("ThreePhaseSeparator", """Three-phase separator: a horizontal drum with a weir near its east end.
+
+    ``feed`` enters the west head and ``vapor`` leaves the top; ``water``
+    is drawn off ahead of the weir and ``liquid`` beyond it.
+"""),
+
+    # --- Pig traps ------------------------------------------------------
+    ("pig_trap", "launcher"): ("PigLauncher", """Pig launcher: a barrel behind a closure, sending the pig out of ``main``.
+
+    The line into ``kicker`` drives the pig from the barrel into the
+    main line.
+"""),
+    ("pig_trap", "receiver"): ("PigReceiver", """Pig receiver: a barrel behind a closure, taking the pig in at ``main``.
+
+    The line leaves at ``kicker`` once the pig is in the barrel.
+"""),
 
     # --- Filters ------------------------------------------------------
     ("filter", "gas"): ("DustCollector", """Dust collector: a gas filter with a hopper under the medium.
@@ -579,6 +600,11 @@ STAYS_ON_BASE = {
     ("filter", "belt"): "medium: a cloth on rollers, in a liquid casing",
     ("filter", "fixed_bed"): "medium: a granular bed, in a liquid casing",
     ("separator", "horizontal"): "attitude: the same separator lying down",
+    ("membrane", "default"): "MembraneModule's own drawing (no grade lettered)",
+    ("membrane", "ro"): "membrane grade: reverse osmosis, lettered RO",
+    ("membrane", "nf"): "membrane grade: nanofiltration, lettered NF",
+    ("membrane", "uf"): "membrane grade: ultrafiltration, lettered UF",
+    ("membrane", "mf"): "membrane grade: microfiltration, lettered MF",
     ("valve", "default"): "Valve's own drawing (the gate body)",
     ("valve", "gate"): "body style, and the same drawing as the default",
     ("valve", "globe"): "body style",
