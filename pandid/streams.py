@@ -40,6 +40,9 @@ SIGNAL_KINDS = frozenset({"electric", "pneumatic", "hydraulic", "wireless", "dat
 #: Every kind ``connect()`` accepts.
 STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS
 
+#: Treatments drawn along a pipe: ``tracing``, ``insulated``, ``jacketed``.
+TREATMENTS = ("tracing", "insulated", "jacketed")
+
 #: Accepted colour shapes: a keyword, a hex colour of 3, 4, 6 or 8
 #: digits, or an ``rgb``/``rgba``/``hsl``/``hsla`` function.
 _COLOR = re.compile(
@@ -101,6 +104,52 @@ def check_color(value: str, stream: "Stream | None" = None) -> None:
     )
 
 
+def check_treatment(name: str, value, stream: "Stream | None" = None) -> None:
+    """Raise unless ``value`` is a treatment the stream can be drawn with.
+
+    Parameters
+    ----------
+    name : str
+        ``"tracing"``, ``"insulated"`` or ``"jacketed"``.
+    value : object
+        Proposed value: the tracing medium as text, or ``None``; a bool
+        for the others.
+    stream : Stream or None, optional
+        Stream named in the error message, and whose kind is checked.
+
+    Raises
+    ------
+    TypeError
+        If ``tracing`` is not text or ``None``, or ``insulated`` or
+        ``jacketed`` is not a bool.
+    ValueError
+        If ``tracing`` is blank, or a signal line is given a treatment.
+    """
+    if name == "tracing":
+        if value is not None and not isinstance(value, str):
+            raise TypeError(
+                f"{_names(stream)}tracing={value!r} must name the tracing medium, such "
+                f"as 'steam' or 'electric', or be None"
+            )
+        if value is not None and not value.strip():
+            raise ValueError(
+                f"{_names(stream)}tracing={value!r} is blank. Name the tracing medium, "
+                f"such as 'steam' or 'electric', or set None for an untraced line"
+            )
+    elif not isinstance(value, bool):
+        raise TypeError(f"{_names(stream)}{name}={value!r} must be True or False")
+    kind = getattr(stream, "kind", None)
+    if value not in (None, False) and kind in SIGNAL_KINDS:
+        raise ValueError(
+            f"{_names(stream)}a {kind} signal line is not {_TREATED[name]}. Set "
+            f"{name}= on the pipe it serves"
+        )
+
+
+#: How each treatment reads in a message.
+_TREATED = {"tracing": "traced", "insulated": "insulated", "jacketed": "jacketed"}
+
+
 def check_dasharray(value: str, stream: "Stream | None" = None) -> None:
     """Raise ``ValueError`` unless ``value`` is a dash pattern.
 
@@ -158,6 +207,16 @@ class Stream:
         Report this segment in a split run's stream-table column.
     state : State or None
         Stream conditions.
+    tracing : str or None
+        Tracing medium, such as ``"steam"`` or ``"electric"``; the line is
+        drawn traced (ISO 10628-2 25.6, or 25.8 when insulated too).
+    insulated : bool
+        Draw the line insulated (ISO 10628-2 25.9).
+    jacketed : bool
+        Draw the line jacketed (ISO 10628-2 25.7).
+
+    Treatments are checked when set; set on a split line's handle, they
+    apply to its whole run.
     """
 
     name: str
@@ -179,6 +238,9 @@ class Stream:
     properties: dict[str, str | float] = field(default_factory=dict)
     tabulate: bool = False
     state: State | None = None
+    tracing: str | None = None
+    insulated: bool = False
+    jacketed: bool = False
     _is_recycle: bool = field(default=False, init=False, repr=False)
     # Sequence last written by automatic numbering.
     _auto_sequence: str | None = field(default=None, init=False, repr=False)
@@ -192,10 +254,11 @@ class Stream:
     _CHECKED = {"color": check_color, "dasharray": check_dasharray}
 
     def __setattr__(self, name: str, value) -> None:
-        """Set an attribute, validating ``color`` and ``dasharray``.
+        """Set an attribute, validating ``color``, ``dasharray`` and the
+        treatments.
 
-        Either set on a split line's handle is set on the line's every
-        segment and the pipework of its valve stations.
+        Any of them set on a split line's handle is set on the line's
+        every segment and the pipework of its valve stations.
 
         Parameters
         ----------
@@ -207,10 +270,19 @@ class Stream:
         Raises
         ------
         TypeError
-            If ``color`` or ``dasharray`` is not text or ``None``.
+            If ``color`` or ``dasharray`` is not text or ``None``, or a
+            treatment has the wrong type.
         ValueError
-            If ``color`` or ``dasharray`` has the wrong shape.
+            If ``color`` or ``dasharray`` has the wrong shape, or a
+            treatment is refused (:func:`check_treatment`).
         """
+        if name in TREATMENTS:
+            check_treatment(name, value, self)
+            object.__setattr__(self, name, value)
+            for part in (*getattr(self, "_logical_segments", ()),
+                         *getattr(self, "_logical_pipework", ())):
+                object.__setattr__(part, name, value)
+            return
         check = self._CHECKED.get(name)
         if check is not None and value is not None:
             if not isinstance(value, str):

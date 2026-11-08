@@ -77,7 +77,14 @@ DEVICES = {
     # --- Compressors --------------------------------------------------
     ("compressor", "default"): ("CentrifugalCompressor", """Centrifugal compressor: dynamic compression for large gas flows."""),
     ("compressor", "reciprocating"): ("ReciprocatingCompressor", """Reciprocating compressor: a piston in a cylinder."""),
-    ("compressor", "rotary"): ("RotaryCompressor", """Rotary compressor: screws or lobes."""),
+    ("compressor", "rotary"): ("RotaryCompressor", """Rotary lobe compressor: two rotors in a casing.
+
+    For a screw machine, use :class:`ScrewCompressor`.
+"""),
+    ("compressor", "screw"): ("ScrewCompressor", """Screw compressor: two meshing screws.
+
+    ISO 10628-2 item 16.8, X8161.
+"""),
     ("compressor", "liquid_ring"): ("LiquidRingCompressor", """Liquid-ring compressor: a rotating liquid seal does the work."""),
 
     # --- Fans ----------------------------------------------------------
