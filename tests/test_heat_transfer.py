@@ -75,9 +75,13 @@ def test_each_new_drawing_draws_clean(tmp_path):
     fs.render(str(tmp_path / "hx.drawio"), diagram="p&id")
 
 
-def _midpoints(path) -> list:
-    """Return a polyline's corners and the midpoint of each stroke."""
-    return path + [((ax + bx) / 2, (ay + by) / 2) for (ax, ay), (bx, by) in zip(path, path[1:])]
+def _along(path) -> list:
+    """Return a polyline's corners and the quarter points of each stroke."""
+    return path + [
+        (ax + t * (bx - ax), ay + t * (by - ay))
+        for (ax, ay), (bx, by) in zip(path, path[1:])
+        for t in (0.25, 0.75)
+    ]
 
 
 def test_the_floating_head_and_the_channel_partition_are_drawn():
@@ -95,7 +99,7 @@ def test_the_coil_runs_between_the_tubesheets():
     """Check item 3.7's coil, corner by corner, in both exports."""
     coil = [(15, 15), (26, 15), (29, 7.5), (35, 22.5), (41, 7.5), (47, 22.5)]
     coil += [(53, 7.5), (58, 22.5), (65, 7.5), (71, 22.5), (74, 15), (85, 15)]
-    assert_inked(ShellAndTubeExchanger("E-1", variant="coil_tube"), _midpoints(coil))
+    assert_inked(ShellAndTubeExchanger("E-1", variant="coil_tube"), _along(coil))
 
 
 def test_the_electric_heater_draws_its_terminal_box_and_elements():
