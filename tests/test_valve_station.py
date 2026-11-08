@@ -100,10 +100,16 @@ def test_a_drain_leg_ends_at_its_valve():
 
 
 def test_the_control_valve_takes_the_tag_and_the_variant():
-    """Check that the control valve carries the station tag and variant."""
-    _fs, st = _sheet(variant="butterfly_pneumatic")
+    """Check that the control valve carries the station tag, variant and actuator."""
+    _fs, st = _sheet(variant="butterfly", actuator="piston")
     assert st.control.name == "CV-303"
-    assert st.control.variant == "butterfly_pneumatic"
+    assert (st.control.variant, st.control.actuator_type) == ("butterfly", "piston")
+
+
+def test_the_control_valve_takes_a_diaphragm_unless_told_otherwise():
+    """Check that a station's control valve gets a diaphragm on whatever body it names."""
+    assert _sheet()[1].control.actuator_type == "diaphragm"
+    assert _sheet(variant="globe")[1].control.actuator_type == "diaphragm"
 
 
 def test_members_can_be_left_out():

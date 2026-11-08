@@ -146,7 +146,7 @@ def _inferred_kind(src: "Port", dst: "Port") -> str:
     """Return the stream kind two ports imply.
 
     Two signal ports imply ``"pneumatic"`` when one is the actuator of
-    a valve drawn with a diaphragm or with no actuator, else
+    a valve drawn with a diaphragm, a piston or no actuator, else
     ``"electric"``; two energy or utility ports imply ``"energy"``; a
     driver's shaft to a machine's drive implies ``"mechanical"``.
 
@@ -164,10 +164,8 @@ def _inferred_kind(src: "Port", dst: "Port") -> str:
     if (src.role, dst.role) == ("shaft", "drive"):
         return MECHANICAL
     if src.role == "signal":
-        from pandid.render.symbols import variant_actuator
-
         air = any(p.name == "actuator"
-                  and variant_actuator(p.owner.variant) in ("", "diaphragm")
+                  and getattr(p.owner, "actuator_type", "") in ("", "diaphragm", "piston")
                   for p in (src, dst))
         return "pneumatic" if air else "electric"
     return ("energy" if src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES
@@ -1759,7 +1757,8 @@ class Flowsheet:
     def add_valve_station(
         self, tag: str, *,
         x: float | None = None, y: float | None = None, mirrored: bool | None = None,
-        variant: str = "control", number: str | int | None = None,
+        variant: str = "default", actuator: str | None = None,
+        number: str | int | None = None,
         isolation: bool = True, reducers: bool = True, bypass: bool = True,
         drains: int = 2, description: str = "", bypass_over: str | None = None,
         tag_scheme: "str | Callable[[str, str], str] | None" = None,
@@ -1784,8 +1783,11 @@ class Flowsheet:
             Station left edge and run centreline; give both or neither.
         mirrored : bool or None, optional
             Pipe the run east to west; any bool needs ``x`` and ``y``.
-        variant : str, default="control"
-            Control valve symbol.
+        variant : str, default="default"
+            Control valve body.
+        actuator : str or None, optional
+            Control valve actuator, as for :class:`~pandid.units.Valve`;
+            a diaphragm when omitted.
         number : str, int or None, optional
             Member tag number; defaults to the control tag's.
         isolation, reducers, bypass : bool, default=True
@@ -1834,7 +1836,7 @@ class Flowsheet:
             from pandid.stations import (
                 BYPASS_ANCHORS, ROLE_WORDS, ValveStation, member_tag, member_mirror,
             )
-            from pandid.units import Reducer, Tee, Valve, split_tag
+            from pandid.units import _FUSED, Reducer, Tee, Valve, split_tag
 
             if on is not None:
                 # Refuse a bad position before any member is added.
@@ -1940,7 +1942,9 @@ class Flowsheet:
                 self.add(unit)
                 return unit
 
-            control = Valve(tag, variant=variant,
+            if actuator is None and variant not in _FUSED:
+                actuator = "diaphragm"
+            control = Valve(tag, variant=variant, actuator=actuator,
                             description=f"{description} Control Valve".strip())
             self.add(control)
             iso_a = valve("upstream_isolation") if isolation else None
@@ -2147,7 +2151,7 @@ class Flowsheet:
         kind : str or None, optional
             One of :data:`~pandid.streams.STREAM_KINDS`. ``None`` infers
             ``"pneumatic"`` for a signal line to the actuator of a valve
-            drawn with a diaphragm or with no actuator, ``"electric"``
+            drawn with a diaphragm, a piston or no actuator, ``"electric"``
             for another signal line, ``"energy"`` between two energy or
             utility ports, ``"mechanical"`` from a driver's ``shaft`` to
             a machine's ``drive``, else ``"material"``. An energy line

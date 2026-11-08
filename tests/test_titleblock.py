@@ -740,7 +740,7 @@ def _across_a_valve():
     """Create a two-segment pressure-drop run."""
     fs = Flowsheet("drop")
     feed = fs.add(U.Feed("F"))
-    fv = fs.add(U.Valve("FV-1", variant="control"))
+    fv = fs.add(U.Valve("FV-1", actuator="diaphragm"))
     prod = fs.add(U.Product("P"))
     up = fs.connect(feed.outlet, fv.inlet)
     down = fs.connect(fv.outlet, prod.inlet)
@@ -760,7 +760,7 @@ def test_the_mark_moves_the_values_and_not_the_heading():
     """Verify the mark moves the values and not the heading."""
     fs = Flowsheet("heading")
     feed = fs.add(U.Feed("F"))
-    fv = fs.add(U.Valve("FV-1", variant="control"))
+    fv = fs.add(U.Valve("FV-1", actuator="diaphragm"))
     prod = fs.add(U.Product("P"))
     up = fs.connect(feed.outlet, fv.inlet, size='6"', service="P", spec="A1A")
     down = fs.connect(fv.outlet, prod.inlet)

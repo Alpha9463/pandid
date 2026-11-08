@@ -681,7 +681,7 @@
     <symbol id="sym_hex_straight_tubes_s130x40" viewBox="0 0 130 40" overflow="visible"><rect x="0" y="0" width="130" height="40" fill="white" stroke="#111" stroke-width="2"/><path d="M 19.5 0 L 19.5 40 M 110.5 0 L 110.5 40 M 110.5 10 L 19.5 10 M 110.5 20 L 19.5 20 M 110.5 30 L 19.5 30" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_hex_straight_tubes_s140x44" viewBox="0 0 140 44" overflow="visible"><rect x="0" y="0" width="140" height="44" fill="white" stroke="#111" stroke-width="2"/><path d="M 21 0 L 21 44 M 119 0 L 119 44 M 119 11 L 21 11 M 119 22 L 21 22 M 119 33 L 21 33" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
-    <symbol id="sym_valve_control" viewBox="0 0 24.5 19.75" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="white" stroke="#111" stroke-width="4"/></g></symbol>
+    <symbol id="sym_valve_diaphragm" viewBox="0 0 24.5 20.0" overflow="visible"><g transform="translate(0,5)"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="4"/></g></g><path d="M 7.25 5 A 5 5 0 0 1 12.25 0 A 5 5 0 0 1 17.25 5 Z" fill="white" stroke="#111" stroke-width="1"/><path d="M 12.25 5 L 12.25 12.5" fill="none" stroke="#111" stroke-width="1"/></symbol>
     <symbol id="sym_vessel_horizontal_120x40_cf99ece5a" viewBox="0 0 120.0 40.0" overflow="visible"><path d="M 5.7692 40 L 114.231 40 A 5.7692 20 0 0 0 120 20 A 5.7692 20 0 0 0 114.231 0 L 5.7692 0 A 5.7692 20 0 0 0 0 20 A 5.7692 20 0 0 0 5.7692 40 Z M 5.7692 0 L 5.7692 40 M 114.231 0 L 114.231 40" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
@@ -694,7 +694,7 @@
     <use href="#sym_hex_straight_tubes_s130x40" x="370" y="960" width="130" height="40" />
     <use href="#sym_pump" x="530" y="870" width="70.0" height="67.0" transform="translate(1130, 0) scale(-1, 1)" />
     <use href="#sym_pump" x="1350" y="210" width="70.0" height="67.0" />
-    <use href="#sym_valve_control" x="460" y="809.56" width="24.5" height="19.75" />
+    <use href="#sym_valve_diaphragm" x="460" y="809.5" width="24.5" height="20.0" />
     <polygon points="39.312,532.97 105.0,532.97 120.0,545.97 105.0,558.97 39.312,558.97" fill="transparent" stroke="black" stroke-width="2" />
     <text x="72.156" y="541.97" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Sour Gas</text>
     <text x="72.156" y="553.97" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-301</text>
@@ -802,7 +802,7 @@
     <text x="565.0" y="860.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">P-401A/B</text>
     <rect x="1355.3" y="188.0" width="59.4" height="15.0" fill="white" />
     <text x="1385.0" y="200.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">P-402A/B</text>
-    <rect x="448.9" y="787.6" width="46.7" height="15.0" fill="white" />
-    <text x="472.25" y="799.5575" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">LV-401</text>
+    <rect x="448.9" y="787.5" width="46.7" height="15.0" fill="white" />
+    <text x="472.25" y="799.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">LV-401</text>
   </g>
 </svg>

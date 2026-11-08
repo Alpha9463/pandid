@@ -13,7 +13,7 @@ SPEC = {
     "units": [
         {"kind": "Feed", "name": "Raw Feed"},
         {"kind": "Pump", "name": "P-101"},
-        {"kind": "Valve", "name": "FV-101", "variant": "control"},
+        {"kind": "Valve", "name": "FV-101", "actuator": "diaphragm"},
         {"kind": "Product", "name": "To Unit 200"},
     ],
     "streams": [
@@ -36,7 +36,7 @@ name: Feed Skid
 units:
   - {kind: Feed, name: Raw Feed}
   - {kind: Pump, name: P-101}
-  - {kind: Valve, name: FV-101, variant: control}
+  - {kind: Valve, name: FV-101, actuator: diaphragm}
   - {kind: Product, name: To Unit 200}
 streams:
   - {from: [Raw Feed, outlet], to: [P-101, suction]}
@@ -268,7 +268,7 @@ def test_symbols_lists_every_symbol_in_the_registry(capsys):
 
 @pytest.mark.parametrize(
     ("kind", "shown"),
-    [("valve", ["control", "psv"]), ("Valve", ["control", "psv"]), ("heat_exchanger", ["kettle"])],
+    [("valve", ["globe", "psv"]), ("Valve", ["globe", "psv"]), ("heat_exchanger", ["kettle"])],
 )
 def test_symbols_filters_by_kind_however_a_spec_spells_it(kind, shown, capsys):
     assert main(["symbols", "--kind", kind]) == EXIT_OK

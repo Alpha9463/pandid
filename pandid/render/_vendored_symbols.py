@@ -135,60 +135,12 @@ def register_vendored(registry):
     ), 'pinch')
 
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_motor"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">M</text><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">M</text></g></g>',
-        width=24.5, height=22.25,
-        ports={'inlet': (0.0, 14.9075), 'outlet': (24.5, 14.9075), 'actuator': (12.25, 0.0)},
-        drawio_shape='mxgraph.pid.valves.motor_operated_valve',
-        trim=True,
-    ), 'motor')
-
-    registry.register('valve', Symbol(
-        svg='<g id="sym_valve_solenoid"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">S</text><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">S</text></g></g>',
-        width=24.5, height=22.25,
-        ports={'inlet': (0.0, 14.9075), 'outlet': (24.5, 14.9075), 'actuator': (12.25, 0.0)},
-        drawio_shape='mxgraph.pid.valves.solenoid_valve_closed',
-        trim=True,
-    ), 'solenoid')
-
-    registry.register('valve', Symbol(
-        svg='<g id="sym_valve_hydraulic"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">H</text><text x="49.0" y="21.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">H</text></g></g>',
-        width=24.5, height=22.25,
-        ports={'inlet': (0.0, 14.9075), 'outlet': (24.5, 14.9075), 'actuator': (12.25, 0.0)},
-        drawio_shape='mxgraph.pid.valves.hydraulic_valve',
-        trim=True,
-    ), 'hydraulic')
-
-    registry.register('valve', Symbol(
-        svg='<g id="sym_valve_control"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=24.5, height=19.75,
-        ports={'inlet': (0.0, 12.4425), 'outlet': (24.5, 12.4425), 'actuator': (12.25, 0.0)},
-        drawio_shape='mxgraph.pid.valves.pneumatic_operated',
-        trim=True,
-    ), 'control')
-
-    registry.register('valve', Symbol(
-        svg='<g id="sym_valve_manual"><g transform="scale(0.25)"><path d="M 0.0 65.0 L 0.0 5.0 L 98.0 65.0 L 98.0 5.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 35.0 L 49.0 0.0 L 79.0 0.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=24.5, height=16.25,
-        ports={'inlet': (0.0, 8.775), 'outlet': (24.5, 8.775), 'actuator': (12.25, 0.0)},
-        drawio_shape='mxgraph.pid.valves.manual_operated_valve',
-        trim=True,
-    ), 'manual')
-
-    registry.register('valve', Symbol(
         svg='<g id="sym_valve_knife"><g transform="scale(0.25)"><rect x="35.0" y="15.0" width="30.0" height="70.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 45.0 L 35.0 45.0 M 65.0 45.0 L 100.0 45.0 M 30.0 0.0 L 70.0 0.0 M 50.0 0.0 L 50.0 60.0 M 60.0 50.0 L 50.0 80.0 L 40.0 50.0 L 50.0 60.0 Z" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=25.0, height=21.25,
         ports={'inlet': (0.0, 11.2625), 'outlet': (25.0, 11.2625), 'actuator': (12.5, 0.0)},
         drawio_shape='mxgraph.pid.valves.knife_valve',
         trim=True,
     ), 'knife')
-
-    registry.register('valve', Symbol(
-        svg='<g id="sym_valve_butterfly_pneumatic"><g transform="scale(0.4083333333333333, 0.375)"><rect x="0.0" y="40.0" width="60.0" height="40.0" fill="white" stroke="#111" stroke-width="5.111"/><path d="M 30.0 20.0 L 30.0 52.0 M 10.0 20.0 A 20.0 20.0 0.0 0 1 30.0 0.0 A 20.0 20.0 0.0 0 1 50.0 20.0 Z M 5.0 75.0 L 55.0 45.0" fill="white" stroke="#111" stroke-width="5.111"/><ellipse cx="30.0" cy="60.0" rx="4.0" ry="4.0" fill="white" stroke="#111" stroke-width="5.111"/></g></g>',
-        width=24.5, height=30.0,
-        ports={'inlet': (0.0, 22.5), 'outlet': (24.5, 22.5), 'actuator': (12.25, 0.0)},
-        drawio_shape='mxgraph.pid.valves.pneumatic_operated_butterfly_valve',
-        trim=True,
-    ), 'butterfly_pneumatic')
 
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_regulator"><g transform="scale(0.25)"><path d="M 0.0 94.0 L 0.0 35.0 L 98.0 94.0 L 98.0 35.0 Z M 49.0 35.0 L 49.0 64.0 M 29.0 35.0 A 20.0 20.0 0.0 0 1 49.0 15.0 A 20.0 20.0 0.0 0 1 69.0 35.0 Z" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 0.0 L 97.5 0.0 L 49.0 64.5" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',

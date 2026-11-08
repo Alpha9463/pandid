@@ -100,10 +100,15 @@ The names depend on the class and variant. Common patterns are:
 
 - `Feed.outlet` connects to a unit's inlet; `Product.inlet` receives its output.
 - Pumps, compressors and fans use `suction` and `discharge`; valves use
-  `inlet`, `outlet` and a signal `actuator`. A `CheckValve` has `inlet` and
-  `outlet` only, and `variant=` picks its form: `"lift"`, `"swing"`,
-  `"swing_form_2"`, `"ball"`, `"dual_plate"`, `"stop"` or `"foot"`, the foot
-  valve drawn upright over its strainer.
+  `inlet`, `outlet` and a signal `actuator`. A valve's `variant=` is its body
+  and `actuator=` what strokes it: `"diaphragm"`, `"piston"`, `"motor"`,
+  `"solenoid"`, `"hydraulic"` or `"handwheel"`, drawn on the body's stem, as in
+  `Valve("XV-101", variant="ball", actuator="piston")`. `ControlValve`,
+  `SolenoidValve` and `MotorOperatedValve` draw their own actuator on the body
+  `variant=` names. A `CheckValve` has `inlet` and `outlet` only, and
+  `variant=` picks its form: `"lift"`, `"swing"`, `"swing_form_2"`, `"ball"`,
+  `"dual_plate"`, `"stop"` or `"foot"`, the foot valve drawn upright over its
+  strainer.
 - A machine that takes a driver has a `drive`: pumps, compressors, fans,
   conveyors, crushers, mills and feeders. A `Motor` (`variant="ac"` or `"dc"`
   for ISO items 20.7 and 20.8) turns it through its `shaft`:
@@ -132,6 +137,14 @@ The names depend on the class and variant. Common patterns are:
   stacked at `feed`, on top, and reclaimed at `reclaim`, under it. Both are
   built to the `width` and `height` they are given: a longer mill carries more
   balls, and a wider pile has a flat top.
+- A `MembraneModule` takes `feed` and gives `concentrate` and `permeate`;
+  `variant="ro"`, `"nf"`, `"uf"` or `"mf"` letters its grade. A
+  `PigLauncher` sends the pig out of `main`, driven in at `kicker`; a
+  `PigReceiver` takes it in at `main` and lets the line out at `kicker`. Both
+  have `closure`, `vent`, `relief` and `drain`.
+- A `BootedDrum` (`Separator(variant="boot")`) or `ThreePhaseSeparator`
+  (`variant="three_phase"`) takes one `feed` and gives `vapor`, `liquid` and
+  `water`: the water from the boot, or from ahead of the weir.
 - A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
   `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
   heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
@@ -281,8 +294,8 @@ units. `kind` may be `material`, `energy`, `electric`, `pneumatic`,
 `hydraulic`, `wireless`, `data`, `software`, `capillary` or `mechanical`. A
 hydraulic line carries a footed stroke at each mark (ISO 15519-2 A.1.08) and a
 wireless line is drawn as a wave. When omitted, a signal line to a valve with a
-diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
-electric; two energy/utility ports make an energy stream; a driver's `shaft` to a
+diaphragm or piston actuator, or with none drawn, is pneumatic and any other
+signal line is electric; two energy/utility ports make an energy stream; a driver's `shaft` to a
 machine's `drive` makes a mechanical one, drawn without a number; other process
 ports make a material stream. `add_control_loop()` infers its output line the same way
 unless `output_kind=` is given. On a PFD, `validate()` reports
@@ -391,8 +404,9 @@ Signal streams connect instrument terminals to a valve's `actuator`.
 
 `fs.add_valve_station("CV-101", isolation=True, reducers=True, bypass=True,
 drains=2)` builds a station and returns a `ValveStation` with `inlet`, `outlet`,
-`control` and `members`. Pass `on=` to put one in an existing line, as for a
-device. The station's tag scheme can be set on the flowsheet or for one
+`control` and `members`. Its control valve is a diaphragm valve on the body
+`variant=` names; `actuator=` gives it another. Pass `on=` to put one in an
+existing line, as for a device. The station's tag scheme can be set on the flowsheet or for one
 station.
 
 ## Package units

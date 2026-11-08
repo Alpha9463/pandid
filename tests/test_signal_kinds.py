@@ -19,7 +19,7 @@ from pandid.render.svg import (
 def _sheet(kind: str) -> Flowsheet:
     """Return a routed sheet with one signal line of ``kind`` turning a corner."""
     fs = Flowsheet(kind)
-    valve = fs.add(units.Valve("FV-101", variant="control")).pin(x=400, y=300)
+    valve = fs.add(units.Valve("FV-101", actuator="diaphragm")).pin(x=400, y=300)
     pic = fs.add_instrument("PIC", 101, display="central").pin(x=100, y=100)
     fs.connect(pic.sig_out, valve.actuator, kind=kind)
     fs.route()

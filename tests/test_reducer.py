@@ -22,7 +22,7 @@ def _station(variant="concentric"):
     fs = Flowsheet("valve station")
     feed = fs.add(units.Feed("FROM T-301"))
     rd = fs.add(units.Reducer("RD-306A", variant=variant))
-    cv = fs.add(units.Valve("CV-306", variant="control"))
+    cv = fs.add(units.Valve("CV-306", actuator="diaphragm"))
     ex = fs.add(units.Reducer("RD-306B", variant=variant, large_end="outlet"))
     prod = fs.add(units.Product("TO F-301"))
     x = 160.0
@@ -102,7 +102,7 @@ def test_the_run_crosses_both_fittings_without_a_break(variant):
 def test_the_reference_stations_proportions():
     """Check that a concentric reducer is square and half the control valve's width."""
     reducer = registry.get("reducer", "concentric")
-    valve = registry.get("valve", "control")
+    valve = registry.actuated("default", "diaphragm")
     assert reducer.width == reducer.height
     assert reducer.width == pytest.approx(valve.width / 2, rel=0.05)
 
@@ -163,7 +163,7 @@ def test_only_a_two_ended_fitting_can_be_turned_end_for_end():
     with pytest.raises(ValueError, match="two ends to trade"):
         expander(registry.get("pump", "default"))
     with pytest.raises(ValueError, match="two ends to trade"):
-        expander(registry.get("valve", "control"))  # inlet, outlet and actuator
+        expander(registry.actuated("default", "diaphragm"))  # inlet, outlet and actuator
 
 
 def test_the_turned_drawing_mirrors_its_bands_and_keeps_every_other_field() -> None:

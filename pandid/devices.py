@@ -23,6 +23,7 @@ from pandid.units import (
     Heater,
     Kiln,
     Mill,
+    PigTrap,
     Pump,
     Reactor,
     ScreeningDevice,
@@ -78,6 +79,10 @@ __all__ = [
     "Scrubber",
     "VenturiScrubber",
     "KnockoutDrum",
+    "BootedDrum",
+    "ThreePhaseSeparator",
+    "PigLauncher",
+    "PigReceiver",
     "DustCollector",
     "RotaryDrumFilter",
     "FilterPress",
@@ -112,11 +117,8 @@ __all__ = [
     "RotaryDrumScreen",
     "ReelScreen",
     "ThreeWayValve",
-    "ControlValve",
-    "SolenoidValve",
     "ReliefValve",
     "PressureRegulator",
-    "MotorOperatedValve",
     "CheckValve",
     "SpectacleBlind",
     "PaddleBlind",
@@ -126,6 +128,9 @@ __all__ = [
     "StirredTankReactor",
     "JacketedReactor",
     "GasHolder",
+    "ControlValve",
+    "SolenoidValve",
+    "MotorOperatedValve",
 ]
 
 
@@ -890,6 +895,105 @@ class KnockoutDrum(Separator):
     liquid: Port
 
 
+class BootedDrum(Separator):
+    """Booted drum: a horizontal drum with a water boot under its east end.
+
+    ``feed`` enters the west head, ``vapor`` leaves the top, ``liquid``
+    the bottom and ``water`` the boot.
+
+    Parameters are those of :class:`~pandid.units.Separator`.
+    """
+
+    VARIANTS = ("default", "boot")
+    VARIANT_ALIASES = {"default": "boot"}
+    PORTS = [
+        ("vapor", "outlet", "vapor"),
+        ("liquid", "outlet", "liquid"),
+        ("water", "outlet", "liquid"),
+    ]
+
+    vapor: Port
+    liquid: Port
+    water: Port
+
+
+class ThreePhaseSeparator(Separator):
+    """Three-phase separator: a horizontal drum with a weir near its east end.
+
+    ``feed`` enters the west head and ``vapor`` leaves the top; ``water``
+    is drawn off ahead of the weir and ``liquid`` beyond it.
+
+    Parameters are those of :class:`~pandid.units.Separator`.
+    """
+
+    VARIANTS = ("default", "three_phase")
+    VARIANT_ALIASES = {"default": "three_phase"}
+    PORTS = [
+        ("vapor", "outlet", "vapor"),
+        ("liquid", "outlet", "liquid"),
+        ("water", "outlet", "liquid"),
+    ]
+
+    vapor: Port
+    liquid: Port
+    water: Port
+
+
+class PigLauncher(PigTrap):
+    """Pig launcher: a barrel behind a closure, sending the pig out of ``main``.
+
+    The line into ``kicker`` drives the pig from the barrel into the
+    main line.
+
+    Parameters are those of :class:`~pandid.units.PigTrap`.
+    """
+
+    VARIANTS = ("default", "launcher")
+    VARIANT_ALIASES = {"default": "launcher"}
+    PORTS = [
+        ("kicker", "inlet", "process"),
+        ("main", "outlet", "process"),
+        ("closure", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
+
+    kicker: Port
+    main: Port
+    closure: Port
+    vent: Port
+    relief: Port
+    drain: Port
+
+
+class PigReceiver(PigTrap):
+    """Pig receiver: a barrel behind a closure, taking the pig in at ``main``.
+
+    The line leaves at ``kicker`` once the pig is in the barrel.
+
+    Parameters are those of :class:`~pandid.units.PigTrap`.
+    """
+
+    VARIANTS = ("default", "receiver")
+    VARIANT_ALIASES = {"default": "receiver"}
+    PORTS = [
+        ("main", "inlet", "process"),
+        ("kicker", "outlet", "process"),
+        ("closure", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
+
+    main: Port
+    kicker: Port
+    closure: Port
+    vent: Port
+    relief: Port
+    drain: Port
+
+
 class DustCollector(Filter):
     """Dust collector: a gas filter with a hopper under the medium.
 
@@ -1473,51 +1577,6 @@ class ThreeWayValve(Valve):
     branch: Port
 
 
-class ControlValve(Valve):
-    """Control valve: the valve a controller modulates.
-
-    Drawn as the general body with a diaphragm actuator (ISO 15519-2
-    A.3.41); ``butterfly_pneumatic`` draws a butterfly body. The
-    ``default`` body raises on ``normal_position="closed"``; use
-    ``fail="closed"``.
-
-    Parameters are those of :class:`~pandid.units.Valve`.
-    """
-
-    VARIANTS = ("default", "butterfly_pneumatic", "control")
-    VARIANT_ALIASES = {"default": "control"}
-    PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-        ("actuator", "inlet", "signal"),
-    ]
-
-    inlet: Port
-    outlet: Port
-    actuator: Port
-
-
-class SolenoidValve(Valve):
-    """Solenoid valve: an electrically operated on/off valve.
-
-    It takes a ``fail`` position and may be shown normally closed.
-
-    Parameters are those of :class:`~pandid.units.Valve`.
-    """
-
-    VARIANTS = ("default", "solenoid")
-    VARIANT_ALIASES = {"default": "solenoid"}
-    PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-        ("actuator", "inlet", "signal"),
-    ]
-
-    inlet: Port
-    outlet: Port
-    actuator: Port
-
-
 class ReliefValve(Valve):
     """Pressure relief valve: opens itself at the set pressure.
 
@@ -1552,27 +1611,6 @@ class PressureRegulator(Valve):
 
     VARIANTS = ("default", "regulator")
     VARIANT_ALIASES = {"default": "regulator"}
-    PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-        ("actuator", "inlet", "signal"),
-    ]
-
-    inlet: Port
-    outlet: Port
-    actuator: Port
-
-
-class MotorOperatedValve(Valve):
-    """Motor-operated valve: a block valve on an electric actuator.
-
-    It takes a ``fail`` position and may be shown normally closed.
-
-    Parameters are those of :class:`~pandid.units.Valve`.
-    """
-
-    VARIANTS = ("default", "motor")
-    VARIANT_ALIASES = {"default": "motor"}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -1792,3 +1830,104 @@ class GasHolder(Tank):
     vent: Port
     relief: Port
     drain: Port
+
+
+class ControlValve(Valve):
+    """Control valve: the valve a controller modulates.
+
+    A diaphragm actuator (ISO 15519-2 A.3.41) on the body ``variant=``
+    names. It raises on ``normal_position="closed"``; use
+    ``fail="closed"``.
+
+    Parameters are those of :class:`~pandid.units.Valve`.
+    """
+
+    VARIANTS = (
+        "default",
+        "gate",
+        "angle",
+        "globe",
+        "ball",
+        "plug",
+        "saunders",
+        "butterfly",
+        "needle",
+        "pinch",
+        "knife",
+    )
+    ACTUATOR = "diaphragm"
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    actuator: Port
+
+
+class SolenoidValve(Valve):
+    """Solenoid valve: an electrically operated on/off valve.
+
+    It takes a ``fail`` position and may be shown normally closed.
+
+    Parameters are those of :class:`~pandid.units.Valve`.
+    """
+
+    VARIANTS = (
+        "default",
+        "gate",
+        "angle",
+        "globe",
+        "ball",
+        "plug",
+        "saunders",
+        "butterfly",
+        "needle",
+        "pinch",
+        "knife",
+    )
+    ACTUATOR = "solenoid"
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    actuator: Port
+
+
+class MotorOperatedValve(Valve):
+    """Motor-operated valve: a block valve on an electric actuator.
+
+    It takes a ``fail`` position and may be shown normally closed.
+
+    Parameters are those of :class:`~pandid.units.Valve`.
+    """
+
+    VARIANTS = (
+        "default",
+        "gate",
+        "angle",
+        "globe",
+        "ball",
+        "plug",
+        "saunders",
+        "butterfly",
+        "needle",
+        "pinch",
+        "knife",
+    )
+    ACTUATOR = "motor"
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    actuator: Port

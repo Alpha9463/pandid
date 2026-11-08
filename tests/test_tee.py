@@ -33,7 +33,7 @@ def station():
     hv_a = fs.add(units.Valve("HV-303A", variant="gate"))
     t_dr_a = fs.add(units.Tee())  # upstream drain
     rd = fs.add(units.Reducer("RD-303", variant="concentric"))
-    cv = fs.add(units.Valve("CV-303", variant="control"))
+    cv = fs.add(units.Valve("CV-303", actuator="diaphragm"))
     t_dr_b = fs.add(units.Tee())  # downstream drain
     hv_b = fs.add(units.Valve("HV-303B", variant="gate"))
     t_by_b = fs.add(units.Tee(branch="inlet"))  # bypass return
