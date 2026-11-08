@@ -100,6 +100,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
   or thermal mass flowmeter, a flume and a weir:
   `FlowElement("FE-101", variant="magnetic")`.
+- `ShellAndTubeExchanger` draws a floating-head and a coil-tube exchanger,
+  `variant="floating_head"` and `variant="coil_tube"`, and `ElectricHeater`
+  draws the ISO 10628-2 electric heater, powered at `utility_in`.
 
 ### Changed
 
