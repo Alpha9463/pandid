@@ -84,8 +84,9 @@ def covering(fs: Flowsheet) -> dict[tuple, set[int]]:
     -------
     dict[tuple, set[int]]
         A key for each unit, line (with its tracing, insulation and
-        jacket marks), tag or letter beside a unit, package label, letter
-        code, line number and number leader that meets a placed
+        jacket marks and the limits, tie-ins and spec breaks marked on
+        it), tag or letter beside a unit, package label, letter code,
+        line number and number leader that meets a placed
         annotation, by name, so keys from two drawings of a sheet
         compare, and the indexes in :func:`placed` of the annotations it
         meets.
@@ -94,6 +95,7 @@ def covering(fs: Flowsheet) -> dict[tuple, set[int]]:
     from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
     from pandid.package import frame as package_frame
     from pandid.portgeom import unit_box
+    from pandid.render.line_markers import line_markers
     from pandid.render.pipe_marks import pipe_marks
     from pandid.render.svg import (_unit_label_box, drawn_codes, package_labels,
                                    resolve_connections, stream_hops, stream_numbers,
@@ -155,8 +157,12 @@ def covering(fs: Flowsheet) -> dict[tuple, set[int]]:
         if u.frame is not None:
             add(("unit", u.name), over(unit_box(u, u.frame)))
     marks = {id(mark.stream): mark.box for mark in pipe_marks(fs)}
+    markers: dict[int, set[int]] = {}
+    for drawn in line_markers(fs):
+        markers.setdefault(id(drawn.stream), set()).update(over(drawn.box))
     for s in fs.streams:
-        add(("line", s.name), crosses(stream_path(s)) | over(marks.get(id(s))))
+        add(("line", s.name), crosses(stream_path(s)) | over(marks.get(id(s)))
+            | markers.get(id(s), set()))
     frames = [(pkg, package_frame(pkg)) for pkg in fs.packages]
     packages = [((pkg.name, k), item) for pkg, frame in frames if frame is not None
                 for k, item in enumerate(package_labels(pkg, frame))]

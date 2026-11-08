@@ -69,6 +69,7 @@ def test_each_tumbling_mill_is_a_drum_on_two_trunnions(cls, variant, box):
     assert {name: port_faces(mill, name) for name in mill.ports} == {
         "feed": ["W"],
         "discharge": ["E"],
+        "drive": ["N"],
     }
 
 
@@ -115,6 +116,7 @@ def test_the_mill_kind_still_draws_its_iso_rows_unchanged():
     assert {name: port_faces(mill, name) for name in mill.ports} == {
         "feed": ["N"],
         "discharge": ["S"],
+        "drive": ["E"],
     }
 
 

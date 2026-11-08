@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pandid.portgeom import port_point
+from pandid.portgeom import COMPASS, port_point, resolve_port
+from pandid.streams import MECHANICAL
 
 if TYPE_CHECKING:
     from pandid.streams import Stream
@@ -53,3 +54,32 @@ def stream_polyline(stream: Stream) -> list[Point]:
         simplified.append(current)
     simplified.append(points[-1])
     return simplified
+
+
+def straight_shaft(stream: Stream) -> "tuple[Point, Point] | None":
+    """Return a shaft's two nozzle points where it is drawn straight.
+
+    A shaft is drawn straight where its two ends face each other on one
+    level or upright line.
+
+    Parameters
+    ----------
+    stream : Stream
+        Stream to read.
+
+    Returns
+    -------
+    tuple[Point, Point] or None
+        Source and destination points, or None for any other line.
+    """
+    ends = (stream.source, stream.dest)
+    if stream.kind != MECHANICAL or any(p.owner.frame is None for p in ends):
+        return None
+    (a, _, fa), (b, _, fb) = (resolve_port(p.owner, p.owner.frame, p.name) for p in ends)
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    if (dx and dy) or not (dx or dy):
+        return None
+    out = (dx / abs(dx or 1.0), dy / abs(dy or 1.0))
+    if COMPASS[fa] != out or COMPASS[fb] != (-out[0], -out[1]):
+        return None
+    return a, b

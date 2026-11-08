@@ -75,7 +75,7 @@ from pandid import devices as D, units as U  # noqa: E402
 def test_fixed_port_units_have_expected_ports():
     assert set(U.Feed("F").ports) == {"outlet"}
     assert set(U.Product("P").ports) == {"inlet"}
-    assert set(U.Pump("K").ports) == {"suction", "discharge"}
+    assert set(U.Pump("K").ports) == {"suction", "discharge", "drive"}
     assert set(U.HeatExchanger("E").ports) == {
         "shell_in",
         "shell_out",
@@ -623,7 +623,7 @@ def test_a_probe_for_an_absent_attribute_does_not_list_the_ports():
         getattr(pump, misspelt)
     assert str(typo.value) == (
         "Pump 'P-101' has no attribute or port 'dischrage'; "
-        "available ports: ['discharge', 'suction']"
+        "available ports: ['discharge', 'drive', 'suction']"
     )
 
 

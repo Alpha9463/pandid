@@ -22,7 +22,11 @@ def test_a_screw_compressor_draws_item_16_8():
     assert sym is default_registry.for_unit(Compressor("K-2", variant="screw"))
     assert sym.iso_reg == "X8161"
     assert (sym.width, sym.height) == (6 * M, 6 * M)
-    assert sym.ports == {"suction": (0.0, 3 * M), "discharge": (6 * M, 3 * M)}
+    assert sym.ports == {
+        "suction": (0.0, 3 * M),
+        "discharge": (6 * M, 3 * M),
+        "drive": (3 * M, 0.0),
+    }
 
 
 #: Item 16.8's screws, in modules from the centre: each screw's corners

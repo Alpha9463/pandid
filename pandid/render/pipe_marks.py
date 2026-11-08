@@ -6,8 +6,8 @@ say how often a line carries its mark, so a line carries it once: its
 marks stand together on one straight run of the line, its own segments'
 runs longest first and then those of its valve stations' pipework,
 where they keep clear of every unit, other line, tap line, pneumatic
-hatch, placed annotation and other line's marks. A line with no such run
-carries none. The jacket is a pipe and is drawn on the main-flow rung;
+hatch, placed annotation, line marker and other line's marks. A line with
+no such run carries none. The jacket is a pipe and is drawn on the main-flow rung;
 tracer and insulation are drawn on the detail rung.
 """
 
@@ -310,6 +310,7 @@ def _place(fs: "Flowsheet") -> tuple[list[PipeMark], list]:
     from pandid.layout.compact import placed
     from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
     from pandid.portgeom import unit_box
+    from pandid.render.line_markers import line_markers
     from pandid.render.svg import hatch_boxes, tap_lines, tap_route
     from pandid.route_geometry import stream_polyline
 
@@ -332,7 +333,7 @@ def _place(fs: "Flowsheet") -> tuple[list[PipeMark], list]:
         return [], []
 
     blocks = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
-    blocks += hatch_boxes(fs) + placed(fs)
+    blocks += hatch_boxes(fs) + placed(fs) + [m.box for m in line_markers(fs)]
     # Every segment a mark must not meet: tap lines', then each line's.
     taps = [tap_route(*tap) for tap in tap_lines(fs)]
     reach: list[tuple[Stream | None, int, tuple[float, float], tuple[float, float]]] = [
