@@ -18,7 +18,7 @@ def test_the_general_fan_is_row_17_1():
     fan = default_registry.get("blower", "general")
     assert (fan.width, fan.height) == (6 * M, 6 * M)
     assert '<circle cx="30" cy="30" r="30"' in fan.svg
-    assert fan.ports == {"suction": (0.0, 30.0), "discharge": (60.0, 30.0)}
+    assert fan.ports == {"suction": (0.0, 30.0), "discharge": (60.0, 30.0), "drive": (30.0, 0.0)}
     assert fan.iso_reg == "X8164"
 
     chords = re.findall(r"M (\S+) (\S+) L (\S+) (\S+) ", fan.svg)

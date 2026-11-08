@@ -1372,7 +1372,7 @@ def test_unknown_port_lists_that_unit_s_ports():
     assert "streams[0].from" in message
     assert "Pump 'P-101' has no port 'dischrge'" in message
     assert "did you mean 'discharge'?" in message
-    assert "available ports: ['discharge', 'suction']" in message
+    assert "available ports: ['discharge', 'drive', 'suction']" in message
 
 
 @pytest.mark.parametrize("name", ["liquid", "vapour"])

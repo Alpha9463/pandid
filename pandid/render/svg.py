@@ -20,7 +20,7 @@ from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking
                                    default_registry, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
 from pandid.route_geometry import stream_polyline
-from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
+from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
 if TYPE_CHECKING:
@@ -1402,7 +1402,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     label_items: list = []
     labeled_names: set = set()
     for s in fs.streams:
-        if s.kind in _SIGNAL_KINDS or s.name in labeled_names:
+        if s.kind not in PROCESS_KINDS or s.name in labeled_names:
             continue
         longest_seg, max_len = None, -1.0
         carrier, carrier_points = s, []
@@ -2025,7 +2025,7 @@ def flange_marks(s, points, ends) -> "list[Flange]":
     Parameters
     ----------
     s : Stream
-        Stream; a signal line carries no marks.
+        Stream; a signal line or a shaft carries no marks.
     points : sequence of tuple[float, float]
         The stream's drawn polyline, source end first.
     ends : tuple[str, str]
@@ -2036,7 +2036,7 @@ def flange_marks(s, points, ends) -> "list[Flange]":
     list[Flange]
         Marks in drawing order.
     """
-    if len(points) < 2 or s.kind in _SIGNAL_KINDS:
+    if len(points) < 2 or s.kind not in PROCESS_KINDS:
         return []
 
     spans = [math.hypot(bx - ax, by - ay)

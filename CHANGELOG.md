@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Motor` draws an electric motor, with `variant="ac"` or `"dc"` for ISO
+  10628-2 items 20.7 and 20.8. Pumps, compressors, fans, conveyors, crushers,
+  mills and feeders take one at their new `drive`:
+  `fs.connect(motor.shaft, pump.drive)` draws the motor beside the machine on a
+  short straight shaft.
 - `connect(..., tracing="steam", insulated=True, jacketed=True)` draws a pipe
   traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
   in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers

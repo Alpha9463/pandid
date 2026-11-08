@@ -40,7 +40,7 @@ from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD,
                                    closed_marking, default_registry, fail_marking,
                                    overlay_boxes, wears_arrowhead)
 from pandid.render.weights import LineWeight
-from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
+from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
 if TYPE_CHECKING:
@@ -470,6 +470,7 @@ OWN_OUTLINE = frozenset({
     ("compressor", "screw"),
     ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
     ("stockpile", "default"),
+    ("motor", "general"), ("motor", "ac"), ("motor", "dc"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -1789,12 +1790,12 @@ class DrawioRenderer:
             keys.append("startArrow=none")
 
             # Only the first segment of a named run carries its number;
-            # signal lines carry none. An enclosed number is its own
-            # vertex.
+            # signal lines and shafts carry none. An enclosed number is
+            # its own vertex.
             label = ""
             number = None
             boxed = False
-            if not signal and s.name not in labelled:
+            if s.kind in PROCESS_KINDS and s.name not in labelled:
                 labelled.add(s.name)
                 number = numbers.get(s.name)
                 boxed = number is not None and shape != "none"

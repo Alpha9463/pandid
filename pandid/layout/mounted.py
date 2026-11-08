@@ -1602,7 +1602,7 @@ def _set_corner(run: MountedRun, index: int, legs: list[Leg], wanted: list[float
 
 
 def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
-    """Place equipment and loose stations, then set pipe furniture.
+    """Place equipment and its drivers, loose stations, then furniture.
 
     Each furnished pipe reserves its furniture's room in the equipment
     solve (:class:`pandid.layout.layered.Link`). With
@@ -1633,6 +1633,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     runs : list[MountedRun]
         Furnished pipes from :func:`mounted_runs`; may be empty.
     """
+    from pandid.layout.drives import driver_pads, hung, place_drivers
     from pandid.layout.layered import Link, place_equipment
     from pandid.layout.station import place_stations
     from pandid.stations import StationAssembly
@@ -1641,7 +1642,9 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
                            for run in mounted_runs(fs, True) for element in run.elements)
     laid = mounted_runs(fs) if fs._corner_valves else runs
     members = {unit for run in laid for element in run.elements for unit in _members(element)}
-    retained = [unit for unit in process_units(fs) if unit not in members]
+    shafts = hung(fs)
+    drivers = [shaft.source.owner for shaft in shafts]
+    retained = [unit for unit in process_units(fs) if unit not in members and unit not in drivers]
     shown = set(retained)
     loose = [a for a in fs._station_assemblies if not members.intersection(a.station.members)]
     inside = {id(segment) for run in laid for segment in run.segments}
@@ -1653,7 +1656,9 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
         *(Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
                _chain_width(run) + _fence(run, group), _column_room(run, fs._upright_stations),
                fs._fan_out and _off_header(run))
-          for run in laid)])
+          for run in laid)], driver_pads(shafts))
+    place_drivers(shafts)
+    retained += drivers
     for unit in members:
         placed = slot(unit)
         unit.frame = Frame(x=0.0, y=0.0, w=placed.w, h=placed.h,

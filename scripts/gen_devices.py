@@ -490,6 +490,9 @@ STAYS_ON_BASE = {
     ("feeder", "general"): "ISO item 19.1: the bare circle, no mechanism drawn",
     ("screening_device", "general"): "ISO item 7.1: the bare outline, no mechanism drawn",
     ("kneader", "default"): "Kneader's own drawing (ISO item 12.4 X8134)",
+    ("motor", "general"): "Motor's own drawing (ISO item 20.6 C0082)",
+    ("motor", "ac"): "supply: ISO item 20.7 X8157, a tilde under the M",
+    ("motor", "dc"): "supply: ISO item 20.8 X8158, a bar under the M",
     ("evaporator", "default"):
         "the general row: two tubesheets around a boxed element, no element chosen",
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",

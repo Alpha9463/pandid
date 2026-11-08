@@ -7,6 +7,7 @@ from typing import Protocol, TYPE_CHECKING
 
 from pandid.deprecation import Deprecation
 from pandid.geometry import Route
+from pandid.streams import MECHANICAL
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -355,6 +356,8 @@ class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         """Route and separate the sheet's automatic streams.
 
+        A shaft is drawn straight from its driver to its machine.
+
         Where the sheet asks for a re-check, each stream whose separated
         route crosses more of the lines routed before it than its search
         priced is routed again against those lines as separated, each run
@@ -578,7 +581,13 @@ class DefaultRouter:
             return True
 
         for stream in fs.streams:
-            if (stream.route and stream.route.manual) or route_one(stream, None):
+            ends = (stream.source, stream.dest)
+            if (stream.kind == MECHANICAL and not (stream.route and stream.route.manual)
+                    and all(p.owner.frame is not None for p in ends)):
+                stream.route = Route(waypoints=[
+                    resolve_port(p.owner, p.owner.frame, p.name).point for p in ends])
+                routed.append(stream)
+            elif (stream.route and stream.route.manual) or route_one(stream, None):
                 routed.append(stream)
 
         from pandid.routing.lanes import relane

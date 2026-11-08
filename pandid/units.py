@@ -79,13 +79,17 @@ __all__ = [
     "SprayNozzle",
     "ScreeningDevice",
     "Kneader",
+    "Motor",
     "Instrument",
     "Block",
 ]
 
-# Port roles. "signal" ports carry signal lines, the rest carry fluid;
-# "draw" is a column side draw.
+# Port roles. "signal" ports carry signal lines, "shaft" and "drive"
+# the shaft from a driver to its machine, the rest carry fluid; "draw"
+# is a column side draw.
 _VALID_ROLES = {
+    "shaft",
+    "drive",
     "process",
     "feed",
     "product",
@@ -1260,13 +1264,16 @@ class _FluidMover(Unit):
 
     suction: Port
     discharge: Port
+    drive: Port
 
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
 
 class Pump(_FluidMover):
     """Centrifugal or positive-displacement pump.
 
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`.
     Parameters are those of :class:`Unit`.
     """
 
@@ -1276,6 +1283,7 @@ class Pump(_FluidMover):
 class Compressor(_FluidMover):
     """Gas compressor.
 
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`.
     Parameters are those of :class:`Unit`.
     """
 
@@ -3002,7 +3010,8 @@ class Blower(_FluidMover):
     """Fan or blower.
 
     ``"general"`` (the default) draws ISO 10628-2 item 17.1;
-    ``"centrifugal"`` and ``"axial"`` draw those fans. Parameters are
+    ``"centrifugal"`` and ``"axial"`` draw those fans. ``drive`` takes
+    the shaft of a driver, such as a :class:`Motor`. Parameters are
     those of :class:`Unit`.
     """
 
@@ -3556,7 +3565,8 @@ class Kiln(Unit):
 class Feeder(Unit):
     """Proportional or metering feeder, ISO 10628-2 group 19.
 
-    Solids enter at ``feed`` and leave metered at ``discharge``.
+    Solids enter at ``feed`` and leave metered at ``discharge``;
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`.
     Variants, by ISO item: ``"general"`` (19.1, the default),
     ``"rotary_valve"`` (19.2), ``"rotary_table"`` (19.3) and
     ``"metering"`` (19.4). Drawn one way up; ``validate`` reports a
@@ -3566,10 +3576,12 @@ class Feeder(Unit):
 
     feed: Port
     discharge: Port
+    drive: Port
 
     kind = "feeder"
     VARIANT_ALIASES = {"default": "general"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
 
 class SprayNozzle(Unit):
@@ -3626,19 +3638,41 @@ class Kneader(Unit):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
+class Motor(Unit):
+    """Electric motor, ISO 10628-2 items 20.6 to 20.8.
+
+    ``shaft`` turns the machine it is connected to,
+    ``fs.connect(motor.shaft, pump.drive)``, and the sheet draws the
+    motor beside that machine, on the side its ``drive`` faces, joined
+    by a short straight shaft. Variants, by ISO item: ``"general"``
+    (20.6, the default), ``"ac"`` (20.7) and ``"dc"`` (20.8).
+    Parameters are those of :class:`Unit`.
+    """
+
+    shaft: Port
+
+    kind = "motor"
+    VARIANT_ALIASES = {"default": "general"}
+    PORTS = [("shaft", "outlet", "shaft")]
+
+
 class CrushingMachine(Unit):
     """General size-reduction machine, ISO 10628-2 item 11.1 X8084.
 
-    ``feed`` enters the top and ``discharge`` leaves the bottom. Drawn
-    one way up; ``validate`` reports a turned machine as
-    ``gravity-turned``. Parameters are those of :class:`Unit`.
+    ``feed`` enters the top, ``discharge`` leaves the bottom and
+    ``drive`` takes the shaft of a driver, such as a :class:`Motor`, on
+    the east side. Drawn one way up; ``validate`` reports a turned
+    machine as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
     """
 
     feed: Port
     discharge: Port
+    drive: Port
 
     kind = "crushing_machine"
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
 
 class Crusher(CrushingMachine):
@@ -3678,7 +3712,9 @@ class Conveyor(Unit):
     built to ``length`` and ``diameter``. A belt's ``feed`` is the tail
     roller and ``discharge`` the head; a screw is fed through a top
     spout near the tail and discharges through a bottom spout near the
-    head.
+    head. ``drive`` takes the shaft of a driver, such as a
+    :class:`Motor`: on top of a belt's head roller, and on a screw's
+    head end.
 
     Parameters
     ----------
@@ -3704,9 +3740,11 @@ class Conveyor(Unit):
 
     feed: Port
     discharge: Port
+    drive: Port
 
     kind = "conveyor"
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process"),
+             ("drive", "inlet", "drive")]
 
     _length: float
     _diameter: float
