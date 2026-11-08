@@ -58,6 +58,24 @@ DEVICES = {
 
     For a liquid-ring machine, use :class:`LiquidRingCompressor`.
 """),
+    ("pump", "progressive_cavity"): ("ProgressiveCavityPump", """Progressive-cavity pump: a helical rotor in a stator.
+
+    ISO 10628-2 item 15.5, X8093.
+"""),
+    ("pump", "reciprocating"): ("ReciprocatingPump", """Reciprocating pump: a piston in a cylinder.
+
+    ISO 10628-2 item 15.6, X8094.
+"""),
+    ("pump", "diaphragm"): ("DiaphragmPump", """Diaphragm pump, such as an air-operated double-diaphragm pump.
+
+    ISO 10628-2 item 15.7, X8095.
+"""),
+    ("pump", "lobe"): ("LobePump", """Rotary lobe pump: two lobed rotors, positive displacement."""),
+    ("pump", "vertical_turbine"): ("VerticalTurbinePump", """Vertical turbine pump: a bowl hung on a column below its head.
+
+    ``suction`` is the bowl's bell underneath; ``discharge`` is the
+    head's side outlet.
+"""),
 
     # --- Compressors --------------------------------------------------
     ("compressor", "default"): ("CentrifugalCompressor", """Centrifugal compressor: dynamic compression for large gas flows."""),
@@ -352,6 +370,9 @@ OWNS = {
         "positive_displacement": "positive_displacement",
         "v_cone": "v_cone", "wedge": "wedge", "target": "target",
         "pitot": "pitot", "averaging_pitot": "averaging_pitot",
+        "orifice": "orifice", "magnetic": "magnetic",
+        "ultrasonic_clamp_on": "ultrasonic_clamp_on", "thermal_mass": "thermal_mass",
+        "flume": "flume", "weir": "weir",
     },
 }
 
@@ -462,10 +483,20 @@ STAYS_ON_BASE = {
     ("instrument", "panel"): "a function, not a device",
     ("instrument", "aux"): "a function, not a device",
     ("instrument", "shared"): "a function, not a device",
+    ("instrument", "shared_field"): "a function, not a device",
     ("instrument", "computer"): "a function, not a device",
     ("instrument", "sis"): "a function, not a device",
     ("instrument", "logic"): "a function, not a device",
     ("instrument", "interlock"): "a function, not a device",
+    ("instrument", "shared_subsidiary"): "a function, not a device",
+    ("instrument", "computer_central"): "a function, not a device",
+    ("instrument", "computer_subsidiary"): "a function, not a device",
+    ("instrument", "sis_central"): "a function, not a device",
+    ("instrument", "sis_subsidiary"): "a function, not a device",
+    ("instrument", "logic_central"): "a function, not a device",
+    ("instrument", "logic_subsidiary"): "a function, not a device",
+    ("instrument", "interlock_central"): "a function, not a device",
+    ("instrument", "interlock_subsidiary"): "a function, not a device",
     ("vessel", "dished"): "head style, plus the brackets it stands on",
     ("vessel", "dome"): "head style: a raised manway dome",
     ("vessel", "horizontal"): "attitude: the same vessel lying down",
@@ -507,7 +538,6 @@ STAYS_ON_BASE = {
     ("fitting", "strainer_y"): "body style",
     ("fitting", "strainer_basket"): "body style",
     ("fitting", "strainer_duplex"): "body style",
-    ("fitting", "orifice"): "body style: a restriction orifice, which restricts rather than measures",
     ("fitting", "rotameter"): "body style: a variable-area meter carrying its own indication",
     ("fitting", "rupture_disc"): "body style",
     ("fitting", "sight_glass"): "body style",

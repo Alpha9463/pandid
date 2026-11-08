@@ -9,11 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Every balloon symbol, computer, SIS, logic and interlock included, takes
+  `display="central"` or `display="subsidiary"` and draws one or two location
+  bars across it: `fs.add_instrument("UY", 301, variant="logic", display="central")`.
+- Signal lines take `kind="hydraulic"`, drawn with a footed stroke at each mark,
+  and `kind="wireless"`, drawn as a wave: `fs.connect(ft, fic, kind="wireless")`.
 - A valve draws any actuator on any body with a stem, the piston cylinder
   included: `Valve("XV-101", variant="ball", actuator="piston")`, where
   `actuator=` is `"diaphragm"`, `"piston"`, `"motor"`, `"solenoid"`,
   `"hydraulic"` or `"handwheel"`.
-
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,
@@ -29,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and says how to clear it: an `at=` for a valve alone on its line, the `at=`
   bounds that keep the line's order where other items share it, or the end or
   neighbour to move where pinned ends leave no room.
+- `validate()` warns `drawn-over-note` when a unit, line or label is drawn over
+  a note or table placed with `position=`, and names what to move.
 - `validate()` warns `tap-crosses-unit` when a balloon's tap line is drawn
   through a unit other than its own, and names the pin that moves it clear.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
@@ -83,12 +89,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feeds and draws on either wall at their stage height, and an upright
   `Separator` its feeds on either wall: `Reactor("R-1").nozzle("feed", "N")`.
   Layout moves one there toward its peer where that draws fewer bends.
+- `ProgressiveCavityPump`, `ReciprocatingPump` and `DiaphragmPump` draw the ISO
+  10628-2 pumps of those types, and `LobePump` and `VerticalTurbinePump` draw a
+  rotary lobe pump and a vertical turbine pump.
+- `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
+  or thermal mass flowmeter, a flume and a weir:
+  `FlowElement("FE-101", variant="magnetic")`.
 
 ### Changed
 
 - A valve with a diaphragm actuator refuses `normal_position="closed"` on any
   body, as `variant="control"` did; give it `fail="closed"`.
 - `Blower()` draws the ISO 10628-2 fan instead of a compressor.
+- `Fitting(variant="orifice")`, the restriction orifice, draws the ISO 10628-2
+  orifice plate, the same drawing as `FlowElement(variant="orifice")`.
 - `connect()` no longer needs `kind=` for a signal line: a line to a valve
   with a diaphragm actuator, or none drawn, is pneumatic and any other is
   electric. `add_control_loop()` infers its output line the same way, so a
@@ -127,6 +141,11 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A shared display's square in the field,
+  `Instrument("FI", 301, variant="shared", display="field")`, is drawn without
+  the central bar, and its spec reads back in the field.
+- Balloons exported to draw.io draw their location bars, and a shared display
+  balloon its square.
 - Each step that `route()` or `layout()` keeps only where it draws no worse
   also puts the drawing back where it draws a unit, line or label over a note
   or table placed with `position=` that the drawing before kept clear of it.

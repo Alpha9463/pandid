@@ -3152,7 +3152,9 @@ class Fitting(_NormallyPositioned):
 
     The variant picks the device: ``strainer``, ``strainer_cone``,
     ``strainer_y``, ``strainer_basket``, ``strainer_duplex``,
-    ``orifice``, ``rotameter``, ``rupture_disc``, ``sight_glass``,
+    ``orifice`` (a restriction orifice; ISO 10628-2 item 24.8, the
+    plate a metering orifice draws too), ``rotameter``,
+    ``rupture_disc``, ``sight_glass``,
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``,
     ``bellows``, ``blind``, ``damper``, ``spool``, ``static_mixer``
     (ISO 10628-2 item 12.2 X2673), ``rotary_mixer`` (item 12.1
@@ -3164,8 +3166,10 @@ class Fitting(_NormallyPositioned):
 
     Primary flow elements are variants too: ``venturi``,
     ``flow_nozzle``, ``coriolis``, ``vortex``, ``ultrasonic``,
-    ``turbine_meter``, ``positive_displacement``, ``v_cone``,
-    ``wedge``, ``target``, ``pitot`` and ``averaging_pitot``.
+    ``ultrasonic_clamp_on`` (ISO 15519-2 A.4.47), ``magnetic``
+    (A.4.48), ``thermal_mass``, ``turbine_meter``,
+    ``positive_displacement``, ``v_cone``, ``wedge``, ``target``,
+    ``pitot``, ``averaging_pitot``, ``flume`` and ``weir``.
 
     A stream keeps its line number through a fitting unless
     ``new_line_number`` is set. Only ``blind`` takes a
@@ -3850,7 +3854,12 @@ _BALLOON_SYMBOLS = {
     ("default", "field"): "default",
     ("default", "central"): "panel",
     ("default", "subsidiary"): "aux",
+    ("shared", "field"): "shared_field",
     ("shared", "central"): "shared",
+    ("shared", "subsidiary"): "shared_subsidiary",
+    **{(shape, display): f"{shape}_{display}"
+       for shape in ("computer", "sis", "logic", "interlock")
+       for display in ("central", "subsidiary")},
 }
 
 # Registered variant -> symbol type.
@@ -3859,8 +3868,9 @@ _BALLOON_SHAPES = {drawn: shape for (shape, _display), drawn in _BALLOON_SYMBOLS
 # Display implied by a symbol type.
 _IMPLIED_DISPLAY = {"shared": "central"}
 
-# Variant spellings refused by name, and the display each means.
-_DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
+# Registered variants refused as spellings, and the symbol type and
+# display each means.
+_DISPLAY_VARIANTS = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items() if drawn != pair[0]}
 
 #: Deprecation of a unit face given as ``at=``.
 _AT_FACE = Deprecation(
@@ -3939,8 +3949,8 @@ class Instrument(Unit):
     # Pool names, which are also each pool's first member.
     _SIGNAL_POOLS = ("sig_in", "sig_out")
 
-    # Variants that may be drawn several times under one tag.
-    _REPEATABLE_VARIANTS = frozenset({"sis", "logic", "interlock"})
+    # Symbol types that may be drawn several times under one tag.
+    _REPEATABLE_TYPES = frozenset({"sis", "logic", "interlock"})
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -4024,10 +4034,13 @@ class Instrument(Unit):
         """
         meant = _DISPLAY_VARIANTS.get(variant)
         if meant is not None:
+            shape, where = meant
+            spelled = (f"display={where!r}" if shape == "default"
+                       else f"variant={shape!r}, display={where!r}")
             raise ValueError(
                 f"{name}: variant={variant!r} says where the information is "
                 f"available, which is the display= axis: write "
-                f"display={meant!r}. What the instrument *does* is variant="
+                f"{spelled}. What the instrument *does* is variant="
             )
         if display is None:
             display = _IMPLIED_DISPLAY.get(variant, "field")
@@ -4045,14 +4058,12 @@ class Instrument(Unit):
             return pair
         if display == "field":
             return variant
-        drawn = ", ".join(
-            f"variant={v!r} display={d!r}" for (v, d) in _BALLOON_SYMBOLS if d != "field"
-        )
+        drawn = ", ".join(repr(shape) for shape in dict.fromkeys(s for s, _ in _BALLOON_SYMBOLS))
         raise ValueError(
             f"{name}: no balloon is drawn for variant={variant!r} with "
             f"display={display!r}. A location bar is registered artwork rather than "
-            f"a stripe laid over any outline, and the pairs drawn today are {drawn}. "
-            f"Ask for display='field', or for one of those"
+            f"a stripe laid over any outline, and the symbol types drawn with one are "
+            f"variant= {drawn}. Ask for display='field', or for one of those"
         )
 
     # Signal pools. sig_in and sig_out are the first members; others are
@@ -4137,10 +4148,11 @@ class Instrument(Unit):
         return (
             isinstance(other, Instrument)
             and other.tag == self.tag
-            and self.variant in self._REPEATABLE_VARIANTS
+            and self.symbol_type in self._REPEATABLE_TYPES
+            and self.display == other.display
             # A logic square draws the sis symbol.
-            and ("sis" if self.variant == "logic" else self.variant)
-            == ("sis" if other.variant == "logic" else other.variant)
+            and ("sis" if self.symbol_type == "logic" else self.symbol_type)
+            == ("sis" if other.symbol_type == "logic" else other.symbol_type)
         )
 
     def annotate(

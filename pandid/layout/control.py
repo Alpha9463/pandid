@@ -374,13 +374,13 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     Returns
     -------
     Counter[str]
-        Each validate() finding by code but ``unit-off-sheet`` and
-        ``tap-crosses-unit``, which it counts itself, plus
-        units on tag halos, lines through tag halos, line segments
-        through units other than balloons on that line and the end of a
-        line leaving its own nozzle straight out of the face, tap lines
-        through units or tag halos, and runs two lines or tap lines
-        share; and ``covered <what>`` once for each thing
+        Each validate() finding by code but ``unit-off-sheet``,
+        ``tap-crosses-unit`` and ``drawn-over-note``, which it counts
+        itself, plus units on tag halos, lines through tag halos, line
+        segments through units other than balloons on that line and the
+        end of a line leaving its own nozzle straight out of the face,
+        tap lines through units or tag halos, and runs two lines or tap
+        lines share; and ``covered <what>`` once for each thing
         :func:`~pandid.layout.compact.covered` finds drawn over a placed
         annotation, so a drawing that draws anything new over one grows
         a count.
@@ -431,7 +431,7 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         """
         return any(segment_crosses_box(a, b, box) for a, b in zip(points, points[1:]))
 
-    flaws = Counter(i.code for i in fs.validate()
+    flaws = Counter(i.code for i in fs._findings(notes=False)
                     if i.code not in ("unit-off-sheet", "tap-crosses-unit"))
     halos = _halos(fs)
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]

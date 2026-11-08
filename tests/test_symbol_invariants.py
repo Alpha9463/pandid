@@ -579,13 +579,14 @@ _UNBOXABLE_KINDS = {"conveyor"}
 
 _UNIT_BY_KIND = {cls.kind: cls for cls in (getattr(units, n) for n in units.__all__)}
 
-_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
+_DISPLAYS = {drawn: pair for pair, drawn in units._BALLOON_SYMBOLS.items()}
 
 
 def _drawing(cls, variant: str) -> dict[str, Any]:
-    """Return the keyword that asks ``cls`` for a registered drawing."""
+    """Return the keywords that ask ``cls`` for a registered drawing."""
     if cls is units.Instrument and variant in _DISPLAYS:
-        return {"display": _DISPLAYS[variant]}
+        shape, display = _DISPLAYS[variant]
+        return {"variant": shape, "display": display}
     key = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
     return {key: variant}
 

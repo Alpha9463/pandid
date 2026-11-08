@@ -1099,7 +1099,7 @@ class Flowsheet:
                 f"acts, and a utility header flag (a Feed or Product with "
                 f"header=True), one service drawn at each place it is tapped. Both "
                 f"drawings have to be of the same thing, so they must agree on the "
-                f"class and the variant, and two flags on the off-page reference. "
+                f"class, the variant and the display, and two flags on the off-page reference. "
                 f"A primary element and its balloon are one instrument shown twice "
                 f"and share a tag for that reason, but the balloon has to be asked "
                 f"for from the element: fs.add_balloon(fe303), not a second "
@@ -4402,6 +4402,33 @@ class Flowsheet:
         ValueError
             If ``diagram`` or ``show_stream_table`` is unknown.
         """
+        return self._findings(diagram, show_stream_table)
+
+    def _findings(self, diagram: str | None = None,
+                  show_stream_table: bool | Literal["sheet"] | None = None,
+                  notes: bool = True) -> list:
+        """Return validation findings, errors first, then warnings.
+
+        Parameters
+        ----------
+        diagram : str or None, optional
+            As for :meth:`validate`.
+        show_stream_table : bool, {"sheet"} or None, optional
+            As for :meth:`validate`.
+        notes : bool, optional
+            Report what is drawn over a placed note or table. Default
+            True.
+
+        Returns
+        -------
+        list[Issue]
+            Findings.
+
+        Raises
+        ------
+        ValueError
+            If ``diagram`` or ``show_stream_table`` is unknown.
+        """
         from pandid.render.svg import (draws_arrowheads, tabulates_boundary_flows,
                                        wants_table_sheet)
         from pandid.validate import validate as _validate
@@ -4411,7 +4438,8 @@ class Flowsheet:
         table = (self._drawn_table if show_stream_table is None
                  else bool(show_stream_table))
         return _validate(self, arrows=draws_arrowheads(diagram),
-                         tabulates=tabulates_boundary_flows(diagram), table=table)
+                         tabulates=tabulates_boundary_flows(diagram), table=table,
+                         notes=notes)
 
     def to_svg(self, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
