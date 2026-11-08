@@ -77,7 +77,8 @@ def covered(fs: Flowsheet) -> set[tuple]:
     from pandid.package import frame as package_frame
     from pandid.portgeom import unit_box
     from pandid.render.svg import (_unit_label_box, drawn_codes, package_labels,
-                                   stream_numbers, unit_tags)
+                                   resolve_connections, stream_hops, stream_numbers,
+                                   unit_tags)
 
     notes = placed(fs)
     if not notes:
@@ -120,8 +121,13 @@ def covered(fs: Flowsheet) -> set[tuple]:
     frames = [(pkg, package_frame(pkg)) for pkg in fs.packages]
     packages = [((pkg.name, k), item) for pkg, frame in frames if frame is not None
                 for k, item in enumerate(package_labels(pkg, frame))]
-    for joints in (None, "none"):
-        for direction in ("vertical", "horizontal"):
+    # Place labels once for each joint marking and jump direction that
+    # draws the sheet differently.
+    marked = any(resolve_connections(p, None) != resolve_connections(p, "none")
+                 for s in fs.streams for p in (s, *s._logical_segments))
+    hopped = stream_hops(fs, "vertical") != stream_hops(fs, "horizontal")
+    for joints in (None, "none") if marked else (None,):
+        for direction in ("vertical", "horizontal") if hopped else ("vertical",):
             items = packages + [((u.name, k), item) for u, _, drawn in unit_tags(fs, joints, direction)
                                 for k, item in enumerate(drawn)]
             out |= {("label", key) for key, item in items if over(_unit_label_box(item))}
