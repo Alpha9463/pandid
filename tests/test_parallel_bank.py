@@ -223,15 +223,17 @@ def test_a_bank_tapped_near_its_pumps_settles_on_the_first_route():
     assert not _taps_off(fs)
 
 
-def test_a_first_route_draws_no_balloon_over_a_note_placed_by_the_bank():
-    """Keep TI-301 off a note placed beside the bank it taps."""
+def test_routing_a_bank_draws_no_balloon_over_a_note_placed_beside_it():
+    """Keep TI-301 off a note placed beside the bank it taps, routed once and again."""
     from pandid.document import notes
     from pandid.layout.compact import covered
 
     fs = _tapped_bank(3, at=0.75)
     fs.add_annotation(notes(["Start only with suction valve open"], position=(450, 150)))
     fs.to_svg(diagram="p&id")
-    assert covered(fs) == set()
+    first = covered(fs)
+    fs.route()
+    assert (first, covered(fs)) == (set(), set())
 
 
 def test_a_sheet_laid_out_again_draws_as_a_fresh_build():
