@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
   in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers
   off them.
+- `BallMill`, `RodMill`, `SAGMill` and `AGMill` draw tumbling mills on a
+  trunnion at each end, and `Stockpile` draws the open bulk storage of
+  ISO 10628-2, stacked at `feed` and reclaimed at `reclaim`.
 - A valve takes `lock="LO"`, `"LC"`, `"CSO"` or `"CSC"`, locked or car-sealed
   open or closed, lettered where its fail position would go, in place of NC,
   and written to a spec: `Valve("HV-101", lock="CSO")`.
@@ -109,6 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ShellAndTubeExchanger` draws a floating-head and a coil-tube exchanger,
   `variant="floating_head"` and `variant="coil_tube"`, and `ElectricHeater`
   draws the ISO 10628-2 electric heater, powered at `utility_in`.
+- `PaddleBlind` and `PaddleSpacer` draw the ISO 10628-2 paddle blind and
+  spacer, a solid or bored disc on a handle, beside the spectacle blind.
 - `ScrewCompressor` draws the ISO 10628-2 screw compressor, and
   `RotaryCompressor` stays the two-rotor lobe machine.
 
