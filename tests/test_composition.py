@@ -1056,6 +1056,10 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "furnace/combustion_chamber": "X8106",
     "stack/default": "2041",
     "flare/default": "2591",
+    # Group 15, LIQUID PUMPS.
+    "pump/progressive_cavity": "X8093",
+    "pump/reciprocating": "X8094",
+    "pump/diaphragm": "X8095",
     # Group 16, COMPRESSORS, VACUUM PUMPS.
     "compressor/screw": "X8161",
     # Group 17, BLOWERS, FANS.
