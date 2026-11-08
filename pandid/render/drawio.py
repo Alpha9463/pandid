@@ -24,6 +24,7 @@ from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import fmt, writable
+from pandid.render.pipe_marks import pipe_marks
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _FIT_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
@@ -466,6 +467,7 @@ OWN_OUTLINE = frozenset({
     ("fitting", "magnetic"), ("fitting", "ultrasonic_clamp_on"),
     ("fitting", "thermal_mass"), ("fitting", "flume"),
     ("tank", "flat_roof"), ("tank", "open_top"),
+    ("compressor", "screw"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -1305,10 +1307,9 @@ class DrawioRenderer:
                                      fit.length(1.0))
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
-            keys = [f"shape={stencil}", "outlineConnect=0",
+            return [f"shape={stencil}", "outlineConnect=0",
                     f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
                     weight]
-            return keys
         approx = self._approximation(u, sym)
         shape = approx.shape if approx is not None else None
         keys = [] if shape is None else [f"shape={shape}"]
@@ -1750,6 +1751,7 @@ class DrawioRenderer:
         labelled: set = set()
         cells: dict = {}
         boxes: list[str] = []
+        marks = {id(mark.stream): mark for mark in pipe_marks(fs)}
         for n, s in enumerate(fs.streams):
             src_u, dst_u = s.source.owner, s.dest.owner
             points = polylines[n]
@@ -1831,6 +1833,9 @@ class DrawioRenderer:
             ]
             cells[n] += _line_marks(f"s{n}", s, points, resolve_connections(s, joints),
                                     s.color or _LINE_INK, fit)
+            if id(s) in marks:
+                cells[n] += _pipe_mark_cells(f"s{n}", marks[id(s)], points,
+                                             s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
             if boxed:
@@ -2318,6 +2323,61 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
     return out
 
 
+def _pipe_mark_cells(edge_id: str, mark, points, ink: str, fit: "_Fit") -> list[str]:
+    """Return the tracing, insulation and jacket strokes on one line.
+
+    Each stroke is a ``line`` child vertex of the edge, placed by the arc
+    length of its foot on the run and its offset from there.
+
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    mark : PipeMark
+        The line's marks, from :func:`~pandid.render.pipe_marks.pipe_marks`.
+    points : list[tuple[float, float]]
+        Stream polyline.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Drawing fit.
+
+    Returns
+    -------
+    list[str]
+        XML lines, one cell per stroke.
+    """
+    total = sum(math.hypot(bx - ax, by - ay) for (ax, ay), (bx, by) in zip(points, points[1:]))
+    if total <= 0:
+        return []
+    (sx, sy), (_, ey) = mark.start, mark.end
+    flat = abs(sy - ey) < 1e-6
+    out: list[str] = []
+    for k, ((ax, ay), (bx, by), weight) in enumerate(mark.strokes):
+        cx, cy = (ax + bx) / 2, (ay + by) / 2
+        fx, fy = (cx, sy) if flat else (sx, cy)
+        along = mark.before + math.hypot(fx - sx, fy - sy)
+        rel = max(-1.0, min(1.0, 2.0 * along / total - 1.0))
+        length = fit.length(math.hypot(bx - ax, by - ay))
+        half = length / 2
+        angle = math.degrees(math.atan2(by - ay, bx - ax))
+        style = (f"shape=line;rotation={fmt(angle, 2)};strokeColor={ink};"
+                 f"strokeWidth={fit.length(weight.width):g};"
+                 f"fillColor={_NO_FILL};html=1;resizable=0;movable=1;")
+        out += [
+            f'        <mxCell id="{edge_id}m{k}" value="" '
+            f'style={_attr(style)} vertex="1" connectable="0" parent="{edge_id}">',
+            f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+            f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
+            'relative="1" as="geometry">',
+            f'            <mxPoint x="{fmt(fit.length(cx - fx) - half, 2)}" '
+            f'y="{fmt(fit.length(cy - fy) - half, 2)}" as="offset" />',
+            '          </mxGeometry>',
+            '        </mxCell>',
+        ]
+    return out
+
+
 # Furniture, as draw.io tables
 
 # Table styles. The table rules its own row and column lines; rows and
@@ -2452,7 +2512,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     list[str]
         XML lines.
     """
-    body = [row for row in rows]
+    body = list(rows)
     if headers:
         body = body + [headers] if header_last else [headers] + body
     head_at = (len(body) - 1) if (headers and header_last) else (0 if headers else None)
@@ -2764,7 +2824,7 @@ def _rev_table(cid: str, grid) -> list[str]:
         XML lines.
     """
     headings = [heading for heading, _cw in grid.cols]
-    rows = [row for row in grid.rows]
+    rows = list(grid.rows)
     # Filler rows, then revisions oldest to newest, then the heading. A
     # partial row's remainder goes into the topmost filler row.
     blank = grid.header_y - grid.y - grid.row_h * len(rows)

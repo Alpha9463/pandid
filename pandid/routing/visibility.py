@@ -423,8 +423,8 @@ class VisibilityGraph:
             for x in [min_x - 40.0, max_x + 40.0]:
                 x_set.add(x)
 
-        self.xs = sorted(list(x_set))
-        self.ys = sorted(list(y_set))
+        self.xs = sorted(x_set)
+        self.ys = sorted(y_set)
         xs, ys = self.xs, self.ys
 
         blocked_on_row: List[Set[float]] = [set() for _ in ys]

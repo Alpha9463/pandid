@@ -143,7 +143,7 @@ from pandid.ports import Port
 from pandid.stations import (
     DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP, DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
-from pandid.streams import LINE_NUMBER_FIELDS, Stream
+from pandid.streams import LINE_NUMBER_FIELDS, TREATMENTS, Stream
 from pandid.units import _IMPLIED_DISPLAY, Instrument, Unit, _Boundary
 
 
@@ -713,7 +713,7 @@ _PACKAGE_KEYS = {"name", "units", "description", "reference"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
     "color", "dasharray", "ends", "inline_at", "logical_to",
-    *LINE_NUMBER_FIELDS,
+    *LINE_NUMBER_FIELDS, *TREATMENTS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
 # Constructor keywords only some classes take, and their readers.
@@ -1617,8 +1617,9 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
             )
     src = _read_endpoint(fs, data["from"], f"{where}.from")
     dst = _read_endpoint(fs, data["to"], f"{where}.to")
-    kwargs = _read_fields(data, where, ((("kind", "name"), _text),
-                                        (("draw_as_recycle",), _flag)))
+    kwargs = _read_fields(data, where, ((("kind", "name", "tracing"), _text),
+                                        (("draw_as_recycle", "insulated", "jacketed"),
+                                         _flag)))
     if "ends" in data:
         ends = data["ends"]
         if isinstance(ends, (list, tuple)) and len(ends) == 2:
@@ -2323,7 +2324,7 @@ def _read_beside(fs: Flowsheet, entry: Any, where: str) -> dict:
     return beside
 
 
-def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None) -> tuple:
+def _read_state(fs: Flowsheet, entry: Any, where: str) -> tuple:
     """Read a held state: its geometry and what it was laid out with.
 
     Parameters
@@ -2334,9 +2335,6 @@ def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None
         The state entry.
     where : str
         Entry path for error messages.
-    base : tuple or None, optional
-        Geometry its geometry was written against; None for the sheet
-        as drawn.
 
     Returns
     -------
@@ -2361,7 +2359,7 @@ def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None
         faces.append((unit, _flag(face.get("stock_face", False), f"{at}.stock_face"),
                       _number(face.get("nozzle_pitch", 0.0), f"{at}.nozzle_pitch")))
     unhung = data.get("unhung")
-    geometry = _read_geometry(fs, data.get("geometry", {}), f"{where}.geometry", base)
+    geometry = _read_geometry(fs, data.get("geometry", {}), f"{where}.geometry")
     return (geometry,
             None if unhung is None else _read_geometry(fs, unhung, f"{where}.unhung", geometry),
             _read_switches(data.get("switches", {}), _SWITCHES, f"{where}.switches"),
@@ -2836,7 +2834,7 @@ def _write_geometry(fs: Flowsheet, geometry: tuple, base: tuple | None = None) -
     return entry
 
 
-def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict[str, Any]:
+def _write_state(fs: Flowsheet, state: tuple) -> dict[str, Any]:
     """Write a held state: its geometry and what it was laid out with.
 
     Parameters
@@ -2845,9 +2843,6 @@ def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict
         Sheet written.
     state : tuple
         What ``Flowsheet._state()`` returned.
-    base : tuple or None, optional
-        Geometry to write its geometry against; None for the sheet as
-        drawn.
 
     Returns
     -------
@@ -2855,7 +2850,7 @@ def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict
         The state entry.
     """
     geometry, unhung, switches, stock, beside = state
-    entry: dict[str, Any] = {"geometry": _write_geometry(fs, geometry, base)}
+    entry: dict[str, Any] = {"geometry": _write_geometry(fs, geometry)}
     if unhung is not None:
         entry["unhung"] = _write_geometry(fs, unhung, geometry)
     if values := _write_switches(_SWITCHES, switches):
@@ -3352,6 +3347,11 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
     if stream.ends is not None:
         entry["ends"] = (stream.ends if isinstance(stream.ends, str)
                          else list(stream.ends))
+    if stream.tracing is not None:
+        entry["tracing"] = stream.tracing
+    for key in ("insulated", "jacketed"):
+        if getattr(stream, key):
+            entry[key] = True
     if stream.route is not None and stream.route.manual:
         entry["via"] = [list(point) for point in stream.route.waypoints]
     if stream.properties:
