@@ -55,7 +55,7 @@ def _compute_offsets(
             continue
 
         ends = (s.source.owner, s.dest.owner)
-        boxes = [unit_box(u, u.frame) for u in ends if u is not None and u.frame is not None]
+        boxes = [unit_box(u, u.frame) for u in ends if u.frame is not None]
         pts = s.route.waypoints
         n_segs = len(pts) - 1
         # Every run of a via() route is fixed.
