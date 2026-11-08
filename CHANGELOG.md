@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A balloon takes two process taps on the face it senses and draws an impulse
+  line from each, for a level gauge, cage or DP transmitter:
+  `fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
+- `element=` draws a thermowell, radar, vibrating-fork or electrode mark at a
+  balloon's tap end: `fs.add_instrument("TT", 101, sensing=line, element="thermowell")`.
 - Every balloon symbol, computer, SIS, logic and interlock included, takes
   `display="central"` or `display="subsidiary"` and draws one or two location
   bars across it: `fs.add_instrument("UY", 301, variant="logic", display="central")`.

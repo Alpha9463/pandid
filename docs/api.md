@@ -302,6 +302,15 @@ two across every symbol; `variant=` selects the symbol: `"default"`,
 `"shared"`, `"computer"`, `"sis"`, `"logic"` or `"interlock"`.
 `fs.add_balloon(element)` gives a primary fitting its balloon.
 
+A level gauge, an external cage or a DP level transmitter takes two process
+taps on the face it senses, as fractions along it from its top or left end, and
+draws an impulse line from each:
+`fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
+`element=` draws the primary element at the tap end (ISO 15519-2 A.4):
+`"thermowell"` (A.4.10), `"radar"` or `"ultrasonic"` (A.4.21),
+`"vibrating fork"` (A.4.22) or `"electrode"` (A.4.23):
+`fs.add_instrument("TT", 101, sensing=line, element="thermowell")`.
+
 ### Control loops
 
 `fs.add_loop("F", 101)` returns a `Loop` that supplies member tags with

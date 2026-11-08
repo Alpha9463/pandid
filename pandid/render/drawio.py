@@ -34,7 +34,8 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
                                quadrant_labels,
                                resolve_connections, sheet_connections,
-                               stream_numbers, stream_polyline, tap_lines, tap_route)
+                               stream_numbers, stream_polyline, tap_lines, tap_marks,
+                               mark_box, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, default_registry, fail_marking,
                                    overlay_boxes, wears_arrowhead)
@@ -1844,6 +1845,16 @@ class DrawioRenderer:
                 *geometry,
                 '        </mxCell>',
             ]
+        # Primary elements at the tap end, each drawn as its own outline.
+        for n, (_inst, paths) in enumerate(tap_marks(fs)):
+            x0, y0, x1, y1 = mark_box(paths)
+            art = "".join(f'<path d="{d}" fill="none" stroke="black" '
+                          f'stroke-width="{LineWeight.DETAIL.width:g}"/>' for d in paths)
+            shape = drawio_stencil(art, x1 - x0, y1 - y0, (-x0, -y0), fit.length(1.0))
+            style = (f"shape={shape};strokeColor={_INK};fillColor={_NO_FILL};"
+                     f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};connectable=0;")
+            px0, py0, px1, py1 = fit.box((x0, y0, x1, y1))
+            out += _rect(f"m{n}-mark", px0, py0, px1 - px0, py1 - py0, style)
         return out
 
     # -------------------------------------------------- furniture

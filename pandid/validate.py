@@ -759,6 +759,18 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
 
+    # --- a tap-end element or second tap with no tap line to draw it on ---
+    for u in fs.units:
+        asked = [f"{key}={value!r}" for key in ("element", "taps")
+                 if (value := getattr(u, key, None)) is not None]
+        if u.kind == "instrument" and asked and (
+                getattr(u, "host", None) is None or getattr(u, "relation", "") == "near"):
+            warnings.append(Issue(
+                "warning", "tap-end-undrawn",
+                f"{u.name} has {' and '.join(asked)}, drawn on the line from what it "
+                f"senses, and it senses nothing, so neither is drawn. Add it with "
+                f"fs.add_instrument(..., sensing=<the line or unit>)"))
+
     # --- a label side no renderer places ---
     for u in fs.units:
         side = getattr(u, "label_pos", None)

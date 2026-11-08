@@ -3752,6 +3752,49 @@ _IMPLIED_DISPLAY = {"shared": "central"}
 # display each means.
 _DISPLAY_VARIANTS = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items() if drawn != pair[0]}
 
+#: Primary elements drawn at a balloon's tap end, and the ISO 15519-2
+#: item each draws.
+ELEMENTS = {
+    "thermowell": "A.4.10",
+    "radar": "A.4.21",
+    "ultrasonic": "A.4.21",
+    "vibrating fork": "A.4.22",
+    "electrode": "A.4.23",
+}
+
+
+def _checked_taps(name: str, taps: object) -> "tuple[float, float]":
+    """Return ``taps=`` as two distinct fractions, upper first.
+
+    Parameters
+    ----------
+    name : str
+        Tag, for messages.
+    taps : object
+        What the author gave.
+
+    Returns
+    -------
+    tuple[float, float]
+        The two fractions, smaller first.
+
+    Raises
+    ------
+    ValueError
+        If ``taps`` is not two different fractions from 0 to 1.
+    """
+    pair = tuple(taps) if isinstance(taps, (tuple, list)) else ()
+    if not (len(pair) == 2 and all(is_real(t) and 0 <= t <= 1 for t in pair)
+            and pair[0] != pair[1]):
+        raise ValueError(
+            f"{name}: taps= is two fractions along the face the balloon hangs from, 0 "
+            f"at its top or left end, one for each process tap, such as taps=(0.3, 0.7); "
+            f"got {taps!r}"
+        )
+    low, high = sorted(float(t) for t in pair)
+    return (low, high)
+
+
 #: Deprecation of a unit face given as ``at=``.
 _AT_FACE = Deprecation(
     what="at='N' (a unit face)",
@@ -3780,6 +3823,12 @@ class Instrument(Unit):
         ``"sis"``, ``"logic"`` or ``"interlock"``.
     display : str, optional
         One of :data:`DISPLAYS`; implied by ``variant`` when omitted.
+    taps : Sequence[float], optional
+        Two process taps on the face of the unit the balloon senses,
+        as fractions along it from its top or left end, such as a level
+        gauge's ``(0.3, 0.7)``; one tap line is drawn from each.
+    element : str, optional
+        Primary element drawn at the tap end, one of :data:`ELEMENTS`.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
@@ -3790,6 +3839,10 @@ class Instrument(Unit):
         Function letters and loop number.
     display : str
         Where the reading is available.
+    taps : tuple[float, float] or None
+        Two tap fractions along the host's face, or ``None`` for one tap.
+    element : str or None
+        Primary element drawn at the tap end, or ``None``.
     symbol_type : str
         Symbol type as given, without the display.
     host : Stream, Unit or None
@@ -3811,8 +3864,9 @@ class Instrument(Unit):
     TypeError
         If ``number`` is not ``None``, text or a whole number.
     ValueError
-        If ``display`` is unknown, ``variant`` is a display spelling, or
-        the pair has no drawing.
+        If ``display`` is unknown, ``variant`` is a display spelling, the
+        pair has no drawing, ``taps`` is not two fractions, or
+        ``element`` has no mark.
     """
 
     pv: Port
@@ -3839,6 +3893,8 @@ class Instrument(Unit):
         variant: str = "default",
         *,
         display: str | None = None,
+        taps: "Sequence[float] | None" = None,
+        element: str | None = None,
         **options: Unpack[_UnitOptions],
     ):
         letters, num = split_tag(type, number)
@@ -3846,6 +3902,14 @@ class Instrument(Unit):
         # _resolved_variant sets the final display.
         self.display = "field"
         variant = self._resolved_variant(name, variant, display)
+        self.taps = None if taps is None else _checked_taps(name, taps)
+        typed = element.strip().lower() if isinstance(element, str) else element
+        if typed is not None and typed not in ELEMENTS:
+            raise ValueError(
+                f"{name}: element={element!r} has no mark at the tap end. Write one of "
+                f"{', '.join(map(repr, ELEMENTS))}"
+            )
+        self.element = typed
         super().__init__(name, variant=variant, **options)
         self.type = letters
         self.number = num
@@ -4144,8 +4208,9 @@ class Instrument(Unit):
             If ``on`` is not a Stream or Unit.
         ValueError
             If ``on`` is this balloon, ``at`` and ``face`` are both given
-            or do not suit the host, ``offset`` is negative or
-            ``relation`` is unknown.
+            or do not suit the host, ``offset`` is negative,
+            ``relation`` is unknown, or the balloon's ``taps`` cannot be
+            drawn on ``on``.
 
         Warns
         -----
@@ -4248,6 +4313,8 @@ class Instrument(Unit):
                 f"{getattr(on, 'name', on)!r}, one of "
                 f"{', '.join(repr(r) for r in RELATIONS)}, got {relation!r}"
             )
+        if self.taps is not None:
+            _check_taps_on(self, on, side if face is not None or old else None, relation)
         if warn:
             self._deprecate_at(at, side, stacklevel=5)
         self.host = on
@@ -4258,6 +4325,47 @@ class Instrument(Unit):
         self.angle = angle
         self.relation = relation
         self._invalidate_layout()
+
+
+def _check_taps_on(inst: Instrument, on: "Stream | Unit", face: str | None,
+                   relation: str) -> None:
+    """Refuse ``taps=`` where its two taps cannot be drawn.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Balloon with ``taps``.
+    on : Stream or Unit
+        Host it is being attached to.
+    face : str or None
+        Face stated for it, or ``None``.
+    relation : str
+        Its relation to the host.
+
+    Raises
+    ------
+    ValueError
+        If the host is a line, no face is stated, the balloon does not
+        sense, or a tap is off the face's straight wall.
+    """
+    from pandid.render.iso_parts import wall_point
+
+    taps = inst.taps
+    assert taps is not None
+    if not isinstance(on, Unit):
+        raise ValueError(
+            f"{inst.name}: taps= puts two process taps on the face of a unit, and "
+            f"{on.name} is a line; hang the balloon from the vessel, e.g. "
+            f"sensing=drum, face='E'"
+        )
+    if face is None or relation != "sensing":
+        raise ValueError(
+            f"{inst.name}: taps= draws two impulse lines to the face it senses, so give "
+            f"sensing={on.name} and face= 'N', 'S', 'E' or 'W'"
+        )
+    for t in taps:
+        wall_point(on.kind, getattr(on, "variant", "default"), face, t,
+                   f"{inst.name}: the tap at {t:g}")
 
 
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:

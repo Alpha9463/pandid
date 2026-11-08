@@ -699,7 +699,7 @@ _UNIT_KEYS = {
 _INSTRUMENT_KEYS = {
     "type", "number", "variant", "display", "description", "reference", "width",
     "height", "label_pos", "new_line_number", "sensing", "acting_on", "near",
-    "at", "face", "offset", "angle", "pin", "port_faces", "quadrants",
+    "at", "face", "offset", "angle", "pin", "port_faces", "quadrants", "taps", "element",
 }
 # The three ways an instrument entry names its anchor.
 _ANCHOR_KEYS = ("sensing", "acting_on", "near")
@@ -1228,9 +1228,12 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     if not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
-    kwargs = _read_fields(data, where, ((("variant", "display"), _text),
+    kwargs = _read_fields(data, where, ((("variant", "display", "element"), _text),
                                         (("description", "reference"), _drawn),
                                         (("width", "height"), _number)))
+    if "taps" in data:
+        kwargs["taps"] = [_number(t, f"{where}.taps")
+                          for t in _sequence(data["taps"], f"{where}.taps")]
     with _blame(where):
         inst = Instrument(type_, number, **kwargs)
     if "quadrants" in data:
@@ -3230,6 +3233,10 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
         entry["variant"] = inst.symbol_type
     if inst.display != "field" or inst.symbol_type in _IMPLIED_DISPLAY:
         entry["display"] = inst.display
+    if inst.taps is not None:
+        entry["taps"] = list(inst.taps)
+    if inst.element is not None:
+        entry["element"] = inst.element
     if inst.quadrants:
         by_name = {name: list(codes) for name, letter in _QUADRANT_KEYS.items()
                    for codes in [inst.quadrants.get(letter, ())] if codes}
