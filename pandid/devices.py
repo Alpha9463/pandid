@@ -38,6 +38,11 @@ __all__ = [
     "PeristalticPump",
     "SubmersiblePump",
     "VacuumPump",
+    "ProgressiveCavityPump",
+    "ReciprocatingPump",
+    "DiaphragmPump",
+    "LobePump",
+    "VerticalTurbinePump",
     "CentrifugalCompressor",
     "ReciprocatingCompressor",
     "RotaryCompressor",
@@ -203,6 +208,80 @@ class VacuumPump(Pump):
     suction: Port
     discharge: Port
     drive: Port
+
+
+class ProgressiveCavityPump(Pump):
+    """Progressive-cavity pump: a helical rotor in a stator.
+
+    ISO 10628-2 item 15.5, X8093.
+
+    Parameters are those of :class:`~pandid.units.Pump`.
+    """
+
+    VARIANTS = ("default", "progressive_cavity")
+    VARIANT_ALIASES = {"default": "progressive_cavity"}
+
+    suction: Port
+    discharge: Port
+
+
+class ReciprocatingPump(Pump):
+    """Reciprocating pump: a piston in a cylinder.
+
+    ISO 10628-2 item 15.6, X8094.
+
+    Parameters are those of :class:`~pandid.units.Pump`.
+    """
+
+    VARIANTS = ("default", "reciprocating")
+    VARIANT_ALIASES = {"default": "reciprocating"}
+
+    suction: Port
+    discharge: Port
+
+
+class DiaphragmPump(Pump):
+    """Diaphragm pump, such as an air-operated double-diaphragm pump.
+
+    ISO 10628-2 item 15.7, X8095.
+
+    Parameters are those of :class:`~pandid.units.Pump`.
+    """
+
+    VARIANTS = ("default", "diaphragm")
+    VARIANT_ALIASES = {"default": "diaphragm"}
+
+    suction: Port
+    discharge: Port
+
+
+class LobePump(Pump):
+    """Rotary lobe pump: two lobed rotors, positive displacement.
+
+    Parameters are those of :class:`~pandid.units.Pump`.
+    """
+
+    VARIANTS = ("default", "lobe")
+    VARIANT_ALIASES = {"default": "lobe"}
+
+    suction: Port
+    discharge: Port
+
+
+class VerticalTurbinePump(Pump):
+    """Vertical turbine pump: a bowl hung on a column below its head.
+
+    ``suction`` is the bowl's bell underneath; ``discharge`` is the
+    head's side outlet.
+
+    Parameters are those of :class:`~pandid.units.Pump`.
+    """
+
+    VARIANTS = ("default", "vertical_turbine")
+    VARIANT_ALIASES = {"default": "vertical_turbine"}
+
+    suction: Port
+    discharge: Port
 
 
 class CentrifugalCompressor(Compressor):
