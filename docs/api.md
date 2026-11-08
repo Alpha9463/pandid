@@ -105,7 +105,10 @@ The names depend on the class and variant. Common patterns are:
   `"solenoid"`, `"hydraulic"` or `"handwheel"`, drawn on the body's stem, as in
   `Valve("XV-101", variant="ball", actuator="piston")`. `ControlValve`,
   `SolenoidValve` and `MotorOperatedValve` draw their own actuator on the body
-  `variant=` names. A valve's `lock="LO"`, `"LC"`, `"CSO"` or `"CSC"` locks or
+  `variant=` names. A `CheckValve` has `inlet` and `outlet` only, and
+  `variant=` picks its form: `"lift"`, `"swing"`, `"swing_form_2"`, `"ball"`,
+  `"dual_plate"`, `"stop"` or `"foot"`, the foot valve drawn upright over its
+  strainer. A valve's `lock="LO"`, `"LC"`, `"CSO"` or `"CSC"` locks or
   car-seals it in the position the letters name, drawn under it as a fail
   position is.
 - A machine that takes a driver has a `drive`: pumps, compressors, fans,

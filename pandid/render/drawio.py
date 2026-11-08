@@ -255,8 +255,9 @@ def drawio_stencil(svg: str, width: float, height: float,
     them as placed rather than stretching a library shape. A
     ``scale(...)`` group, as a vendored drawing is wrapped in, scales
     everything drawn. An element drawn thinner than the artwork's
-    widest stroke gets its own fixed width. A white letter, a halo, is
-    left out.
+    widest stroke gets its own fixed width, one filled solid keeps its
+    colour, and a dashed one is dashed. A white letter, a halo, is left
+    out.
 
     Parameters
     ----------
@@ -288,6 +289,14 @@ def drawio_stencil(svg: str, width: float, height: float,
             out.append(f'<strokewidth width="{fmt(stroke * math.sqrt(sx * sy) * scale, 4)}" '
                        f'fixed="1"/>')
             drawn = stroke
+        fill = a.get("fill", "none")
+        solid = fill not in ("none", "white")
+        styled = solid or "stroke-dasharray" in a
+        if styled:
+            # Set the fill or dash for this element alone.
+            out.append("<save/>")
+            out.append(f'<fillcolor color="{fill}"/>' if solid else "")
+            out.append('<dashed dashed="1"/>' if "stroke-dasharray" in a else "")
         if tag == "rect":
             out.append(f'<rect x="{fmt(float(a["x"]) * sx + dx, 4)}" '
                        f'y="{fmt(float(a["y"]) * sy + dy, 4)}" '
@@ -323,7 +332,9 @@ def drawio_stencil(svg: str, width: float, height: float,
                 else:
                     steps.append(f'<{"move" if cmd == "M" else "line"} x="{x}" y="{y}"/>')
             out.append(f"<path>{''.join(steps)}</path>")
-        out.append("<stroke/>" if a.get("fill", "none") == "none" else "<fillstroke/>")
+        out.append("<stroke/>" if fill == "none" else "<fillstroke/>")
+        if styled:
+            out.append("<restore/>")
     for attrs, text in re.findall(r"<text\b([^>]*)>([^<]*)</text>", svg):
         a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
         if a.get("fill") == "white":
@@ -481,6 +492,9 @@ OWN_OUTLINE = frozenset({
     ("pump", "lobe"), ("pump", "vertical_turbine"),
     ("fitting", "magnetic"), ("fitting", "ultrasonic_clamp_on"),
     ("fitting", "thermal_mass"), ("fitting", "flume"),
+    ("valve", "lift_check"), ("valve", "swing_check"), ("valve", "swing_check_form_2"),
+    ("valve", "ball_check"), ("valve", "dual_plate_check"), ("valve", "stop_check"),
+    ("valve", "foot"),
     ("tank", "flat_roof"), ("tank", "open_top"),
     ("compressor", "screw"),
     ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
