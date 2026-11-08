@@ -104,6 +104,19 @@ The names depend on the class and variant. Common patterns are:
   `outlet` only, and `variant=` picks its form: `"lift"`, `"swing"`,
   `"swing_form_2"`, `"ball"`, `"dual_plate"`, `"stop"` or `"foot"`, the foot
   valve drawn upright over its strainer.
+- A machine that takes a driver has a `drive`: pumps, compressors, fans,
+  conveyors, crushers, mills and feeders. A `Motor` (`variant="ac"` or `"dc"`
+  for ISO items 20.7 and 20.8) turns it through its `shaft`:
+  `fs.connect(motor.shaft, pump.drive)`. The motor is drawn beside the
+  machine, on the side its `drive` faces, joined by a short straight shaft.
+- Other drivers turn a machine the same way: a `Turbine` and a `DieselEngine`
+  through their `shaft`, and a `Gearbox` between a driver and its machine,
+  taking the driver at its `drive` and turning the machine with its `shaft`.
+  A `Generator` (`variant="ac"` or `"dc"`) is driven at its `drive`:
+  `fs.connect(turbine.shaft, generator.drive)`. A unit whose only lines are
+  shafts is drawn beside its partner; two piped machines on one shaft, such as
+  a turbine and the compressor it drives, are stacked where their shaft ends
+  face each other, and the shaft is drawn straight wherever they do.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`
@@ -113,6 +126,12 @@ The names depend on the class and variant. Common patterns are:
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
+- A tumbling mill, `BallMill`, `RodMill`, `SAGMill` or `AGMill`
+  (`Mill("ML-101", variant="ball")` and so on), takes `feed` through its west
+  trunnion and gives `discharge` through its east one. A `Stockpile` is
+  stacked at `feed`, on top, and reclaimed at `reclaim`, under it. Both are
+  built to the `width` and `height` they are given: a longer mill carries more
+  balls, and a wider pile has a flat top.
 - A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
   `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
   heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
@@ -259,12 +278,13 @@ Validation reports `gravity-turned` when one is rotated away from it.
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`,
-`hydraulic`, `wireless`, `data`, `software` or `capillary`. A hydraulic line
-carries a footed stroke at each mark (ISO 15519-2 A.1.08) and a wireless line is
-drawn as a wave. When omitted, a signal line to a valve with a
+`hydraulic`, `wireless`, `data`, `software`, `capillary` or `mechanical`. A
+hydraulic line carries a footed stroke at each mark (ISO 15519-2 A.1.08) and a
+wireless line is drawn as a wave. When omitted, a signal line to a valve with a
 diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
-electric; two energy/utility ports make an energy stream; other process ports
-make a material stream. `add_control_loop()` infers its output line the same way
+electric; two energy/utility ports make an energy stream; a driver's `shaft` to a
+machine's `drive` makes a mechanical one, drawn without a number; other process
+ports make a material stream. `add_control_loop()` infers its output line the same way
 unless `output_kind=` is given. On a PFD, `validate()` reports
 `energy-carrier-missing` until the label drawn on an energy line names its
 carrier: `fs.connect(cooler.utility_out, heater.utility_in, service="LP steam")`.
@@ -275,20 +295,37 @@ stream is `S1` by default. Inline fittings carry the same number through;
 `unit.new_line_number = True` starts a new one. Assigning line-number fields
 produces names such as `6"-P-1001-A1A` instead of `S1`.
 
+`line.mark(kind, at=...)` marks a point of a line, `at` being a fraction of its
+drawn length strictly between 0 and 1:
+
+- `line.mark("battery limit", at=0.5, before="ISBL", after="OSBL")` and
+  `line.mark("limit of supply", at=0.5, before="VENDOR", after="OWNER")` draw
+  a dashed boundary across the line with a diamond on top (ISO 10628-1 5.6,
+  Figure 7), the parties either side of the diamond; both texts are optional.
+- `line.mark("tie-in", at=0.5, number="TI-101")` draws the number in a hexagon
+  on the line.
+- `line.mark("spec break", at=0.5, before="A1A", after="B2B")` draws a bar
+  across the line with the piping classes either side.
+
+`before` is the upstream side. On a split line's handle, `at` runs along the
+whole run. Tags and line numbers keep off the markers, and `validate()` reports
+`line-marker-crowded` for one drawn over a unit, another line or another
+marker. Signal lines take none.
+
 `connect()` also draws a pipe's treatment along it: `tracing="steam"` (or
 `"electric"`, or any medium) for a traced line (ISO 10628-2 25.6),
 `insulated=True` for an insulated one (25.9; 25.8 when traced too) and
 `jacketed=True` for a jacketed one (25.7). `insulation=` is only the line
 number's code and draws nothing. A line carries its marks once, together on
-its longest straight run with room for them clear of every unit, other line and
-note; its own segments come first, then its valve stations' pipework. Tags and
+its longest straight run with room for them clear of every unit, other line,
+marker and note; its own segments come first, then its valve stations' pipework. Tags and
 line numbers keep off the marks. Where no run has room the marks are not drawn,
 and `validate()` reports `line-mark-crowded`. Set on a split line's handle, a
 treatment applies to the whole run; signal lines take none.
 
 A returned `Stream` exposes `source`, `dest`, `kind`, `name`, `route`,
-`properties`, `color`, `dasharray`, `ends`, `tracing`, `insulated` and
-`jacketed`. `properties` supplies text or
+`properties`, `color`, `dasharray`, `ends`, `tracing`, `insulated`, `jacketed`
+and `markers`. `properties` supplies text or
 numbers for the stream table; no balances are calculated. `draw_as_recycle`
 hints which edge a cycle should break. `via()` overrides its automatic route.
 
@@ -332,6 +369,15 @@ It takes a symbol of ISO 15519-2 A.6 or ISA-5.1, typed as drawn or as a word:
 `"characterize"` (f(x)), `"bias"` (±), `"gain"` (K), `"lag"` (Pt1),
 `"high select"` (>), `"low select"` (<), `"max"`, `"min"`, or a signal
 conversion such as `"I/P"` or `"E/P"`.
+
+A level gauge, an external cage or a DP level transmitter takes two process
+taps on the face it senses, as fractions along it from its top or left end, and
+draws an impulse line from each:
+`fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
+`element=` draws the primary element at the tap end (ISO 15519-2 A.4):
+`"thermowell"` (A.4.10), `"radar"` or `"ultrasonic"` (A.4.21),
+`"vibrating fork"` (A.4.22) or `"electrode"` (A.4.23):
+`fs.add_instrument("TT", 101, sensing=line, element="thermowell")`.
 
 ### Control loops
 
@@ -520,7 +566,8 @@ variants. Exit codes: `0` success, `1` rejected sheet, `2` invalid command,
 
 Subclass `Unit` with a unique `kind` and a `PORTS` list. Each port is
 `(name, direction, role)`; directions are `inlet` or `outlet`. Roles include
-`process`, `feed`, `product`, `energy`, `utility`, `vapor`, `liquid` and `signal`.
+`process`, `feed`, `product`, `energy`, `utility`, `vapor`, `liquid`, `signal`,
+and `shaft` and `drive` for the two ends of a shaft.
 
 ```python
 from pandid import Unit

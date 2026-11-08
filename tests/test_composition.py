@@ -526,8 +526,8 @@ def test_the_three_group_11_bodies_are_the_outline_table_2_draws():
     for sym in (general, crusher, mill):
         assert (sym.width, sym.height) == (100.0, 60.0)
         assert trapezoid in sym.svg
-        # Fed at the mouth, discharging at the throat.
-        assert sym.ports == {"feed": (50.0, 0.0), "discharge": (50.0, 60.0)}
+        # Fed at the mouth, discharging at the throat, driven from the east.
+        assert sym.ports == {"feed": (50.0, 0.0), "discharge": (50.0, 60.0), "drive": (90.0, 30.0)}
     assert general.iso_reg == "X8084"
     assert "M 20 0 L 20 60" not in general.svg
     assert "M 25 0 L 7.6923" not in general.svg
@@ -794,7 +794,7 @@ def test_the_group_19_circle_carries_its_own_mark():
         'stroke-width="2"/></g>'
     )
     assert (general.width, general.height) == (40.0, 40.0)
-    assert general.ports == {"feed": (20.0, 0.0), "discharge": (20.0, 40.0)}
+    assert general.ports == {"feed": (20.0, 0.0), "discharge": (20.0, 40.0), "drive": (40.0, 20.0)}
     assert general.iso_reg == "C2056"
     assert general.gravity_fixed
 
@@ -825,7 +825,7 @@ def test_group_19s_other_two_feeders_match_their_rows():
         '<polygon points="50,27.5 47.3,30.5 52.7,30.5" fill="#111" stroke="none"/></g>'
     )
     assert (table.width, table.height) == (50.0, 60.0)
-    assert table.ports == {"feed": (25.0, 0.0), "discharge": (25.0, 60.0)}
+    assert table.ports == {"feed": (25.0, 0.0), "discharge": (25.0, 60.0), "drive": (0.0, 37.5)}
     assert table.iso_reg == "C0074"
     assert table.gravity_fixed
 
@@ -841,7 +841,7 @@ def test_group_19s_other_two_feeders_match_their_rows():
     )
     assert (metering.width, metering.height) == (148.0, 33.0)
     # A third of a module below the top edge, so the ports resolve to the side walls.
-    assert metering.ports == {"feed": (0.0, 3.0), "discharge": (148.0, 3.0)}
+    assert metering.ports == {"feed": (0.0, 3.0), "discharge": (148.0, 3.0), "drive": (74.0, 33.0)}
     assert metering.iso_reg == "C0035"
     assert metering.gravity_fixed
 
@@ -1053,6 +1053,7 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "silo/default": "X2062",
     "tank/flat_roof": "301",
     "tank/open_top": "2061",
+    "stockpile/default": "2065",
     "boiler/default": "2532",
     "furnace/general": "2533",
     "furnace/combustion_chamber": "X8106",
@@ -1105,6 +1106,14 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "screening_device/vibrating": "X2605",
     "screening_device/rotating_drum": "X8029",
     "screening_device/basket_reel": "X8030",
+    # Group 20: the gearbox, the generator and the electric motor.
+    "gearbox/default": "X8167",
+    "generator/general": "C0079",
+    "generator/ac": "X8154",
+    "generator/dc": "X8155",
+    "motor/general": "C0082",
+    "motor/ac": "X8157",
+    "motor/dc": "X8158",
 }
 
 

@@ -209,6 +209,48 @@ def _move_cure(u) -> str:
     return f"Move {u.name} clear of it: {_pin_call(u)}"
 
 
+def _taps_off_wall(fs) -> list["Issue"]:
+    """Return an error for each balloon whose ``taps=`` leave the placed wall.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[Issue]
+        ``tap-off-wall`` errors.
+    """
+    from pandid.layout.attach import tap_points
+    from pandid.portgeom import body_box, face_wall
+
+    out = []
+    for inst in fs.units:
+        points = tap_points(inst) if getattr(inst, "taps", None) else []
+        if not points:
+            continue
+        host, face = inst.host, inst.face or "E"
+        wall = face_wall(host, host.frame, face)
+        x0, y0, x1, y1 = body_box(host, host.frame, bare=True)
+        along = 1 if face in ("W", "E") else 0
+        start, span = (y0, y1 - y0) if along else (x0, x1 - x0)
+        off = [t for t, point in zip(inst.taps, points)
+               if wall is None or not wall[0] - 0.5 <= point[along] <= wall[1] + 0.5]
+        if not off:
+            continue
+        has = ("no straight wall" if wall is None else
+               f"a straight wall from {math.ceil((wall[0] - start) / span * 100) / 100:g} to "
+               f"{math.floor((wall[1] - start) / span * 100) / 100:g} of the way "
+               f"{'down' if along else 'across'}")
+        out.append(Issue(
+            "error", "tap-off-wall",
+            f"{inst.name}: taps= puts {', '.join(f'{t:g}' for t in off)} off "
+            f"{host.name}'s {face} face as drawn, which has {has}; give taps= in that "
+            f"range, or draw {host.name} taller"))
+    return out
+
+
 def _over_notes(fs) -> list["Issue"]:
     """Return a warning for each thing drawn over a placed note or table.
 
@@ -261,6 +303,56 @@ def _over_notes(fs) -> list["Issue"]:
     return out
 
 
+def _crowded_markers(fs) -> list["Issue"]:
+    """Return a warning for each line marker drawn over something.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[Issue]
+        ``line-marker-crowded`` for each limit, tie-in or spec break whose
+        drawing meets a unit, another run of line or another marker,
+        naming the first it meets and the ``at=`` that moves it.
+    """
+    from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.line_markers import line_markers
+    from pandid.route_geometry import stream_polyline
+
+    drawn = line_markers(fs)
+    if not drawn:
+        return []
+    units = [(u.name, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    lines = [(s, stream_polyline(s)) for s in fs.streams
+             if s.source.owner.frame is not None and s.dest.owner.frame is not None]
+    out = []
+    for k, m in enumerate(drawn):
+        met = next((name for name, box in units if boxes_overlap(m.box, box)), None)
+        if met is None:
+            met = next((f"stream {s.name}" for s, points in lines
+                        for a, b in zip(points, points[1:])
+                        if not (s is m.stream and {a, b} == {m.start, m.end})
+                        and segment_crosses_box(a, b, m.box)), None)
+        if met is None:
+            met = next((f"the {o.marker.kind} at={o.marker.at:g} on {o.line.name}"
+                        for j, o in enumerate(drawn) if j != k and boxes_overlap(m.box, o.box)),
+                       None)
+        if met is not None:
+            name, marker = m.line.name, m.marker
+            texts = "".join(f", {key}={getattr(marker, key)!r}" for key in ("before", "after", "number")
+                            if getattr(marker, key) is not None)
+            out.append(Issue(
+                "warning", "line-marker-crowded",
+                f"the {marker.kind} at={marker.at:g} on {name} is drawn over {met}. Mark it "
+                f"elsewhere along {name}: drop it from {name}.markers and call "
+                f"{name}.mark({marker.kind!r}, at=...{texts})"))
+    return out
+
+
 def _crowded_marks(fs) -> list["Issue"]:
     """Return a warning for each line drawn without its marks.
 
@@ -274,8 +366,8 @@ def _crowded_marks(fs) -> list["Issue"]:
     list[Issue]
         ``line-mark-crowded`` for each traced, insulated or jacketed line
         with no straight run long enough for its marks clear of units,
-        other lines, tap lines, hatches, placed annotations and other
-        lines' marks.
+        other lines, tap lines, hatches, placed annotations, line markers
+        and other lines' marks.
     """
     from pandid.render.pipe_marks import MARK_END_CLEAR, MARK_GAP, MARK_LENGTH, crowded_marks
 
@@ -792,6 +884,18 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
             elif v < 0 and id(u) not in grouped:
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
+
+    # --- a tap-end element or second tap with no tap line to draw it on ---
+    for u in fs.units:
+        asked = [f"{key}={value!r}" for key in ("element", "taps")
+                 if (value := getattr(u, key, None)) is not None]
+        if u.kind == "instrument" and asked and (
+                getattr(u, "host", None) is None or getattr(u, "relation", "") == "near"):
+            warnings.append(Issue(
+                "warning", "tap-end-undrawn",
+                f"{u.name} has {' and '.join(asked)}, drawn on the line from what it "
+                f"senses, and it senses nothing, so neither is drawn. Add it with "
+                f"fs.add_instrument(..., sensing=<the line or unit>)"))
 
     # --- a label side no renderer places ---
     for u in fs.units:
@@ -1634,6 +1738,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True,
                         f"{_move_cure(inst)}"))
                     break
 
+        # Hard: a process tap off the straight wall it is drawn on.
+        errors += _taps_off_wall(fs)
+
         # Soft: a unit, line or label drawn over a note or table placed by
         # position.
         if notes:
@@ -1641,6 +1748,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True,
 
         # Soft: a line's tracing, insulation or jacket marks with no clear run.
         warnings += _crowded_marks(fs)
+
+        # Soft: a limit, tie-in or spec break drawn over a unit, a line or
+        # another marker.
+        warnings += _crowded_markers(fs)
 
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
 
