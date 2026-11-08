@@ -247,6 +247,30 @@ DEVICES = {
 
     ISO 10628-2 item 11.12.
 """),
+    ("mill", "ball"): ("BallMill", """Ball mill: a long drum tumbling a charge of steel balls.
+
+    Drawn on a trunnion at each end, with two rows
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+"""),
+    ("mill", "rod"): ("RodMill", """Rod mill: a long drum tumbling a charge of steel rods.
+
+    Drawn on a trunnion at each end, with three
+    rods along the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+"""),
+    ("mill", "sag"): ("SAGMill", """SAG mill: a short, wide drum tumbling ore with a few steel balls.
+
+    Drawn on a trunnion at each end, with one row
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+"""),
+    ("mill", "ag"): ("AGMill", """AG mill: a short, wide drum tumbling ore on itself.
+
+    Drawn on a trunnion at each end, with no
+    grinding media. ``feed`` enters the west trunnion and ``discharge``
+    leaves the east one.
+"""),
 
     # --- Solids conveying ---------------------------------------------
     ("conveyor", "screw"): ("ScrewConveyor", """Screw conveyor: a flighted shaft turning in a closed trough.

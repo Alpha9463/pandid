@@ -2582,6 +2582,34 @@ def series_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     return replace(base, port_series=(*split, *kept))
 
 
+def _named(unit, build: "Callable[..., Symbol]", *args) -> Symbol:
+    """Return ``build(*args)``, naming the unit in a refusal.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit drawn.
+    build : Callable[..., Symbol]
+        Builder.
+    *args
+        Its arguments.
+
+    Returns
+    -------
+    Symbol
+        The drawing.
+
+    Raises
+    ------
+    ValueError
+        If the builder refuses, with the unit's name first.
+    """
+    try:
+        return build(*args)
+    except ValueError as exc:
+        raise ValueError(f"{unit.name}: {exc}") from None
+
+
 # Builders of symbols drawn per unit, by (kind, variant). A ``None``
 # variant matches every variant.
 _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
@@ -3408,6 +3436,124 @@ _MILL_CHAMFERS = (
 
 # Vibration mill drum, ISO item 11.12 X8054: a 4 M circle.
 _VIBRATION_DRUM = f'<circle cx="{_CRUSHER_W / 2:g}" cy="{_CRUSHER_H / 2:g}" r="20" {_INK}/>'
+
+
+# Tumbling mills: a drum on a trunnion at each end, fed through the
+# west trunnion and discharged through the east one. The trunnions,
+# the conical heads and the grinding media keep their own size; the
+# shell takes the rest of the box.
+
+#: Trunnion length and diameter, and the length of each conical head.
+_TRUNNION_L, _TRUNNION_D, _MILL_HEAD = M, 2 * M, M
+
+#: Each tumbling mill's natural shell length and diameter.
+TUMBLING_MILLS = {
+    "ball": (8 * M, 4 * M),
+    "rod": (10 * M, 4 * M),
+    "sag": (4 * M, 6 * M),
+    "ag": (4 * M, 6 * M),
+}
+
+#: Grinding ball radius and pitch, rod spacing, and the media's inset
+#: from the shell's ends.
+_BALL_R, _BALL_PITCH, _ROD_GAP, _MEDIA_INSET = M / 2, 1.5 * M, 0.75 * M, M
+
+#: Least shell length and diameter a tumbling mill is drawn with.
+_MILL_LEAST = (2 * M, 3 * M)
+
+
+def tumbling_mill_too_small(variant: str, width: float, height: float) -> ValueError:
+    """Return the refusal of a box too small for a tumbling mill.
+
+    Parameters
+    ----------
+    variant : str
+        One of :data:`TUMBLING_MILLS`.
+    width, height : float
+        The box.
+
+    Returns
+    -------
+    ValueError
+        The refusal, naming the least box.
+    """
+    least_w = _MILL_LEAST[0] + 2 * (_TRUNNION_L + _MILL_HEAD)
+    return ValueError(
+        f"a box {width:g} x {height:g} is too small to draw a {variant!r} mill's "
+        f"trunnions, heads and charge, which need a box at least {least_w:g} wide and "
+        f"{_MILL_LEAST[1]:g} tall; give width= and height= at least that, or leave them "
+        f"unset"
+    )
+
+
+@lru_cache(maxsize=None)
+def tumbling_mill_symbol(variant: str, width: float | None = None,
+                         height: float | None = None) -> Symbol:
+    """Return a tumbling mill built to a box.
+
+    Parameters
+    ----------
+    variant : str
+        ``"ball"``, ``"rod"``, ``"sag"`` or ``"ag"``.
+    width, height : float, optional
+        Box; the variant's natural size where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The drum, its trunnions and its charge.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the trunnions, heads and charge.
+    """
+    length, diameter = TUMBLING_MILLS[variant]
+    ends = _TRUNNION_L + _MILL_HEAD
+    w = float(length + 2 * ends if width is None else width)
+    h = float(diameter if height is None else height)
+    if w - 2 * ends < _MILL_LEAST[0] or h < _MILL_LEAST[1]:
+        raise tumbling_mill_too_small(variant, w, h)
+    x0, x1, c, t = ends, w - ends, h / 2, _TRUNNION_D / 2
+    tw = w - _TRUNNION_L
+    outline = (
+        f"M 0 {_n(c - t)} L {_n(_TRUNNION_L)} {_n(c - t)} L {_n(x0)} 0 L {_n(x1)} 0 "
+        f"L {_n(tw)} {_n(c - t)} L {_n(w)} {_n(c - t)} L {_n(w)} {_n(c + t)} "
+        f"L {_n(tw)} {_n(c + t)} L {_n(x1)} {_n(h)} L {_n(x0)} {_n(h)} "
+        f"L {_n(_TRUNNION_L)} {_n(c + t)} L 0 {_n(c + t)} Z "
+        f"M {_n(_TRUNNION_L)} {_n(c - t)} L {_n(_TRUNNION_L)} {_n(c + t)} "
+        f"M {_n(tw)} {_n(c - t)} L {_n(tw)} {_n(c + t)} "
+        f"M {_n(x0)} 0 L {_n(x0)} {_n(h)} M {_n(x1)} 0 L {_n(x1)} {_n(h)}"
+    )
+    lo, hi = x0 + _MEDIA_INSET, x1 - _MEDIA_INSET
+    media = ""
+    if variant == "rod":
+        media = f'<path d="{" ".join(f"M {_n(lo)} {_n(y)} L {_n(hi)} {_n(y)}" for y in (h - _BALL_R - k * _ROD_GAP for k in range(3)))}" {_DETAIL}/>'
+    elif variant in ("ball", "sag"):
+        # A ball mill's charge is two staggered rows, a SAG mill's one.
+        rows = 2 if variant == "ball" else 1
+        balls = []
+        for row in range(rows):
+            start = lo + row * _BALL_PITCH / 2
+            count = int((hi - start) / _BALL_PITCH + 1e-9) + 1
+            y = h - _BALL_R - row * 2 * _BALL_R
+            balls += [f'<circle cx="{_n(start + i * _BALL_PITCH)}" cy="{_n(y)}" '
+                      f'r="{_n(_BALL_R)}" {_DETAIL}/>' for i in range(count)]
+        media = "".join(balls)
+    natural = (w, h) == (length + 2 * ends, diameter)
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    return Symbol(
+        svg=f'<g id="sym_mill_{variant}{suffix}"><path d="{outline}" {_OUTLINE}/>{media}</g>',
+        width=w, height=h,
+        ports={"feed": (0.0, c), "discharge": (w, c)},
+        id_suffix=suffix,
+        gravity_fixed=True,
+    )
+
+
+for _variant in TUMBLING_MILLS:
+    _BUILT_TO_SIZE[("mill", _variant)] = lambda unit: _named(
+        unit, tumbling_mill_symbol, unit.variant, unit.width, unit.height)
 
 
 # Stack inlet on the tapering west wall, 8 M down.
@@ -4561,6 +4707,7 @@ _FLAT_ROOF_TANK = _rect_tank("flat_roof", 12 * M, True, "301")
 _OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
 
 
+
 # Mixer-settler: a closed box whose west compartment is the mixer. The
 # dispersion overflows the partition into the settler, and the light
 # phase overflows the weir into the launder at the east end.
@@ -5380,6 +5527,8 @@ class SymbolRegistry:
         self.register("crushing_machine", general)
         self.register("crusher", crusher)
         self.register("mill", mill)
+        for variant in TUMBLING_MILLS:
+            self.register("mill", tumbling_mill_symbol(variant), variant)
 
         for kind, body, marks in (
             ("crusher", crusher, (("hammer", "X8045"), ("impact", "X8046"),

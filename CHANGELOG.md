@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `BallMill`, `RodMill`, `SAGMill` and `AGMill` draw tumbling mills on a
+  trunnion at each end, fed through the west one and discharged through the
+  east one.
 - A balloon takes a function block, drawn touching it at a clear corner, in SVG
   and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
   or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6

@@ -3634,7 +3634,10 @@ class Mill(CrushingMachine):
 
     Variants, by ISO item: ``"default"`` (general, 11.8), ``"hammer"``
     (11.9), ``"impact"`` (11.10), ``"roller"`` (11.11) and
-    ``"vibration"`` (11.12). Drawn one way up; ``validate`` reports a
+    ``"vibration"`` (11.12). The tumbling mills ``"ball"``, ``"rod"``,
+    ``"sag"`` and ``"ag"`` are drums on a trunnion at each end, fed
+    through the west one and discharged through the east one, built to
+    the box they are given. Drawn one way up; ``validate`` reports a
     turned mill as ``gravity-turned``. Parameters are those of
     :class:`Unit`.
     """

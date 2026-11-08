@@ -110,6 +110,10 @@ The names depend on the class and variant. Common patterns are:
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
+- A tumbling mill, `BallMill`, `RodMill`, `SAGMill` or `AGMill`
+  (`Mill("ML-101", variant="ball")` and so on), takes `feed` through its west
+  trunnion and gives `discharge` through its east one. It is built to the
+  `width` and `height` it is given: a longer mill carries more balls.
 - A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
   `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
   heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
