@@ -458,6 +458,7 @@ OWN_OUTLINE = frozenset({
     ("fitting", "magnetic"), ("fitting", "ultrasonic_clamp_on"),
     ("fitting", "thermal_mass"), ("fitting", "flume"),
     ("tank", "flat_roof"), ("tank", "open_top"),
+    ("compressor", "screw"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -1297,10 +1298,9 @@ class DrawioRenderer:
                                      fit.length(1.0))
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
-            keys = [f"shape={stencil}", "outlineConnect=0",
+            return [f"shape={stencil}", "outlineConnect=0",
                     f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
                     weight]
-            return keys
         approx = self._approximation(u, sym)
         shape = approx.shape if approx is not None else None
         keys = [] if shape is None else [f"shape={shape}"]
@@ -2441,7 +2441,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     list[str]
         XML lines.
     """
-    body = [row for row in rows]
+    body = list(rows)
     if headers:
         body = body + [headers] if header_last else [headers] + body
     head_at = (len(body) - 1) if (headers and header_last) else (0 if headers else None)
@@ -2753,7 +2753,7 @@ def _rev_table(cid: str, grid) -> list[str]:
         XML lines.
     """
     headings = [heading for heading, _cw in grid.cols]
-    rows = [row for row in grid.rows]
+    rows = list(grid.rows)
     # Filler rows, then revisions oldest to newest, then the heading. A
     # partial row's remainder goes into the topmost filler row.
     blank = grid.header_y - grid.y - grid.row_h * len(rows)
