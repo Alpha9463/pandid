@@ -135,6 +135,14 @@ def test_a_hand_drawn_line_into_a_blocked_nozzle_keeps_its_face():
         assert [m for m in _drawn_wrong(fs, line) if "slant" in m] == []
 
 
+def test_a_controller_a_turn_clears_stays_by_its_transmitter():
+    """Route a bank at k = 10: FIC-200's nozzle is turned clear, so only FIC-201 hangs beside its valve."""
+    fs, loops = _routed_bank(10)
+
+    assert id(loops[0].controller) not in fs._beside
+    assert id(loops[1].controller) in fs._beside
+
+
 def test_a_controller_with_no_clear_side_hangs_beside_its_valve():
     """Draw FT-201's line to FIC-201 clear of units where no side of FIC-201 is clear by FT-201.
 
@@ -273,8 +281,35 @@ def test_a_line_leaves_a_unit_for_at_most_two_crossings_or_runs_along_units(
     assert _out_of_unit(before, Counter(after)) is kept
 
 
+@pytest.mark.parametrize(
+    ("after", "taps_off", "trade", "kept"),
+    [
+        ({"route-crosses-unit": 1, "crossing": 4}, set(), True, True),
+        ({"route-crosses-unit": 1, "crossing": 5}, set(), True, False),
+        ({"route-crosses-unit": 1, "crossing": 4}, {7}, True, False),
+        ({"crossing": 6}, set(), True, True),
+        ({"crossing": 6}, set(), False, False),
+    ],
+)
+def test_a_redraw_is_kept_where_no_tap_leaves_its_line_and_nothing_grows_untraded(
+    after: dict[str, int], taps_off: set[int], trade: bool, kept: bool
+):
+    """Keep a redraw only where no tap leaves its line and no count grows.
+
+    With the trade allowed, a redraw that takes a line out of a unit at the
+    price allowed is kept too.
+    """
+    from collections import Counter
+
+    from pandid.layout.control import _kept
+
+    before = Counter({"route-crosses-unit": 1, "crossing": 4})
+
+    assert _kept(before, set(), Counter(after), taps_off, trade) is kept
+
+
 def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
-    """Freeze FIC-201's output and route a bank twice; then FT-201's line and P-1's outlet, once.
+    """Freeze FIC-201's output and route a bank; then FT-201's line and P-1's outlet, and route.
 
     The first route() both hangs FIC-201 beside FV-11 and closes the bank's empty
     bands. After each later route() the frozen lines keep their points, the
@@ -290,7 +325,7 @@ def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
     frozen: list[tuple[Stream, list[tuple[float, float]]]] = []
     held: list[tuple[U.Instrument, float, float]] = []
     steps = [
-        ([loops[1].output], [loops[1].controller], 2),
+        ([loops[1].output], [loops[1].controller], 1),
         ([loops[1].measurement, process], [loops[1].transmitter], 1),
     ]
     for lines, balloons, routes in steps:
@@ -314,21 +349,108 @@ def test_lines_frozen_on_a_bank_keep_their_points_and_balloons():
             assert [m for s, _ in frozen for m in _drawn_wrong(fs, s)] == []
 
 
-def test_a_pin_after_a_controller_hangs_beside_its_valve_draws_no_line_through_a_unit():
-    """Pin FV-11 off where a bank with a hung controller draws it, and route again.
+def _pinned_off(fs: Flowsheet, name: str, dx: float) -> None:
+    """Pin a valve ``dx`` to the right of where the sheet draws it."""
+    valve = next(u for u in fs.units if u.name == name)
+    valve.pin(x=frame_of(valve).x + dx, y=frame_of(valve).y)
 
-    The P&ID exports to SVG and draw.io, nothing overlaps, and no line is drawn
-    through a unit.
+
+def test_a_pin_after_a_controller_hangs_beside_its_valve_draws_no_line_through_a_unit():
+    """Pin FV-10 40 px left of where a two-pump bank with a hung controller draws it.
+
+    The hang no longer passes its terms, so route() draws without it: the P&ID
+    exports to SVG and draw.io, nothing overlaps, no line is drawn through a
+    unit, and no lines crowd or cross by a nozzle.
     """
-    fs, _ = _valved_bank(10)
+    fs, _ = _valved_bank(10, pumps=2)
     assert fs._beside
-    next(u for u in fs.units if u.name == "FV-11").pin(x=430, y=230)
+    _pinned_off(fs, "FV-10", -40)
     fs.route()
     fs.to_svg(diagram="p&id")
     fs.to_drawio(diagram="p&id")
-    codes = ("route-crosses-unit", "unit-overlap")
+    codes = ("route-crosses-unit", "unit-overlap", "lines-crowded", "route-crosses-near-nozzle")
 
     assert [i.message for i in fs.validate() if i.code in codes] == []
+
+
+def test_a_hang_that_still_passes_its_terms_after_an_edit_is_kept():
+    """Pin FV-10 1 px left of where a two-pump bank draws it; FIC-200 stays hung beside it."""
+    fs, loops = _valved_bank(10, pumps=2)
+    assert id(loops[0].controller) in fs._beside
+    _pinned_off(fs, "FV-10", -1)
+    fs.route()
+
+    assert id(loops[0].controller) in fs._beside
+
+
+def test_a_hang_whose_redraw_fails_is_drawn_afresh(monkeypatch: pytest.MonkeyPatch):
+    """Route a two-pump bank again after an edit where redrawing its hang raises.
+
+    route() draws the sheet without the hang instead, and the P&ID exports.
+    """
+    fs, _ = _valved_bank(10, pumps=2)
+    assert fs._beside
+    _pinned_off(fs, "FV-10", -1)
+    stepped = Flowsheet._route_stepped
+    calls: list[int] = []
+
+    def fails_first(self: Flowsheet, router: object = None) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise ValueError("the hung redraw fails")
+        stepped(self, router)
+
+    monkeypatch.setattr(Flowsheet, "_route_stepped", fails_first)
+    fs.route()
+    fs.to_svg(diagram="p&id")
+
+    assert len(calls) > 1
+
+
+def _steps_per_drawing(fs: Flowsheet, monkeypatch: pytest.MonkeyPatch) -> tuple[int, int]:
+    """Route a sheet; return how often it ran the hang steps and drew the sheet."""
+    counts = {"steps": 0, "drawings": 0}
+    stepped, drawing = Flowsheet._route_stepped, Flowsheet._route_drawing
+
+    def counted_steps(self: Flowsheet, router: object = None) -> None:
+        counts["steps"] += 1
+        stepped(self, router)
+
+    def counted_drawing(self: Flowsheet, router: object = None) -> None:
+        counts["drawings"] += 1
+        drawing(self, router)
+
+    monkeypatch.setattr(Flowsheet, "_route_stepped", counted_steps)
+    monkeypatch.setattr(Flowsheet, "_route_drawing", counted_drawing)
+    fs.route()
+    return counts["steps"], counts["drawings"]
+
+
+def test_a_sheet_with_no_hung_controller_runs_the_hang_steps_once(monkeypatch):
+    """Route a single loop whose controller hangs nowhere: no hang is judged again."""
+    from pandid.devices import ControlValve
+
+    fs = Flowsheet("one loop")
+    pump = fs.add(U.Pump("P-1"))
+    line = fs.connect(fs.add(U.Feed("F")).outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Product("P")).inlet)
+    valve = fs.add(ControlValve("FV-1"), on=line, at=0.5)
+    fs.add_control_loop("F", 1, measuring=line, acting_on=valve)
+    steps, drawings = _steps_per_drawing(fs, monkeypatch)
+
+    assert steps == drawings
+
+
+def test_a_hung_controller_its_frozen_lines_meet_is_not_judged_again(monkeypatch):
+    """Freeze FIC-200's lines on a two-pump bank and route again: the hang is not re-judged."""
+    fs, loops = _valved_bank(10, pumps=2)
+    assert id(loops[0].controller) in fs._beside
+    for line in (loops[0].output, loops[0].measurement):
+        assert line.route is not None
+        line.via(list(line.route.waypoints))
+    steps, drawings = _steps_per_drawing(fs, monkeypatch)
+
+    assert steps == drawings
 
 
 def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
@@ -346,20 +468,14 @@ def test_a_nozzle_face_or_attachment_is_not_read_against_the_drawing():
     assert fs._stated() == stated
 
 
-def test_a_valve_pinned_by_where_drawn_after_a_hang_routes():
-    """Route a bank at k = 99, then pin FV-100 1 px left of where it is drawn and route again.
+def test_a_bank_at_k99_hangs_a_controller_where_its_lines_draw_clear():
+    """Route a bank at k = 99; route() hangs a controller beside its valve.
 
-    The first route() hangs a controller and draws FT-201's line to FIC-201 and
-    FIC-202's output with no fallback path and through no unit. The second
-    completes and the P&ID exports.
+    FT-201's line to FIC-201 and FIC-202's output take no fallback path and
+    cross no unit.
     """
-    fs, loops = _valved_bank(99)
+    fs, loops = _routed_bank(99)
     assert fs._beside
     for line in (loops[1].measurement, loops[2].output):
         assert line.route is not None and not line.route.used_fallback
         assert _drawn_wrong(fs, line) == []
-    valve = next(u for u in fs.units if u.name == "FV-100")
-    valve.pin(x=frame_of(valve).x - 1, y=frame_of(valve).y)
-    fs.route()
-    fs.to_svg(diagram="p&id")
-    fs.to_drawio(diagram="p&id")
