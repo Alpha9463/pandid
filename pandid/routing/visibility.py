@@ -4,6 +4,8 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterable, List, Set, Tuple
 
+from pandid.streams import SHAFT_ROLES
+
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
@@ -302,7 +304,7 @@ class VisibilityGraph:
         from pandid.layout.attach import is_attached
         from pandid.package import frame as package_frame
         from pandid.portgeom import COMPASS, port_anchor, unit_box
-        from pandid.route_geometry import SNAP
+        from pandid.route_geometry import SNAP, straight_shaft
 
         margin = MARGIN
 
@@ -316,8 +318,11 @@ class VisibilityGraph:
         self.port_projs: Dict[Tuple[str, str], Tuple[float, float]] = {}
 
         # Put nozzles that differ by rounding error on one track.
+        # A free shaft end takes no track.
         anchors = {(u.name, name): port_anchor(u, u.frame, name)
-                   for u in fs.units if u.frame is not None for name in u.ports}
+                   for u in fs.units if u.frame is not None
+                   for name, port in u.ports.items()
+                   if port.role not in SHAFT_ROLES or port.stream is not None}
         on_x = _snap_tracks((a[0] for a in anchors.values()), SNAP)
         on_y = _snap_tracks((a[1] for a in anchors.values()), SNAP)
 
@@ -364,6 +369,8 @@ class VisibilityGraph:
             y_set.add(f.y + u_height + margin)
 
             for name in u.ports:
+                if (u.name, name) not in anchors:
+                    continue
                 ax, ay, o_dir = anchors[(u.name, name)]
                 ax, ay = on_x[ax], on_y[ay]
                 self.port_anchors[(u.name, name)] = (ax, ay)
@@ -390,6 +397,13 @@ class VisibilityGraph:
             if box is not None:
                 x_set.update((box[0] - margin, box[2] + margin))
                 y_set.update((box[1] - margin, box[3] + margin))
+
+        # A straight shaft blocks the lanes across it.
+        for stream in fs.streams:
+            straight = straight_shaft(stream)
+            if straight is not None:
+                (x1, y1), (x2, y2) = straight
+                self.obstacles.append(Rect(min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)))
 
         for stream in fs.streams:
             src, dst = stream.source, stream.dest

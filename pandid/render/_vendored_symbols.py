@@ -201,35 +201,35 @@ def register_vendored(registry):
     registry.register('pump', Symbol(
         svg='<g id="sym_pump"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=67.0,
-        ports={'suction': (0.0, 30.0), 'discharge': (70.0, 10.0)},
+        ports={'suction': (0.0, 30.0), 'discharge': (70.0, 10.0), 'drive': (30.0, 0.0)},
         drawio_shape='mxgraph.pid.pumps.centrifugal_pump_1',
     ), 'default')
 
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_gear"><path d="M 15.0 82.0 L 7.5 91.0 L 49.5 91.0 L 41.9 82.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 48.5 10.0 L 48.5 75.0 A 20.0 10.0 0.0 0 1 28.5 85.0 A 20.0 10.0 0.0 0 1 8.5 75.0 L 8.5 10.0 A 20.0 10.0 0.0 0 1 28.5 0.0 A 20.0 10.0 0.0 0 1 48.5 10.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="28.5" cy="23.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="28.5" cy="60.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 57.0 31.5 L 57.0 51.5 M 48.5 41.5 L 57.0 41.5 M 0.0 32.0 L 0.0 52.0 M 0.0 41.5 L 8.5 41.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=57.0, height=91.0,
-        ports={'suction': (0.0, 41.5), 'discharge': (57.0, 41.5)},
+        ports={'suction': (0.0, 41.5), 'discharge': (57.0, 41.5), 'drive': (28.5, 0.0)},
         drawio_shape='mxgraph.pid.pumps.gear_pump',
     ), 'gear')
 
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_screw"><path d="M 12.0 53.97 L 0.0 66.97 L 60.0 66.97 L 48.0 53.97" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 24.97 A 30.0 30.0 0.0 0 1 30.175 0.0018 A 30.0 30.0 0.0 0 1 59.75 24.97 L 70.0 24.97 L 70.0 34.97 L 59.75 34.97 A 30.0 30.0 0.0 0 1 30.175 59.9382 A 30.0 30.0 0.0 0 1 0.6 34.97" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 7.7 40.77 A 13.0 13.0 0.0 0 0 30.0 29.97 A 13.0 13.0 0.0 0 1 52.4 18.97" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=66.97,
-        ports={'suction': (0.7, 30.1365), 'discharge': (70.0, 30.1365)},
+        ports={'suction': (0.7, 30.1365), 'discharge': (70.0, 30.1365), 'drive': (30.175, 0.0)},
         drawio_shape='mxgraph.pid.pumps.screw_pump',
     ), 'screw')
 
     registry.register('compressor', Symbol(
         svg='<g id="sym_compressor"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=67.0,
-        ports={'suction': (0.0, 30.0), 'discharge': (70.0, 10.0)},
+        ports={'suction': (0.0, 30.0), 'discharge': (70.0, 10.0), 'drive': (30.0, 0.0)},
         drawio_shape='mxgraph.pid.compressors.centrifugal_compressor',
     ), 'default')
 
     registry.register('compressor', Symbol(
         svg='<g id="sym_compressor_reciprocating"><path d="M 14.5 40.0 L 14.5 0.0 L 34.5 0.0 L 34.5 13.0 L 74.5 13.0 L 74.5 40.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="23.0" width="14.0" height="4.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 74.5 23.0 L 87.5 23.0 L 87.5 21.5 L 98.0 25.0 L 87.5 28.5 L 87.5 27.0 L 74.5 27.0 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=98.0, height=40.0,
-        ports={'suction': (0.0, 25.0), 'discharge': (98.0, 25.0)},
+        ports={'suction': (0.0, 25.0), 'discharge': (98.0, 25.0), 'drive': (54.5, 13.0)},
         drawio_shape='mxgraph.pid.compressors.reciprocating_compressor',
     ), 'reciprocating')
 
@@ -809,35 +809,35 @@ def register_vendored(registry):
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_vacuum"><path d="M 0.0 22.97 L 14.5 22.97 L 14.5 14.97 L 26.6 14.97 A 25.0 25.0 0.0 0 1 72.4 14.97 L 84.5 14.97 L 84.5 22.97 L 99.0 22.97 L 99.0 26.97 L 84.5 26.97 L 84.5 34.97 L 72.4 34.97 A 25.0 25.0 0.0 0 1 26.6 34.97 L 14.5 34.97 L 14.5 26.97 L 0.0 26.97 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 14.5 22.97 L 14.5 26.97 M 84.5 22.97 L 84.5 26.97 M 26.6 34.97 A 25.0 25.0 0.0 0 1 26.6 14.97 M 72.4 14.97 A 25.0 25.0 0.0 0 1 72.4 34.97" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=99.0, height=49.94,
-        ports={'suction': (0.0, 24.97), 'discharge': (99.0, 24.97)},
+        ports={'suction': (0.0, 24.97), 'discharge': (99.0, 24.97), 'drive': (49.5, 0.0)},
         drawio_shape='mxgraph.pid.pumps.vacuum_pump',
     ), 'vacuum')
 
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_peristaltic"><path d="M 12.0 56.0 L 0.0 69.0 L 60.0 69.0 L 48.0 56.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="32.0" rx="30.0" ry="30.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="12.0" rx="10.0" ry="10.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="13.6" cy="43.5" rx="10.0" ry="10.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="46.4" cy="43.5" rx="10.0" ry="10.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 21.3 7.2 L 4.6 39.0 M 38.7 7.2 L 55.4 39.0 M 13.6 53.5 L 46.4 53.5 M 20.0 0.0 L 20.0 12.0 M 40.0 0.0 L 40.0 12.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=69.0,
-        ports={'suction': (20.0, 0.0), 'discharge': (40.0, 0.0)},
+        ports={'suction': (20.0, 0.0), 'discharge': (40.0, 0.0), 'drive': (60.0, 32.0)},
         drawio_shape='mxgraph.pid.pumps.peristaltic',
     ), 'peristaltic')
 
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_submersible"><path d="M 96.77 40.0 A 20.0 20.0 0.0 0 1 96.77 70.0 L 6.77 70.0 A 20.0 20.0 0.0 0 1 6.77 40.0 Z M 76.77 31.5 L 96.77 31.5 M 86.77 31.5 L 86.77 40.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="16.77" y="70.0" width="70.0" height="4.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="31.77" y="5.0" width="40.0" height="35.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="44.77" y="0.0" width="14.0" height="5.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=103.54, height=74.0,
-        ports={'suction': (51.77, 74.0), 'discharge': (96.77, 31.5)},
+        ports={'suction': (51.77, 74.0), 'discharge': (96.77, 31.5), 'drive': (51.77, 0.0)},
         drawio_shape='mxgraph.pid.pumps.submersible_pump',
     ), 'submersible')
 
     registry.register('compressor', Symbol(
         svg='<g id="sym_compressor_rotary"><path d="M 7.5 82.0 L 0.0 91.0 L 42.0 91.0 L 34.4 82.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 41.0 10.0 L 41.0 75.0 A 20.0 10.0 0.0 0 1 21.0 85.0 A 20.0 10.0 0.0 0 1 1.0 75.0 L 1.0 10.0 A 20.0 10.0 0.0 0 1 21.0 0.0 A 20.0 10.0 0.0 0 1 41.0 10.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="21.0" cy="23.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="21.0" cy="60.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=42.0, height=91.0,
-        ports={'suction': (0.84, 45.5), 'discharge': (21.0, 0.0)},
+        ports={'suction': (0.84, 45.5), 'discharge': (21.0, 0.0), 'drive': (41.0, 45.5)},
         drawio_shape='mxgraph.pid.compressors.rotary_compressor',
     ), 'rotary')
 
     registry.register('compressor', Symbol(
         svg='<g id="sym_compressor_liquid_ring"><ellipse cx="45.0" cy="45.0" rx="45.0" ry="45.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="0.0" width="0.0" height="0.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 45.0 5.0 A 30.0 30.0 0.0 0 1 45.0 45.0 A 30.0 30.0 0.0 0 0 45.0 85.0 M 73.3 16.7 A 30.0 30.0 0.0 0 1 45.0 45.0 A 30.0 30.0 0.0 0 0 16.7 73.3 M 85.0 45.0 A 30.0 30.0 0.0 0 1 45.0 45.0 A 30.0 30.0 0.0 0 0 5.0 45.0 M 73.3 73.3 A 30.0 30.0 0.0 0 1 45.0 45.0 A 30.0 30.0 0.0 0 0 16.5 16.5" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="0.0" width="0.0" height="0.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="45.0" cy="45.0" rx="3.0" ry="3.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=90.0, height=90.0,
-        ports={'suction': (0.0, 45.0), 'discharge': (45.0, 0.0)},
+        ports={'suction': (0.0, 45.0), 'discharge': (45.0, 0.0), 'drive': (90.0, 45.0)},
         drawio_shape='mxgraph.pid.compressors.liquid_ring_compressor',
     ), 'liquid_ring')
 
@@ -1065,7 +1065,7 @@ def register_vendored(registry):
     registry.register('turbine', Symbol(
         svg='<g id="sym_turbine"><path d="M 0.0 22.0 L 9.0 22.0 L 9.0 15.0 L 89.0 0.0 L 89.0 22.0 L 98.0 22.0 L 98.0 38.0 L 89.0 38.0 L 89.0 60.0 L 9.0 45.0 L 9.0 38.0 L 0.0 38.0 Z M 9.0 22.0 L 9.0 38.0 M 89.0 22.0 L 89.0 38.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0), 'shaft': (69.0, 56.25)},
         drawio_shape='mxgraph.pid.pumps.turbine',
     ), 'default')
 

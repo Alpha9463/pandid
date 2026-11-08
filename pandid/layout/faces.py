@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from pandid.routing.visibility import MIN_ESCAPE
+from pandid.streams import SHAFT_ROLES
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -22,7 +23,8 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
     ``nozzle()``, a list of faces nor a pin names it. A block, tank or
     vessel connection that shares its family's faces moves only where
     that saves its family bends. A balloon held where a ``via()`` line
-    met it keeps its faces.
+    met it keeps its faces. With ``fs.auto_faces`` off, only the shaft
+    ends a hung driver's placement turned are kept.
 
     Parameters
     ----------
@@ -40,8 +42,11 @@ def select_faces(fs: "Flowsheet", units: "list[Unit] | None" = None) -> None:
         frame = unit.frame
         if frame is None or id(unit) in fs._typed_at:
             continue
+        hung = {name: face for name, face in frame.port_faces.items()
+                if name in unit.ports and unit.ports[name].role in SHAFT_ROLES}
         frame.port_faces.clear()
         if not fs.auto_faces:
+            frame.port_faces.update(hung)
             continue
         live, fixed, menus = _movable(unit, frame)
         # Points of fixed ports; no choice may land on a taken point.

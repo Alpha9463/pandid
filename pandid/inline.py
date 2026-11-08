@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from dataclasses import replace
 from math import isfinite
 from typing import TYPE_CHECKING, TypeVar
@@ -89,8 +91,10 @@ def _ends(segments: list[Stream]) -> tuple[str, str]:
     return source, dest
 
 
-def _carried(fs: Flowsheet, line: Stream, segments: list[Stream]) -> str:
-    """Return a sentence listing what a line carries, to put back.
+def _carried(fs: Flowsheet, line: Stream, segments: list[Stream], device: Unit,
+             at: float | None) -> str:
+    """Return sentences listing what a line carries, to put back on its
+    connections through a tee.
 
     Parameters
     ----------
@@ -100,14 +104,23 @@ def _carried(fs: Flowsheet, line: Stream, segments: list[Stream]) -> str:
         Line handle.
     segments : list[Stream]
         The line's physical segments in flow order.
+    device : Unit
+        The tee.
+    at : float or None
+        The tee's fraction of the line, or ``None`` to go last.
 
     Returns
     -------
     str
         The devices and valve stations on the line in flow order, then
-        the balloons on it or its parts; ``""`` when it carries none.
+        the balloons on it or its parts; then the treatments both new
+        connections take; then its markers, as :func:`_remarked` puts
+        them. ``""`` when it carries none.
     """
+    from pandid.streams import TREATMENTS
     from pandid.units import Instrument
+
+    tee = device.name
 
     devices = [next((f"valve station {a.station.control.name}" for a in fs._station_assemblies
                      if a.station.inlet is s.dest), s.dest.owner.name)
@@ -116,10 +129,125 @@ def _carried(fs: Flowsheet, line: Stream, segments: list[Stream]) -> str:
                 if isinstance(u, Instrument) and any(u.host is s for s in segments)]
     items = ([", ".join(devices) + (" (in flow order)" if len(devices) > 1 else "")]
              if devices else []) + balloons
-    if not items:
+    out = ""
+    if items:
+        listed = " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
+        out = f". Then put back what {line.name} carries, each where it sits now: {listed}"
+    treated = ", ".join(f"{key}={getattr(line, key)!r}" for key in TREATMENTS
+                        if getattr(line, key) not in (None, False))
+    if treated:
+        out += f". Give both connections through {tee} {treated}"
+    return out + _remarked(line, segments, device, at)
+
+
+def _remarked(line: Stream, segments: list[Stream], device: Unit, at: float | None) -> str:
+    """Return a sentence marking a line's markers again on its connections
+    through a tee.
+
+    Every marker on the line or any of its segments goes on the connection
+    it falls on, at the fraction of that connection that keeps it where it
+    is drawn: the tee's centre sits ``at`` along the line through its
+    devices, as on= puts a device, and its ports either side. Where the
+    line is not drawn, the fractions come from the segments' devices. A
+    marker within the tee's span is given a choice of side instead.
+
+    Parameters
+    ----------
+    line : Stream
+        Line handle.
+    segments : list[Stream]
+        The line's physical segments in flow order.
+    device : Unit
+        The tee.
+    at : float or None
+        The tee's fraction of the line, or ``None`` to go last.
+
+    Returns
+    -------
+    str
+        The sentence, or ``""`` when the line carries no marker.
+    """
+    from pandid.geometry import Frame
+    from pandid.layout.attach import logical_stream_path
+    from pandid.portgeom import port_point, resolve_size
+    from pandid.render.weights import M
+    from pandid.route_geometry import stream_polyline
+
+    owned = [(k if k else -1, m) for k, s in enumerate(segments) for m in s.markers]
+    if not owned:
         return ""
-    listed = " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
-    return f". Then put back what {line.name} carries, each where it sits now: {listed}"
+    tee = device.name
+    if at is None:
+        return (f". {line.name} carries markers: give {tee} an at= in fs.add(..., on="
+                f"{line.name}, at=...) to be told where each goes")
+    source, dest = _ends(segments)
+    up, down = f"fs.connect({source}, {tee}.inlet)", f"fs.connect({tee}.outlet, {dest})"
+    if all(s.source.owner.frame is not None and s.dest.owner.frame is not None
+           for s in segments):
+        polylines = [stream_polyline(s) for s in segments]
+        lengths = [sum(math.dist(a, b) for a, b in zip(p, p[1:])) for p in polylines]
+        # The tee's centre: ``at`` along the line through its devices,
+        # found on the drawn segments.
+        path = logical_stream_path(line)
+        left = at * sum(math.dist(a, b) for a, b in zip(path, path[1:]))
+        centre = path[-1]
+        for a, b in zip(path, path[1:]):
+            n = math.dist(a, b)
+            if n > 0 and left <= n:
+                centre = (a[0] + (b[0] - a[0]) * left / n, a[1] + (b[1] - a[1]) * left / n)
+                break
+            left -= n
+        best = (math.inf, 0.0)
+        walked = 0.0
+        for p in polylines:
+            for a, b in zip(p, p[1:]):
+                n = math.dist(a, b)
+                t = 0.0 if n == 0 else max(0.0, min(1.0, ((centre[0] - a[0]) * (b[0] - a[0])
+                                                         + (centre[1] - a[1]) * (b[1] - a[1]))
+                                                        / (n * n)))
+                foot = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+                best = min(best, (math.dist(foot, centre), walked + n * t))
+                walked += n
+        split = best[1]
+        w, h = resolve_size(device)
+        frame = Frame(x=0.0, y=0.0, w=w, h=h)
+        half = math.dist(port_point(device, frame, "inlet"), port_point(device, frame, "outlet")) / 2
+        room = M
+    else:
+        bounds = [0.0, *(position(s) or 0.0 for s in segments[:-1]), 1.0]
+        lengths = [b - a for a, b in zip(bounds, bounds[1:])]
+        split, half, room = at, 0.0, 0.0
+    total = sum(lengths)
+    upstream, downstream = split - half, total - split - half
+    sides: dict[str, list[str]] = {}
+    choices = []
+    for k, m in owned:
+        texts = "".join(f", {key}={getattr(m, key)!r}" for key in ("before", "after", "number")
+                        if getattr(m, key) is not None)
+        drawn = m.at * total if k < 0 else sum(lengths[:k]) + m.at * lengths[k]
+        before = drawn / upstream if upstream > 0 else 1.0
+        after = (drawn - split - half) / downstream if downstream > 0 else 0.0
+        if 0 < before < 1:
+            sides.setdefault(up, []).append(f".mark({m.kind!r}, at={before:.4g}{texts})")
+        elif 0 < after < 1:
+            sides.setdefault(down, []).append(f".mark({m.kind!r}, at={after:.4g}{texts})")
+        else:
+            # Within the tee's span: a module clear of it on either side.
+            near = (upstream - room) / upstream if upstream > room else 0.5
+            far = room / downstream if downstream > room else 0.5
+            choices.append(
+                f"the {m.kind} at={m.at:g} on {line.name} falls within {tee}'s span, so it "
+                f"cannot stay where it is: choose its side, before {tee} on the stream {up} "
+                f"returns, .mark({m.kind!r}, at={near:.4g}{texts}), or after it on the stream "
+                f"{down} returns, .mark({m.kind!r}, at={far:.4g}{texts})")
+    out = ""
+    if sides:
+        out += (f". Mark again what {line.name} marks, on the stream each connect() call "
+                f"returns: " + "; ".join(f"on {side}, {' and '.join(calls)}"
+                                         for side, calls in sides.items()))
+    for choice in choices:
+        out += ". " + choice[0].upper() + choice[1:]
+    return out
 
 
 def position(segment: Stream) -> float | None:
@@ -248,7 +376,7 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
             f"Draw {line.name} through {tee} with connect() calls in place of the one "
             f"that drew {line.name}, keeping its other arguments: "
             f"fs.connect({source}, {tee}.inlet), fs.connect({tee}.outlet, {dest}) "
-            f"and {branch}" + _carried(fs, line, segments)
+            f"and {branch}" + _carried(fs, line, segments, device, at)
         )
     if not isinstance(device, Unit) or device.kind not in _INLINE_KINDS:
         raise ValueError("on= puts a valve, reducer or fitting in a line")
