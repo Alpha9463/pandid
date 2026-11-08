@@ -102,6 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ShellAndTubeExchanger` draws a floating-head and a coil-tube exchanger,
   `variant="floating_head"` and `variant="coil_tube"`, and `ElectricHeater`
   draws the ISO 10628-2 electric heater, powered at `utility_in`.
+- `ScrewCompressor` draws the ISO 10628-2 screw compressor, and
+  `RotaryCompressor` stays the two-rotor lobe machine.
 
 ### Changed
 
