@@ -247,7 +247,7 @@ def _on_body(host: "Unit", face: str, point: Point) -> Point:
 
 
 def tap_points(inst: "Instrument") -> list[Point]:
-    """Return where a balloon's ``taps=`` meet the face of its host.
+    """Return where a balloon's ``taps=`` meet the face of its host's body.
 
     Parameters
     ----------
@@ -260,13 +260,14 @@ def tap_points(inst: "Instrument") -> list[Point]:
         Both taps, upper or left first; empty without ``taps=`` or a
         placed unit host.
     """
-    from pandid.portgeom import unit_box
+    from pandid.portgeom import body_box
     from pandid.streams import Stream
 
     host, taps = inst.host, getattr(inst, "taps", None)
     if taps is None or host is None or isinstance(host, Stream) or host.frame is None:
         return []
-    x0, y0, x1, y1 = unit_box(host, host.frame)
+    # Fractions of the shell, clear of the parts drawn beyond it.
+    x0, y0, x1, y1 = body_box(host, host.frame)
     face = inst.face or "E"
     return [{"N": (x0 + t * (x1 - x0), y0), "S": (x0 + t * (x1 - x0), y1),
              "W": (x0, y0 + t * (y1 - y0)), "E": (x1, y0 + t * (y1 - y0))}[face]

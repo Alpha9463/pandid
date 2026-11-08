@@ -306,6 +306,41 @@ def test_a_single_tap_on_a_face_with_a_manhole_starts_on_the_shell():
     assert line[0][0] == pytest.approx(x1 - _SHELL_W)
 
 
+@pytest.mark.parametrize(
+    "parts",
+    [
+        {"manholes": [("E", 0.5)]},
+        {"sockets": [("E", 0.5)]},
+        {"supports": "leg"},
+        {"supports": "skirt"},
+    ],
+    ids=["manhole", "socket", "legs", "skirt"],
+)
+def test_two_taps_sit_on_the_shell_wall_whatever_it_carries(parts):
+    """Put both taps on the shell, at fractions of the shell, not of the grown box."""
+    fs = Flowsheet("level")
+    drum = fs.add(units.Vessel("D", **parts)).pin(x=200, y=100)
+    fs.add_instrument("LG", 1, sensing=drum, face="E", taps=(0.3, 0.7))
+    fs.route()
+    x0, y0, x1, y1 = _box(drum)
+    assert (x1 - x0, y1 - y0) != (_SHELL_W, _SHELL_H), "the premise: a part grows the box"
+    starts = sorted(line[0] for line in _polylines(_taps_group(fs.to_svg(check=False))))
+    # The shell is the box's top-left 62 x 100 here: parts grow it east or down.
+    flat = [v for xy in starts for v in xy]
+    assert flat == pytest.approx([x0 + _SHELL_W, y0 + 30.0, x0 + _SHELL_W, y0 + 70.0])
+    root = ET.fromstring(fs.to_drawio(check=False))
+    edges = [c for c in root.iter("mxCell") if re.fullmatch(r"t\d+", c.get("id") or "")]
+    # draw.io leaves the drum's cell, the whole box, at the same two points.
+    exits = sorted(
+        (float(m["exitX"]), float(m["exitY"]))
+        for e in edges
+        for m in [dict(kv.split("=", 1) for kv in (e.get("style") or "").split(";") if "=" in kv)]
+    )
+    w, h = x1 - x0, y1 - y0
+    want = [_SHELL_W / w, 30.0 / h, _SHELL_W / w, 70.0 / h]
+    assert [v for xy in exits for v in xy] == pytest.approx(want, abs=1e-3)
+
+
 def test_a_tap_on_a_stirred_vessels_top_stays_on_its_motor():
     """Keep the motor a speed transmitter senses: only wall parts are left out."""
     fs = Flowsheet("stirred")
