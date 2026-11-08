@@ -4707,6 +4707,87 @@ _FLAT_ROOF_TANK = _rect_tank("flat_roof", 12 * M, True, "301")
 _OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
 
 
+# ISO 10628-2 item 1.29, 2065, open bulk storage: a pile 4 M high on
+# slopes of one in one over a base line reaching a module past each toe,
+# each slope broken mid-way by a gap 1.5 M long with two dots in it. A
+# wider pile keeps its height and slopes and gains a flat top.
+STOCKPILE_W, STOCKPILE_H = 10 * M, 4 * M
+_PILE_OVER, _PILE_GAP, _PILE_DOTS = M, 1.5 * M, 0.25 * M
+
+
+def stockpile_too_narrow(width: float, height: float) -> ValueError:
+    """Return the refusal of a box too narrow for its pile.
+
+    Parameters
+    ----------
+    width, height : float
+        The box.
+
+    Returns
+    -------
+    ValueError
+        The refusal, naming the least width.
+    """
+    least = 2 * (_PILE_OVER + height)
+    return ValueError(
+        f"a box {width:g} wide is too small to draw a stockpile {height:g} high on its "
+        f"slopes of one in one, which needs a width of at least {least:g}; give "
+        f"width={least:g} or more, or a smaller height"
+    )
+
+
+@lru_cache(maxsize=None)
+def stockpile_symbol(width: float | None = None, height: float | None = None) -> Symbol:
+    """Return an open stockpile built to a box.
+
+    Parameters
+    ----------
+    width, height : float, optional
+        Box; 10 M by 4 M where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The pile on its base line, fed at the top centre and reclaimed
+        under it.
+
+    Raises
+    ------
+    ValueError
+        If the box is too narrow for the pile's slopes.
+    """
+    w = float(STOCKPILE_W if width is None else width)
+    h = float(STOCKPILE_H if height is None else height)
+    if h <= 0 or w < 2 * (_PILE_OVER + h):
+        raise stockpile_too_narrow(w, h)
+    unit = math.sqrt(0.5)
+    strokes, dots = [f"M 0 {_n(h)} L {_n(w)} {_n(h)}"], []
+    for toe, way in ((_PILE_OVER, 1.0), (w - _PILE_OVER, -1.0)):
+        # Points up the slope from its middle: the gap's ends, then the dots.
+        mx, my = toe + way * h / 2, h / 2
+        low, high, *marks = [(mx + way * d * unit, my - d * unit) for d in
+                             (-_PILE_GAP / 2, _PILE_GAP / 2, -_PILE_DOTS, _PILE_DOTS)]
+        strokes += [f"M {_n(toe)} {_n(h)} L {_n(low[0])} {_n(low[1])}",
+                    f"M {_n(high[0])} {_n(high[1])} L {_n(toe + way * h)} 0"]
+        dots += marks
+    strokes.append(f"M {_n(_PILE_OVER + h)} 0 L {_n(w - _PILE_OVER - h)} 0")
+    natural = (w, h) == (STOCKPILE_W, STOCKPILE_H)
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    ink = "".join(f'<circle cx="{_n(x)}" cy="{_n(y)}" r="1" fill="#111" stroke="none"/>'
+                  for x, y in dots)
+    return Symbol(
+        svg=f'<g id="sym_stockpile{suffix}"><path d="{" ".join(strokes)}" {_INK}/>{ink}</g>',
+        width=w, height=h,
+        ports={"feed": (w / 2, 0.0), "reclaim": (w / 2, h)},
+        id_suffix=suffix,
+        gravity_fixed=True,
+        iso_reg="2065",
+    )
+
+
+_BUILT_TO_SIZE[("stockpile", "default")] = lambda unit: _named(
+    unit, stockpile_symbol, unit.width, unit.height)
+
 
 # Mixer-settler: a closed box whose west compartment is the mixer. The
 # dispersion overflows the partition into the settler, and the light
@@ -5469,6 +5550,7 @@ class SymbolRegistry:
         self.register("silo", _BUNKER, "bunker")
         self.register("tank", _FLAT_ROOF_TANK, "flat_roof")
         self.register("tank", _OPEN_TOP_TANK, "open_top")
+        self.register("stockpile", stockpile_symbol())
         self.register("mixer_settler", _MIXER_SETTLER)
         self.register("deaerator", _DEAERATOR)
         self._register_kilns()

@@ -45,6 +45,7 @@ __all__ = [
     "FlotationCell",
     "Deaerator",
     "Silo",
+    "Stockpile",
     "MixerSettler",
     "Crystallizer",
     "Absorber",
@@ -5005,6 +5006,24 @@ class Deaerator(Unit):
         ("steam", "inlet", "utility"),
         ("outlet", "outlet", "liquid"),
     ]
+
+
+class Stockpile(Unit):
+    """Open stockpile of bulk solids, ISO 10628-2 item 1.29 2065.
+
+    Solids are stacked at ``feed``, on top of the pile, and reclaimed at
+    ``reclaim``, under it. The pile is 4 M high on slopes of one in one;
+    a ``width`` wider than the pile's base gives it a flat top, and a
+    ``height`` raises it on the same slopes. ``validate`` reports a
+    turned stockpile as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
+    """
+
+    feed: Port
+    reclaim: Port
+
+    kind = "stockpile"
+    PORTS = [("feed", "inlet", "feed"), ("reclaim", "outlet", "process")]
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:

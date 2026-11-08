@@ -477,6 +477,7 @@ STAYS_ON_BASE = {
         "the general row: two tubesheets around a boxed element, no element chosen",
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",
     ("silo", "default"): "Silo's own drawing (ISO item 1.9 X2062, the closed silo)",
+    ("stockpile", "default"): "Stockpile's own drawing (ISO item 1.29 2065)",
     ("crystallizer", "default"): "Crystallizer's own drawing (the draft-tube baffle body)",
     ("flotation_cell", "default"): "FlotationCell's own drawing (the mechanical cell)",
     ("mixer_settler", "default"): "MixerSettler's own drawing",

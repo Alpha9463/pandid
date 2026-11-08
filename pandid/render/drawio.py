@@ -459,6 +459,7 @@ OWN_OUTLINE = frozenset({
     ("fitting", "thermal_mass"), ("fitting", "flume"),
     ("tank", "flat_roof"), ("tank", "open_top"),
     ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
+    ("stockpile", "default"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what

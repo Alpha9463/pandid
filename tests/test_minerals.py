@@ -1,9 +1,11 @@
-"""Check the tumbling mills."""
+"""Check the tumbling mills and the open stockpile of ISO 10628-2 item 1.29."""
+
+import math
 
 import pytest
 from marks import assert_inked, drawio_ink, off_ink, svg_ink
 
-from pandid import Flowsheet, Mill
+from pandid import Conveyor, Feed, Flowsheet, Mill, Product, Stockpile
 from pandid.devices import AGMill, BallMill, RodMill, SAGMill
 from pandid.portgeom import port_faces
 
@@ -113,3 +115,69 @@ def test_the_mill_kind_still_draws_its_iso_rows_unchanged():
         "feed": ["N"],
         "discharge": ["S"],
     }
+
+
+#: Half the gap that breaks each slope, and the dots' offset, along it.
+_GAP, _DOT = 7.5 / math.sqrt(2), 2.5 / math.sqrt(2)
+
+
+def _slopes(w: float, h: float = 40.0) -> tuple:
+    """Return points on a pile's solid slopes, its dots, and its gaps."""
+    solid, dots, gaps = [], [], []
+    for toe, way in ((M, 1), (w - M, -1)):
+        mx, my = toe + way * h / 2, h / 2
+        solid += [
+            (toe + way * 5, h - 5),
+            (mx - way * (_GAP + 2), my + _GAP + 2),
+            (mx + way * (_GAP + 2), my - _GAP - 2),
+            (toe + way * (h - 5), 5),
+        ]
+        dots += [(mx + way * d + 1, my - d) for d in (-_DOT, _DOT)]
+        gaps += [(mx, my), (mx + way * (_DOT + 2.5), my - _DOT - 2.5)]
+    return solid, dots, gaps
+
+
+def test_the_stockpile_is_row_1_29():
+    """Check item 1.29: a pile 4 M high on one-in-one slopes over a base line 10 M long."""
+    solid, dots, gaps = _slopes(100)
+    assert_inked(Stockpile("SP-101"), [(5, 40), (50, 40), (95, 40), (50, 0), *solid, *dots])
+    _bare(Stockpile("SP-102"), gaps)
+    pile = Stockpile("SP-103")
+    assert port_faces(pile, "feed") == ["N"] and port_faces(pile, "reclaim") == ["S"]
+
+
+def test_a_wider_stockpile_keeps_its_slopes_and_gains_a_flat_top():
+    """Check that a pile built wider keeps its height and slopes, and runs flat along the top."""
+    solid, dots, gaps = _slopes(200)
+    ridge = [(5, 40), (195, 40), (60, 0), (100, 0), (140, 0)]
+    assert_inked(Stockpile("SP-101", width=200), ridge + solid + dots)
+    _bare(Stockpile("SP-102", width=200), gaps)
+
+
+def test_a_stockpile_too_narrow_for_its_slopes_is_refused():
+    """Check that a box narrower than the pile's slopes need is refused, naming the least."""
+    with pytest.raises(
+        ValueError, match="SP-101: a box 100 wide is too small to draw a stockpile 60 high"
+    ):
+        fs = Flowsheet("Narrow")
+        fs.add(Stockpile("SP-101", width=100, height=60))
+        fs.to_svg()
+
+
+def test_a_stockpile_between_two_belts_feeds_a_ball_mill():
+    """Check a stockpile stacked and reclaimed by belts, feeding a ball mill, draws clean."""
+    fs = Flowsheet("Grinding")
+    ore = fs.add(Feed("Ore"))
+    stacker = fs.add(Conveyor("CV-101"))
+    pile = fs.add(Stockpile("SP-101", description="Coarse Ore Stockpile"))
+    reclaimer = fs.add(Conveyor("CV-102"))
+    mill = fs.add(BallMill("ML-101"))
+    out = fs.add(Product("Cyclone Feed"))
+    fs.connect(ore.outlet, stacker.feed)
+    fs.connect(stacker.discharge, pile.feed)
+    fs.connect(pile.reclaim, reclaimer.feed)
+    fs.connect(reclaimer.discharge, mill.feed)
+    fs.connect(mill.discharge, out.inlet)
+    fs.to_svg(diagram="p&id")
+    assert [i for i in fs.validate() if i.severity == "error"] == []
+    assert {"SP-101", "ML-101"} <= {row["tag"] for row in fs.equipment_list()}

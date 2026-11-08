@@ -196,6 +196,7 @@ GRAVITY_FIXED = {
     ("mill", "rod"),
     ("mill", "sag"),
     ("mill", "ag"),
+    ("stockpile", "default"),
     ("elevator", "default"),
     ("elevator", "z_form"),
     ("filter", "gas"),
