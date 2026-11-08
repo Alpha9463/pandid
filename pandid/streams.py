@@ -36,8 +36,14 @@ PROCESS_KINDS = frozenset({"material", "energy"})
 #: Kinds that carry a signal; they join signal-role ports only.
 SIGNAL_KINDS = frozenset({"electric", "pneumatic", "data", "capillary", "software"})
 
+#: The kind of a shaft from a driver's ``shaft`` to a machine's ``drive``.
+MECHANICAL = "mechanical"
+
+#: Port roles at the two ends of a shaft.
+SHAFT_ROLES = frozenset({"shaft", "drive"})
+
 #: Every kind ``connect()`` accepts.
-STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS
+STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS | {MECHANICAL}
 
 #: Accepted colour shapes: a keyword, a hex colour of 3, 4, 6 or 8
 #: digits, or an ``rgb``/``rgba``/``hsl``/``hsla`` function.

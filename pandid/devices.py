@@ -125,6 +125,7 @@ class CentrifugalPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class GearPump(Pump):
@@ -138,6 +139,7 @@ class GearPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ScrewPump(Pump):
@@ -151,6 +153,7 @@ class ScrewPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class PeristalticPump(Pump):
@@ -166,6 +169,7 @@ class PeristalticPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class SubmersiblePump(Pump):
@@ -182,6 +186,7 @@ class SubmersiblePump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class VacuumPump(Pump):
@@ -197,6 +202,7 @@ class VacuumPump(Pump):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class CentrifugalCompressor(Compressor):
@@ -209,6 +215,7 @@ class CentrifugalCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ReciprocatingCompressor(Compressor):
@@ -222,6 +229,7 @@ class ReciprocatingCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class RotaryCompressor(Compressor):
@@ -235,6 +243,7 @@ class RotaryCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class LiquidRingCompressor(Compressor):
@@ -248,6 +257,7 @@ class LiquidRingCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class CentrifugalFan(Blower):
@@ -264,6 +274,7 @@ class CentrifugalFan(Blower):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class AxialFan(Blower):
@@ -277,6 +288,7 @@ class AxialFan(Blower):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class ShellAndTubeExchanger(HeatExchanger):
@@ -938,6 +950,7 @@ class JawCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ConeCrusher(Crusher):
@@ -953,6 +966,7 @@ class ConeCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class HammerCrusher(Crusher):
@@ -968,6 +982,7 @@ class HammerCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ImpactCrusher(Crusher):
@@ -983,6 +998,7 @@ class ImpactCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RollerCrusher(Crusher):
@@ -998,6 +1014,7 @@ class RollerCrusher(Crusher):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class HammerMill(Mill):
@@ -1013,6 +1030,7 @@ class HammerMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ImpactMill(Mill):
@@ -1028,6 +1046,7 @@ class ImpactMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RollerMill(Mill):
@@ -1043,6 +1062,7 @@ class RollerMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class VibratingMill(Mill):
@@ -1058,6 +1078,7 @@ class VibratingMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ScrewConveyor(Conveyor):
@@ -1075,6 +1096,7 @@ class ScrewConveyor(Conveyor):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RotaryValveFeeder(Feeder):
@@ -1090,6 +1112,7 @@ class RotaryValveFeeder(Feeder):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RotaryTableFeeder(Feeder):
@@ -1105,6 +1128,7 @@ class RotaryTableFeeder(Feeder):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class MeteringFeeder(Feeder):
@@ -1120,6 +1144,7 @@ class MeteringFeeder(Feeder):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class CoarseRakeScreen(ScreeningDevice):
