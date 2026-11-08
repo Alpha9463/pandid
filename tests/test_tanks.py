@@ -312,3 +312,28 @@ def test_a_stirred_body_reassigned_to_a_variant_that_cannot_carry_it_is_refused(
     fs.add(unit)
     fs.to_svg()
 
+
+@pytest.mark.parametrize(
+    ("unit", "drawn"),
+    [
+        (Reactor("R-1", width=150, height=120), (150, 90)),
+        (Reactor("R-2", variant="jacketed", agitator="anchor", width=80, height=170), (80, 140)),
+    ],
+    ids=["wide-reactor", "tall-jacketed-reactor"],
+)
+def test_draw_io_draws_a_stirred_reactor_under_a_round_motor_on_its_shaft(unit, drawn):
+    """Check that the export draws a reactor's body under its 2 M motor, not stretched over it."""
+    cells, cid = _exported(unit)
+    stencil = _outline(cells, cid)
+    w, h = _geometry(cells[cid])[2:]
+    scale = h / float(stencil.get("h", "nan"))
+    top = min(float(step.get("y", "nan")) for step in stencil.iter() if step.get("y") is not None)
+    bottom = max(
+        float(step.get("y", "nan")) for step in stencil.iter() if step.get("y") is not None
+    )
+    assert (top * scale, (bottom - top) * scale) == pytest.approx(
+        (MOTOR_D + MOTOR_GAP, drawn[1]), abs=0.05
+    )
+    motor = cells[f"{cid}-p{len(unit.__dict__['overlays']) - 1}"]
+    assert "shape=ellipse" in (motor.get("style") or "")
+    assert _geometry(motor) == pytest.approx(((w - MOTOR_D) / 2, 0, MOTOR_D, MOTOR_D))
