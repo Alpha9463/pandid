@@ -480,6 +480,36 @@ def _out_of_unit(before: "Counter[str]", after: "Counter[str]") -> bool:
             and not any(n > before[k] for k, n in after.items() if k not in traded))
 
 
+def _kept(before: "Counter[str]", before_off: set[int], after: "Counter[str]",
+          after_off: set[int], trade: bool = True) -> bool:
+    """Return whether a redraw is kept over the drawing before it.
+
+    Parameters
+    ----------
+    before : Counter[str]
+        Counts of the drawing before, as ``Flowsheet._judged`` returns
+        them.
+    before_off : set[int]
+        Balloons whose tap is off their line in it, as :func:`_taps_off`
+        returns them.
+    after : Counter[str]
+        The same counts for the redraw.
+    after_off : set[int]
+        The same balloons for the redraw.
+    trade : bool, optional
+        Also keep a redraw that takes a line out of a unit at a price
+        :func:`_out_of_unit` keeps. Default True.
+
+    Returns
+    -------
+    bool
+        True if no tap leaves its line and either no count grows or, with
+        ``trade``, the redraw takes a line out of a unit at that price.
+    """
+    return after_off <= before_off and (not any(n > before[k] for k, n in after.items())
+                                        or (trade and _out_of_unit(before, after)))
+
+
 def _taps_off(fs: "Flowsheet") -> set[int]:
     """Return the balloons whose tap is off their host's drawn line or face.
 
