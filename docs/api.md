@@ -297,6 +297,14 @@ sheet title; `fs.stream_table_sections` adds section headers. Set
 or unit: `at=` how far along a line, `face=` which side of a unit. `display=`
 selects field, central or subsidiary presentation; `variant=` selects the
 symbol. `fs.add_balloon(element)` gives a primary fitting its balloon.
+`function=` draws a function block touching the balloon at a clear corner,
+upper right first: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`.
+It takes a symbol of ISO 15519-2 A.6 or ISA-5.1, typed as drawn or as a word:
+`"sum"` (Σ), `"average"` (Σ/n), `"difference"` (Δ), `"multiply"` (×),
+`"divide"` (÷), `"sqrt"` (√), `"derivative"` (dx/dt), `"integral"` (∫),
+`"characterize"` (f(x)), `"bias"` (±), `"gain"` (K), `"lag"` (Pt1),
+`"high select"` (>), `"low select"` (<), `"max"`, `"min"`, or a signal
+conversion such as `"I/P"` or `"E/P"`.
 
 ### Control loops
 

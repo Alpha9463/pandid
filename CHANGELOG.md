@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A balloon takes a function block, drawn touching it at a clear corner, in SVG
+  and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
+  or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
+  and ISA-5.1 symbols.
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,
