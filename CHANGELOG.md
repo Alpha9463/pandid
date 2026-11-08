@@ -151,8 +151,8 @@ These are removed in 0.4.0.
   actuator with `actuator=`, as in `Valve(variant="butterfly",
   actuator="diaphragm")`.
 - `normal_position="closed"` on a butterfly valve with a diaphragm actuator,
-  `variant="butterfly_pneumatic"` before, is deprecated: give it
-  `fail="closed"`.
+  `variant="butterfly_pneumatic"` before, is deprecated: drop it, keeping any
+  `fail=` already given, or give `fail="closed"` if the valve fails shut.
 - `pandid.document.equipment_list()`, the drawn box, and the spec box
   `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
 - `duty` on `Reactor(variant="jacketed")`, which now draws `jacket_in`. Use
