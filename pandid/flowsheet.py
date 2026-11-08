@@ -4398,6 +4398,33 @@ class Flowsheet:
         ValueError
             If ``diagram`` or ``show_stream_table`` is unknown.
         """
+        return self._findings(diagram, show_stream_table)
+
+    def _findings(self, diagram: str | None = None,
+                  show_stream_table: bool | Literal["sheet"] | None = None,
+                  notes: bool = True) -> list:
+        """Return validation findings, errors first, then warnings.
+
+        Parameters
+        ----------
+        diagram : str or None, optional
+            As for :meth:`validate`.
+        show_stream_table : bool, {"sheet"} or None, optional
+            As for :meth:`validate`.
+        notes : bool, optional
+            Report what is drawn over a placed note or table. Default
+            True.
+
+        Returns
+        -------
+        list[Issue]
+            Findings.
+
+        Raises
+        ------
+        ValueError
+            If ``diagram`` or ``show_stream_table`` is unknown.
+        """
         from pandid.render.svg import (draws_arrowheads, tabulates_boundary_flows,
                                        wants_table_sheet)
         from pandid.validate import validate as _validate
@@ -4407,7 +4434,8 @@ class Flowsheet:
         table = (self._drawn_table if show_stream_table is None
                  else bool(show_stream_table))
         return _validate(self, arrows=draws_arrowheads(diagram),
-                         tabulates=tabulates_boundary_flows(diagram), table=table)
+                         tabulates=tabulates_boundary_flows(diagram), table=table,
+                         notes=notes)
 
     def to_svg(self, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
