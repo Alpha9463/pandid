@@ -1155,7 +1155,7 @@ class Flowsheet:
                 f"acts, and a utility header flag (a Feed or Product with "
                 f"header=True), one service drawn at each place it is tapped. Both "
                 f"drawings have to be of the same thing, so they must agree on the "
-                f"class and the variant, and two flags on the off-page reference. "
+                f"class, the variant and the display, and two flags on the off-page reference. "
                 f"A primary element and its balloon are one instrument shown twice "
                 f"and share a tag for that reason, but the balloon has to be asked "
                 f"for from the element: fs.add_balloon(fe303), not a second "

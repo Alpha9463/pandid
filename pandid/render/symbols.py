@@ -1087,6 +1087,30 @@ def block_box_too_small(owner: str, face: str, count: int, axis: str,
     )
 
 
+def location_bars(balloon: Symbol, name: str,
+                  bars: "tuple[tuple[float, float, float], ...]") -> Symbol:
+    """Return a balloon with location bars drawn across it.
+
+    Parameters
+    ----------
+    balloon : Symbol
+        Balloon drawn without bars.
+    name : str
+        Registered variant of the barred balloon.
+    bars : tuple[tuple[float, float, float], ...]
+        Each bar's ``(y, x1, x2)``.
+
+    Returns
+    -------
+    Symbol
+        The barred balloon.
+    """
+    svg = re.sub(r'id="sym_instrument_\w+"', f'id="sym_instrument_{name}"', balloon.svg, count=1)
+    lines = "".join(f'<line x1="{x1:g}" y1="{y:g}" x2="{x2:g}" y2="{y:g}" stroke="black" '
+                    f'stroke-width="2"/>' for y, x1, x2 in bars)
+    return replace(balloon, svg=svg.removesuffix("</g>") + lines + "</g>")
+
+
 # Faces in drawing order.
 _BLOCK_FACES = ("W", "E", "N", "S")
 
@@ -2024,6 +2048,66 @@ _VESSEL_EXTENT = 0.7
 _SUPPORT_CLEARANCE = {"inlet": ARROWHEAD / 2 + MIN_HEAD_CLEARANCE, "outlet": MIN_HEAD_CLEARANCE}
 
 
+def stirred(body: Symbol) -> Symbol:
+    """Return a tank or vessel with its roof left to an agitator's motor.
+
+    The vent moves to the top of the east wall's band and the relief to
+    the top of the west wall's. No inlet or outlet is offered the roof;
+    one drawn there moves to the first wall its menu offers.
+
+    Parameters
+    ----------
+    body : Symbol
+        Upright tank or vessel.
+
+    Returns
+    -------
+    Symbol
+        The body with its nozzles moved.
+    """
+    w, h = body.width, body.height
+    ports = dict(body.ports)
+    menus = {name: {face: xy for face, xy in menu.items() if face != "N" or name not in
+                    ("inlet", "outlet")} for name, menu in body.port_faces.items()}
+    families = {role: {face: xy for face, xy in menu.items() if face != "N"}
+                for role, menu in body.family_faces.items()}
+    for role in ("inlet", "outlet"):
+        if role in ports and outward_dir(*ports[role], w, h) == "N":
+            ports[role] = next(iter(menus[role].values()))
+    # Each wall's x, from where the inlets and outlets meet it.
+    walls = {outward_dir(x, y, w, h): x
+             for menu in (*menus.values(), *families.values()) for x, y in menu.values()}
+    for name, face in (("vent", "E"), ("relief", "W")):
+        if name in ports:
+            ports[name] = (walls[face], body.bands[face][0])
+            menus.pop(name)
+    return replace(body, ports=ports, port_faces=menus, family_faces=families,
+                   bands={face: band for face, band in body.bands.items() if face != "N"})
+
+
+def carrying(kind: str, body: Symbol, overlays: "tuple[Overlay, ...]") -> Symbol:
+    """Return a body as it carries its parts: stirred under a motor.
+
+    Parameters
+    ----------
+    kind : str
+        Body kind.
+    body : Symbol
+        The body.
+    overlays : tuple[Overlay, ...]
+        Parts drawn on it.
+
+    Returns
+    -------
+    Symbol
+        :func:`stirred` for a tank or vessel with a motor over it, else
+        ``body``.
+    """
+    if kind in ("tank", "vessel") and any(o.group == 20 for o in overlays):
+        return stirred(body)
+    return body
+
+
 @lru_cache(maxsize=None)
 def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
                  ports: "tuple[tuple[str, tuple[float, float]], ...]",
@@ -2057,7 +2141,8 @@ def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
         body = default_registry.get(kind, variant)
     else:
         body = vessel_shell(variant, *size)
-        drawn = replace(body, ports={**body.ports, **dict(ports)}) if ports else body
+        drawn = carrying(kind, body, overlays)
+        drawn = replace(drawn, ports={**drawn.ports, **dict(ports)}) if ports else drawn
         base = compose(drawn, [(o, default_registry.part(o.group, o.name)) for o in overlays])
     boxes = overlay_boxes(body, overlays)
     oy = -min([0.0, *(o.y * body.height for o in overlays)])
@@ -4471,6 +4556,60 @@ _BUNKER = Symbol(
 )
 
 
+# ISO 10628-2 items 1.1 and 1.2: rectangular tanks 8 M wide, filled a
+# module above the floor on either wall and drawn off the middle of the
+# floor, with the drain 2 M in from the west wall. The walls and floor
+# are held a module off each end for families.
+_RECT_W = 8 * M
+_RECT_FILL = {"W": (0.0, -M), "E": (_RECT_W, -M)}
+
+
+def _rect_tank(name: str, height: float, closed: bool, iso_reg: str) -> Symbol:
+    """Return a rectangular tank, closed by a flat roof or open.
+
+    Parameters
+    ----------
+    name : str
+        Suffix of the group id.
+    height : float
+        Wall height.
+    closed : bool
+        Draw the roof, with the vent and relief a quarter in from each
+        wall and a fill in its middle.
+    iso_reg : str
+        Registration number of the row.
+
+    Returns
+    -------
+    Symbol
+        The tank.
+    """
+    fill = {face: (x, height + y) for face, (x, y) in _RECT_FILL.items()}
+    roof = {"vent": (2 * M, 0.0), "relief": (6 * M, 0.0)} if closed else {}
+    outline = (f'<rect x="0" y="0" width="{_RECT_W:g}" height="{height:g}" {_OUTLINE}/>'
+               if closed else
+               f'<path d="M 0 0 L 0 {height:g} L {_RECT_W:g} {height:g} L {_RECT_W:g} 0" {_INK}/>')
+    walls = (M, height - M)
+    return Symbol(
+        svg=f'<g id="sym_tank_{name}">{outline}</g>',
+        width=_RECT_W, height=height,
+        ports={"inlet": fill["W"], "outlet": (4 * M, height), **roof, "drain": (2 * M, height)},
+        port_faces={"inlet": {**fill, **({"N": (4 * M, 0.0)} if closed else {})}},
+        bands={"W": walls, "E": walls, "S": (M, _RECT_W - M),
+               **({"N": (M, _RECT_W - M)} if closed else {})},
+        family_faces={"outlet": dict(fill)},
+        gravity_fixed=True,
+        iso_reg=iso_reg,
+    )
+
+
+# Item 1.1, 301, tank, vessel: 12 M tall under a flat roof.
+_FLAT_ROOF_TANK = _rect_tank("flat_roof", 12 * M, True, "301")
+
+# Item 1.2, 2061, container, tank, cistern: 6 M tall, open at the top.
+_OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
+
+
 # Mixer-settler: a closed box whose west compartment is the mixer. The
 # dispersion overflows the partition into the settler, and the light
 # phase overflows the weir into the launder at the east end.
@@ -4820,7 +4959,7 @@ class SymbolRegistry:
             return self.get(kind, variant)
         key = (kind, variant, tuple(overlays), tuple(ports))
         if key not in self._composed:
-            body = self.get(kind, variant)
+            body = carrying(kind, self.get(kind, variant), overlays)
             if ports:
                 body = replace(body, ports={**body.ports, **dict(ports)})
             self._composed[key] = compose(
@@ -5069,14 +5208,17 @@ class SymbolRegistry:
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
             stretchable=False, trim=True), "aux")
-        # Shared display: a circle in a square with one bar
-        # (ISO 15519-2 Table 1).
-        self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="2"/></g>',
+        # Shared display: a circle in a square, with one bar for a
+        # central display (ISO 15519-2 Table 1).
+        _shared = Symbol(
+            svg='<g id="sym_instrument_shared_field"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True), "shared")
-        self.register("instrument", Symbol(
+            trim=True)
+        self.register("instrument", _shared, "shared_field")
+        self.register("instrument", location_bars(_shared, "shared", ((22.0, 2.0, 42.0),)),
+                      "shared")
+        _computer = Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
             # pv sits 1 unit below the hexagon's flat bottom.
             width=44.0, height=44.0, label_pos="center", stretchable=False,
@@ -5087,7 +5229,8 @@ class SymbolRegistry:
                         for n in _inst_ports},
             rim=((11.0, 3.0), (33.0, 3.0), (43.0, 22.0), (33.0, 41.0), (11.0, 41.0),
                  (1.0, 22.0)),
-            trim=True), "computer")
+            trim=True)
+        self.register("instrument", _computer, "computer")
         # ISA-5.1 trip and logic symbols. Ports sit on the diamond's
         # vertices.
         _logic_ports = {'pv': (20.0, 39.0), 'sig_in': (1.0, 20.0), 'sig_out': (39.0, 20.0)}
@@ -5101,14 +5244,31 @@ class SymbolRegistry:
             ports=_logic_ports, trim=True)
         self.register("instrument", _sis, "sis")
         self.register("instrument", _sis, "logic")
-        self.register("instrument", Symbol(
+        _interlock = Symbol(
             svg='<g id="sym_instrument_interlock">'
                 '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
                 '</g>',
             width=40.0, height=40.0, label_pos="center", stretchable=False,
             ports=_logic_ports, rim=((20.0, 1.0), (39.0, 20.0), (20.0, 39.0), (1.0, 20.0)),
-            trim=True),
-            "interlock")
+            trim=True)
+        self.register("instrument", _interlock, "interlock")
+        # Location bars (ISO 15519-2 Table 1) on the other outlines, each
+        # ending on the outline: a subsidiary display's pair 6 apart, or 4
+        # on a diamond.
+        for outline, shapes, central, subsidiary in (
+            (_shared, ("shared",), None, ((19.0, 2.0, 42.0), (25.0, 2.0, 42.0))),
+            (_computer, ("computer",), ((22.0, 1.0, 43.0),),
+             ((19.0, 2.58, 41.42), (25.0, 2.58, 41.42))),
+            (_sis, ("sis", "logic"), ((20.0, 1.0, 39.0),),
+             ((18.0, 1.0, 39.0), (22.0, 1.0, 39.0))),
+            (_interlock, ("interlock",), ((20.0, 1.0, 39.0),),
+             ((18.0, 3.0, 37.0), (22.0, 3.0, 37.0))),
+        ):
+            for display, bars in (("central", central), ("subsidiary", subsidiary)):
+                if bars is not None:
+                    barred = location_bars(outline, f"{shapes[0]}_{display}", bars)
+                    for shape in shapes:
+                        self.register("instrument", barred, f"{shape}_{display}")
 
         # Tubular reactor: a rectangular shell with a serpentine tube. The
         # shell is 64 tall, so three feeds fit 16 apart in half its W face.
@@ -5209,6 +5369,8 @@ class SymbolRegistry:
         self._register_flotation_cell()
         self.register("silo", _SILO)
         self.register("silo", _BUNKER, "bunker")
+        self.register("tank", _FLAT_ROOF_TANK, "flat_roof")
+        self.register("tank", _OPEN_TOP_TANK, "open_top")
         self.register("mixer_settler", _MIXER_SETTLER)
         self.register("deaerator", _DEAERATOR)
         self.register("motor", _motor("general", "C0082"), "general")
