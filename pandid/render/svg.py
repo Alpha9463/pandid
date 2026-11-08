@@ -15,6 +15,7 @@ from pandid.package import INSET as _PACKAGE_INSET, frame as package_frame
 from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
+from pandid.render.line_markers import MARKER_TYPE, line_markers
 from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking,
                                    default_registry, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
@@ -423,7 +424,8 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
     if pairs and flanges:
         ink = _ink(fs, direction)
         held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-        held += flanges + [_obstacle(b) for b in labels]
+        held += flanges + [_obstacle(m.box) for m in line_markers(fs)]
+        held += [_obstacle(b) for b in labels]
         # The hatch strokes stand off a pneumatic line, outside its ink.
         held += hatch_boxes(fs)
         for pair in pairs:
@@ -1394,6 +1396,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     ]
 
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
+    symbols += [_obstacle(m.box) for m in line_markers(fs)]
     symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [_obstacle(b) for b in package_edges(fs)]
@@ -1972,6 +1975,35 @@ def flange_marks(s, points, ends) -> "list[Flange]":
         cx, cy = tip[0] + ux * FLANGE_STANDOFF, tip[1] + uy * FLANGE_STANDOFF
         along = total - FLANGE_STANDOFF if at_dest else FLANGE_STANDOFF
         out.append(Flange(cx, cy, math.degrees(math.atan2(uy, ux)), along))
+    return out
+
+
+def _marker_svg(drawn, color: str) -> list[str]:
+    """Return the SVG of one line marker.
+
+    Parameters
+    ----------
+    drawn : DrawnMarker
+        Marker as :func:`~pandid.render.line_markers.line_markers` draws it.
+    color : str
+        Escaped line colour.
+
+    Returns
+    -------
+    list[str]
+        SVG lines: strokes, outlines, then text.
+    """
+    width = f'stroke-width="{LineWeight.DETAIL.width:g}"'
+    out = [f'    <line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+           f'stroke="{color}" {width} />' for (x1, y1), (x2, y2) in drawn.strokes]
+    for shape in drawn.shapes:
+        points = " ".join(f"{x:.1f},{y:.1f}" for x, y in shape.points)
+        out.append(f'    <polygon points="{points}" fill="{"white" if shape.fill else "none"}" '
+                   f'stroke="{color}" {width} />')
+    for x, y, anchor, text in drawn.texts:
+        out.append(f'    <text x="{x:.1f}" y="{y:.1f}" font-family="sans-serif" '
+                   f'font-size="{MARKER_TYPE:g}" text-anchor="{anchor}" '
+                   f'dominant-baseline="middle" fill="{color}">{escaped(text)}</text>')
     return out
 
 
@@ -2954,6 +2986,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     hatches = hatch_boxes(fs)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    symbols += [(None, m.box) for m in line_markers(fs)]
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
@@ -4574,6 +4607,9 @@ class SvgRenderer:
             SVG lines.
         """
         stream_geoms = [(s, stream_polyline(s)) for s in fs.streams]
+        markers: dict[int, list] = {}
+        for drawn in line_markers(fs):
+            markers.setdefault(id(drawn.stream), []).append(drawn)
         # Hops keyed by (stream, segment), in drawing order.
         hops: dict[tuple[int, int], list[_Hop]] = {}
         if crossing_style != "plain":
@@ -4633,6 +4669,10 @@ class SvgRenderer:
                         f'stroke="{color}" '
                         f'stroke-width="{LineWeight.DETAIL.width:g}" />'
                     )
+
+            # Limits, tie-ins and spec breaks marked on the line.
+            for drawn in markers.get(id(s), ()):
+                lines += _marker_svg(drawn, color)
 
             if s.kind == "pneumatic":
                 # Pneumatic hatching (ISO 15519-2 Annex A.1.09).

@@ -262,8 +262,25 @@ stream is `S1` by default. Inline fittings carry the same number through;
 `unit.new_line_number = True` starts a new one. Assigning line-number fields
 produces names such as `6"-P-1001-A1A` instead of `S1`.
 
+`line.mark(kind, at=...)` marks a point of a line, `at` being a fraction of its
+drawn length strictly between 0 and 1:
+
+- `line.mark("battery limit", at=0.5, before="ISBL", after="OSBL")` and
+  `line.mark("limit of supply", at=0.5, before="VENDOR", after="OWNER")` draw
+  a dashed boundary across the line with a diamond on top (ISO 10628-1 5.6,
+  Figure 7), the parties either side of the diamond; both texts are optional.
+- `line.mark("tie-in", at=0.5, number="TI-101")` draws the number in a hexagon
+  on the line.
+- `line.mark("spec break", at=0.5, before="A1A", after="B2B")` draws a bar
+  across the line with the piping classes either side.
+
+`before` is the upstream side. On a split line's handle, `at` runs along the
+whole run. Tags and line numbers keep off the markers, and `validate()` reports
+`line-marker-crowded` for one drawn over a unit, another line or another
+marker. Signal lines take none.
+
 A returned `Stream` exposes `source`, `dest`, `kind`, `name`, `route`,
-`properties`, `color`, `dasharray` and `ends`. `properties` supplies text or
+`properties`, `color`, `dasharray`, `ends` and `markers`. `properties` supplies text or
 numbers for the stream table; no balances are calculated. `draw_as_recycle`
 hints which edge a cycle should break. `via()` overrides its automatic route.
 

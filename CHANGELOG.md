@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `line.mark("battery limit" | "limit of supply" | "tie-in" | "spec break",
+  at=...)` marks a point of a line, drawn in SVG and draw.io and kept in the
+  spec; a limit is drawn as ISO 10628-1 Figure 7 shows it.
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,

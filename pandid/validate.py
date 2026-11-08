@@ -261,6 +261,56 @@ def _over_notes(fs) -> list["Issue"]:
     return out
 
 
+def _crowded_markers(fs) -> list["Issue"]:
+    """Return a warning for each line marker drawn over something.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[Issue]
+        ``line-marker-crowded`` for each limit, tie-in or spec break whose
+        drawing meets a unit, another run of line or another marker,
+        naming the first it meets and the ``at=`` that moves it.
+    """
+    from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.line_markers import line_markers
+    from pandid.route_geometry import stream_polyline
+
+    drawn = line_markers(fs)
+    if not drawn:
+        return []
+    units = [(u.name, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    lines = [(s, stream_polyline(s)) for s in fs.streams
+             if s.source.owner.frame is not None and s.dest.owner.frame is not None]
+    out = []
+    for k, m in enumerate(drawn):
+        met = next((name for name, box in units if boxes_overlap(m.box, box)), None)
+        if met is None:
+            met = next((f"stream {s.name}" for s, points in lines
+                        for a, b in zip(points, points[1:])
+                        if not (s is m.stream and {a, b} == {m.start, m.end})
+                        and segment_crosses_box(a, b, m.box)), None)
+        if met is None:
+            met = next((f"the {o.marker.kind} at={o.marker.at:g} on {o.line.name}"
+                        for j, o in enumerate(drawn) if j != k and boxes_overlap(m.box, o.box)),
+                       None)
+        if met is not None:
+            name, marker = m.line.name, m.marker
+            texts = "".join(f", {key}={getattr(marker, key)!r}" for key in ("before", "after", "number")
+                            if getattr(marker, key) is not None)
+            out.append(Issue(
+                "warning", "line-marker-crowded",
+                f"the {marker.kind} at={marker.at:g} on {name} is drawn over {met}. Mark it "
+                f"elsewhere along {name}: drop it from {name}.markers and call "
+                f"{name}.mark({marker.kind!r}, at=...{texts})"))
+    return out
+
+
 def _arrowhead_cure(u) -> str:
     """Return advice that sets a device clear of the arrowhead after it.
 
@@ -1596,6 +1646,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True,
         # position.
         if notes:
             warnings += _over_notes(fs)
+
+        # Soft: a limit, tie-in or spec break drawn over a unit, a line or
+        # another marker.
+        warnings += _crowded_markers(fs)
 
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
 
