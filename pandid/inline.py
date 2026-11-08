@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from dataclasses import replace
 from math import isfinite
 from typing import TYPE_CHECKING, TypeVar
@@ -89,8 +91,10 @@ def _ends(segments: list[Stream]) -> tuple[str, str]:
     return source, dest
 
 
-def _carried(fs: Flowsheet, line: Stream, segments: list[Stream]) -> str:
-    """Return a sentence listing what a line carries, to put back.
+def _carried(fs: Flowsheet, line: Stream, segments: list[Stream], device: Unit,
+             at: float | None) -> str:
+    """Return sentences listing what a line carries, to put back on its
+    connections through a tee.
 
     Parameters
     ----------
@@ -100,14 +104,29 @@ def _carried(fs: Flowsheet, line: Stream, segments: list[Stream]) -> str:
         Line handle.
     segments : list[Stream]
         The line's physical segments in flow order.
+    device : Unit
+        The tee.
+    at : float or None
+        The tee's fraction of the line, or ``None`` to go last.
 
     Returns
     -------
     str
         The devices and valve stations on the line in flow order, then
-        the balloons on it or its parts; ``""`` when it carries none.
+        the balloons on it or its parts; then the treatments both new
+        connections take; then each marker, with the connection it falls
+        on and its fraction of that connection, which keeps it where it
+        is drawn when the tee's ports sit either side of ``at`` on the
+        drawn line, or, with no ``at``, a call for one. ``""`` when it
+        carries none.
     """
+    from pandid.geometry import Frame
+    from pandid.portgeom import port_point, resolve_size
+    from pandid.route_geometry import stream_polyline
+    from pandid.streams import TREATMENTS
     from pandid.units import Instrument
+
+    tee = device.name
 
     devices = [next((f"valve station {a.station.control.name}" for a in fs._station_assemblies
                      if a.station.inlet is s.dest), s.dest.owner.name)
@@ -116,10 +135,46 @@ def _carried(fs: Flowsheet, line: Stream, segments: list[Stream]) -> str:
                 if isinstance(u, Instrument) and any(u.host is s for s in segments)]
     items = ([", ".join(devices) + (" (in flow order)" if len(devices) > 1 else "")]
              if devices else []) + balloons
-    if not items:
-        return ""
-    listed = " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
-    return f". Then put back what {line.name} carries, each where it sits now: {listed}"
+    out = ""
+    if items:
+        listed = " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
+        out = f". Then put back what {line.name} carries, each where it sits now: {listed}"
+    treated = ", ".join(f"{key}={getattr(line, key)!r}" for key in TREATMENTS
+                        if getattr(line, key) not in (None, False))
+    if treated:
+        out += f". Give both connections through {tee} {treated}"
+    if line.markers and at is None:
+        out += (f". {line.name} carries markers: give {tee} an at= in fs.add(..., on="
+                f"{line.name}, at=...) to be told where each goes")
+    elif line.markers and at is not None:
+        source, dest = _ends(segments)
+        # The drawn length, and half the tee's span between its ports; as
+        # fractions where the line is not drawn.
+        total, half = 1.0, 0.0
+        if all(s.source.owner.frame is not None and s.dest.owner.frame is not None
+               for s in segments):
+            total = sum(math.dist(a, b) for s in segments
+                        for a, b in zip(stream_polyline(s), stream_polyline(s)[1:]))
+            w, h = resolve_size(device)
+            frame = Frame(x=0.0, y=0.0, w=w, h=h)
+            half = math.dist(port_point(device, frame, "inlet"),
+                             port_point(device, frame, "outlet")) / 2
+        split = at * total
+        sides: dict[str, list[str]] = {}
+        for m in line.markers:
+            texts = "".join(f", {key}={getattr(m, key)!r}" for key in ("before", "after", "number")
+                            if getattr(m, key) is not None)
+            if m.at < at:
+                side, fraction = f"fs.connect({source}, {tee}.inlet)", m.at * total / (split - half)
+            else:
+                side = f"fs.connect({tee}.outlet, {dest})"
+                fraction = (m.at * total - split - half) / (total - split - half)
+            where = f"{min(max(fraction, 0.001), 0.999):.4g}"
+            sides.setdefault(side, []).append(f".mark({m.kind!r}, at={where}{texts})")
+        out += (f". Mark again what {line.name} marks, on the stream each connect() call "
+                f"returns: " + "; ".join(f"on {side}, {' and '.join(calls)}"
+                                         for side, calls in sides.items()))
+    return out
 
 
 def position(segment: Stream) -> float | None:
@@ -248,7 +303,7 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
             f"Draw {line.name} through {tee} with connect() calls in place of the one "
             f"that drew {line.name}, keeping its other arguments: "
             f"fs.connect({source}, {tee}.inlet), fs.connect({tee}.outlet, {dest}) "
-            f"and {branch}" + _carried(fs, line, segments)
+            f"and {branch}" + _carried(fs, line, segments, device, at)
         )
     if not isinstance(device, Unit) or device.kind not in _INLINE_KINDS:
         raise ValueError("on= puts a valve, reducer or fitting in a line")

@@ -467,3 +467,60 @@ def test_an_insulation_mark_keeps_clear_of_a_tie_in_on_its_line() -> None:
     assert len(strokes) == 5
     assert not any(segment_crosses_box((a, b), (c, d), box) for a, b, c, d in strokes)
     assert [i.code for i in fs.validate() if "crowded" in i.code] == []
+
+
+def _tee_advice(**treated: object) -> tuple[str, dict[str, tuple[float, float]]]:
+    """Return the advice refusing a tee on a marked line, and where its markers are drawn."""
+    from pandid.units import Tee
+
+    fs = Flowsheet("Tee")
+    feed, product = fs.add(Feed("F")), fs.add(Product("P"))
+    feed.pin(x=100, y=100)
+    product.pin(x=500, y=100)
+    line = fs.connect(feed.outlet, product.inlet)
+    for key, value in treated.items():
+        setattr(line, key, value)
+    line.mark("tie-in", at=0.75, number="TI-101")
+    line.mark("battery limit", at=0.2, before="VENDOR", after="OWNER")
+    fs.route()
+    drawn = {m.marker.kind: m.point for m in line_markers(fs)}
+    with pytest.raises(ValueError) as refused:
+        fs.add(Tee("T"), on=line, at=0.375)
+    return str(refused.value), drawn
+
+
+def test_following_the_tee_advice_keeps_each_marker_where_it_was_drawn() -> None:
+    """Draw the line through the tee as advised, re-marked as advised, and find each marker unmoved."""
+    from pandid.units import Tee
+
+    advice, drawn = _tee_advice()
+    fs = Flowsheet("Tee")
+    feed, product, drain = fs.add(Feed("F")), fs.add(Product("P")), fs.add(Product("D"))
+    tee = fs.add(Tee("T"))
+    feed.pin(x=100, y=100)
+    product.pin(x=500, y=100)
+    # The tee's 12 px box centred where on= at=0.375 splits the 400 px line,
+    # at (250, 100), its ports either side on the line.
+    tee.pin(x=244, y=94)
+    drain.pin(x=250, y=250)
+    streams = {
+        "fs.connect(F.outlet, T.inlet)": fs.connect(feed.outlet, tee.inlet),
+        "fs.connect(T.outlet, P.inlet)": fs.connect(tee.outlet, product.inlet),
+    }
+    fs.connect(tee.branch, drain.inlet)
+    advised = re.findall(r"on (fs\.connect\([^)]*\)), ((?:\.mark\([^)]*\)(?: and )?)+)", advice)
+    assert {side for side, _ in advised} == set(streams)
+    for side, calls in advised:
+        for call in re.findall(r"\.mark\([^)]*\)", calls):
+            eval("stream" + call, {"stream": streams[side]})  # noqa: S307
+    fs.route()
+    moved = {m.marker.kind: m.point for m in line_markers(fs)}
+    assert moved.keys() == drawn.keys()
+    for kind, point in drawn.items():
+        assert moved[kind] == pytest.approx(point, abs=0.05)
+
+
+def test_the_tee_advice_gives_both_connections_the_lines_treatments() -> None:
+    """Name the tracing and insulation both connections through the tee take."""
+    advice, _ = _tee_advice(tracing="steam", insulated=True)
+    assert "Give both connections through T tracing='steam', insulated=True." in advice
