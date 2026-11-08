@@ -43,10 +43,14 @@ def test_each_pump_class_draws_its_variant(cls, variant: str, reg: str):
 
 @pytest.mark.parametrize("variant", ["progressive_cavity", "reciprocating", "diaphragm", "lobe"])
 def test_a_group_15_pump_is_the_six_module_circle(variant: str):
-    """Check the 15.1 outline: suction W and discharge at the chevron's apex E."""
+    """Check the 15.1 outline: suction W, discharge at the chevron's apex E, drive on the crown."""
     sym = default_registry.get("pump", variant)
     assert (sym.width, sym.height) == (6 * M, 6 * M)
-    assert sym.ports == {"suction": (0.0, 3 * M), "discharge": (6 * M, 3 * M)}
+    assert sym.ports == {
+        "suction": (0.0, 3 * M),
+        "discharge": (6 * M, 3 * M),
+        "drive": (3 * M, 0.0),
+    }
 
 
 def test_a_vertical_turbine_pump_draws_from_below_and_discharges_from_its_head():

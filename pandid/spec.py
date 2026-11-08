@@ -700,21 +700,24 @@ _INSTRUMENT_KEYS = {
     "type", "number", "variant", "display", "description", "reference", "width",
     "height", "label_pos", "new_line_number", "sensing", "acting_on", "near",
     "at", "face", "offset", "angle", "pin", "port_faces", "quadrants", "function",
+    "taps", "element",
 }
 # The three ways an instrument entry names its anchor.
 _ANCHOR_KEYS = ("sensing", "acting_on", "near")
 # Keys of a balloon entry: an instrument entry's, less the tag and
 # anchor, plus balloon_of.
-_BALLOON_KEYS = ({"balloon_of"} | _INSTRUMENT_KEYS) - {"type", "number", *_ANCHOR_KEYS}
+_BALLOON_KEYS = ({"balloon_of"} | _INSTRUMENT_KEYS) - {"type", "number", "taps", "element",
+                                                    *_ANCHOR_KEYS}
 # quadrants: key -> ISO quadrant letter; keys match Instrument.annotate.
 _QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
 _PACKAGE_KEYS = {"name", "units", "description", "reference"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
-    "color", "dasharray", "ends", "inline_at", "logical_to",
+    "color", "dasharray", "ends", "inline_at", "logical_to", "markers",
     *LINE_NUMBER_FIELDS, *TREATMENTS,
 }
+_MARKER_KEYS = {"kind", "at", "before", "after", "number"}
 _COMPONENT_KEYS = {"name", "formula"}
 # Constructor keywords only some classes take, and their readers.
 _KIND_READERS: dict[str, Callable[[Any, str], Any]] = {
@@ -1229,9 +1232,12 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     if not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
-    kwargs = _read_fields(data, where, ((("variant", "display", "function"), _text),
+    kwargs = _read_fields(data, where, ((("variant", "display", "function", "element"), _text),
                                         (("description", "reference"), _drawn),
                                         (("width", "height"), _number)))
+    if "taps" in data:
+        kwargs["taps"] = [_number(t, f"{where}.taps")
+                          for t in _sequence(data["taps"], f"{where}.taps")]
     with _blame(where):
         inst = Instrument(type_, number, **kwargs)
     if "quadrants" in data:
@@ -1649,6 +1655,21 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         stream.properties = dict(properties)
     if "tabulate" in data:
         stream.tabulate = _flag(data["tabulate"], f"{where}.tabulate")
+    if "markers" in data:
+        markers = data["markers"]
+        if not isinstance(markers, list):
+            raise SpecError(f"{where}.markers must be a list of markers, got {markers!r}")
+        for k, item in enumerate(markers):
+            at = f"{where}.markers[{k}]"
+            entry = _mapping(item, at)
+            _check_keys(entry, _MARKER_KEYS, at)
+            for key in ("kind", "at"):
+                if key not in entry:
+                    raise SpecError(f"{at}: a marker needs {key!r}, got {dict(entry)!r}")
+            texts = _read_fields(entry, at, ((("before", "after", "number"), _text),))
+            with _blame(at):
+                stream.mark(_text(entry["kind"], f"{at}.kind"), _number(entry["at"], f"{at}.at"),
+                            **texts)
     if "via" in data:
         stream.via(_points(data["via"], f"{where}.via"))
     return stream
@@ -3232,6 +3253,10 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
         entry["display"] = inst.display
     if inst.function is not None:
         entry["function"] = inst.function
+    if inst.taps is not None:
+        entry["taps"] = list(inst.taps)
+    if inst.element is not None:
+        entry["element"] = inst.element
     if inst.quadrants:
         by_name = {name: list(codes) for name, letter in _QUADRANT_KEYS.items()
                    for codes in [inst.quadrants.get(letter, ())] if codes}
@@ -3362,6 +3387,12 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["properties"] = dict(stream.properties)
     if stream.tabulate:
         entry["tabulate"] = True
+    if stream.markers:
+        entry["markers"] = [
+            {"kind": m.kind, "at": m.at,
+             **{key: getattr(m, key) for key in ("before", "after", "number")
+                if getattr(m, key) is not None}}
+            for m in stream.markers]
     if stream._inline_at is not None:
         entry["inline_at"] = stream._inline_at
     if stream._logical_to is not None:

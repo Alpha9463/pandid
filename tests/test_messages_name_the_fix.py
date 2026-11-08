@@ -78,7 +78,7 @@ def _acting_on_the_inlet() -> None:
 @pytest.mark.parametrize(
     ("build", "error", "says"),
     [
-        (_unit_to_unit, ValueError, "Its nozzles are ['discharge', 'suction']"),
+        (_unit_to_unit, ValueError, "Its nozzles are ['discharge', 'drive', 'suction']"),
         (_into_the_station_valve, ValueError, "station's own inlet, station.inlet"),
         (_out_of_the_station_valve, ValueError, "station's own outlet, station.outlet"),
         (_tee_on_a_line, ValueError, "fs.connect(TEE.branch, ...)"),

@@ -49,7 +49,11 @@ Example, a pumped product cooler with a flow control loop::
 
 Ports:
     Feed / Product              outlet / inlet
-    Pump, Compressor            suction, discharge
+    Pump, Compressor            suction, discharge, drive
+    Motor, DieselEngine         shaft: fs.connect(motor.shaft, pump.drive)
+    Gearbox                     drive, shaft
+    Generator                   drive: fs.connect(turbine.shaft, generator.drive)
+    Turbine                     inlet, outlet, shaft
     Valve, ControlValve         inlet, outlet, actuator (signal)
     HeatExchanger, Condenser,
     ShellAndTubeExchanger       tube_in, tube_out, shell_in, shell_out
@@ -84,6 +88,9 @@ Traps:
   ports. Pass kind= for another, such as hydraulic, wireless, data,
   capillary or software:
   fs.connect(ft, fic, kind="data").
+- line.mark("battery limit", at=0.5, before="ISBL", after="OSBL") marks a
+  point of a line; also "limit of supply", "tie-in" (number=) and
+  "spec break" (before= and after= piping classes).
 - connect(..., tracing="steam", insulated=True, jacketed=True) draws a
   pipe traced, insulated or jacketed; insulation= is only the line
   number's code.

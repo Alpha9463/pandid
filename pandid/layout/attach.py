@@ -10,6 +10,7 @@ import math
 from typing import TYPE_CHECKING
 
 from pandid.routing.visibility import MIN_ESCAPE
+from pandid.streams import SHAFT_ROLES
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -208,12 +209,20 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return _along(points, float(inst.at if inst.at is not None else 0.5))
     if host.frame is None:
         return None
-    face = free_face(inst) or inst.face
-    (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
+    taps = tap_points(inst)
+    if len(taps) == 2:
+        # Two taps: the balloon hangs off the middle of the pair.
+        (ax, ay), (bx, by) = taps
+        (_px, _py), (nx, ny) = face_point(host, host.frame, inst.face or "E")
+        return ((ax + bx) / 2, (ay + by) / 2), (-ny, nx)
+    face = free_face(inst) or inst.face or "E"
+    point, (nx, ny) = face_point(host, host.frame, face)
     fs = inst.flowsheet
     moved = nozzle_tap(inst) if fs is not None and fs._clear_taps else None
     axial = axial_start(inst) if fs is not None and fs._axial_taps else None
-    return (moved or axial or (px, py)), (-ny, nx)
+    if moved is None and axial is not None:
+        return axial, (-ny, nx)
+    return _on_body(inst, host, face, moved or point), (-ny, nx)
 
 
 def axial_start(inst: "Instrument") -> Point | None:
@@ -240,6 +249,90 @@ def axial_start(inst: "Instrument") -> Point | None:
             or inst.relation == "near"):
         return None
     return axial_tap(host, host.frame, free_face(inst) or inst.face or "E")
+
+
+#: Variables a balloon measures on a machine its host carries, such as
+#: a stirrer's motor, rather than in the fluid (ISA-5.1 first letters).
+_MACHINE_VARIABLES = frozenset("S")
+
+
+def senses_fluid(inst: "Instrument") -> bool:
+    """Return whether a balloon taps its host's bare body.
+
+    A balloon with a primary element or two process taps, or one
+    measuring anything but a machine's speed, senses the fluid, so its
+    tap is on the body itself, clear of every part drawn on it.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    bool
+        Whether the tap is on the bare body; otherwise it may be on a
+        part such as a motor.
+    """
+    if getattr(inst, "element", None) or getattr(inst, "taps", None):
+        return True
+    return getattr(inst, "type", "")[:1].upper() not in _MACHINE_VARIABLES
+
+
+def _on_body(inst: "Instrument", host: "Unit", face: str, point: Point) -> Point:
+    """Return a point on a face of a balloon host's box, moved onto its body.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Balloon hung from ``host``.
+    host : Unit
+        Placed unit.
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+    point : Point
+        Point on that face of the unit's box.
+
+    Returns
+    -------
+    Point
+        The point on the same face of the host's body, clear of its
+        supports, manholes and sockets, and of every other part where
+        the balloon senses the fluid (:func:`senses_fluid`).
+    """
+    from pandid.portgeom import body_box
+
+    x0, y0, x1, y1 = body_box(host, host.frame, bare=senses_fluid(inst))
+    x, y = point
+    return {"W": (x0, y), "E": (x1, y), "N": (x, y0), "S": (x, y1)}[face.upper()]
+
+
+def tap_points(inst: "Instrument") -> list[Point]:
+    """Return where a balloon's ``taps=`` meet the face of its host's body.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    list[Point]
+        Both taps, upper or left first; empty without ``taps=`` or a
+        placed unit host.
+    """
+    from pandid.portgeom import body_box
+    from pandid.streams import Stream
+
+    host, taps = inst.host, getattr(inst, "taps", None)
+    if taps is None or host is None or isinstance(host, Stream) or host.frame is None:
+        return []
+    # Fractions of the bare body, as the wall the taps are checked on.
+    x0, y0, x1, y1 = body_box(host, host.frame, bare=senses_fluid(inst))
+    face = inst.face or "E"
+    return [{"N": (x0 + t * (x1 - x0), y0), "S": (x0 + t * (x1 - x0), y1),
+             "W": (x0, y0 + t * (y1 - y0)), "E": (x1, y0 + t * (y1 - y0))}[face]
+            for t in taps]
 
 
 def nozzle_tap(inst: "Instrument") -> Point | None:
@@ -272,6 +365,7 @@ def nozzle_tap(inst: "Instrument") -> Point | None:
         return None
     face = inst.face or "E"
     point, (nx, ny) = face_point(host, host.frame, face)
+    point = _on_body(inst, host, face, point)
     nozzles = [port_point(host, host.frame, name)
                for name, port in host.ports.items() if port.stream is not None]
     wall = face_wall(host, host.frame, face)
@@ -335,7 +429,8 @@ def _free_face(host: "Unit") -> str:
 
     at = {name: resolve_port(host, host.frame, name) for name in host.ports}
     used = {at[name].face for name, port in host.ports.items() if port.stream is not None}
-    process = [at[name].point for name, port in host.ports.items() if port.role != "signal"]
+    process = [at[name].point for name, port in host.ports.items()
+               if port.role != "signal" and port.role not in SHAFT_ROLES]
     for face in "NSW" if "E" in used else "":
         middle = face_point(host, host.frame, face)[0]
         if face not in used and any(math.dist(point, middle) < 0.5 for point in process):

@@ -89,15 +89,22 @@ KIND_MAP = {
                              {"inlet": "W", "outlet": "E", "actuator": ("N", 49.0)}),
     # Rotating equipment. Where the stencil draws a nozzle, the port goes on its
     # mouth rather than on draw.io's compass anchor.
+    # A driven machine's drive is on the casing's crown where it is free.
     ("pump", "default"):       ("pumps", "Centrifugal Pump 1",
-                                {"suction": ("W", 30.0), "discharge": ("E", 10.0)}),
+                                {"suction": ("W", 30.0), "discharge": ("E", 10.0),
+                                 "drive": ("N", 30.0)}),
     ("pump", "gear"):          ("pumps", "Gear Pump",
-                                {"suction": ("W", 41.5), "discharge": ("E", 41.5)}),
-    ("pump", "screw"):         ("pumps", "Screw Pump",         {"suction": "W", "discharge": "E"}),
+                                {"suction": ("W", 41.5), "discharge": ("E", 41.5),
+                                 "drive": ("N", 28.5)}),
+    ("pump", "screw"):         ("pumps", "Screw Pump",
+                                {"suction": "W", "discharge": "E", "drive": ("N", 30.175)}),
     ("compressor", "default"): ("compressors", "Centrifugal Compressor",
-                                {"suction": ("W", 30.0), "discharge": ("E", 10.0)}),
+                                {"suction": ("W", 30.0), "discharge": ("E", 10.0),
+                                 "drive": ("N", 30.0)}),
+    # The drive is on the crankcase, east of the cylinder.
     ("compressor", "reciprocating"): ("compressors", "Reciprocating Compressor",
-                                      {"suction": "W", "discharge": ("E", 25.0)}),
+                                      {"suction": "W", "discharge": ("E", 25.0),
+                                       "drive": ("AT", 54.5, 13.0)}),
     # Heat exchangers: nozzles are named for the side (shell or tube), not the duty.
     # The ISO circle-and-zigzag: the tube runs W to E, the shell takes N and S.
     ("hex", "default"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
@@ -365,16 +372,25 @@ KIND_MAP = {
                              "jacket_in": ("W", 30), "jacket_out": ("E", 30)}),
     # Pump / compressor styles.
     ("pump", "vacuum"):           ("pumps", "Vacuum Pump",
-                                   {"suction": ("W", 24.97), "discharge": ("E", 24.97)}),
-    # Peristaltic: the only drawn connections are the two stubs on top.
+                                   {"suction": ("W", 24.97), "discharge": ("E", 24.97),
+                                    "drive": ("N", 49.5)}),
+    # Peristaltic: the only drawn connections are the two stubs on top;
+    # the drive is on the east of the rotor's casing.
     ("pump", "peristaltic"):      ("pumps", "Peristaltic",
-                                   {"suction": ("N", 20.0), "discharge": ("N", 40.0)}),
+                                   {"suction": ("N", 20.0), "discharge": ("N", 40.0),
+                                    "drive": ("E", 32.0)}),
     # Submersible: the suction is the strainer plate (S); the discharge is the open
     # end of the drawn elbow, inboard of the box edge.
     ("pump", "submersible"):      ("pumps", "Submersible Pump",
-                                   {"suction": "S", "discharge": ("AT", 96.77, 31.5)}),
-    ("compressor", "rotary"):      ("compressors", "Rotary Compressor", {"suction": "W", "discharge": "N"}),
-    ("compressor", "liquid_ring"): ("compressors", "Liquid Ring Compressor", {"suction": "W", "discharge": "N"}),
+                                   {"suction": "S", "discharge": ("AT", 96.77, 31.5),
+                                    "drive": ("N", 51.77)}),
+    # Rotary and liquid ring: the crown carries the discharge, so the
+    # drive is on the east wall.
+    ("compressor", "rotary"):      ("compressors", "Rotary Compressor",
+                                    {"suction": "W", "discharge": "N",
+                                     "drive": ("AT", 41.0, 45.5)}),
+    ("compressor", "liquid_ring"): ("compressors", "Liquid Ring Compressor",
+                                    {"suction": "W", "discharge": "N", "drive": ("E", 45.0)}),
     # Vessel / tank styles.
     # Floating roof: the vent and relief on the deck plate at y = 5. The fill has no
     # roof placement, since the deck moves; it enters the shell at y = 60.
@@ -516,7 +532,9 @@ KIND_MAP = {
     # The process coil enters at (0, 54.5) and leaves at (80, 79.5).
     ("furnace", "default"): ("vessels", "Furnace",
                              {"inlet": ("W", 54.5), "outlet": ("E", 79.5), "fuel": "S"}),
-    ("turbine", "default"): ("pumps", "Turbine", {"inlet": "W", "outlet": "E"}),
+    # The shaft leaves from under the casing's wide end.
+    ("turbine", "default"): ("pumps", "Turbine",
+                             {"inlet": "W", "outlet": "E", "shaft": ("AT", 69.0, 56.25)}),
     # Cooling tower: the nozzles are named for the side (water, air), as on ``hex``;
     # ``makeup`` and ``blowdown`` flank ``water_out`` on the basin floor, and both
     # drawings offer the same six. Induced draft: the air leaves the stack top and

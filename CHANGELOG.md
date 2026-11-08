@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `line.mark("battery limit" | "limit of supply" | "tie-in" | "spec break",
+  at=...)` marks a point of a line, drawn in SVG and draw.io and kept in the
+  spec; a limit is drawn as ISO 10628-1 Figure 7 shows it.
+- `Gearbox`, `Generator` (`variant="ac"` or `"dc"`) and `DieselEngine` draw
+  ISO 10628-2 items 20.2 to 20.5 and a diesel engine, and a `Turbine` drives
+  through its new `shaft`: `fs.connect(turbine.shaft, generator.drive)`.
+- `Motor` draws an electric motor, with `variant="ac"` or `"dc"` for ISO
+  10628-2 items 20.7 and 20.8. Pumps, compressors, fans, conveyors, crushers,
+  mills and feeders take one at their new `drive`:
+  `fs.connect(motor.shaft, pump.drive)` draws the motor beside the machine on a
+  short straight shaft.
 - `connect(..., tracing="steam", insulated=True, jacketed=True)` draws a pipe
   traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
   in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers
@@ -20,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
   or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
   and ISA-5.1 symbols.
+- A balloon takes two process taps on the face it senses and draws an impulse
+  line from each, for a level gauge, cage or DP transmitter:
+  `fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
+- `element=` draws a thermowell, radar, vibrating-fork or electrode mark at a
+  balloon's tap end: `fs.add_instrument("TT", 101, sensing=line, element="thermowell")`.
 - `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
   and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
   `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
