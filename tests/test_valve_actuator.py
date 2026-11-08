@@ -184,11 +184,50 @@ def test_the_actuator_is_keyword_only():
 # --- normally closed ---------------------------------------------------------
 
 
-@pytest.mark.parametrize("body", ["default", "butterfly"])
-def test_a_diaphragm_valve_refuses_the_normally_closed_mark(body):
-    """Refuse NC on a diaphragm actuator whatever the body (PIP PIC001 4.2.2.10)."""
-    with pytest.raises(ValueError, match=r"4\.2\.2\.10.*a diaphragm actuator"):
-        U.Valve("CV-1", variant=body, actuator="diaphragm", normal_position="closed")
+#: Diaphragm valves main refused to show closed, and the spellings of each.
+_REFUSED_CLOSED = [
+    {"variant": "control"},
+    {"actuator": "diaphragm"},
+    {"variant": "gate", "actuator": "diaphragm"},
+    {"variant": "globe", "actuator": "diaphragm"},
+]
+
+
+@pytest.mark.parametrize("spelling", _REFUSED_CLOSED, ids=lambda kw: "-".join(kw.values()))
+def test_a_diaphragm_valve_main_refused_to_close_is_still_refused(spelling):
+    """Refuse NC where main did, and on the bodies main drew no diaphragm on."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        with pytest.raises(ValueError, match=r"4\.2\.2\.10.*a diaphragm actuator"):
+            U.Valve("CV-1", **spelling, normal_position="closed")
+
+
+#: Spellings main drew as a closed pneumatic butterfly, lettered NC.
+_ACCEPTED_CLOSED = [
+    lambda: U.Valve("XV-1", variant="butterfly_pneumatic", normal_position="closed"),
+    lambda: U.Valve("XV-1", variant="butterfly", actuator="diaphragm", normal_position="closed"),
+    lambda: devices.ControlValve("XV-1", variant="butterfly_pneumatic", normal_position="closed"),
+]
+
+
+@pytest.mark.parametrize("build", _ACCEPTED_CLOSED, ids=["fused", "pair", "control_valve"])
+def test_a_closed_pneumatic_butterfly_main_drew_still_draws_with_a_warning(build):
+    """Draw it lettered NC, as main did, and warn that fail='closed' replaces it."""
+    with pytest.warns(DeprecationWarning) as caught:
+        valve = build()
+    assert any("so use fail='closed'" in str(w.message) for w in caught)
+    assert valve.normal_position == "closed"
+    fs = Flowsheet("nc")
+    fs.add(valve).pin(x=100, y=100)
+    assert ">NC</text>" in fs.to_svg()
+    assert [i.code for i in fs.validate()].count("deprecated") >= 1
+
+
+def test_closing_a_pneumatic_butterfly_later_warns_too():
+    valve = U.Valve("XV-1", variant="butterfly", actuator="diaphragm")
+    with pytest.warns(DeprecationWarning, match="use fail='closed'"):
+        valve.normal_position = "closed"
+    assert valve.normal_position == "closed"
 
 
 def test_a_normally_closed_actuated_valve_darkens_its_body_and_not_its_actuator():

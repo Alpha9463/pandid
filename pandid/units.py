@@ -1367,6 +1367,14 @@ _HYDRAULIC_VARIANT = Deprecation(
 _MANUAL_VARIANT = Deprecation(
     what="variant='manual'", instead="actuator='handwheel'", removed_in="0.4.0")
 
+#: Deprecation of showing NC the one diaphragm valve that took it.
+_CLOSED_PNEUMATIC_BUTTERFLY = Deprecation(
+    what="normal_position='closed' on a butterfly valve with a diaphragm actuator",
+    instead="fail='closed'",
+    removed_in="0.4.0",
+    note="PIP PIC001 4.2.2.10 bars a control valve from being shown NC",
+)
+
 #: Retired variants: the body and the actuator each drew, and its
 #: deprecation.
 _FUSED: dict[str, tuple[str, str, Deprecation]] = {
@@ -1496,6 +1504,8 @@ class Valve(_NormallyPositioned):
         self.fail = fail
         if retired is not None:
             retired.warn(self, where=name)
+        if self._closed_pneumatic_butterfly():
+            _CLOSED_PNEUMATIC_BUTTERFLY.warn(self, where=name)
 
     def _resolve(self, name: str, variant: str,
                  actuator: str | None) -> "tuple[str, str, Deprecation | None]":
@@ -1632,8 +1642,22 @@ class Valve(_NormallyPositioned):
             )
         self._fail = value
 
+    def _closed_pneumatic_butterfly(self) -> bool:
+        """Return whether the valve is a butterfly on a diaphragm shown NC.
+
+        Returns
+        -------
+        bool
+            Whether it is closed on that body and actuator.
+        """
+        return (self.normal_position == "closed"
+                and (self.variant, self._actuator) == ("butterfly", "diaphragm"))
+
     def _refuse_closed(self) -> None:
         """Refuse a closed control, regulator or relief valve.
+
+        A butterfly body on a diaphragm is accepted with a deprecation,
+        reported here once the valve is built.
 
         Raises
         ------
@@ -1644,6 +1668,11 @@ class Valve(_NormallyPositioned):
         """
         from pandid.render.symbols import NC_FORBIDDEN, NC_FORBIDDEN_ACTUATORS
 
+        if (self.variant, self._actuator) == ("butterfly", "diaphragm"):
+            # Built: warn at the assignment; building, __init__ warns.
+            if "_fail" in self.__dict__:
+                _CLOSED_PNEUMATIC_BUTTERFLY.warn(self, where=self.name, stacklevel=5)
+            return
         if self._actuator in NC_FORBIDDEN_ACTUATORS:
             drawn = f"a {self._actuator} actuator"
         elif self.variant in NC_FORBIDDEN:

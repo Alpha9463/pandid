@@ -260,6 +260,7 @@ def test_the_package_declares_only_the_announced_deprecations():
     from pandid.units import (
         _AT_FACE,
         _BUTTERFLY_PNEUMATIC_VARIANT,
+        _CLOSED_PNEUMATIC_BUTTERFLY,
         _CONTROL_VARIANT,
         _DEFAULT_FACES,
         _HYDRAULIC_VARIANT,
@@ -280,6 +281,7 @@ def test_the_package_declares_only_the_announced_deprecations():
         "pandid.streams._LINE_COMPONENTS": _LINE_COMPONENTS,
         "pandid.units._AT_FACE": _AT_FACE,
         "pandid.units._BUTTERFLY_PNEUMATIC_VARIANT": _BUTTERFLY_PNEUMATIC_VARIANT,
+        "pandid.units._CLOSED_PNEUMATIC_BUTTERFLY": _CLOSED_PNEUMATIC_BUTTERFLY,
         "pandid.units._CONTROL_VARIANT": _CONTROL_VARIANT,
         "pandid.units._DEFAULT_FACES": _DEFAULT_FACES,
         "pandid.units._HYDRAULIC_VARIANT": _HYDRAULIC_VARIANT,
