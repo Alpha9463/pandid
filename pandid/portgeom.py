@@ -442,6 +442,58 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     return x0, top, x1, bottom
 
 
+def body_box(unit: "Unit", frame, bare: bool = False) -> tuple[float, float, float, float]:
+    """Return the box a unit is drawn in, without the parts on its walls.
+
+    The supports, manholes and sockets of ISO 10628-2 group 26 drawn
+    beyond the body grow the unit's box; this box leaves them out and
+    keeps every other part, such as a stirrer's motor, unless ``bare``.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to measure.
+    frame : Frame or _Slot
+        Its placement.
+    bare : bool, default=False
+        Leave out every part, for the body alone.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x_min, y_min, x_max, y_max)``.
+    """
+    sym = _placed_sym(unit, frame)
+    if not any(bare or o.group == 26 for o in sym.overlays):
+        return unit_box(unit, frame)
+
+    def reach(parts) -> tuple[float, float, float, float]:
+        """Return the box round the body and some parts, in body fractions.
+
+        Parameters
+        ----------
+        parts : Iterable[Overlay]
+            Parts drawn on the body.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``(x_min, y_min, x_max, y_max)``.
+        """
+        parts = list(parts)
+        return (min([0.0, *(o.x for o in parts)]), min([0.0, *(o.y for o in parts)]),
+                max([1.0, *(o.x + o.w for o in parts)]), max([1.0, *(o.y + o.h for o in parts)]))
+
+    lx, ly, hx, hy = reach(sym.overlays)
+    kept = reach(o for o in sym.overlays if not bare and o.group != 26)
+    rot, mirrored, mirror_y = _xform(frame)
+    corners = [_to_box(sym, (fx - lx) / (hx - lx) * sym.width, (fy - ly) / (hy - ly) * sym.height,
+                       frame.w, frame.h, rot, mirrored, mirror_y)[0]
+               for fx, fy in (kept[:2], kept[2:])]
+    xs, ys = [frame.x + x for x, _ in corners], [frame.y + y for _, y in corners]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
 def tag_width(tag: str) -> float:
     """Return the width of the halo an equipment tag is drawn on.
 

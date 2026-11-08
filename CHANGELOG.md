@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
   or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
   and ISA-5.1 symbols.
+- A balloon takes two process taps on the face it senses and draws an impulse
+  line from each, for a level gauge, cage or DP transmitter:
+  `fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
+- `element=` draws a thermowell, radar, vibrating-fork or electrode mark at a
+  balloon's tap end: `fs.add_instrument("TT", 101, sensing=line, element="thermowell")`.
 - `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
   and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
   `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
