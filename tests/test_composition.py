@@ -1053,6 +1053,7 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "silo/default": "X2062",
     "tank/flat_roof": "301",
     "tank/open_top": "2061",
+    "stockpile/default": "2065",
     "boiler/default": "2532",
     "furnace/general": "2533",
     "furnace/combustion_chamber": "X8106",

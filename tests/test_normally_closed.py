@@ -119,6 +119,7 @@ def test_darkening_keeps_every_field_but_the_artwork_the_id_and_the_fill() -> No
         id_suffix="_x",
         stretchable=False,
         bare_run=True,
+        axial_taps=True,
         gravity_fixed=True,
         directional=True,
         drawio_flip_h=True,

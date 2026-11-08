@@ -97,6 +97,10 @@ __all__ = [
     "ImpactMill",
     "RollerMill",
     "VibratingMill",
+    "BallMill",
+    "RodMill",
+    "SAGMill",
+    "AGMill",
     "ScrewConveyor",
     "RotaryValveFeeder",
     "RotaryTableFeeder",
@@ -112,6 +116,8 @@ __all__ = [
     "PressureRegulator",
     "CheckValve",
     "SpectacleBlind",
+    "PaddleBlind",
+    "PaddleSpacer",
     "SteamTrap",
     "FlowElement",
     "StirredTankReactor",
@@ -1185,6 +1191,74 @@ class VibratingMill(Mill):
     discharge: Port
 
 
+class BallMill(Mill):
+    """Ball mill: a long drum tumbling a charge of steel balls.
+
+    Drawn on a trunnion at each end, with two rows
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "ball")
+    VARIANT_ALIASES = {"default": "ball"}
+
+    feed: Port
+    discharge: Port
+
+
+class RodMill(Mill):
+    """Rod mill: a long drum tumbling a charge of steel rods.
+
+    Drawn on a trunnion at each end, with three
+    rods along the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "rod")
+    VARIANT_ALIASES = {"default": "rod"}
+
+    feed: Port
+    discharge: Port
+
+
+class SAGMill(Mill):
+    """SAG mill: a short, wide drum tumbling ore with a few steel balls.
+
+    Drawn on a trunnion at each end, with one row
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "sag")
+    VARIANT_ALIASES = {"default": "sag"}
+
+    feed: Port
+    discharge: Port
+
+
+class AGMill(Mill):
+    """AG mill: a short, wide drum tumbling ore on itself.
+
+    Drawn on a trunnion at each end, with no
+    grinding media. ``feed`` enters the west trunnion and ``discharge``
+    leaves the east one.
+
+    Parameters are those of :class:`~pandid.units.Mill`.
+    """
+
+    VARIANTS = ("default", "ag")
+    VARIANT_ALIASES = {"default": "ag"}
+
+    feed: Port
+    discharge: Port
+
+
 class ScrewConveyor(Conveyor):
     """Screw conveyor: a flighted shaft turning in a closed trough.
 
@@ -1437,6 +1511,38 @@ class SpectacleBlind(Fitting):
 
     VARIANTS = ("default", "blind")
     VARIANT_ALIASES = {"default": "blind"}
+
+    inlet: Port
+    outlet: Port
+
+
+class PaddleBlind(Fitting):
+    """Paddle blind: a solid disc on a handle, blanking the line.
+
+    ISO 10628-2 item 24.9. For the bored disc that keeps the line open,
+    use :class:`PaddleSpacer`.
+
+    Parameters are those of :class:`~pandid.units.Fitting`.
+    """
+
+    VARIANTS = ("default", "paddle_blind")
+    VARIANT_ALIASES = {"default": "paddle_blind"}
+
+    inlet: Port
+    outlet: Port
+
+
+class PaddleSpacer(Fitting):
+    """Paddle spacer: a bored disc on a handle, keeping the line open.
+
+    ISO 10628-2 item 24.10. For the solid disc that blanks the line,
+    use :class:`PaddleBlind`.
+
+    Parameters are those of :class:`~pandid.units.Fitting`.
+    """
+
+    VARIANTS = ("default", "paddle_spacer")
+    VARIANT_ALIASES = {"default": "paddle_spacer"}
 
     inlet: Port
     outlet: Port

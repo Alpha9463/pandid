@@ -257,6 +257,30 @@ DEVICES = {
 
     ISO 10628-2 item 11.12.
 """),
+    ("mill", "ball"): ("BallMill", """Ball mill: a long drum tumbling a charge of steel balls.
+
+    Drawn on a trunnion at each end, with two rows
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+"""),
+    ("mill", "rod"): ("RodMill", """Rod mill: a long drum tumbling a charge of steel rods.
+
+    Drawn on a trunnion at each end, with three
+    rods along the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+"""),
+    ("mill", "sag"): ("SAGMill", """SAG mill: a short, wide drum tumbling ore with a few steel balls.
+
+    Drawn on a trunnion at each end, with one row
+    of balls in the drum. ``feed`` enters the west trunnion and
+    ``discharge`` leaves the east one.
+"""),
+    ("mill", "ag"): ("AGMill", """AG mill: a short, wide drum tumbling ore on itself.
+
+    Drawn on a trunnion at each end, with no
+    grinding media. ``feed`` enters the west trunnion and ``discharge``
+    leaves the east one.
+"""),
 
     # --- Solids conveying ---------------------------------------------
     ("conveyor", "screw"): ("ScrewConveyor", """Screw conveyor: a flighted shaft turning in a closed trough.
@@ -330,6 +354,16 @@ DEVICES = {
 
     ``normal_position="open"`` puts the ring in the line;
     ``normal_position="closed"`` puts the solid disc in it.
+"""),
+    ("fitting", "paddle_blind"): ("PaddleBlind", """Paddle blind: a solid disc on a handle, blanking the line.
+
+    ISO 10628-2 item 24.9. For the bored disc that keeps the line open,
+    use :class:`PaddleSpacer`.
+"""),
+    ("fitting", "paddle_spacer"): ("PaddleSpacer", """Paddle spacer: a bored disc on a handle, keeping the line open.
+
+    ISO 10628-2 item 24.10. For the solid disc that blanks the line,
+    use :class:`PaddleBlind`.
 """),
     ("fitting", "steam_trap"): ("SteamTrap", """Steam trap: drains condensate from a steam line.
 
@@ -465,6 +499,7 @@ STAYS_ON_BASE = {
         "the general row: two tubesheets around a boxed element, no element chosen",
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",
     ("silo", "default"): "Silo's own drawing (ISO item 1.9 X2062, the closed silo)",
+    ("stockpile", "default"): "Stockpile's own drawing (ISO item 1.29 2065)",
     ("crystallizer", "default"): "Crystallizer's own drawing (the draft-tube baffle body)",
     ("flotation_cell", "default"): "FlotationCell's own drawing (the mechanical cell)",
     ("mixer_settler", "default"): "MixerSettler's own drawing",

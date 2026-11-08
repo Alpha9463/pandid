@@ -536,7 +536,7 @@ def _whole_number(value: Any, name: str) -> int:
 
 # Layout and route switches a drawing is held with, in _state() order.
 _SWITCHES = (
-    "_free_faces", "_clear_taps", "_off_leaders", "_exit_tight", "_mounted_layout", "_widened",
+    "_free_faces", "_clear_taps", "_axial_taps", "_off_leaders", "_exit_tight", "_mounted_layout", "_widened",
     "_stack_spans", "_rows_out", "_tees_away", "_fannable", "_far_branches", "_flags_off",
     "_lanes", "_relaned", "_crowded_station", "_angle_valves", "_furniture_over",
 )
@@ -778,6 +778,9 @@ class Flowsheet:
         # Whether a balloon drawn from a face the author named taps the face
         # beside a nozzle a line leaves from its middle.
         self._clear_taps = False
+        # Whether a balloon tapping the side of a drawing laid along its
+        # axis starts its tap at the drawing's centre.
+        self._axial_taps = False
         # Whether a route that finds no path is drawn round the units in
         # its way where it can.
         self._clear_fallback = False
@@ -2077,7 +2080,9 @@ class Flowsheet:
                 service: str | float | None = None,
                 sequence: str | float | None = None, spec: str | float | None = None,
                 insulation: str | float | None = None,
-                ends: "str | tuple[str, str] | None" = None) -> Stream:
+                ends: "str | tuple[str, str] | None" = None,
+                tracing: str | None = None, insulated: bool = False,
+                jacketed: bool = False) -> Stream:
         """Connect two ports with a new stream.
 
         A process stream runs from an outlet to an inlet; a signal
@@ -2107,6 +2112,14 @@ class Flowsheet:
         ends : str, tuple[str, str] or None, optional
             One of :data:`~pandid.render.svg.CONNECTIONS` for both ends,
             or a ``(source, dest)`` pair; overrides ``connections``.
+        tracing : str or None, optional
+            Tracing medium, such as ``"steam"`` or ``"electric"``; the
+            line is drawn traced.
+        insulated : bool, default=False
+            Draw the line insulated. ``insulation`` is the line number's
+            code and draws nothing.
+        jacketed : bool, default=False
+            Draw the line jacketed.
 
         Returns
         -------
@@ -2118,8 +2131,9 @@ class Flowsheet:
         TypeError
             If an end is neither a port nor a unit.
         ValueError
-            If the kind, ports, ``ends`` or numbering is invalid, or a
-            port is taken and its unit has no other like it.
+            If the kind, ports, ``ends`` or numbering is invalid, a port
+            is taken and its unit has no other like it, or a signal line
+            is traced, insulated or jacketed.
         """
         from pandid.ports import Port
         from pandid.units import Unit
@@ -2153,6 +2167,9 @@ class Flowsheet:
                 spec=spec,
                 insulation=insulation,
                 ends=ends,
+                tracing=tracing,
+                insulated=insulated,
+                jacketed=jacketed,
             )
             src.stream = stream
             dst.stream = stream
@@ -3763,15 +3780,15 @@ class Flowsheet:
             If the default router's path search exceeds its budget.
         """
         # Start from main's faces for unfaced balloons, taps and balloons.
-        self._free_faces = self._clear_taps = self._off_leaders = False
+        self._free_faces = self._clear_taps = self._axial_taps = self._off_leaders = False
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         from pandid.routing import DefaultRouter
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import (MAX_PLACEMENT_PASSES, TOUCHING, _chained, free_face,
-                                          nozzle_tap, on_leader)
+        from pandid.layout.attach import (MAX_PLACEMENT_PASSES, TOUCHING, _chained,
+                                          axial_start, free_face, nozzle_tap, on_leader)
         from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
         from pandid.layout.halo import fixed_balloons
@@ -3858,8 +3875,8 @@ class Flowsheet:
                 when omitted.
             """
             prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
-            free, clear, leaders = (self._free_faces, self._clear_taps,
-                                    self._off_leaders)
+            free, clear, axial, leaders = (self._free_faces, self._clear_taps,
+                                           self._axial_taps, self._off_leaders)
             try:
                 redo()
                 kept = _taps_off(self) <= off and not any(
@@ -3867,8 +3884,8 @@ class Flowsheet:
             except Exception:
                 kept = False
             if not kept:
-                self._free_faces, self._clear_taps, self._off_leaders = (
-                    free, clear, leaders)
+                self._free_faces, self._clear_taps, self._axial_taps, self._off_leaders = (
+                    free, clear, axial, leaders)
                 self._put_geometry(prior, keep_manual=False)
                 self._unhung = unhung
 
@@ -3949,6 +3966,13 @@ class Flowsheet:
             self._clear_taps = True
             settle_best()
 
+        def axial() -> None:
+            """Settle the sheet with each side tap on a drawing laid along
+            its axis started at its centre
+            (:func:`~pandid.layout.attach.axial_start`)."""
+            self._axial_taps = True
+            settle_best()
+
         def off_leaders() -> None:
             """Settle the sheet with each balloon hung from a balloon kept
             off that balloon's tap line."""
@@ -4003,6 +4027,8 @@ class Flowsheet:
                 keep_if_better(rechecked, _score(self)[0], lambda fs: _score(fs)[0])
             if tries and any(isinstance(u, Instrument) and nozzle_tap(u) for u in self.units):
                 keep_if_better(cleared, _score(self)[0], lambda fs: _score(fs)[0])
+            if tries and any(isinstance(u, Instrument) and axial_start(u) for u in self.units):
+                keep_if_better(axial, _score(self)[0], lambda fs: _score(fs)[0])
             if tries and on_leader(self):
                 score = _score(self)[0]
                 # Keep only a drawing with fewer tap lines through units.

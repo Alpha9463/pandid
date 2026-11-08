@@ -115,6 +115,12 @@ The names depend on the class and variant. Common patterns are:
 - A `Furnace` heats `inlet` to `outlet` with `fuel`. A `CombustionChamber`
   takes combustion air at `inlet` and sends hot gas out of `outlet`.
 - A `Silo` uses `feed`, `vent` and `discharge`; a `Bunker` has no `vent`.
+- A tumbling mill, `BallMill`, `RodMill`, `SAGMill` or `AGMill`
+  (`Mill("ML-101", variant="ball")` and so on), takes `feed` through its west
+  trunnion and gives `discharge` through its east one. A `Stockpile` is
+  stacked at `feed`, on top, and reclaimed at `reclaim`, under it. Both are
+  built to the `width` and `height` they are given: a longer mill carries more
+  balls, and a wider pile has a flat top.
 - A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
   `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
   heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
@@ -277,8 +283,20 @@ stream is `S1` by default. Inline fittings carry the same number through;
 `unit.new_line_number = True` starts a new one. Assigning line-number fields
 produces names such as `6"-P-1001-A1A` instead of `S1`.
 
+`connect()` also draws a pipe's treatment along it: `tracing="steam"` (or
+`"electric"`, or any medium) for a traced line (ISO 10628-2 25.6),
+`insulated=True` for an insulated one (25.9; 25.8 when traced too) and
+`jacketed=True` for a jacketed one (25.7). `insulation=` is only the line
+number's code and draws nothing. A line carries its marks once, together on
+its longest straight run with room for them clear of every unit, other line and
+note; its own segments come first, then its valve stations' pipework. Tags and
+line numbers keep off the marks. Where no run has room the marks are not drawn,
+and `validate()` reports `line-mark-crowded`. Set on a split line's handle, a
+treatment applies to the whole run; signal lines take none.
+
 A returned `Stream` exposes `source`, `dest`, `kind`, `name`, `route`,
-`properties`, `color`, `dasharray` and `ends`. `properties` supplies text or
+`properties`, `color`, `dasharray`, `ends`, `tracing`, `insulated` and
+`jacketed`. `properties` supplies text or
 numbers for the stream table; no balances are calculated. `draw_as_recycle`
 hints which edge a cycle should break. `via()` overrides its automatic route.
 
