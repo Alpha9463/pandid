@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A balloon takes a function block, drawn touching it at a clear corner, in SVG
+  and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
+  or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
+  and ISA-5.1 symbols.
 - `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
   and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
   `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
