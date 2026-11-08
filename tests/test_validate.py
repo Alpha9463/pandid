@@ -498,7 +498,8 @@ def test_a_corner_pinned_inline_device_is_reported_off_the_run():
     issues = _found(fs, "run-off-elevation")
     assert [i.severity for i in issues] == ["warning", "warning"]
     assert "2.5px apart" in issues[0].message
-    assert "FV-101.pin(port='inlet', y=195)" in issues[0].message
+    # The valve is as tall as the flag, so the message names the flag first.
+    assert "Feed.pin(port='outlet', y=192.5)" in issues[0].message
 
 
 def test_pinning_the_nozzle_is_the_cure_the_message_names():
