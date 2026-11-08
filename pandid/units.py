@@ -3041,7 +3041,9 @@ class Fitting(_NormallyPositioned):
 
     The variant picks the device: ``strainer``, ``strainer_cone``,
     ``strainer_y``, ``strainer_basket``, ``strainer_duplex``,
-    ``orifice``, ``rotameter``, ``rupture_disc``, ``sight_glass``,
+    ``orifice`` (a restriction orifice; ISO 10628-2 item 24.8, the
+    plate a metering orifice draws too), ``rotameter``,
+    ``rupture_disc``, ``sight_glass``,
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``,
     ``bellows``, ``blind``, ``damper``, ``spool``, ``static_mixer``
     (ISO 10628-2 item 12.2 X2673), ``rotary_mixer`` (item 12.1
@@ -3053,8 +3055,10 @@ class Fitting(_NormallyPositioned):
 
     Primary flow elements are variants too: ``venturi``,
     ``flow_nozzle``, ``coriolis``, ``vortex``, ``ultrasonic``,
-    ``turbine_meter``, ``positive_displacement``, ``v_cone``,
-    ``wedge``, ``target``, ``pitot`` and ``averaging_pitot``.
+    ``ultrasonic_clamp_on`` (ISO 15519-2 A.4.47), ``magnetic``
+    (A.4.48), ``thermal_mass``, ``turbine_meter``,
+    ``positive_displacement``, ``v_cone``, ``wedge``, ``target``,
+    ``pitot``, ``averaging_pitot``, ``flume`` and ``weir``.
 
     A stream keeps its line number through a fitting unless
     ``new_line_number`` is set. Only ``blind`` takes a

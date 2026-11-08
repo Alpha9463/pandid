@@ -15,7 +15,7 @@ from pandid import (
     Compressor,
     ControlValve,
     Feed,
-    Fitting,
+    FlowElement,
     Flowsheet,
     Furnace,
     KnockoutDrum,
@@ -67,12 +67,12 @@ def main():
     mix.new_line_number = True
     purge_tee.new_line_number = True
 
-    fe301 = fs.add(Fitting(flow301.element("FE"), variant="orifice",
-                           description="Make-up Gas Flow Element"))
+    fe301 = fs.add(FlowElement(flow301.element("FE"), variant="orifice",
+                               description="Make-up Gas Flow Element"))
     cv301 = fs.add(ControlValve(flow301.tag("CV"), fail="closed",
                                 description="Make-up Gas Control Valve"))
-    fe303 = fs.add(Fitting(flow303.element("FE"), variant="orifice",
-                           description="Fuel Gas Flow Element"))
+    fe303 = fs.add(FlowElement(flow303.element("FE"), variant="orifice",
+                               description="Fuel Gas Flow Element"))
     xv307 = fs.add(SolenoidValve("XV-307", fail="closed",
                                  description="Fired Heater Fuel Trip Valve"))
     cv303 = fs.add(ControlValve(flow303.tag("CV"), fail="closed",
