@@ -261,6 +261,43 @@ def _over_notes(fs) -> list["Issue"]:
     return out
 
 
+def _crowded_marks(fs) -> list["Issue"]:
+    """Return a warning for each line whose marks find no clear run.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[Issue]
+        ``line-mark-crowded`` for each line whose tracing, insulation or
+        jacket marks meet a unit, another line, a tap line, a hatch, a
+        placed annotation or another line's marks, or overrun their run.
+    """
+    from pandid.render.pipe_marks import MARK_END_CLEAR, MARK_GAP, MARK_LENGTH, pipe_marks
+
+    names = {"jacket": "jacket", "tracer": "tracing", "insulation": "insulation"}
+    out = []
+    for mark in pipe_marks(fs):
+        if mark.clear:
+            continue
+        words = [names[k] for part in mark.kinds for k in part]
+        what = ", ".join(words[:-1]) + (" and " if len(words) > 1 else "") + words[-1]
+        need = (len(mark.kinds) * MARK_LENGTH + (len(mark.kinds) - 1) * MARK_GAP
+                + 2 * MARK_END_CLEAR)
+        name, many = mark.stream.name, len(words) > 1
+        out.append(Issue(
+            "warning", "line-mark-crowded",
+            f"{name} has no straight run {need:g} px long clear of units and other "
+            f"lines for its {what} mark{'s' if many else ''}, so "
+            f"{'they are' if many else 'it is'} drawn where "
+            f"{'they meet' if many else 'it meets'} the fewest. Lengthen a straight "
+            f"run of {name}, or move the units and lines beside it apart"))
+    return out
+
+
 def _arrowhead_cure(u) -> str:
     """Return advice that sets a device clear of the arrowhead after it.
 
@@ -1596,6 +1633,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True,
         # position.
         if notes:
             warnings += _over_notes(fs)
+
+        # Soft: a line's tracing, insulation or jacket marks with no clear run.
+        warnings += _crowded_marks(fs)
 
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
 

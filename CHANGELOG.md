@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `connect(..., tracing="steam", insulated=True, jacketed=True)` draws a pipe
+  traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
+  in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers
+  off them.
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,

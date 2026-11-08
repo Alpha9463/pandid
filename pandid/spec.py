@@ -143,7 +143,7 @@ from pandid.ports import Port
 from pandid.stations import (
     DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP, DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
-from pandid.streams import LINE_NUMBER_FIELDS, Stream
+from pandid.streams import LINE_NUMBER_FIELDS, TREATMENTS, Stream
 from pandid.units import Instrument, Unit, _Boundary
 
 
@@ -713,7 +713,7 @@ _PACKAGE_KEYS = {"name", "units", "description", "reference"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
     "color", "dasharray", "ends", "inline_at", "logical_to",
-    *LINE_NUMBER_FIELDS,
+    *LINE_NUMBER_FIELDS, *TREATMENTS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
 # Constructor keywords only some classes take, and their readers.
@@ -1616,8 +1616,9 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
             )
     src = _read_endpoint(fs, data["from"], f"{where}.from")
     dst = _read_endpoint(fs, data["to"], f"{where}.to")
-    kwargs = _read_fields(data, where, ((("kind", "name"), _text),
-                                        (("draw_as_recycle",), _flag)))
+    kwargs = _read_fields(data, where, ((("kind", "name", "tracing"), _text),
+                                        (("draw_as_recycle", "insulated", "jacketed"),
+                                         _flag)))
     if "ends" in data:
         ends = data["ends"]
         if isinstance(ends, (list, tuple)) and len(ends) == 2:
@@ -3349,6 +3350,11 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
     if stream.ends is not None:
         entry["ends"] = (stream.ends if isinstance(stream.ends, str)
                          else list(stream.ends))
+    if stream.tracing is not None:
+        entry["tracing"] = stream.tracing
+    for key in ("insulated", "jacketed"):
+        if getattr(stream, key):
+            entry[key] = True
     if stream.route is not None and stream.route.manual:
         entry["via"] = [list(point) for point in stream.route.waypoints]
     if stream.properties:

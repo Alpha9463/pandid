@@ -24,6 +24,7 @@ from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import fmt, writable
+from pandid.render.pipe_marks import pipe_marks
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _FIT_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
@@ -1639,6 +1640,7 @@ class DrawioRenderer:
         labelled: set = set()
         cells: dict = {}
         boxes: list[str] = []
+        marks = {id(mark.stream): mark for mark in pipe_marks(fs)}
         for n, s in enumerate(fs.streams):
             src_u, dst_u = s.source.owner, s.dest.owner
             points = polylines[n]
@@ -1716,6 +1718,9 @@ class DrawioRenderer:
             ]
             cells[n] += _line_marks(f"s{n}", s, points, resolve_connections(s, joints),
                                     s.color or _LINE_INK, fit)
+            if id(s) in marks:
+                cells[n] += _pipe_mark_cells(f"s{n}", marks[id(s)], points,
+                                             s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
             if boxed:
@@ -2188,6 +2193,61 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
                     '          </mxGeometry>',
                     '        </mxCell>',
                 ]
+    return out
+
+
+def _pipe_mark_cells(edge_id: str, mark, points, ink: str, fit: "_Fit") -> list[str]:
+    """Return the tracing, insulation and jacket strokes on one line.
+
+    Each stroke is a ``line`` child vertex of the edge, placed by the arc
+    length of its foot on the run and its offset from there.
+
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    mark : PipeMark
+        The line's marks, from :func:`~pandid.render.pipe_marks.pipe_marks`.
+    points : list[tuple[float, float]]
+        Stream polyline.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Drawing fit.
+
+    Returns
+    -------
+    list[str]
+        XML lines, one cell per stroke.
+    """
+    total = sum(math.hypot(bx - ax, by - ay) for (ax, ay), (bx, by) in zip(points, points[1:]))
+    if total <= 0:
+        return []
+    (sx, sy), (_, ey) = mark.start, mark.end
+    flat = abs(sy - ey) < 1e-6
+    out: list[str] = []
+    for k, ((ax, ay), (bx, by), weight) in enumerate(mark.strokes):
+        cx, cy = (ax + bx) / 2, (ay + by) / 2
+        fx, fy = (cx, sy) if flat else (sx, cy)
+        along = mark.before + math.hypot(fx - sx, fy - sy)
+        rel = max(-1.0, min(1.0, 2.0 * along / total - 1.0))
+        length = fit.length(math.hypot(bx - ax, by - ay))
+        half = length / 2
+        angle = math.degrees(math.atan2(by - ay, bx - ax))
+        style = (f"shape=line;rotation={fmt(angle, 2)};strokeColor={ink};"
+                 f"strokeWidth={fit.length(weight.width):g};"
+                 f"fillColor={_NO_FILL};html=1;resizable=0;movable=1;")
+        out += [
+            f'        <mxCell id="{edge_id}m{k}" value="" '
+            f'style={_attr(style)} vertex="1" connectable="0" parent="{edge_id}">',
+            f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+            f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
+            'relative="1" as="geometry">',
+            f'            <mxPoint x="{fmt(fit.length(cx - fx) - half, 2)}" '
+            f'y="{fmt(fit.length(cy - fy) - half, 2)}" as="offset" />',
+            '          </mxGeometry>',
+            '        </mxCell>',
+        ]
     return out
 
 

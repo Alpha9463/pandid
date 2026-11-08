@@ -15,6 +15,7 @@ from pandid.package import INSET as _PACKAGE_INSET, frame as package_frame
 from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
+from pandid.render.pipe_marks import pipe_marks
 from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking,
                                    default_registry, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
@@ -423,7 +424,8 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
     if pairs and flanges:
         ink = _ink(fs, direction)
         held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-        held += flanges + [_obstacle(b) for b in labels]
+        held += flanges + [_obstacle(m.box) for m in pipe_marks(fs)]
+        held += [_obstacle(b) for b in labels]
         # The hatch strokes stand off a pneumatic line, outside its ink.
         held += hatch_boxes(fs)
         for pair in pairs:
@@ -1394,6 +1396,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     ]
 
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
+    symbols += [_obstacle(m.box) for m in pipe_marks(fs)]
     symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [_obstacle(b) for b in package_edges(fs)]
@@ -2954,6 +2957,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     hatches = hatch_boxes(fs)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    symbols += [(None, m.box) for m in pipe_marks(fs)]
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
@@ -4574,6 +4578,9 @@ class SvgRenderer:
             SVG lines.
         """
         stream_geoms = [(s, stream_polyline(s)) for s in fs.streams]
+        marks: dict[int, list] = {}
+        for mark in pipe_marks(fs):
+            marks.setdefault(id(mark.stream), []).append(mark)
         # Hops keyed by (stream, segment), in drawing order.
         hops: dict[tuple[int, int], list[_Hop]] = {}
         if crossing_style != "plain":
@@ -4633,6 +4640,13 @@ class SvgRenderer:
                         f'stroke="{color}" '
                         f'stroke-width="{LineWeight.DETAIL.width:g}" />'
                     )
+
+            # Tracing, insulation and jacket (ISO 10628-2 25.6-25.9).
+            for mark in marks.get(id(s), ()):
+                for (x1, y1), (x2, y2), weight in mark.strokes:
+                    lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
+                                 f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
+                                 f'stroke-width="{weight.width:g}" />')
 
             if s.kind == "pneumatic":
                 # Pneumatic hatching (ISO 15519-2 Annex A.1.09).
