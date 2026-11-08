@@ -278,8 +278,20 @@ stream is `S1` by default. Inline fittings carry the same number through;
 `unit.new_line_number = True` starts a new one. Assigning line-number fields
 produces names such as `6"-P-1001-A1A` instead of `S1`.
 
+`connect()` also draws a pipe's treatment along it: `tracing="steam"` (or
+`"electric"`, or any medium) for a traced line (ISO 10628-2 25.6),
+`insulated=True` for an insulated one (25.9; 25.8 when traced too) and
+`jacketed=True` for a jacketed one (25.7). `insulation=` is only the line
+number's code and draws nothing. A line carries its marks once, together on
+its longest straight run with room for them clear of every unit, other line and
+note; its own segments come first, then its valve stations' pipework. Tags and
+line numbers keep off the marks. Where no run has room the marks are not drawn,
+and `validate()` reports `line-mark-crowded`. Set on a split line's handle, a
+treatment applies to the whole run; signal lines take none.
+
 A returned `Stream` exposes `source`, `dest`, `kind`, `name`, `route`,
-`properties`, `color`, `dasharray` and `ends`. `properties` supplies text or
+`properties`, `color`, `dasharray`, `ends`, `tracing`, `insulated` and
+`jacketed`. `properties` supplies text or
 numbers for the stream table; no balances are calculated. `draw_as_recycle`
 hints which edge a cycle should break. `via()` overrides its automatic route.
 
@@ -315,6 +327,14 @@ selects field, central or subsidiary presentation, drawn as no bar, one bar or
 two across every symbol; `variant=` selects the symbol: `"default"`,
 `"shared"`, `"computer"`, `"sis"`, `"logic"` or `"interlock"`.
 `fs.add_balloon(element)` gives a primary fitting its balloon.
+`function=` draws a function block touching the balloon at a clear corner,
+upper right first: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`.
+It takes a symbol of ISO 15519-2 A.6 or ISA-5.1, typed as drawn or as a word:
+`"sum"` (Σ), `"average"` (Σ/n), `"difference"` (Δ), `"multiply"` (×),
+`"divide"` (÷), `"sqrt"` (√), `"derivative"` (dx/dt), `"integral"` (∫),
+`"characterize"` (f(x)), `"bias"` (±), `"gain"` (K), `"lag"` (Pt1),
+`"high select"` (>), `"low select"` (<), `"max"`, `"min"`, or a signal
+conversion such as `"I/P"` or `"E/P"`.
 
 ### Control loops
 

@@ -2127,7 +2127,9 @@ class Flowsheet:
                 service: str | float | None = None,
                 sequence: str | float | None = None, spec: str | float | None = None,
                 insulation: str | float | None = None,
-                ends: "str | tuple[str, str] | None" = None) -> Stream:
+                ends: "str | tuple[str, str] | None" = None,
+                tracing: str | None = None, insulated: bool = False,
+                jacketed: bool = False) -> Stream:
         """Connect two ports with a new stream.
 
         A process stream runs from an outlet to an inlet; a signal
@@ -2159,6 +2161,14 @@ class Flowsheet:
         ends : str, tuple[str, str] or None, optional
             One of :data:`~pandid.render.svg.CONNECTIONS` for both ends,
             or a ``(source, dest)`` pair; overrides ``connections``.
+        tracing : str or None, optional
+            Tracing medium, such as ``"steam"`` or ``"electric"``; the
+            line is drawn traced.
+        insulated : bool, default=False
+            Draw the line insulated. ``insulation`` is the line number's
+            code and draws nothing.
+        jacketed : bool, default=False
+            Draw the line jacketed.
 
         Returns
         -------
@@ -2170,8 +2180,9 @@ class Flowsheet:
         TypeError
             If an end is neither a port nor a unit.
         ValueError
-            If the kind, ports, ``ends`` or numbering is invalid, or a
-            port is taken and its unit has no other like it.
+            If the kind, ports, ``ends`` or numbering is invalid, a port
+            is taken and its unit has no other like it, or a signal line
+            is traced, insulated or jacketed.
         """
         from pandid.ports import Port
         from pandid.units import Unit
@@ -2205,6 +2216,9 @@ class Flowsheet:
                 spec=spec,
                 insulation=insulation,
                 ends=ends,
+                tracing=tracing,
+                insulated=insulated,
+                jacketed=jacketed,
             )
             src.stream = stream
             dst.stream = stream
