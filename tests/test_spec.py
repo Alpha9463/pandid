@@ -85,7 +85,7 @@ def test_unit_fields():
                 {
                     "kind": "Valve",
                     "name": "FV-1",
-                    "variant": "control",
+                    "actuator": "diaphragm",
                     "description": "Feed Control Valve",
                     "width": 60,
                     "height": 32,
@@ -97,7 +97,8 @@ def test_unit_fields():
         }
     )
     valve, feed = fs.units
-    assert (valve.variant, valve.width, valve.height) == ("control", 60, 32)
+    assert (valve.variant, valve.actuator_type, valve.width) == ("default", "diaphragm", 60)
+    assert valve.height == 32
     assert valve.description == "Feed Control Valve"
     assert feed.reference == "PFD-100"
     assert valve.label_pos == "bottom"

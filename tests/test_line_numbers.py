@@ -14,7 +14,7 @@ def _skid(**line):
     fs = Flowsheet("skid")
     feed = fs.add(U.Feed("F"))
     hv = fs.add(U.Valve("HV-101"))
-    fv = fs.add(U.Valve("FV-101", variant="control"))
+    fv = fs.add(U.Valve("FV-101", actuator="diaphragm"))
     prod = fs.add(U.Product("P"))
     streams = [
         fs.connect(feed.outlet, hv.inlet, **line),

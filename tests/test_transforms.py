@@ -309,7 +309,9 @@ def _linear(transform: str) -> tuple[float, float, float, float]:
 def test_a_symbols_own_lettering_stays_upright(rot, mirror):
     """Check that a placed valve's operator letter is drawn upright."""
     fs = Flowsheet("lettering")
-    fs.add(units.Valve("FV-1", variant="motor")).pin(x=200, y=200, orientation=rot, mirrored=mirror)
+    fs.add(units.Valve("FV-1", actuator="motor")).pin(
+        x=200, y=200, orientation=rot, mirrored=mirror
+    )
     fs.layout()
     svg = fs.to_svg(check=False)
 
@@ -330,10 +332,10 @@ def test_a_symbols_own_lettering_stays_upright(rot, mirror):
 def test_lettered_symbols_get_one_definition_per_transform():
     """Check that lettered symbols get one definition per transform; others share one."""
     fs = Flowsheet("defs")
-    fs.add(units.Valve("FV-1", variant="motor")).pin(x=100, y=100)
-    fs.add(units.Valve("FV-2", variant="motor")).pin(x=300, y=100, mirrored="y")
-    fs.add(units.Valve("HV-1", variant="control")).pin(x=500, y=100)
-    fs.add(units.Valve("HV-2", variant="control")).pin(x=700, y=100, mirrored="y")
+    fs.add(units.Valve("FV-1", actuator="motor")).pin(x=100, y=100)
+    fs.add(units.Valve("FV-2", actuator="motor")).pin(x=300, y=100, mirrored="y")
+    fs.add(units.Valve("HV-1", actuator="diaphragm")).pin(x=500, y=100)
+    fs.add(units.Valve("HV-2", actuator="diaphragm")).pin(x=700, y=100, mirrored="y")
     fs.layout()
     svg = fs.to_svg(check=False)
 
@@ -341,7 +343,7 @@ def test_lettered_symbols_get_one_definition_per_transform():
         "sym_valve_motor",
         "sym_valve_motor_ty",
     ]
-    assert re.findall(r'<symbol id="(sym_valve_control[^"]*)"', svg) == ["sym_valve_control"]
+    assert re.findall(r'<symbol id="(sym_valve_diaphragm[^"]*)"', svg) == ["sym_valve_diaphragm"]
 
 
 # A symbol's own direction under every placement transform: a mirror or

@@ -225,6 +225,12 @@ the result. So it composes on the standard's own authority. The admission lists
 *items*, not groups, precisely so it cannot become a licence for the rest of
 group 20 — and a second entry needs a tabulated row of its own, named there.
 
+Valve actuators compose outside that mechanism, on the authority of ISO
+15519-2 A.3.40 to A.3.45, which draw each actuator on a valve body, and ISO
+14617-1 4.7 and Table B.1, which build a symbol from the two.
+`symbols.actuated` draws any of `ACTUATORS` at its own size on the stem of any
+body in `STEM_FOOT`, the stem landing where that table says the body's ink is.
+
 **The artwork lives in `pandid/render/iso_parts.py`** — forty-three parts, all
 original, all built to the construction Table 2 states rather than traced from
 its figures. Review a change to it with

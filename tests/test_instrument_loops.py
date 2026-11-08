@@ -39,7 +39,7 @@ def _level_loop() -> tuple[Flowsheet, U.Instrument, U.Valve]:
     fs = Flowsheet("level")
     feed = fs.add(U.Feed("Feed"))
     drum = fs.add(U.Vessel("V-1"))
-    lv = fs.add(U.Valve("LV-101", variant="control"))
+    lv = fs.add(U.Valve("LV-101", actuator="diaphragm"))
     prod = fs.add(U.Product("Product"))
     fs.connect(feed.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
@@ -110,7 +110,7 @@ def test_a_controller_driving_no_actuator_is_not_hung():
 def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
     """Check that a controller too big for the actuator spot is placed clear of the valve."""
     fs = Flowsheet("big")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add(U.Instrument("LIC", 1, width=600, height=600))
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()
@@ -123,7 +123,7 @@ def test_a_controller_is_not_hung_across_a_pipe():
     """Check that a controller is not hung across a pipe through the actuator's standoff."""
     fs = Flowsheet("pipe")
     feed = fs.add(U.Feed("Feed")).pin(port="outlet", x=100, y=100)
-    fv = fs.add(U.Valve("FV-1", variant="control")).pin(port="inlet", x=300, y=212.4)
+    fv = fs.add(U.Valve("FV-1", actuator="diaphragm")).pin(port="inlet", x=300, y=212.4)
     prod = fs.add(U.Product("Product")).pin(port="inlet", x=600, y=212.4)
     fs.connect(feed.outlet, fv.inlet).via([(400, 100), (400, 160), (275, 160), (275, 212.4)])
     fs.connect(fv.outlet, prod.inlet)
@@ -137,8 +137,8 @@ def test_a_controller_is_not_hung_across_a_pipe():
 def test_a_controller_driving_two_actuators_reads_back_in_place():
     """Check that a controller driving two actuators reads back from the spec in place."""
     fs = Flowsheet("split")
-    first = fs.add(U.Valve("FV-1", variant="control")).pin(x=100, y=300)
-    second = fs.add(U.Valve("FV-2", variant="control")).pin(x=500, y=300)
+    first = fs.add(U.Valve("FV-1", actuator="diaphragm")).pin(x=100, y=300)
+    second = fs.add(U.Valve("FV-2", actuator="diaphragm")).pin(x=500, y=300)
     fic = fs.add(U.Instrument("FIC", 1))
     third_out = fic.signal_port("sig_out_3")
     fs.connect(fic.signal_port("sig_out_2"), second.actuator, kind="electric")
@@ -170,7 +170,7 @@ def test_a_controller_hangs_from_the_actuators_own_point():
 def _hung_controller() -> tuple[Flowsheet, U.Instrument, U.Valve]:
     """Return a free LIC-1 driving the actuator of a pinned valve."""
     fs = Flowsheet("review")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     return fs, lic, valve
@@ -266,7 +266,7 @@ def test_a_unit_kept_clear_of_a_pinned_transmitter_draws_no_tap_line_through_a_v
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
     """Check that a hung controller stands clear of a balloon pinned by grid rank."""
     fs = Flowsheet("grid")
-    valve = fs.add(U.Valve("V", variant="control")).pin(col=0, row=0)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(col=0, row=0)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.add_instrument("PI", 1).pin(col=0, row=-1)
@@ -330,7 +330,7 @@ def test_a_hung_controllers_line_clears_a_balloon_on_the_actuator() -> None:
 def test_a_controller_with_a_balloon_on_its_line_is_not_hung() -> None:
     """Check that a controller with a balloon on its line is not hung over it."""
     fs = Flowsheet("inline")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=270)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300, orientation=270)
     lic = fs.add_instrument("LIC", 1)
     signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.add_instrument("ZI", 1, sensing=signal, at=0.9, offset=0)
@@ -342,7 +342,7 @@ def test_a_controller_with_a_balloon_on_its_line_is_not_hung() -> None:
 def test_a_controller_wired_from_behind_its_valve_is_not_hung() -> None:
     """Check that a controller wired from behind its valve is not hung across it."""
     fs = Flowsheet("behind")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=100, y=350, orientation=180)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=100, y=350, orientation=180)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     lt = fs.add_instrument("LT", 1).pin(x=100, y=300)
@@ -355,7 +355,7 @@ def test_a_controller_wired_from_behind_its_valve_is_not_hung() -> None:
 def _close_transmitter() -> Flowsheet:
     """Return a free LIC-1 on a turned valve, with LT-1 pinned close by."""
     fs = Flowsheet("close")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=90)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300, orientation=90)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     lt = fs.add_instrument("LT", 1).pin(x=450, y=275)
@@ -367,7 +367,7 @@ def _close_transmitter() -> Flowsheet:
 def _two_transmitters() -> Flowsheet:
     """Return a free LIC-1 that drives no actuator and reads two pinned transmitters."""
     fs = Flowsheet("no-actuator")
-    fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
     lt1 = fs.add_instrument("LT", 1).pin(x=325, y=275)
     lt2 = fs.add_instrument("LT", 2).pin(x=325, y=325)
@@ -379,8 +379,8 @@ def _two_transmitters() -> Flowsheet:
 def _cascade() -> Flowsheet:
     """Return LIC-1 and FIC-1 driving valves 50 apart and wired to each other."""
     fs = Flowsheet("cascade")
-    va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=300)
-    vb = fs.add(U.Valve("VB", variant="control")).pin(x=300, y=350)
+    va = fs.add(U.Valve("VA", actuator="diaphragm")).pin(x=300, y=300)
+    vb = fs.add(U.Valve("VB", actuator="diaphragm")).pin(x=300, y=350)
     lic = fs.add_instrument("LIC", 1)
     fic = fs.add_instrument("FIC", 1)
     fs.connect(lic.sig_out, va.actuator, kind="electric")
@@ -392,8 +392,8 @@ def _cascade() -> Flowsheet:
 def _crossed_cascade() -> Flowsheet:
     """Return two turned valves whose controllers are in cascade, with LT-1 and PI-1 nearby."""
     fs = Flowsheet("fallback")
-    va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=500, orientation=270)
-    vb = fs.add(U.Valve("VB", variant="control")).pin(x=350, y=550, orientation=90)
+    va = fs.add(U.Valve("VA", actuator="diaphragm")).pin(x=300, y=500, orientation=270)
+    vb = fs.add(U.Valve("VB", actuator="diaphragm")).pin(x=350, y=550, orientation=90)
     lic = fs.add_instrument("LIC", 1)
     fic = fs.add_instrument("FIC", 1)
     fs.connect(lic.sig_out, va.actuator, kind="electric")
@@ -408,7 +408,7 @@ def _crossed_cascade() -> Flowsheet:
 def _tap_past_a_transmitter() -> Flowsheet:
     """Return PI-1 hung off a turned valve near the LT-1 that LIC-1 reads."""
     fs = Flowsheet("tap")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=180)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300, orientation=180)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     lt = fs.add_instrument("LT", 1).pin(x=250, y=350)
@@ -420,7 +420,7 @@ def _tap_past_a_transmitter() -> Flowsheet:
 def _drawn_by_hand() -> Flowsheet:
     """Return a free LIC-1 whose line to the actuator is drawn by hand."""
     fs = Flowsheet("manual")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
     lic.nozzle("sig_out", face="E")
     fs.connect(lic.sig_out, valve.actuator, kind="electric").via(
@@ -432,7 +432,7 @@ def _drawn_by_hand() -> Flowsheet:
 def _balloon_on_a_signal_line() -> Flowsheet:
     """Return PI-1 on a signal line between two indicators near LIC-1's valve."""
     fs = Flowsheet("signal balloon")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     lt = fs.add_instrument("LT", 1).pin(x=300, y=350)
@@ -731,7 +731,7 @@ def test_hanging_lays_no_line_along_another() -> None:
     from pandid.layout.control import _shared
 
     fs = Flowsheet("coincident")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
     lic.nozzle("sig_out", face="S")
     feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=265)
@@ -753,7 +753,7 @@ def test_hanging_lays_no_line_along_a_tap_line() -> None:
     from pandid.render.svg import tap_lines, tap_route
 
     fs = Flowsheet("tap overlap")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
     lic.nozzle("sig_out", face="S")
     feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=270)
@@ -785,7 +785,7 @@ def test_hanging_lays_no_line_along_a_pipe_with_rounding_in_its_track() -> None:
         return min(max(a[1], b[1]), max(c[1], d[1])) - low > 1
 
     fs = Flowsheet("overlap")
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
     lic.nozzle("sig_out", face="S")
     feed = fs.add(U.Feed("F")).pin(x=100, y=265)
@@ -900,8 +900,8 @@ def _split_range():
     loop = fs.add_loop("P", 301)
     pt = fs.add(U.Instrument("PT", 301)).pin(x=120, y=300)
     pic = fs.add(U.Instrument("PIC", 301, variant="shared")).pin(x=340, y=300)
-    cv1 = fs.add(U.Valve("CV-301-1", variant="control")).pin(x=320, y=520)
-    cv2 = fs.add(U.Valve("CV-301-2", variant="control")).pin(x=600, y=280)
+    cv1 = fs.add(U.Valve("CV-301-1", actuator="diaphragm")).pin(x=320, y=520)
+    cv2 = fs.add(U.Valve("CV-301-2", actuator="diaphragm")).pin(x=600, y=280)
     fs.connect(pt.sig_out, pic.sig_in, kind="electric")
     lo = fs.connect(pic.sig_out, cv1.actuator, kind="pneumatic")
     hi = fs.connect(pic.sig_out, cv2.actuator, kind="pneumatic")
@@ -1030,7 +1030,7 @@ def test_the_process_tap_is_one_tap():
 def test_a_valve_has_one_actuator():
     """Check that a second line onto a valve's actuator is refused."""
     fs = Flowsheet("stem")
-    cv = fs.add(U.Valve("CV-301-1", variant="control"))
+    cv = fs.add(U.Valve("CV-301-1", actuator="diaphragm"))
     a = fs.add(U.Instrument("PIC-301", variant="shared"))
     b = fs.add(U.Instrument("HIC-301", variant="shared"))
     fs.connect(a.sig_out, cv.actuator, kind="pneumatic")

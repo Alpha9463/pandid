@@ -39,9 +39,9 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines, tap_marks,
                                mark_box, tap_route)
-from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
-                                   closed_marking, default_registry, fail_marking,
-                                   overlay_boxes, wears_arrowhead)
+from pandid.render.symbols import (ARROWHEAD, _BODY_INK, STEM_FOOT, TRAP_BODY_D, TRAP_LEAD,
+                                   TRAP_W, actuator_art, closed_marking, default_registry,
+                                   fail_marking, overlay_boxes, wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
@@ -250,12 +250,13 @@ def drawio_stencil(svg: str, width: float, height: float,
     """Return a draw.io inline stencil drawing an artwork's outlines.
 
     The artwork's paths, of ``M``, ``L``, ``A`` and ``Z`` commands in
-    absolute coordinates, and its rectangles, circles and lines become
-    the stencil's own geometry, so draw.io draws them as placed rather
-    than stretching a library shape. A ``scale(...)`` group, as a
-    vendored drawing is wrapped in, scales everything drawn. An element
-    drawn thinner than the artwork's widest stroke gets its own fixed
-    width.
+    absolute coordinates, and its rectangles, circles, lines and
+    centred letters become the stencil's own geometry, so draw.io draws
+    them as placed rather than stretching a library shape. A
+    ``scale(...)`` group, as a vendored drawing is wrapped in, scales
+    everything drawn. An element drawn thinner than the artwork's
+    widest stroke gets its own fixed width. A white letter, a halo, is
+    left out.
 
     Parameters
     ----------
@@ -323,6 +324,17 @@ def drawio_stencil(svg: str, width: float, height: float,
                     steps.append(f'<{"move" if cmd == "M" else "line"} x="{x}" y="{y}"/>')
             out.append(f"<path>{''.join(steps)}</path>")
         out.append("<stroke/>" if a.get("fill", "none") == "none" else "<fillstroke/>")
+    for attrs, text in re.findall(r"<text\b([^>]*)>([^<]*)</text>", svg):
+        a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
+        if a.get("fill") == "white":
+            continue
+        size = float(a["font-size"])
+        # draw.io anchors a letter by its bottom, a fifth of the size below
+        # the baseline.
+        out.append(f'<fontsize size="{fmt(size * math.sqrt(sx * sy), 4)}"/><text str="{text}" '
+                   f'x="{fmt(float(a["x"]) * sx + dx, 4)}" '
+                   f'y="{fmt((float(a["y"]) + 0.2 * size) * sy + dy, 4)}" '
+                   f'align="center" valign="bottom"/>')
     xml = (f'<shape w="{fmt(width, 4)}" h="{fmt(height, 4)}" aspect="variable" '
            f'strokewidth="inherit"><foreground>{"".join(out)}</foreground></shape>')
     # draw.io reads a stencil as raw-deflated, base64'd encodeURIComponent text.
@@ -1305,6 +1317,13 @@ class DrawioRenderer:
                     "rounded=0", "whiteSpace=wrap",
                     f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                     f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
+        actuator = getattr(u, "actuator_type", "")
+        if actuator:
+            # The actuator is the cell's own outline; the body is a child cell.
+            x = default_registry.get(u.kind, u.variant).ports["actuator"][0]
+            art, _ = actuator_art(actuator, x, STEM_FOOT[u.variant])
+            return [f"shape={drawio_stencil(art, sym.width, sym.height, scale=fit.length(1.0))}",
+                    "outlineConnect=0", f"strokeColor={_INK}", f"fillColor={_PAPER}", weight]
         stencil = sym.drawio_shape or sym.drawio_body_shape
         body = self._shell(u)
         if body is None and not stencil and (u.kind, u.variant) in OWN_OUTLINE:
@@ -1470,6 +1489,7 @@ class DrawioRenderer:
             *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
             *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name,
                                  self._shell(u)),
+            *self._actuated_body(u, sym, cid, x1 - x0, y1 - y0, fit),
             *_function_block(cid, tags.blocks.get(id(u)), (x0, y0), fit),
         ]
 
@@ -1544,6 +1564,43 @@ class DrawioRenderer:
                 "connectable=0", "movable=0"]) + ";"
             out += _rect(f"{cid}-s{i}", px * w, py * h, pw * w, ph * h, style, parent=cid)
         return out
+
+    def _actuated_body(self, u, sym, cid: str, w: float, h: float,
+                       fit: "_Fit") -> list[str]:
+        """Return the body under a valve's actuator, as a child cell.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+        cid : str
+            Parent cell id.
+        w : float
+            Parent cell width.
+        h : float
+            Parent cell height.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty for a unit with no actuator.
+        """
+        if not getattr(u, "actuator_type", ""):
+            return []
+        body = default_registry.get(u.kind, u.variant)
+        rise = (sym.height - body.height) / sym.height
+        bx, by, bw, bh = _placed_rect(u.frame, 0.0, rise, 1.0, 1.0 - rise)
+        keys, _, _ = self._placement(u, sym)
+        style = ";".join([
+            "html=1", f"shape={body.drawio_shape}", *keys,
+            f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
+            f"strokeWidth={fit.length(_svg._class_weight(sym).width):g}",
+            "connectable=0", "movable=0"]) + ";"
+        return _rect(f"{cid}-body", bx * w, by * h, bw * w, bh * h, style, parent=cid)
 
     @staticmethod
     def _shell(u) -> "Symbol | None":

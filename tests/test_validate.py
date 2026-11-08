@@ -305,7 +305,7 @@ def _loop_with_a_balloon():
     """Build a valve loop with a transmitter and a controller balloon on signals."""
     fs = Flowsheet("loop")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
-    fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=300, y=180)
+    fv = fs.add(U.Valve("FV-101", actuator="diaphragm")).pin(x=300, y=180)
     prod = fs.add(U.Product("Product")).pin(x=520, y=170)
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)
@@ -485,7 +485,7 @@ def _corner_pinned_run(fv_y=180.0):
     """Build a control valve and a drum corner-pinned onto different elevations."""
     fs = Flowsheet("corner-pinned")
     feed = fs.add(U.Feed("Feed")).pin(x=110, y=195)
-    fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=270, y=fv_y)
+    fv = fs.add(U.Valve("FV-101", actuator="diaphragm")).pin(x=270, y=fv_y)
     drum = fs.add(U.Vessel("V-101")).pin(x=420, y=145)
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
@@ -497,8 +497,9 @@ def test_a_corner_pinned_inline_device_is_reported_off_the_run():
     fs.layout()
     issues = _found(fs, "run-off-elevation")
     assert [i.severity for i in issues] == ["warning", "warning"]
-    assert "2.6px apart" in issues[0].message
-    assert "FV-101.pin(port='inlet', y=195)" in issues[0].message
+    assert "2.5px apart" in issues[0].message
+    # The valve is as tall as the flag, so the message names the flag first.
+    assert "Feed.pin(port='outlet', y=192.5)" in issues[0].message
 
 
 def test_pinning_the_nozzle_is_the_cure_the_message_names():
@@ -571,7 +572,7 @@ def test_an_unpinned_sheet_keeps_its_elevations_to_itself():
     """Check that a sheet with no pins reports no run-off-elevation."""
     fs = Flowsheet("auto")
     feed = fs.add(U.Feed("F"))
-    fv = fs.add(U.Valve("FV-1", variant="control"))
+    fv = fs.add(U.Valve("FV-1", actuator="diaphragm"))
     drum = fs.add(U.Vessel("V-1"))
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
@@ -582,7 +583,7 @@ def test_an_unpinned_sheet_keeps_its_elevations_to_itself():
 def test_a_signal_line_has_no_elevation_to_be_off():
     """Check that a signal line to a valve actuator is not reported off elevation."""
     fs = Flowsheet("signal")
-    fv = fs.add(U.Valve("FV-1", variant="control")).pin(x=270, y=180)
+    fv = fs.add(U.Valve("FV-1", actuator="diaphragm")).pin(x=270, y=180)
     drum = fs.add(U.Vessel("V-1")).pin(x=420, y=145)
     prod = fs.add(U.Product("P")).pin(x=700, port="inlet", y=195)
     fs.connect(fv.outlet, drum.inlet)

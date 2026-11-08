@@ -2638,85 +2638,173 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
 #: Valve variants whose body is darkened when normally closed.
 NC_DARKENS = frozenset({
     "default", "gate", "globe", "ball", "needle", "plug", "pinch", "three_way",
-    "angle", "bleed", "manual", "motor", "solenoid", "hydraulic",
+    "angle", "bleed",
 })
 
 #: Valve variants that may not be normally closed
 #: (PIP PIC001 4.2.2.10).
-NC_FORBIDDEN = frozenset({"control", "regulator", "relief", "psv"})
+NC_FORBIDDEN = frozenset({"regulator", "relief", "psv"})
 
-# Valve body and actuator pairings.
+#: Actuators that draw a control valve, which may not be normally
+#: closed (PIP PIC001 4.2.2.10).
+NC_FORBIDDEN_ACTUATORS = frozenset({"diaphragm"})
 
-#: ``(body, actuator)`` to the variant whose artwork draws the pair.
-ACTUATED: dict[tuple[str, str], str] = {
-    ("default", "diaphragm"): "control",
-    ("gate", "diaphragm"): "control",
-    ("butterfly", "diaphragm"): "butterfly_pneumatic",
-    # Lettered operator boxes.
-    ("default", "motor"): "motor",
-    ("gate", "motor"): "motor",
-    ("default", "solenoid"): "solenoid",
-    ("gate", "solenoid"): "solenoid",
-    ("default", "hydraulic"): "hydraulic",
-    ("gate", "hydraulic"): "hydraulic",
-    ("default", "handwheel"): "manual",
-    ("gate", "handwheel"): "manual",
+# Valve actuators, drawn on the stem of a body (ISO 15519-2 A.3.40 to
+# A.3.45; ISO 14617-1 4.7 and Table B.1).
+
+#: Bodies that carry an actuator, and how far below the body's top edge
+#: the stem lands: on the crossing of the cones, the top of a ball,
+#: globe or plug seat, the Saunders weir, the butterfly disc, the
+#: needle, the pinch bar or the knife's yoke.
+STEM_FOOT: dict[str, float] = {
+    "default": 7.5, "gate": 7.5, "three_way": 7.5, "angle": 7.5,
+    "globe": 2.5, "ball": 2.5, "plug": 2.5, "saunders": 2.0,
+    "butterfly": 6.25, "needle": 1.25, "pinch": 5.175, "knife": 0.0,
 }
 
 #: Actuators that may be named.
-ACTUATORS: tuple[str, ...] = ("diaphragm", "motor", "solenoid", "hydraulic",
+ACTUATORS: tuple[str, ...] = ("diaphragm", "piston", "motor", "solenoid", "hydraulic",
                               "handwheel")
 
+#: Actuators worked by a power supply, which take a fail position.
+POWERED_ACTUATORS = frozenset(ACTUATORS) - {"handwheel"}
 
-def variant_actuator(variant: str) -> str:
-    """Return the actuator a valve variant draws, from :data:`ACTUATED`.
+# Diaphragm actuator: a dome on its chord (ISO 15519-2 A.3.41).
+_DOME_R = 5.0
+
+# Cylinder actuator, its piston across the middle (ISO 15519-2 A.3.43).
+_CYLINDER_W, _CYLINDER_H = 10.0, 15.0
+
+# Lettered operator box, a piston across its middle.
+_BOX_W, _BOX_H = 15.0, 7.5
+
+# Letter size, halo and baseline of each lettered box.
+_BOX_TYPE = 4.5
+_BOX_HALO = 1.125
+_BOX_LETTERS = {"motor": ("M", 5.35), "solenoid": ("S", 4.1), "hydraulic": ("H", 5.35)}
+
+# Handwheel: the stem rises above the body, then turns along the bar.
+_HANDWHEEL_RISE, _HANDWHEEL_BAR = 1.25, 7.5
+
+# Ink of an actuator: a filled head and a bare stroke.
+_HEAD_INK = 'fill="white" stroke="#111" stroke-width="2"'
+_STEM_INK = 'fill="none" stroke="#111" stroke-width="2"'
+
+
+def actuator_art(actuator: str, x: float, depth: float) -> "tuple[str, float]":
+    """Return an actuator and its stem, and its height above the body.
+
+    The crown is at ``y = 0`` and the body's top edge at the returned
+    height; the stem runs down to ``depth`` below that edge.
 
     Parameters
     ----------
-    variant : str
-        Resolved valve variant.
+    actuator : str
+        One of :data:`ACTUATORS`.
+    x : float
+        Stem axis.
+    depth : float
+        Stem foot below the body's top edge.
 
     Returns
     -------
-    str
-        One of :data:`ACTUATORS`, or ``""`` if the variant draws none.
+    tuple[str, float]
+        SVG elements, and the actuator's height above the body.
     """
-    return next((a for (_, a), drawn in ACTUATED.items() if drawn == variant), "")
+    letter = ""
+    if actuator == "diaphragm":
+        rise = top = _DOME_R
+        head = (f'<path d="M {_n(x - _DOME_R)} {_n(rise)} '
+                f'A {_n(_DOME_R)} {_n(_DOME_R)} 0 0 1 {_n(x)} 0 '
+                f'A {_n(_DOME_R)} {_n(_DOME_R)} 0 0 1 {_n(x + _DOME_R)} {_n(rise)} Z" '
+                f'{_HEAD_INK}/>')
+    elif actuator == "piston":
+        rise, top = _CYLINDER_H, _CYLINDER_H / 2
+        left, right = x - _CYLINDER_W / 2, x + _CYLINDER_W / 2
+        head = (f'<rect x="{_n(left)}" y="0" width="{_n(_CYLINDER_W)}" '
+                f'height="{_n(_CYLINDER_H)}" {_HEAD_INK}/>'
+                f'<path d="M {_n(left)} {_n(top)} L {_n(right)} {_n(top)}" {_STEM_INK}/>')
+    elif actuator in _BOX_LETTERS:
+        rise, top = _BOX_H, _BOX_H / 2
+        left, right = x - _BOX_W / 2, x + _BOX_W / 2
+        head = (f'<rect x="{_n(left)}" y="0" width="{_n(_BOX_W)}" height="{_n(_BOX_H)}" '
+                f'{_HEAD_INK}/>'
+                f'<path d="M {_n(left)} {_n(top)} L {_n(right)} {_n(top)}" {_STEM_INK}/>')
+        text, baseline = _BOX_LETTERS[actuator]
+        type_ = (f'x="{_n(x)}" y="{_n(baseline)}" font-family="sans-serif" '
+                 f'font-size="{_n(_BOX_TYPE)}" text-anchor="middle"')
+        letter = (f'<text {type_} fill="white" stroke="white" stroke-width="{_n(_BOX_HALO)}" '
+                  f'stroke-linejoin="round">{text}</text>'
+                  f'<text {type_} fill="#111">{text}</text>')
+    else:
+        rise = _HANDWHEEL_RISE
+        return (f'<path d="M {_n(x)} {_n(rise + depth)} L {_n(x)} 0 '
+                f'L {_n(x + _HANDWHEEL_BAR)} 0" {_STEM_INK}/>'), rise
+    stem = f'<path d="M {_n(x)} {_n(top)} L {_n(x)} {_n(rise + depth)}" {_STEM_INK}/>'
+    return head + stem + letter, rise
 
 
-def actuated_variant(body: str, actuator: str) -> str:
-    """Return the variant drawing ``body`` with ``actuator`` on it.
+def actuated(body: Symbol, variant: str, actuator: str) -> Symbol:
+    """Return a valve body with an actuator drawn on its stem.
+
+    The actuator keeps its own size, the box grows above the body to
+    hold it, and the ``actuator`` signal port moves to its crown.
 
     Parameters
     ----------
-    body : str
-        Body variant.
+    body : Symbol
+        Valve body.
+    variant : str
+        Body variant, a key of :data:`STEM_FOOT`.
     actuator : str
         One of :data:`ACTUATORS`.
 
     Returns
     -------
-    str
-        Variant from :data:`ACTUATED`.
+    Symbol
+        The body and its actuator.
 
     Raises
     ------
     ValueError
-        If no variant draws the pairing.
+        If the body's artwork is not one ``<g>`` group.
     """
-    drawn = ACTUATED.get((body, actuator))
-    if drawn is not None:
-        return drawn
-    pairs = ", ".join(
-        f"variant={b!r}, actuator={a!r}" for b, a in sorted(ACTUATED) if b != "gate"
-    )
-    raise ValueError(
-        f"no symbol draws a {body!r} body with a {actuator!r} actuator on it. The "
-        f"draw.io P&ID stencil set this package vendors draws each actuated valve "
-        f"as one fused shape rather than as a body plus an operator, so only the "
-        f"pairings it ships can be drawn: {pairs} (and 'gate' wherever 'default' "
-        f"appears, which is the same drawing). Ask for the body on its own if the "
-        f"sheet does not have to say what strokes it."
+    match = _GROUP.match(body.svg)
+    if match is None:
+        raise ValueError(
+            f"{body.symbol_id()}: cannot carry an actuator -- its artwork is not a "
+            f"single <g> group to draw the actuator into"
+        )
+    head, inner, tail = match.groups()
+    x = body.ports["actuator"][0]
+    art, rise = actuator_art(actuator, x, STEM_FOOT[variant])
+
+    def down(xy: "tuple[float, float]") -> "tuple[float, float]":
+        """Return a body point moved below the actuator.
+
+        Parameters
+        ----------
+        xy : tuple[float, float]
+            Point in body coordinates.
+
+        Returns
+        -------
+        tuple[float, float]
+            Point in the grown box.
+        """
+        return (xy[0], round(xy[1] + rise, 4))
+
+    return replace(
+        body,
+        svg=f'{head}<g transform="translate(0,{_n(rise)})">{inner}</g>{art}{tail}',
+        height=round(body.height + rise, 4),
+        ports={**{name: down(xy) for name, xy in body.ports.items()}, "actuator": (x, 0.0)},
+        port_faces={name: {face: down(xy) for face, xy in menu.items()}
+                    for name, menu in body.port_faces.items() if name != "actuator"},
+        id_suffix=f"{body.id_suffix}_{actuator}",
+        drawio_shape="",
+        drawio_body_shape=body.drawio_shape,
+        iso_reg="",
     )
 
 
@@ -2732,11 +2820,6 @@ FAIL_POSITIONS: dict[str, str] = {
     "drift_closed": "FL/DC",
     "indeterminate": "FI",
 }
-
-#: Valve variants with a powered actuator, which take a fail position.
-FAIL_ACTUATED = frozenset({
-    "control", "butterfly_pneumatic", "solenoid", "motor", "hydraulic",
-})
 
 
 def fail_marking(unit) -> str:
@@ -2755,17 +2838,16 @@ def fail_marking(unit) -> str:
     Raises
     ------
     ValueError
-        If the variant has no powered actuator but declares ``fail``.
+        If the valve has no powered actuator but declares ``fail``.
     """
     declared = getattr(unit, "fail", "") or ""
     if not declared:
         return ""
-    if getattr(unit, "variant", "") not in FAIL_ACTUATED:
+    if getattr(unit, "actuator_type", "") not in POWERED_ACTUATORS:
         raise ValueError(
-            f"{getattr(unit, 'name', unit.kind)}: declared fail={declared!r}, but "
-            f"variant {getattr(unit, 'variant', '')!r} has no actuator to lose its "
-            f"motive power. The variants that take a fail position are: "
-            f"{', '.join(sorted(FAIL_ACTUATED))}."
+            f"{getattr(unit, 'name', unit.kind)}: declared fail={declared!r}, but it "
+            f"has no powered actuator to lose its motive power. Give it one: "
+            f"actuator= one of {', '.join(repr(a) for a in sorted(POWERED_ACTUATORS))}."
         )
     return FAIL_POSITIONS[declared]
 
@@ -5456,8 +5538,11 @@ class SymbolRegistry:
     def __init__(self):
         """Create the registry and register the default symbols."""
         self._symbols: dict[tuple[str, str], Symbol] = {}
-        # Caches of derived symbols.
-        self._darkened: dict[tuple[str, str], Symbol] = {}
+        # Caches of derived symbols: darkened per (kind, variant,
+        # actuator), and valve bodies with an actuator per (variant,
+        # actuator).
+        self._darkened: dict[tuple[str, str, str], Symbol] = {}
+        self._actuated: dict[tuple[str, str], Symbol] = {}
         # Closed-state drawings.
         self._closed: dict[tuple[str, str], Symbol] = {}
         # Fittings turned end for end (expanders).
@@ -5485,7 +5570,11 @@ class SymbolRegistry:
             Variant name.
         """
         self._symbols[(kind, variant)] = template
-        self._darkened.pop((kind, variant), None)
+        for dark in [k for k in self._darkened if k[:2] == (kind, variant)]:
+            del self._darkened[dark]
+        if kind == "valve":
+            for pair in [k for k in self._actuated if k[0] == variant]:
+                del self._actuated[pair]
         self._closed.pop((kind, variant), None)
         self._expanders.pop((kind, variant), None)
         for key in [k for k in self._composed if k[:2] == (kind, variant)]:
@@ -5668,8 +5757,9 @@ class SymbolRegistry:
         """Return the symbol to draw a unit with.
 
         Starts from :meth:`get`, then uses, in order, a symbol built
-        to the unit's size, the body with its parts, a normally closed
-        drawing, or a reducer turned end for end.
+        to the unit's size, the body with its parts, the body with its
+        actuator, a normally closed drawing, or a reducer turned end
+        for end.
 
         Parameters
         ----------
@@ -5697,20 +5787,48 @@ class SymbolRegistry:
         overlays = tuple(getattr(unit, "overlays", ()) or ())
         if overlays:
             return self.composed(unit.kind, variant, overlays)
+        actuator = getattr(unit, "actuator_type", "")
+        if actuator:
+            sym = self.actuated(variant, actuator)
         mark = closed_marking(unit, self)
         if mark == "stencil":
             return self._closed[(unit.kind, variant)]
         if mark == "fill":
-            key = (unit.kind, variant)
-            if key not in self._darkened:
-                self._darkened[key] = darkened(sym)
-            return self._darkened[key]
+            dark = (unit.kind, variant, actuator)
+            if dark not in self._darkened:
+                self._darkened[dark] = darkened(sym)
+            return self._darkened[dark]
         if getattr(unit, "large_end", "inlet") == "outlet":
             key = (unit.kind, variant)
             if key not in self._expanders:
                 self._expanders[key] = expander(sym)
             return self._expanders[key]
         return sym
+
+    def actuated(self, variant: str, actuator: str) -> Symbol:
+        """Return a valve body with an actuator drawn on its stem.
+
+        Parameters
+        ----------
+        variant : str
+            Body variant, a key of :data:`STEM_FOOT`.
+        actuator : str
+            One of :data:`ACTUATORS`.
+
+        Returns
+        -------
+        Symbol
+            The body and its actuator, cached.
+
+        Raises
+        ------
+        ValueError
+            If the body is not registered.
+        """
+        key = (variant, actuator)
+        if key not in self._actuated:
+            self._actuated[key] = actuated(self.get("valve", variant), variant, actuator)
+        return self._actuated[key]
 
     def variants(self, kind: str) -> list[str]:
         """Return the variants registered for a kind, ``default`` first.
