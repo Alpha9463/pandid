@@ -348,6 +348,7 @@ class ScrewCompressor(Compressor):
 
     suction: Port
     discharge: Port
+    drive: Port
 
 
 class LiquidRingCompressor(Compressor):

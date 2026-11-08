@@ -3809,7 +3809,7 @@ _COMPRESSOR_SCREW = Symbol(
         f'<path d="{_fan_chord(-1)}{_fan_chord(1)}{_screw_flight(-1)}{_screw_flight(1)}" '
         f'{_INK}/></g>',
     width=2 * _FAN_R, height=2 * _FAN_R,
-    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
+    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R), "drive": (_FAN_R, 0.0)},
     iso_reg="X8161",
 )
 
