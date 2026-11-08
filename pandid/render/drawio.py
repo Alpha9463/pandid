@@ -24,6 +24,8 @@ from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import fmt, writable
+from pandid.render.line_markers import (MARKER_TYPE, TIE_IN_POINT, line_markers,
+                                        text_box as _marker_text_box)
 from pandid.render.pipe_marks import pipe_marks
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _FIT_CODES,
@@ -41,7 +43,7 @@ from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD,
                                    closed_marking, default_registry, fail_marking,
                                    overlay_boxes, wears_arrowhead)
 from pandid.render.weights import LineWeight
-from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
+from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
 if TYPE_CHECKING:
@@ -471,6 +473,9 @@ OWN_OUTLINE = frozenset({
     ("compressor", "screw"),
     ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
     ("stockpile", "default"),
+    ("motor", "general"), ("motor", "ac"), ("motor", "dc"),
+    ("gearbox", "default"), ("generator", "general"), ("generator", "ac"),
+    ("generator", "dc"), ("diesel_engine", "default"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -1756,6 +1761,9 @@ class DrawioRenderer:
         cells: dict = {}
         boxes: list[str] = []
         marks = {id(mark.stream): mark for mark in pipe_marks(fs)}
+        markers: dict[int, list] = {}
+        for drawn in line_markers(fs):
+            markers.setdefault(id(drawn.stream), []).append(drawn)
         for n, s in enumerate(fs.streams):
             src_u, dst_u = s.source.owner, s.dest.owner
             points = polylines[n]
@@ -1790,12 +1798,12 @@ class DrawioRenderer:
             keys.append("startArrow=none")
 
             # Only the first segment of a named run carries its number;
-            # signal lines carry none. An enclosed number is its own
-            # vertex.
+            # signal lines and shafts carry none. An enclosed number is
+            # its own vertex.
             label = ""
             number = None
             boxed = False
-            if not signal and s.name not in labelled:
+            if s.kind in PROCESS_KINDS and s.name not in labelled:
                 labelled.add(s.name)
                 number = numbers.get(s.name)
                 boxed = number is not None and shape != "none"
@@ -1840,6 +1848,9 @@ class DrawioRenderer:
             if id(s) in marks:
                 cells[n] += _pipe_mark_cells(f"s{n}", marks[id(s)], points,
                                              s.color or _LINE_INK, fit)
+            for k, drawn in enumerate(markers.get(id(s), ())):
+                cells[n] += _marker_cells(f"s{n}k{k}", f"s{n}", drawn, points,
+                                          s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
             if boxed:
@@ -2334,6 +2345,92 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
                     '          </mxGeometry>',
                     '        </mxCell>',
                 ]
+    return out
+
+
+def _marker_cells(cell_id: str, edge_id: str, drawn, points, ink: str,
+                  fit: "_Fit") -> list[str]:
+    """Return one line marker's strokes, outlines and text as children of its edge.
+
+    Every cell is placed by the arc length of the marker's point and its
+    offset from there, so the marker moves with the edge.
+
+    Parameters
+    ----------
+    cell_id : str
+        Prefix of the cells' ids.
+    edge_id : str
+        Id of the edge it sits on.
+    drawn : DrawnMarker
+        Marker as :func:`~pandid.render.line_markers.line_markers` draws it.
+    points : list[tuple[float, float]]
+        The edge's polyline.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Drawing fit.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
+    """
+    total = sum(math.hypot(bx - ax, by - ay) for (ax, ay), (bx, by) in zip(points, points[1:]))
+    if total <= 0:
+        return []
+    px, py = drawn.point
+    rel = max(-1.0, min(1.0, 2.0 * (drawn.before + math.dist(drawn.start, drawn.point))
+                        / total - 1.0))
+    pen = f"strokeColor={ink};strokeWidth={fit.length(LineWeight.DETAIL.width):g};"
+    out: list[str] = []
+
+    def cell(k: str, value: str, style: str, box) -> None:
+        """Add one child cell over a box in drawing units.
+
+        Parameters
+        ----------
+        k : str
+            Id suffix.
+        value : str
+            Cell text.
+        style : str
+            Cell style.
+        box : tuple[float, float, float, float]
+            Its box: left, top, right, bottom.
+        """
+        x0, y0, x1, y1 = box
+        out.extend([
+            f'        <mxCell id="{cell_id}{k}" value={_attr(_html_text(value))} '
+            f'style={_attr(style)} vertex="1" connectable="0" parent="{edge_id}">',
+            f'          <mxGeometry x="{fmt(rel, 6)}" y="0" width="{fmt(fit.length(x1 - x0), 2)}" '
+            f'height="{fmt(fit.length(y1 - y0), 2)}" relative="1" as="geometry">',
+            f'            <mxPoint x="{fmt(fit.length(x0 - px), 2)}" '
+            f'y="{fmt(fit.length(y0 - py), 2)}" as="offset" />',
+            '          </mxGeometry>',
+            '        </mxCell>',
+        ])
+
+    for k, ((ax, ay), (bx, by)) in enumerate(drawn.strokes):
+        half = math.dist((ax, ay), (bx, by)) / 2
+        cx, cy = (ax + bx) / 2, (ay + by) / 2
+        angle = math.degrees(math.atan2(by - ay, bx - ax))
+        cell(f"l{k}", "", f"shape=line;rotation={fmt(angle, 2)};{pen}fillColor={_NO_FILL};"
+             "html=1;resizable=0;movable=1;", (cx - half, cy - half, cx + half, cy + half))
+    for k, shape in enumerate(drawn.shapes):
+        xs, ys = [x for x, _ in shape.points], [y for _, y in shape.points]
+        style = ("shape=rhombus;" if shape.kind == "diamond" else
+                 f"shape=hexagon;perimeter=hexagonPerimeter2;fixedSize=1;"
+                 f"size={fmt(fit.length(TIE_IN_POINT), 2)};")
+        fill = "#ffffff" if shape.fill else _NO_FILL
+        cell(f"p{k}", "", f"{style}{pen}fillColor={fill};html=1;resizable=0;movable=1;",
+             (min(xs), min(ys), max(xs), max(ys)))
+    align = {"start": "left", "middle": "center", "end": "right"}
+    for k, text in enumerate(drawn.texts):
+        cell(f"t{k}", text.text,
+             f"text;html=1;strokeColor=none;fillColor=none;align={align[text.anchor]};"
+             f"verticalAlign=middle;spacing=0;fontColor={ink};"
+             f"{_drawn_type(MARKER_TYPE, fit)};resizable=0;movable=1;",
+             _marker_text_box(text))
     return out
 
 

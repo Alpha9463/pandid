@@ -16,11 +16,12 @@ from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
 from pandid.render.pipe_marks import pipe_marks
+from pandid.render.line_markers import MARKER_TYPE, line_markers
 from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking,
                                    default_registry, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
 from pandid.route_geometry import stream_polyline
-from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
+from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
 if TYPE_CHECKING:
@@ -694,6 +695,7 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
         ink = _ink(fs, direction)
         held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         held += flanges + [_obstacle(m.box) for m in pipe_marks(fs)]
+        held += [_obstacle(m.box) for m in line_markers(fs)]
         held += [_obstacle(b) for b in labels]
         # The hatch strokes stand off a pneumatic line, outside its ink.
         held += hatch_boxes(fs)
@@ -1666,6 +1668,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
 
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
     symbols += [_obstacle(m.box) for m in pipe_marks(fs)]
+    symbols += [_obstacle(m.box) for m in line_markers(fs)]
     symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [_obstacle(b) for b in package_edges(fs)]
@@ -1674,7 +1677,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     label_items: list = []
     labeled_names: set = set()
     for s in fs.streams:
-        if s.kind in _SIGNAL_KINDS or s.name in labeled_names:
+        if s.kind not in PROCESS_KINDS or s.name in labeled_names:
             continue
         longest_seg, max_len = None, -1.0
         carrier, carrier_points = s, []
@@ -2300,7 +2303,7 @@ def flange_marks(s, points, ends) -> "list[Flange]":
     Parameters
     ----------
     s : Stream
-        Stream; a signal line carries no marks.
+        Stream; a signal line or a shaft carries no marks.
     points : sequence of tuple[float, float]
         The stream's drawn polyline, source end first.
     ends : tuple[str, str]
@@ -2311,7 +2314,7 @@ def flange_marks(s, points, ends) -> "list[Flange]":
     list[Flange]
         Marks in drawing order.
     """
-    if len(points) < 2 or s.kind in _SIGNAL_KINDS:
+    if len(points) < 2 or s.kind not in PROCESS_KINDS:
         return []
 
     spans = [math.hypot(bx - ax, by - ay)
@@ -2337,6 +2340,35 @@ def flange_marks(s, points, ends) -> "list[Flange]":
         cx, cy = tip[0] + ux * FLANGE_STANDOFF, tip[1] + uy * FLANGE_STANDOFF
         along = total - FLANGE_STANDOFF if at_dest else FLANGE_STANDOFF
         out.append(Flange(cx, cy, math.degrees(math.atan2(uy, ux)), along))
+    return out
+
+
+def _marker_svg(drawn, color: str) -> list[str]:
+    """Return the SVG of one line marker.
+
+    Parameters
+    ----------
+    drawn : DrawnMarker
+        Marker as :func:`~pandid.render.line_markers.line_markers` draws it.
+    color : str
+        Escaped line colour.
+
+    Returns
+    -------
+    list[str]
+        SVG lines: strokes, outlines, then text.
+    """
+    width = f'stroke-width="{LineWeight.DETAIL.width:g}"'
+    out = [f'    <line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+           f'stroke="{color}" {width} />' for (x1, y1), (x2, y2) in drawn.strokes]
+    for shape in drawn.shapes:
+        points = " ".join(f"{x:.1f},{y:.1f}" for x, y in shape.points)
+        out.append(f'    <polygon points="{points}" fill="{"white" if shape.fill else "none"}" '
+                   f'stroke="{color}" {width} />')
+    for x, y, anchor, text in drawn.texts:
+        out.append(f'    <text x="{x:.1f}" y="{y:.1f}" font-family="sans-serif" '
+                   f'font-size="{MARKER_TYPE:g}" text-anchor="{anchor}" '
+                   f'dominant-baseline="middle" fill="{color}">{escaped(text)}</text>')
     return out
 
 
@@ -3409,6 +3441,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
     symbols += [(None, m.box) for m in pipe_marks(fs)]
+    symbols += [(None, m.box) for m in line_markers(fs)]
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
@@ -3576,7 +3609,8 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
 
 
 def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
-    """Return the box round the units, labels, routes, pipe marks and package frames.
+    """Return the box round the units, labels, routes, pipe marks, line markers
+    and package frames.
 
     Parameters
     ----------
@@ -3603,7 +3637,8 @@ def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
         if u.frame is None:
             raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
     for bx0, by0, bx1, by1 in (*(unit_box(u, u.frame) for u in fs.units), *labels,
-                               *(m.box for m in pipe_marks(fs))):
+                               *(m.box for m in pipe_marks(fs)),
+                               *(m.box for m in line_markers(fs))):
         x0, y0 = min(x0, bx0), min(y0, by0)
         x1, y1 = max(x1, bx1), max(y1, by1)
     for s in fs.streams:
@@ -5059,6 +5094,9 @@ class SvgRenderer:
         marks: dict[int, list] = {}
         for mark in pipe_marks(fs):
             marks.setdefault(id(mark.stream), []).append(mark)
+        markers: dict[int, list] = {}
+        for drawn in line_markers(fs):
+            markers.setdefault(id(drawn.stream), []).append(drawn)
         # Hops keyed by (stream, segment), in drawing order.
         hops: dict[tuple[int, int], list[_Hop]] = {}
         if crossing_style != "plain":
@@ -5130,6 +5168,9 @@ class SvgRenderer:
                     lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
                                  f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
                                  f'stroke-width="{weight.width:g}" />')
+            # Limits, tie-ins and spec breaks marked on the line.
+            for drawn in markers.get(id(s), ()):
+                lines += _marker_svg(drawn, color)
 
             # Pneumatic and hydraulic marks (ISO 15519-2 A.1.08, A.1.09).
             for (x1, y1), (x2, y2) in _mark_strokes(s.kind, points):

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `line.mark("battery limit" | "limit of supply" | "tie-in" | "spec break",
+  at=...)` marks a point of a line, drawn in SVG and draw.io and kept in the
+  spec; a limit is drawn as ISO 10628-1 Figure 7 shows it.
+- `Gearbox`, `Generator` (`variant="ac"` or `"dc"`) and `DieselEngine` draw
+  ISO 10628-2 items 20.2 to 20.5 and a diesel engine, and a `Turbine` drives
+  through its new `shaft`: `fs.connect(turbine.shaft, generator.drive)`.
+- `Motor` draws an electric motor, with `variant="ac"` or `"dc"` for ISO
+  10628-2 items 20.7 and 20.8. Pumps, compressors, fans, conveyors, crushers,
+  mills and feeders take one at their new `drive`:
+  `fs.connect(motor.shaft, pump.drive)` draws the motor beside the machine on a
+  short straight shaft.
 - `connect(..., tracing="steam", insulated=True, jacketed=True)` draws a pipe
   traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
   in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers

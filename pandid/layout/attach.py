@@ -10,6 +10,7 @@ import math
 from typing import TYPE_CHECKING
 
 from pandid.routing.visibility import MIN_ESCAPE
+from pandid.streams import SHAFT_ROLES
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -428,7 +429,8 @@ def _free_face(host: "Unit") -> str:
 
     at = {name: resolve_port(host, host.frame, name) for name in host.ports}
     used = {at[name].face for name, port in host.ports.items() if port.stream is not None}
-    process = [at[name].point for name, port in host.ports.items() if port.role != "signal"]
+    process = [at[name].point for name, port in host.ports.items()
+               if port.role != "signal" and port.role not in SHAFT_ROLES]
     for face in "NSW" if "E" in used else "":
         middle = face_point(host, host.frame, face)[0]
         if face not in used and any(math.dist(point, middle) < 0.5 for point in process):
