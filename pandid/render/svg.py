@@ -29,10 +29,7 @@ if TYPE_CHECKING:
 # A symbol's own lettering, such as the "M" in a motor operator.
 _SYMBOL_TEXT = re.compile(
     r'<text\b[^>]*?\bx="(-?[\d.]+)"[^>]*?\by="(-?[\d.]+)"[^>]*?>.*?</text>', re.S)
-# Balloon variants with a location bar across the middle that the tag
-# text must clear.
-_BARRED_BALLOONS = {"panel", "aux", "shared"}
-# Balloon variants drawn as a diamond (ISA-5.1 Table 5.1.1 column B).
+# Balloon symbol types drawn as a diamond (ISA-5.1 Table 5.1.1 column B).
 _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 # Balloon variants that stand for a field device.
 _FIELD_BALLOONS = {"default"}
@@ -4216,9 +4213,12 @@ class SvgRenderer:
         tag = getattr(u, "tag", "") or u.name
         top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
-        if variant in _DIAMOND_BALLOONS:
-            # The number goes in the lower half of the diamond.
-            return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
+        display = getattr(u, "display", "field")
+        if getattr(u, "symbol_type", variant) in _DIAMOND_BALLOONS:
+            # The number goes in the lower half of the diamond, under the
+            # bars of a subsidiary display.
+            dy = 8 if display == "subsidiary" else 7
+            return [f'    <text x="{cx}" y="{cy + dy}" font-family="sans-serif" '
                     f'font-size="11" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top.upper())}</text>']
         if not top:
@@ -4226,7 +4226,7 @@ class SvgRenderer:
                     f'font-size="{_TAG_TYPE:g}" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top)}</text>']
         # Letters above a location bar and the number below it.
-        letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
+        letters_dy, number_dy = (-10, 11) if display != "field" else (-4, 10)
         out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
                f'font-size="{_TAG_TYPE:g}" font-weight="bold" text-anchor="middle" '
                f'dominant-baseline="middle">{escaped(top.upper())}</text>']

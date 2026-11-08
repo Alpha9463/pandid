@@ -459,14 +459,16 @@ OWN_OUTLINE = frozenset({
 # it loses.
 _APPROXIMATIONS = {
     # Instrument balloons: a circle, a circle in a square, a hexagon, a
-    # diamond in a square and a diamond, with their location bars.
+    # diamond in a square and a diamond, each in the field, central and
+    # subsidiary.
     **{("instrument", variant): _balloon(shape, variant, inscribed)
        for shape, inscribed, variants in (
            ("ellipse", None, ("default", "panel", "aux")),
-           (None, "ellipse", ("shared_field", "shared")),
-           ("hexagon", None, ("computer",)),
-           (None, "rhombus", ("sis", "logic")),
-           ("rhombus", None, ("interlock",)))
+           (None, "ellipse", ("shared_field", "shared", "shared_subsidiary")),
+           ("hexagon", None, ("computer", "computer_central", "computer_subsidiary")),
+           (None, "rhombus", ("sis", "sis_central", "sis_subsidiary",
+                              "logic", "logic_central", "logic_subsidiary")),
+           ("rhombus", None, ("interlock", "interlock_central", "interlock_subsidiary")))
        for variant in variants},
     # Junctions and boundaries.
     ("mixer", "default"): _Approximation("triangle", ""),

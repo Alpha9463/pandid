@@ -835,9 +835,8 @@ def test_a_balloon_carries_its_letters_over_its_number():
     assert style["fillColor"] == "#ffffff"
 
 
-@pytest.mark.parametrize(
-    "variant,display", [("default", "central"), ("default", "subsidiary"), ("shared", "central")]
-)
+@pytest.mark.parametrize("variant", ["default", "shared", "computer", "sis", "logic", "interlock"])
+@pytest.mark.parametrize("display", ["central", "subsidiary"])
 def test_a_barred_balloon_exports_its_location_bars(variant, display):
     """Draw each location bar as a level line across the stand-in, and the tag off it."""
     fs = Flowsheet("bars")

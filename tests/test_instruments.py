@@ -879,34 +879,69 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
     assert not drum.faceless_ports
 
 
-def test_a_barred_balloons_tag_clears_its_location_bar():
-    """Check that a barred balloon writes its letters above the bar and number below."""
+_BALLOON_TYPES = ("default", "shared", "computer", "sis", "logic", "interlock")
+_DIAMONDS = ("sis", "logic", "interlock")
+
+
+def _bars(svg: str) -> list[tuple[float, float, float, float]]:
+    """Return each ``<line>`` in a balloon's artwork as ``(x1, y1, x2, y2)``."""
+    import re
+
+    pattern = r'<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"'
+    return [(float(a), float(b), float(c), float(d)) for a, b, c, d in re.findall(pattern, svg)]
+
+
+@pytest.mark.parametrize("variant", _BALLOON_TYPES)
+@pytest.mark.parametrize("display,count", [("field", 0), ("central", 1), ("subsidiary", 2)])
+def test_every_balloon_draws_its_location_bars_from_outline_to_outline(variant, display, count):
+    """Check that each symbol type draws no bar in the field, one central and two subsidiary."""
+    from pandid.render.symbols import default_registry
+    from test_symbol_invariants import _collect_segments, _nearest_distance
+
+    inst = U.Instrument("XX", 1, variant=variant, display=display)
+    assert (inst.symbol_type, inst.display) == (variant, display)
+    sym = default_registry.get("instrument", inst.variant)
+    bare = default_registry.get(
+        "instrument", U.Instrument("XX", 1, variant=variant, display="field").variant
+    )
+    outline = _collect_segments(bare.svg)
+    bars = _bars(sym.svg)
+    assert len(bars) == count
+    for x1, y1, x2, y2 in bars:
+        assert y1 == y2 and abs(y1 - sym.height / 2) <= 3, "level, across the middle"
+        for end in ((x1, y1), (x2, y2)):
+            assert _nearest_distance(end, outline) <= 1.0, f"{end} stops short of the outline"
+
+
+@pytest.mark.parametrize(
+    "variant,display",
+    [(v, d) for v in _BALLOON_TYPES for d in ("central", "subsidiary")],
+)
+def test_a_barred_balloons_tag_clears_its_location_bar(variant, display):
+    """Check that a barred balloon writes its letters above the bars and number below."""
     import re
 
     from pandid.render.symbols import default_registry
 
-    for kwargs, bars in (
-        ({"display": "central"}, (22.0,)),
-        ({"display": "subsidiary"}, (19.0, 25.0)),
-        ({"variant": "shared"}, (22.0,)),
-    ):
-        fs = Flowsheet("bar")
-        inst = fs.add_instrument("LIC", 101, **kwargs).pin(x=200, y=200)
-        fs.layout()
-        svg = fs.to_svg(check=False)
-        sym = default_registry.get("instrument", inst.variant)
-        # Balloon centre in sheet coordinates, and the bars relative to it.
-        cy = inst.frame.y + inst.frame.h / 2
-        band = [cy + b - sym.height / 2 for b in bars]
+    fs = Flowsheet("bar")
+    inst = fs.add_instrument("LIC", 101, variant=variant, display=display).pin(x=200, y=200)
+    fs.layout()
+    svg = fs.to_svg(check=False)
+    sym = default_registry.get("instrument", inst.variant)
+    # Balloon centre in sheet coordinates, and the bars relative to it.
+    frame = frame_of(inst)
+    cy = frame.y + frame.h / 2
+    band = [cy + y - sym.height / 2 for _, y, _, _ in _bars(sym.svg)]
 
-        ys = {
-            t: float(y)
-            for y, t in re.findall(r'<text x="[\d.]+" y="([\d.]+)"[^>]*>(LIC|101)</text>', svg)
-        }
-        assert len(ys) == 2, f"{inst.variant}: expected both tag lines, got {ys}"
-        # 12pt letters and an 11pt number, centred on their baselines.
-        assert ys["LIC"] + 6 <= min(band), f"{inst.variant}: letters run into the bar"
-        assert ys["101"] - 5.5 >= max(band), f"{inst.variant}: number runs into the bar"
+    ys = {
+        t: float(y)
+        for y, t in re.findall(r'<text x="[\d.]+" y="([\d.]+)"[^>]*>(LIC|101)</text>', svg)
+    }
+    # A diamond carries the number alone.
+    assert set(ys) == ({"101"} if variant in _DIAMONDS else {"LIC", "101"})
+    # 12pt letters and an 11pt number, centred on their baselines.
+    assert ys.get("LIC", 0) + 6 <= min(band), f"{inst.variant}: letters run into the bar"
+    assert ys["101"] - 5.5 >= max(band), f"{inst.variant}: number runs into the bar"
 
 
 def test_every_shared_display_balloon_carries_a_location_bar():
@@ -1416,15 +1451,14 @@ def test_a_square_in_the_field_draws_no_bar_and_reads_back_in_the_field():
 
 
 def test_a_display_is_registered_artwork_and_not_a_stripe_over_any_outline():
-    """Check that an unregistered symbol and display pair is refused, naming those that are."""
+    """Check that a bar on an unknown symbol type is refused, naming the types that draw one."""
     with pytest.raises(ValueError) as excinfo:
-        U.Instrument("KIC", 301, variant="computer", display="central")
+        U.Instrument("KIC", 301, variant="gauge", display="central")
     message = str(excinfo.value)
-    assert "no balloon is drawn for variant='computer' with display='central'" in message
-    # ...and it names the pairs that are drawn, so the reader has somewhere to go
-    assert "variant='default' display='central'" in message
-    assert "variant='default' display='subsidiary'" in message
-    assert "variant='shared' display='central'" in message
+    assert "no balloon is drawn for variant='gauge' with display='central'" in message
+    # ...and it names the symbol types that are drawn, so the reader has somewhere to go
+    for variant in _BALLOON_TYPES:
+        assert repr(variant) in message
 
 
 def test_a_display_that_is_not_one_of_the_three_is_refused():
@@ -1556,10 +1590,18 @@ def test_the_anchor_no_longer_leaves_the_relationship_to_be_guessed():
         fs.add_instrument("LX", 101, on=drum, face="E", offset=70)
 
 
-@pytest.mark.parametrize("variant,display", [("panel", "central"), ("aux", "subsidiary")])
-def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
-    """Check that the removed ``panel`` and ``aux`` variants are refused, naming ``display=``."""
-    with pytest.raises(ValueError, match=f"display={display!r}"):
+@pytest.mark.parametrize(
+    "variant,spelled",
+    [
+        ("panel", "display='central'"),
+        ("aux", "display='subsidiary'"),
+        ("computer_central", "variant='computer', display='central'"),
+        ("shared_field", "variant='shared', display='field'"),
+    ],
+)
+def test_a_location_is_no_longer_a_kind_of_balloon(variant, spelled):
+    """Check that a barred drawing's name is refused as a variant, naming ``display=``."""
+    with pytest.raises(ValueError, match=f"write {spelled}"):
         U.Instrument("LIC", 101, variant=variant)
 
 

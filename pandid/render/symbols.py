@@ -4754,7 +4754,7 @@ class SymbolRegistry:
         self.register("instrument", _shared, "shared_field")
         self.register("instrument", location_bars(_shared, "shared", ((22.0, 2.0, 42.0),)),
                       "shared")
-        self.register("instrument", Symbol(
+        _computer = Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
             # pv sits 1 unit below the hexagon's flat bottom.
             width=44.0, height=44.0, label_pos="center", stretchable=False,
@@ -4765,7 +4765,8 @@ class SymbolRegistry:
                         for n in _inst_ports},
             rim=((11.0, 3.0), (33.0, 3.0), (43.0, 22.0), (33.0, 41.0), (11.0, 41.0),
                  (1.0, 22.0)),
-            trim=True), "computer")
+            trim=True)
+        self.register("instrument", _computer, "computer")
         # ISA-5.1 trip and logic symbols. Ports sit on the diamond's
         # vertices.
         _logic_ports = {'pv': (20.0, 39.0), 'sig_in': (1.0, 20.0), 'sig_out': (39.0, 20.0)}
@@ -4779,14 +4780,31 @@ class SymbolRegistry:
             ports=_logic_ports, trim=True)
         self.register("instrument", _sis, "sis")
         self.register("instrument", _sis, "logic")
-        self.register("instrument", Symbol(
+        _interlock = Symbol(
             svg='<g id="sym_instrument_interlock">'
                 '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
                 '</g>',
             width=40.0, height=40.0, label_pos="center", stretchable=False,
             ports=_logic_ports, rim=((20.0, 1.0), (39.0, 20.0), (20.0, 39.0), (1.0, 20.0)),
-            trim=True),
-            "interlock")
+            trim=True)
+        self.register("instrument", _interlock, "interlock")
+        # Location bars (ISO 15519-2 Table 1) on the other outlines, each
+        # ending on the outline: a subsidiary display's pair 6 apart, or 4
+        # on a diamond.
+        for outline, shapes, central, subsidiary in (
+            (_shared, ("shared",), None, ((19.0, 2.0, 42.0), (25.0, 2.0, 42.0))),
+            (_computer, ("computer",), ((22.0, 1.0, 43.0),),
+             ((19.0, 2.58, 41.42), (25.0, 2.58, 41.42))),
+            (_sis, ("sis", "logic"), ((20.0, 1.0, 39.0),),
+             ((18.0, 1.0, 39.0), (22.0, 1.0, 39.0))),
+            (_interlock, ("interlock",), ((20.0, 1.0, 39.0),),
+             ((18.0, 3.0, 37.0), (22.0, 3.0, 37.0))),
+        ):
+            for display, bars in (("central", central), ("subsidiary", subsidiary)):
+                if bars is not None:
+                    barred = location_bars(outline, f"{shapes[0]}_{display}", bars)
+                    for shape in shapes:
+                        self.register("instrument", barred, f"{shape}_{display}")
 
         # Tubular reactor: a rectangular shell with a serpentine tube. The
         # shell is 64 tall, so three feeds fit 16 apart in half its W face.
