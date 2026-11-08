@@ -3072,7 +3072,7 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
-        from pandid.layout.control import _out_of_unit, _taps_off
+        from pandid.layout.control import _kept, _taps_off
         from pandid.routing import DefaultRouter
 
         # A controller an earlier route() hung beside its valve stays there
@@ -3093,10 +3093,7 @@ class Flowsheet:
         self._put_drawing(start)
         self._beside = drawn
         self._route_stepped(router)
-        fresh = self._judged()
-        if hung is not None and hung[2] <= _taps_off(self) and (
-                not any(n > fresh[k] for k, n in hung[1].items())
-                or _out_of_unit(fresh, hung[1])):
+        if hung is not None and _kept(self._judged(), _taps_off(self), hung[1], hung[2]):
             self._put_drawing(hung[0])
 
     def _route_stepped(self, router=None) -> None:
@@ -3211,15 +3208,13 @@ class Flowsheet:
         bool
             Whether the new drawing is kept.
         """
-        from pandid.layout.control import _out_of_unit, _taps_off
+        from pandid.layout.control import _kept, _taps_off
 
         lines = [port.stream for unit in units for port in unit.ports.values()
                  if port.stream is not None]
-        if self._route_only(router, lines) and _taps_off(self) <= off:
-            after = self._judged(tags)
-            if (not any(n > before[k] for k, n in after.items())
-                    or (trade and _out_of_unit(before, after))):
-                return True
+        if (self._route_only(router, lines)
+                and _kept(before, off, self._judged(tags), _taps_off(self), trade)):
+            return True
         self._put_geometry(drawn, keep_manual=False)
         return False
 
