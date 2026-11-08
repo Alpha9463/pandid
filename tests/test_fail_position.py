@@ -331,6 +331,8 @@ def test_a_spec_position_that_is_not_one_names_the_entry():
         Flowsheet.from_dict(
             {
                 "name": "bad",
-                "units": [{"kind": "Valve", "name": "FV-1", "actuator": "diaphragm", "fail": "shut"}],
+                "units": [
+                    {"kind": "Valve", "name": "FV-1", "actuator": "diaphragm", "fail": "shut"}
+                ],
             }
         )

@@ -309,7 +309,9 @@ def _linear(transform: str) -> tuple[float, float, float, float]:
 def test_a_symbols_own_lettering_stays_upright(rot, mirror):
     """Check that a placed valve's operator letter is drawn upright."""
     fs = Flowsheet("lettering")
-    fs.add(units.Valve("FV-1", actuator="motor")).pin(x=200, y=200, orientation=rot, mirrored=mirror)
+    fs.add(units.Valve("FV-1", actuator="motor")).pin(
+        x=200, y=200, orientation=rot, mirrored=mirror
+    )
     fs.layout()
     svg = fs.to_svg(check=False)
 
