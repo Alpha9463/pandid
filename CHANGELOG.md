@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `connect(..., tracing="steam", insulated=True, jacketed=True)` draws a pipe
+  traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
+  in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers
+  off them.
 - A balloon takes a function block, drawn touching it at a clear corner, in SVG
   and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
   or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
