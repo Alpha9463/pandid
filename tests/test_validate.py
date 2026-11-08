@@ -2651,3 +2651,34 @@ def test_a_tap_line_through_a_unit_is_reported() -> None:
         "PI-101's tap line is drawn through FV-101. Move PI-101 clear of it: "
         "call .pin(x=..., y=...) on PI-101"
     ]
+
+
+def test_a_unit_or_tag_drawn_over_a_placed_note_or_table_is_reported() -> None:
+    """Report P-101 and its tag under a placed note and table, naming what to move."""
+    from pandid import Feed, Product, Pump
+    from pandid.document import TableBox, notes
+    from pandid.layout.control import _flaws
+
+    fs = Flowsheet("Pumped feed")
+    feed, pump, product = fs.add(Feed("F")), fs.add(Pump("P-101")), fs.add(Product("P"))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, product.inlet)
+    fs.route()
+    assert pump.frame is not None
+    x, y = pump.frame.x, pump.frame.y
+    fs.add_annotation(notes(["Drain"], position=(x + 5, y + 5)))
+    table = TableBox(title="DUTY", headers=["Unit", "kW"], rows=[["P-101", "15"]])
+    table.position = (x, y - 60)
+    fs.add_annotation(table)
+
+    note, duty = (
+        f"the note 'NOTES' placed at ({x + 5:g}, {y + 5:g})",
+        (f"the table 'DUTY' placed at ({x:g}, {y - 60:g})"),
+    )
+    move = "Move P-101 clear of it: call .pin(x=..., y=...) on P-101"
+    assert [i.message for i in fs.validate() if i.code == "drawn-over-note"] == [
+        f"P-101 is drawn over {note} and {duty}. {move}, or give each another position=",
+        f"P-101's tag is drawn over {duty}. {move}, or give the table another position=",
+    ]
+    flaws = _flaws(fs)
+    assert (flaws["drawn-over-note"], flaws["covered unit P-101"]) == (0, 1)
