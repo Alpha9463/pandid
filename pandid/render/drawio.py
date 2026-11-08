@@ -457,6 +457,7 @@ OWN_OUTLINE = frozenset({
     ("pump", "lobe"), ("pump", "vertical_turbine"),
     ("fitting", "magnetic"), ("fitting", "ultrasonic_clamp_on"),
     ("fitting", "thermal_mass"), ("fitting", "flume"),
+    ("tank", "flat_roof"), ("tank", "open_top"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -701,9 +702,12 @@ class _Tags(NamedTuple):
     plates : list
         Opaque boxes of tags and ``NC``/fail letters, where the sheet
         draws them and where draw.io writes them.
+    blocks : dict
+        ``id(unit)`` -> the label item of a balloon's function block.
     """
     at: dict
     plates: list
+    blocks: dict
 
 
 def _tag_pass(fs, joints: "str | None", direction: str) -> "_Tags":
@@ -727,12 +731,14 @@ def _tag_pass(fs, joints: "str | None", direction: str) -> "_Tags":
 
     at: dict = {}
     plates: list = []
+    blocks: dict = {}
     for u, item, items in unit_tags(fs, joints, direction):
         block = label_box(u, item, items)
         plates += [b for b in (*map(_unit_label_box, items), block) if b is not None]
         if item is not None and u.frame is not None:
             at[id(u)] = _tag_at(u, item)
-    return _Tags(at, plates)
+        blocks.update((id(u), spot) for spot in items if spot[4] == "function")
+    return _Tags(at, plates, blocks)
 
 
 def _tag_at(u, tag) -> tuple:
@@ -805,6 +811,42 @@ def label_box(u, tag, items) -> "tuple[float, float, float, float] | None":
     cx = (x0 + x1 + nx * (x1 - x0 + lw)) / 2 + ex
     cy = (y0 + y1 + ny * (y1 - y0 + lh)) / 2 + ey
     return (cx - lw / 2, cy - lh / 2, cx + lw / 2, cy + lh / 2)
+
+
+def _function_block(cid: str, item, origin: "tuple[float, float]",
+                    fit: "_Fit") -> list[str]:
+    """Return a balloon's function block as an outlined child cell.
+
+    Parameters
+    ----------
+    cid : str
+        The balloon's cell id.
+    item : tuple or None
+        The block's label item, or ``None`` for no block.
+    origin : tuple[float, float]
+        The balloon cell's top-left corner on the page.
+    fit : _Fit
+        Page fit.
+
+    Returns
+    -------
+    list[str]
+        ``mxCell`` XML lines; empty without a block.
+    """
+    from pandid.render.svg import _FUNCTION_TYPE, _unit_label_box
+
+    if item is None:
+        return []
+    box = _unit_label_box(item)
+    if box is None:
+        return []
+    x0, y0, x1, y1 = fit.box(box)
+    style = ("rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;"
+             f"strokeColor={_INK};fillColor=#ffffff;fontColor={_LINE_INK};"
+             f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};"
+             f"fontSize={fit.length(_FUNCTION_TYPE):g};connectable=0;")
+    return _rect(f"{cid}-fn", x0 - origin[0], y0 - origin[1], x1 - x0, y1 - y0, style,
+                 _html_text(item[5]), parent=cid)
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
@@ -1406,6 +1448,7 @@ class DrawioRenderer:
             *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
             *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name,
                                  self._shell(u)),
+            *_function_block(cid, tags.blocks.get(id(u)), (x0, y0), fit),
         ]
 
     def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
@@ -1482,7 +1525,7 @@ class DrawioRenderer:
 
     @staticmethod
     def _shell(u) -> "Symbol | None":
-        """Return the shell a vessel built to size is drawn on.
+        """Return the body a vessel or a stirred tank is drawn in place on.
 
         Parameters
         ----------
@@ -1492,11 +1535,12 @@ class DrawioRenderer:
         Returns
         -------
         Symbol or None
-            The shell, or ``None`` for a unit drawn at its symbol's size.
+            A vessel's shell built to size, or a stirred tank's body
+            under its motor; ``None`` for any other unit.
         """
         from pandid.units import _built_to_size, _drawn_parts
 
-        if not _built_to_size(u):
+        if not (_built_to_size(u) or (u.kind == "tank" and getattr(u, "agitator", None))):
             return None
         return _drawn_parts(u, tuple(getattr(u, "overlays", ()) or ()))[0]
 
