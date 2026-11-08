@@ -136,3 +136,19 @@ def test_a_row_of_locked_valves_keeps_every_tag_and_lock_off_the_others(backward
         for b, other in boxes[i + 1 :]
         if overlaps(box, other)
     ]
+
+
+@pytest.mark.parametrize("lock", ["LC", "CSC"])
+def test_a_closed_lock_replaces_nc_on_a_body_that_is_not_darkened(lock):
+    """Letter a closed butterfly with its lock alone, on the sheet and in draw.io."""
+    fs = _on_a_line(U.Valve("HV-1", variant="butterfly", lock=lock))
+    svg = fs.to_svg()
+    assert f">{lock}</text>" in svg
+    assert ">NC</text>" not in svg
+    assert f'value="HV-1&lt;br&gt;{lock}"' in DrawioRenderer().render(fs)
+
+
+def test_a_closed_lock_on_a_gate_keeps_the_darkened_body():
+    valve = U.Valve("HV-1", lock="CSC")
+    assert 'fill="#111"' in default_registry.for_unit(valve).svg
+    assert ">NC</text>" not in _on_a_line(valve).to_svg()

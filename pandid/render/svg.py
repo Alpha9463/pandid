@@ -3247,8 +3247,10 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
                     tag = None if block else spot
                     tag_box = None if tag is None else _unit_label_box(tag)
                     items = [spot] if block else [] if tag is None else [tag]
-                    # NC marking (ISO 15519-1 11.4.5).
-                    if closed_marking(u, default_registry) == "NC":
+                    # NC marking (ISO 15519-1 11.4.5), which a closed
+                    # lock's letters replace.
+                    if (closed_marking(u, default_registry) == "NC"
+                            and not getattr(u, "lock", "")):
                         items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
                     # Fail position (ISA-5.1 Table 5.4.4), or a lock in
                     # its place.

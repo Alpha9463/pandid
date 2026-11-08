@@ -1372,7 +1372,7 @@ class DrawioRenderer:
             return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE["center"] + [
                 _drawn_type(_TAG_TYPE, fit, lines=len(lines),
                             box=unit_box(u, u.frame))], (0.0, 0.0)
-        if closed_marking(u, default_registry) == "NC":
+        if closed_marking(u, default_registry) == "NC" and not getattr(u, "lock", ""):
             lines.append("NC")
         letters = fail_marking(u) or getattr(u, "lock", "")
         if letters:
