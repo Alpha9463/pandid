@@ -249,8 +249,10 @@ def drawio_stencil(svg: str, width: float, height: float,
     The artwork's paths, of ``M``, ``L``, ``A`` and ``Z`` commands in
     absolute coordinates, and its rectangles, circles and lines become
     the stencil's own geometry, so draw.io draws them as placed rather
-    than stretching a library shape. An element drawn thinner than the
-    artwork's widest stroke gets its own fixed width.
+    than stretching a library shape. A ``scale(...)`` group, as a
+    vendored drawing is wrapped in, scales everything drawn. An element
+    drawn thinner than the artwork's widest stroke gets its own fixed
+    width.
 
     Parameters
     ----------
@@ -269,6 +271,9 @@ def drawio_stencil(svg: str, width: float, height: float,
         A ``stencil(...)`` shape name for a cell's style.
     """
     dx, dy = offset
+    wrap = re.search(r'transform="scale\(([\d.]+)(?:[ ,]+([\d.]+))?\)"', svg)
+    sx = float(wrap.group(1)) if wrap else 1.0
+    sy = float(wrap.group(2) or sx) if wrap else 1.0
     base = max((float(w) for w in re.findall(r'stroke-width="([\d.]+)"', svg)), default=1.0)
     out, drawn = [], base
     for tag, attrs in re.findall(r"<(path|rect|circle|line)\b([^>]*?)/?>", svg):
@@ -276,21 +281,24 @@ def drawio_stencil(svg: str, width: float, height: float,
         stroke = float(a.get("stroke-width", base))
         if stroke != drawn:
             # A fixed width, not scaled with the stencil's box.
-            out.append(f'<strokewidth width="{fmt(stroke * scale, 4)}" fixed="1"/>')
+            out.append(f'<strokewidth width="{fmt(stroke * math.sqrt(sx * sy) * scale, 4)}" '
+                       f'fixed="1"/>')
             drawn = stroke
         if tag == "rect":
-            out.append(f'<rect x="{fmt(float(a["x"]) + dx, 4)}" y="{fmt(float(a["y"]) + dy, 4)}" '
-                       f'w="{fmt(float(a["width"]), 4)}" h="{fmt(float(a["height"]), 4)}"/>')
+            out.append(f'<rect x="{fmt(float(a["x"]) * sx + dx, 4)}" '
+                       f'y="{fmt(float(a["y"]) * sy + dy, 4)}" '
+                       f'w="{fmt(float(a["width"]) * sx, 4)}" '
+                       f'h="{fmt(float(a["height"]) * sy, 4)}"/>')
         elif tag == "circle":
             r = float(a["r"])
-            out.append(f'<ellipse x="{fmt(float(a["cx"]) - r + dx, 4)}" '
-                       f'y="{fmt(float(a["cy"]) - r + dy, 4)}" '
-                       f'w="{fmt(2 * r, 4)}" h="{fmt(2 * r, 4)}"/>')
+            out.append(f'<ellipse x="{fmt((float(a["cx"]) - r) * sx + dx, 4)}" '
+                       f'y="{fmt((float(a["cy"]) - r) * sy + dy, 4)}" '
+                       f'w="{fmt(2 * r * sx, 4)}" h="{fmt(2 * r * sy, 4)}"/>')
         elif tag == "line":
-            out.append(f'<path><move x="{fmt(float(a["x1"]) + dx, 4)}" '
-                       f'y="{fmt(float(a["y1"]) + dy, 4)}"/>'
-                       f'<line x="{fmt(float(a["x2"]) + dx, 4)}" '
-                       f'y="{fmt(float(a["y2"]) + dy, 4)}"/></path>')
+            out.append(f'<path><move x="{fmt(float(a["x1"]) * sx + dx, 4)}" '
+                       f'y="{fmt(float(a["y1"]) * sy + dy, 4)}"/>'
+                       f'<line x="{fmt(float(a["x2"]) * sx + dx, 4)}" '
+                       f'y="{fmt(float(a["y2"]) * sy + dy, 4)}"/></path>')
         else:
             steps, tokens = [], a["d"].replace(",", " ").split()
             i = 0
@@ -302,9 +310,9 @@ def drawio_stencil(svg: str, width: float, height: float,
                 n = 7 if cmd == "A" else 2
                 v = [float(t) for t in tokens[i:i + n]]
                 i += n
-                x, y = fmt(v[-2] + dx, 4), fmt(v[-1] + dy, 4)
+                x, y = fmt(v[-2] * sx + dx, 4), fmt(v[-1] * sy + dy, 4)
                 if cmd == "A":
-                    steps.append(f'<arc rx="{fmt(v[0], 4)}" ry="{fmt(v[1], 4)}" '
+                    steps.append(f'<arc rx="{fmt(v[0] * sx, 4)}" ry="{fmt(v[1] * sy, 4)}" '
                                  f'x-axis-rotation="{fmt(v[2], 4)}" '
                                  f'large-arc-flag="{int(v[3])}" sweep-flag="{int(v[4])}" '
                                  f'x="{x}" y="{y}"/>')
@@ -460,6 +468,8 @@ OWN_OUTLINE = frozenset({
     ("fitting", "thermal_mass"), ("fitting", "flume"),
     ("tank", "flat_roof"), ("tank", "open_top"),
     ("compressor", "screw"),
+    ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
+    ("stockpile", "default"),
     ("motor", "general"), ("motor", "ac"), ("motor", "dc"),
 })
 
@@ -1290,7 +1300,8 @@ class DrawioRenderer:
         stencil = sym.drawio_shape or sym.drawio_body_shape
         body = self._shell(u)
         if body is None and not stencil and (u.kind, u.variant) in OWN_OUTLINE:
-            body = default_registry.get(u.kind, u.variant)
+            # A drawing with no parts is exported as built for its box.
+            body = default_registry.get(u.kind, u.variant) if sym.overlays else sym
         if body is not None:
             # A shell built to size, or a drawing exported as its own
             # outline, is drawn as built; its parts are child cells.
@@ -1528,7 +1539,7 @@ class DrawioRenderer:
 
     @staticmethod
     def _shell(u) -> "Symbol | None":
-        """Return the body a vessel or a stirred tank is drawn in place on.
+        """Return the body a unit is drawn in place on, within its parts.
 
         Parameters
         ----------
@@ -1538,14 +1549,17 @@ class DrawioRenderer:
         Returns
         -------
         Symbol or None
-            A vessel's shell built to size, or a stirred tank's body
-            under its motor; ``None`` for any other unit.
+            A vessel's shell built to size, or the body under a motor;
+            ``None`` for any other unit.
         """
         from pandid.units import _built_to_size, _drawn_parts
 
-        if not (_built_to_size(u) or (u.kind == "tank" and getattr(u, "agitator", None))):
-            return None
-        return _drawn_parts(u, tuple(getattr(u, "overlays", ()) or ()))[0]
+        overlays = tuple(getattr(u, "overlays", ()) or ())
+        if _built_to_size(u):
+            return _drawn_parts(u, overlays)[0]
+        if any(o.group == 20 for o in overlays):
+            return default_registry.get(u.kind, u.variant)
+        return None
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
                        fit: "_Fit", frame: "Frame", name: str,
