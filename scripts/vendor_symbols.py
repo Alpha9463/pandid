@@ -129,6 +129,11 @@ KIND_MAP = {
                             {"inlet": "W", "outlet": "E", "utility_in": "S"}),
     ("cooler", "default"): ("heat_exchangers", "Condenser",
                             {"inlet": "W", "outlet": "E", "utility_out": "N"}),
+    # Electric heater, item 3.13: the supply enters the terminal box; the process
+    # passes the elements from the body's floor to its roof.
+    ("heater", "electric"): ("heat_exchangers", "Electric Heater",
+                             {"inlet": ("S", 100.0), "outlet": ("N", 100.0),
+                              "utility_in": ("W", 50.0)}),
     # Spiral: the sides are lettered; side B's axial connections take the casing's N and S.
     ("hex", "spiral"):     ("heat_exchangers", "Heat Exchanger (Spiral)",
                             {"side_a_in": "W", "side_a_out": "E",
@@ -324,6 +329,17 @@ KIND_MAP = {
     ("hex", "u_tube"):     ("heat_exchangers", "U-Tube Heat Exchanger",
                             {"tube_in": ("W", 7.5), "tube_out": ("W", 22.5),
                              "shell_in": "N", "shell_out": "S"}),
+    # Floating head, ISO 10628-2 item 3.4: the tube side through the channel's
+    # two chambers, as on the U-tube; the shell nozzles where the row draws
+    # them, behind the stationary tubesheet and past the floating head.
+    ("hex", "floating_head"): ("heat_exchangers", "Heat Exchanger (Floating Head)",
+                               {"tube_in": ("W", 7.5), "tube_out": ("W", 22.5),
+                                "shell_in": ("N", 25.0), "shell_out": ("S", 93.0)}),
+    # Coil tubes, item 3.7: the straight-tube casing and nozzles, the coil
+    # running from head to head.
+    ("hex", "coil_tube"):  ("heat_exchangers", "Heat Exchanger (Coil Tubes)",
+                            {"tube_in": ("W", 15), "tube_out": ("E", 15),
+                             "shell_in": ("N", 75), "shell_out": ("S", 25)}),
     # Horizontal shell-and-tube in elevation: the tube side through the heads, the
     # shell nozzles between the tubesheets.
     ("hex", "straight_tubes"): ("heat_exchangers", "Heat Exchanger (Straight Tubes)",
