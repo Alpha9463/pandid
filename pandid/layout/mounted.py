@@ -535,7 +535,7 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     assert unit.frame is not None
     turned = unit._turn_stated
     first = 0 if level else 90
-    turns = ([int(unit.frame.orientation)] if turned
+    turns = ([int(unit.frame.orientation)] if turned else [0] if _upright(unit)
              else [turn % 360 for turn in (first, first + 180, first + 90, first + 270)])
     flips = [bool(unit.frame.mirrored)] if unit._mirror_stated else [False, True]
     if turned and unit._mirror_stated:
@@ -558,6 +558,12 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         if (abs(inlet[across] - ordinate) < 1.0 and abs(outlet[across] - ordinate) < 1.0
                 and (outlet[along] - inlet[along]) * forward > 0):
             fits.append(candidate)
+    if not fits and _upright(unit) and not turned:
+        # Hang it upright from the leg by its outlet.
+        candidate = _candidate(unit, point, *poses[0])
+        outlet = port_point(unit, candidate, "outlet")
+        return replace(candidate, x=candidate.x + point[0] - outlet[0],
+                       y=candidate.y + point[1] - outlet[1])
     if not fits:
         return _candidate(unit, point, *poses[0])
     if turned or level or "actuator" not in unit.ports:
@@ -614,7 +620,8 @@ def _corner_frame(unit: Unit, into: Leg, out: Leg, head: float,
     (a, corner), (_, b) = into, out
     want = (_heading(corner, a), _heading(corner, b))
     assert unit.frame is not None
-    turns = [int(unit.frame.orientation)] if unit._turn_stated else [0, 90, 180, 270]
+    turns = ([int(unit.frame.orientation)] if unit._turn_stated
+             else [0] if _upright(unit) else [0, 90, 180, 270])
     flips = [bool(unit.frame.mirrored)] if unit._mirror_stated else [False, True]
     for turn in turns:
         for flip in flips:
@@ -633,6 +640,24 @@ def _corner_frame(unit: Unit, into: Leg, out: Leg, head: float,
                     and path_length((a, inlet)) >= head and path_length((outlet, b)) >= tail):
                 return frame
     return None
+
+
+def _upright(unit: Unit) -> bool:
+    """Return whether a device must stay as drawn, gravity being its function.
+
+    Parameters
+    ----------
+    unit : Unit
+        Device to check.
+
+    Returns
+    -------
+    bool
+        Whether its symbol is gravity-fixed (ISO 15519-1 11.4.2).
+    """
+    from pandid.render.symbols import default_registry
+
+    return default_registry.for_unit(unit).gravity_fixed
 
 
 def _reaches(unit: Unit, frame: Frame) -> bool:

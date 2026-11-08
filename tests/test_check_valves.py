@@ -171,3 +171,29 @@ def test_a_check_form_round_trips_through_a_spec(form):
     rebuilt = Flowsheet.from_dict(written).units[0]
     assert (type(rebuilt), rebuilt.variant) == (devices.CheckValve, _MARKS[form][0])
     assert spec.to_dict(Flowsheet.from_dict(written)) == written
+
+
+def test_a_foot_valve_piped_from_a_tank_to_a_pump_stays_upright():
+    """Keep the strainer under the body, flow rising, when the run lays it on its pipe."""
+    from pandid.render.drawio import DrawioRenderer
+
+    fs = Flowsheet("foot")
+    tank = fs.add(U.Tank("TK-1"))
+    foot = fs.add(devices.CheckValve("NRV-1", variant="foot"))
+    pump = fs.add(U.Pump("P-1"))
+    product = fs.add(U.Product("Out"))
+    fs.connect(tank.outlet, foot.inlet)
+    fs.connect(foot.outlet, pump.suction)
+    fs.connect(pump.discharge, product.inlet)
+    svg = fs.to_svg()
+    frame = foot.frame
+    assert frame is not None
+    assert (frame.orientation, frame.mirror_y) == (0, False)
+    assert (frame.w, frame.h) == (18.75, 49.5), "upright: taller than wide"
+    assert "gravity-turned" not in [i.code for i in fs.validate()]
+    use = re.search(r'<use href="#sym_valve_foot[^"]*"[^>]*>', svg)
+    assert use is not None and "rotate" not in use.group(0)
+    cell = next(
+        line for line in DrawioRenderer().render(fs).splitlines() if 'value="NRV-1"' in line
+    )
+    assert "direction=" not in cell
