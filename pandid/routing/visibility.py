@@ -4,7 +4,7 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterable, List, Set, Tuple
 
-from pandid.streams import MECHANICAL, SHAFT_ROLES
+from pandid.streams import SHAFT_ROLES
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -303,8 +303,8 @@ class VisibilityGraph:
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
         from pandid.package import frame as package_frame
-        from pandid.portgeom import COMPASS, port_anchor, port_point, unit_box
-        from pandid.route_geometry import SNAP
+        from pandid.portgeom import COMPASS, port_anchor, unit_box
+        from pandid.route_geometry import SNAP, straight_shaft
 
         margin = MARGIN
 
@@ -318,10 +318,11 @@ class VisibilityGraph:
         self.port_projs: Dict[Tuple[str, str], Tuple[float, float]] = {}
 
         # Put nozzles that differ by rounding error on one track.
-        # A shaft is drawn straight, so its ends take no tracks.
+        # A free shaft end takes no track.
         anchors = {(u.name, name): port_anchor(u, u.frame, name)
                    for u in fs.units if u.frame is not None
-                   for name, port in u.ports.items() if port.role not in SHAFT_ROLES}
+                   for name, port in u.ports.items()
+                   if port.role not in SHAFT_ROLES or port.stream is not None}
         on_x = _snap_tracks((a[0] for a in anchors.values()), SNAP)
         on_y = _snap_tracks((a[1] for a in anchors.values()), SNAP)
 
@@ -397,13 +398,11 @@ class VisibilityGraph:
                 x_set.update((box[0] - margin, box[2] + margin))
                 y_set.update((box[1] - margin, box[3] + margin))
 
-        # A level or upright shaft blocks the lanes across it.
+        # A straight shaft blocks the lanes across it.
         for stream in fs.streams:
-            ends = (stream.source, stream.dest)
-            if stream.kind != MECHANICAL or any(p.owner.frame is None for p in ends):
-                continue
-            (x1, y1), (x2, y2) = (port_point(p.owner, p.owner.frame, p.name) for p in ends)
-            if x1 == x2 or y1 == y2:
+            straight = straight_shaft(stream)
+            if straight is not None:
+                (x1, y1), (x2, y2) = straight
                 self.obstacles.append(Rect(min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)))
 
         for stream in fs.streams:

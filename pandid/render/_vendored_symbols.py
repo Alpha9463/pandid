@@ -1065,7 +1065,7 @@ def register_vendored(registry):
     registry.register('turbine', Symbol(
         svg='<g id="sym_turbine"><path d="M 0.0 22.0 L 9.0 22.0 L 9.0 15.0 L 89.0 0.0 L 89.0 22.0 L 98.0 22.0 L 98.0 38.0 L 89.0 38.0 L 89.0 60.0 L 9.0 45.0 L 9.0 38.0 L 0.0 38.0 Z M 9.0 22.0 L 9.0 38.0 M 89.0 22.0 L 89.0 38.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0), 'shaft': (69.0, 56.25)},
         drawio_shape='mxgraph.pid.pumps.turbine',
     ), 'default')
 

@@ -3777,8 +3777,9 @@ _MOTOR_BAR = f"M {M:g} {3.5 * M:g} L {3 * M:g} {3.5 * M:g}"
 _MOTOR_SHAFT = {"N": (2 * M, 0.0), "S": (2 * M, 4 * M), "E": (4 * M, 2 * M), "W": (0.0, 2 * M)}
 
 
-def _motor(name: str, reg: str, mark: str = "") -> Symbol:
-    """Return an electric motor, its shaft offered on every side.
+def _motor(name: str, reg: str, mark: str = "", kind: str = "motor",
+           letter: str = _MOTOR_LETTER, port: str = "shaft") -> Symbol:
+    """Return an electric machine, its shaft end offered on every side.
 
     Parameters
     ----------
@@ -3788,6 +3789,12 @@ def _motor(name: str, reg: str, mark: str = "") -> Symbol:
         ISO registration number.
     mark : str, default=""
         Path data for the supply mark under the letter.
+    kind : str, default="motor"
+        Unit kind, for the drawing's id.
+    letter : str, default=_MOTOR_LETTER
+        Path data for the letter in the rim.
+    port : str, default="shaft"
+        The port at the shaft's end.
 
     Returns
     -------
@@ -3795,15 +3802,56 @@ def _motor(name: str, reg: str, mark: str = "") -> Symbol:
         A 4 M square symbol.
     """
     return Symbol(
-        svg=f'<g id="sym_motor_{name}">'
+        svg=f'<g id="sym_{kind}_{name}">'
             f'<circle cx="{2 * M:g}" cy="{2 * M:g}" r="{2 * M:g}" {_OUTLINE}/>'
-            f'<path d="{_MOTOR_LETTER}{mark}" {_INK}/></g>',
+            f'<path d="{letter}{mark}" {_INK}/></g>',
         width=4 * M, height=4 * M,
-        ports={"shaft": _MOTOR_SHAFT["S"]},
-        port_faces={"shaft": dict(_MOTOR_SHAFT)},
+        ports={port: _MOTOR_SHAFT["S"]},
+        port_faces={port: dict(_MOTOR_SHAFT)},
         stretchable=False,
         iso_reg=reg,
     )
+
+
+# The G of ISO 10628-2 items 20.2 to 20.5 in one stroke, its bar turned
+# in at mid-height.
+_G_LETTER = (f"M {2.5 * M:g} {M:g} L {1.75 * M:g} {M:g} "
+             f"A {0.25 * M:g} {0.25 * M:g} 0 0 0 {1.5 * M:g} {1.25 * M:g} "
+             f"L {1.5 * M:g} {2.75 * M:g} "
+             f"A {0.25 * M:g} {0.25 * M:g} 0 0 0 {1.75 * M:g} {3 * M:g} "
+             f"L {2.5 * M:g} {3 * M:g} L {2.5 * M:g} {2 * M:g} L {2 * M:g} {2 * M:g} ")
+
+# Item 20.2, the gearbox: a 4 M square with the G. Its two shaft ends
+# are offered on every side, the input a half module before the middle
+# and the output a half module after it.
+_GEAR_IN = {"N": (1.5 * M, 0.0), "S": (1.5 * M, 4 * M), "W": (0.0, 1.5 * M), "E": (4 * M, 1.5 * M)}
+_GEAR_OUT = {"N": (2.5 * M, 0.0), "S": (2.5 * M, 4 * M), "W": (0.0, 2.5 * M), "E": (4 * M, 2.5 * M)}
+_GEARBOX = Symbol(
+    svg='<g id="sym_gearbox">'
+        f'<rect x="0" y="0" width="{4 * M:g}" height="{4 * M:g}" {_OUTLINE}/>'
+        f'<path d="{_G_LETTER.strip()}" {_INK}/></g>',
+    width=4 * M, height=4 * M,
+    ports={"drive": _GEAR_IN["W"], "shaft": _GEAR_OUT["E"]},
+    port_faces={"drive": dict(_GEAR_IN), "shaft": dict(_GEAR_OUT)},
+    stretchable=False,
+    iso_reg="X8167",
+)
+
+# A diesel engine, as practice draws one: a 6 M by 4 M block with a D
+# in one stroke, its shaft end offered on every side.
+_ENGINE_W, _ENGINE_H = 6 * M, 4 * M
+_ENGINE_SHAFT = {"N": (_ENGINE_W / 2, 0.0), "S": (_ENGINE_W / 2, _ENGINE_H),
+                 "E": (_ENGINE_W, _ENGINE_H / 2), "W": (0.0, _ENGINE_H / 2)}
+_DIESEL_ENGINE = Symbol(
+    svg='<g id="sym_diesel_engine">'
+        f'<rect x="0" y="0" width="{_ENGINE_W:g}" height="{_ENGINE_H:g}" {_OUTLINE}/>'
+        f'<path d="M {2.25 * M:g} {M:g} L {2.75 * M:g} {M:g} '
+        f'A {M:g} {M:g} 0 0 1 {2.75 * M:g} {3 * M:g} L {2.25 * M:g} {3 * M:g} Z" {_INK}/></g>',
+    width=_ENGINE_W, height=_ENGINE_H,
+    ports={"shaft": _ENGINE_SHAFT["E"]},
+    port_faces={"shaft": dict(_ENGINE_SHAFT)},
+    stretchable=False,
+)
 
 
 # ISO 10628-2 group 12: mixers and kneaders. Item 12.2 is the vendored
@@ -5648,6 +5696,12 @@ class SymbolRegistry:
         self.register("motor", _motor("general", "C0082"), "general")
         self.register("motor", _motor("ac", "X8157", _MOTOR_TILDE), "ac")
         self.register("motor", _motor("dc", "X8158", _MOTOR_BAR), "dc")
+        self.register("gearbox", _GEARBOX)
+        for name, reg, mark in (("general", "C0079", ""), ("ac", "X8154", _MOTOR_TILDE),
+                                ("dc", "X8155", _MOTOR_BAR)):
+            self.register("generator", _motor(name, reg, mark, "generator", _G_LETTER,
+                                              "drive"), name)
+        self.register("diesel_engine", _DIESEL_ENGINE)
         self._register_kilns()
         self._register_steam_trap()
         self._register_flow_elements()

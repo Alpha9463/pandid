@@ -493,6 +493,11 @@ STAYS_ON_BASE = {
     ("motor", "general"): "Motor's own drawing (ISO item 20.6 C0082)",
     ("motor", "ac"): "supply: ISO item 20.7 X8157, a tilde under the M",
     ("motor", "dc"): "supply: ISO item 20.8 X8158, a bar under the M",
+    ("gearbox", "default"): "Gearbox's own drawing (ISO item 20.2 X8167)",
+    ("generator", "general"): "Generator's own drawing (ISO item 20.3 C0079)",
+    ("generator", "ac"): "supply: ISO item 20.4 X8154, a tilde under the G",
+    ("generator", "dc"): "supply: ISO item 20.5 X8155, a bar under the G",
+    ("diesel_engine", "default"): "DieselEngine's own drawing",
     ("evaporator", "default"):
         "the general row: two tubesheets around a boxed element, no element chosen",
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",

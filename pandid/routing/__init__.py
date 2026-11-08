@@ -7,7 +7,7 @@ from typing import Protocol, TYPE_CHECKING
 
 from pandid.deprecation import Deprecation
 from pandid.geometry import Route
-from pandid.streams import MECHANICAL
+from pandid.route_geometry import straight_shaft
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -356,7 +356,8 @@ class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         """Route and separate the sheet's automatic streams.
 
-        A shaft is drawn straight from its driver to its machine.
+        A shaft whose ends face each other on one line is drawn
+        straight between them.
 
         Where the sheet asks for a re-check, each stream whose separated
         route crosses more of the lines routed before it than its search
@@ -581,11 +582,9 @@ class DefaultRouter:
             return True
 
         for stream in fs.streams:
-            ends = (stream.source, stream.dest)
-            if (stream.kind == MECHANICAL and not (stream.route and stream.route.manual)
-                    and all(p.owner.frame is not None for p in ends)):
-                stream.route = Route(waypoints=[
-                    resolve_port(p.owner, p.owner.frame, p.name).point for p in ends])
+            straight = straight_shaft(stream)
+            if straight is not None and not (stream.route and stream.route.manual):
+                stream.route = Route(waypoints=list(straight))
                 routed.append(stream)
             elif (stream.route and stream.route.manual) or route_one(stream, None):
                 routed.append(stream)

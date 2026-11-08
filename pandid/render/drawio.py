@@ -471,6 +471,8 @@ OWN_OUTLINE = frozenset({
     ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
     ("stockpile", "default"),
     ("motor", "general"), ("motor", "ac"), ("motor", "dc"),
+    ("gearbox", "default"), ("generator", "general"), ("generator", "ac"),
+    ("generator", "dc"), ("diesel_engine", "default"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what

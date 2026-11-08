@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Gearbox`, `Generator` (`variant="ac"` or `"dc"`) and `DieselEngine` draw
+  ISO 10628-2 items 20.2 to 20.5 and a diesel engine, and a `Turbine` drives
+  through its new `shaft`: `fs.connect(turbine.shaft, generator.drive)`.
 - `Motor` draws an electric motor, with `variant="ac"` or `"dc"` for ISO
   10628-2 items 20.7 and 20.8. Pumps, compressors, fans, conveyors, crushers,
   mills and feeders take one at their new `drive`:
