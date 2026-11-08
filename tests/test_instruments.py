@@ -1739,23 +1739,28 @@ def test_routing_an_unchanged_sheet_again_keeps_a_drawing_it_would_make_worse() 
         assert fs.to_svg(check=False) == first
 
 
-def test_a_third_route_of_an_unchanged_sheet_draws_as_the_second() -> None:
-    """Route balloon chains by a vessel that each route() would draw better, three times.
+def test_a_third_route_of_an_unchanged_sheet_draws_as_the_first() -> None:
+    """Route balloon chains by a vessel that do not settle, three times.
 
-    The second route() keeps its better drawing, and the third draws as the second.
+    The first route() already keeps the drawing a relayout of it draws better,
+    with no crossing, and the later routes draw it again.
     """
+    from _quality import measure_final
+
     chains: list[tuple[float, float, float, str, float, float]] = [
         (0.7, 35, 270, "S", 100, 180),
         (0.5, 50, 180, "N", 50, 90),
     ]
     fs = _chains_by_a_vessel((500, 200), chains, vessel=(220, 200))
     first = fs.to_svg(check=False)
+    assert not fs.route_converged
+    assert measure_final(fs).crossings == 0
     fs.route()
     second = fs.to_svg(check=False)
     fs.route()
 
-    assert second != first
-    assert fs.to_svg(check=False) == second
+    assert second == first
+    assert fs.to_svg(check=False) == first
 
 
 def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():

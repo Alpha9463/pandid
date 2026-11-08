@@ -207,13 +207,33 @@ def test_a_sheet_routed_again_draws_as_it_would_without_lanes(monkeypatch):
     assert _drawing(fs) == _drawing(plain)
 
 
-def _tapped_bank(n: int) -> Flowsheet:
-    """Return n pumps with a temperature balloon halfway along each line off the splitter."""
+def _tapped_bank(n: int, at: float = 0.5) -> Flowsheet:
+    """Return n pumps with a temperature balloon ``at`` along each line off the splitter."""
     fs = _bank(n, exchangers=False)
     laterals = [s for s in fs.streams if s.source.owner.name == "SP"]
     for i, stream in enumerate(laterals):
-        fs.add_instrument("TI", 301 + i, sensing=stream, at=0.5)
+        fs.add_instrument("TI", 301 + i, sensing=stream, at=at)
     return fs
+
+
+def test_a_bank_tapped_near_its_pumps_settles_on_the_first_route():
+    fs = _tapped_bank(3, at=0.75)
+    fs.route()
+    assert fs.route_converged
+    assert not _taps_off(fs)
+
+
+def test_routing_a_bank_draws_no_balloon_over_a_note_placed_beside_it():
+    """Keep TI-301 off a note placed beside the bank it taps, routed once and again."""
+    from pandid.document import notes
+    from pandid.layout.compact import covered
+
+    fs = _tapped_bank(3, at=0.75)
+    fs.add_annotation(notes(["Start only with suction valve open"], position=(450, 150)))
+    fs.to_svg(diagram="p&id")
+    first = covered(fs)
+    fs.route()
+    assert (first, covered(fs)) == (set(), set())
 
 
 def test_a_sheet_laid_out_again_draws_as_a_fresh_build():

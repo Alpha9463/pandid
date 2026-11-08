@@ -2748,10 +2748,57 @@ class Flowsheet:
         note position since; then it starts from the closed drawing those
         were read against.
 
+        Where the drawing then has not settled and the sheet has no loop
+        from add_loop() or add_control_loop(), with the default router and
+        layout engine, the sheet is laid out again from that drawing, as
+        layout() lays it out from the routes drawn, and drawn again in the
+        same way. The new drawing is kept only if no finding, clash,
+        crossing, bend, fallback route or tap off its line grows and one
+        falls; otherwise the first is put back.
+
         Parameters
         ----------
         router : object or None, optional
             Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.routing import DefaultRouter
+        from pandid.routing.lanes import _score
+
+        if (not self._route_full(router) or self._in_route or self._laying_out
+                or self.route_converged or not self._auto_laid
+                or self.loops
+                or not (router is None or type(router) is DefaultRouter)):
+            return
+        drawn, judged = (self._drawing(), self._record()), _score(self)
+        self._lay_out(self._engine, afresh=False)
+        try:
+            self._route_full(router)
+            kept = _beats(_score(self), judged)
+        except Exception:
+            kept = False
+        if not kept:
+            self._put_drawing(drawn[0])
+            self._put_record(drawn[1])
+
+    def _route_full(self, router=None) -> bool:
+        """Route every stream as route() does, before its relayout trial.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Returns
+        -------
+        bool
+            False if the drawing of an unchanged sheet is kept as it is.
 
         Raises
         ------
@@ -2789,7 +2836,7 @@ class Flowsheet:
                     and all(u.frame is not None for u in self.units)
                     and all(s.route is not None for s in self.streams)):
                 if self._final:
-                    return
+                    return False
                 last = self._drawing(), self._main, measured()
             self._given_then = None
             self._hold_typed()
@@ -2830,6 +2877,7 @@ class Flowsheet:
             self._in_route = outer
             if not outer:
                 self._stated_then = self._stated()
+        return True
 
     def _furniture_apart_if_better(self, router=None) -> None:
         """Draw the sheet again with pipe furniture drawn over a unit moved
@@ -2962,7 +3010,7 @@ class Flowsheet:
         the drawing before them, unless the author has stated drawing
         coordinates since; then it starts from the drawing shown.
         """
-        from pandid.layout.compact import close_bands, covered, empty_bands, onto_sheet
+        from pandid.layout.compact import close_bands, empty_bands, onto_sheet
         from pandid.routing.lanes import _score
 
         # Move the drawing onto the sheet, close what layout left, then
@@ -2972,11 +3020,11 @@ class Flowsheet:
             cuts = find(self)
             if not any(cuts):
                 continue
-            drawn, judged, notes = self._drawing(), _score(self), covered(self)
+            drawn, judged = self._drawing(), _score(self)
             close_bands(self, cuts)
             new = _score(self)
-            grew = new[1] > judged[1] or any(n > judged[0][k] for k, n in new[0].items())
-            if grew or not covered(self) <= notes or (better and not _beats(new, judged)):
+            grew = not new[1] <= judged[1] or any(n > judged[0][k] for k, n in new[0].items())
+            if grew or (better and not _beats(new, judged)):
                 self._put_drawing(drawn)
                 continue
             if self._main is None:
@@ -3347,7 +3395,6 @@ class Flowsheet:
             Whether the new places are kept.
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, pinned_axes
-        from pandid.layout.compact import covered
         from pandid.layout.control import _taps_off, place_control
         from pandid.layout.stages import is_control
         from pandid.routing.lanes import _score
@@ -3371,7 +3418,7 @@ class Flowsheet:
             if not any(is_control(u) for u in loose):
                 return False
             prior, unplaced = self._geometry(), list(self.unplaced_instruments)
-            before, taps, notes = _score(self), _taps_off(self), covered(self)
+            before, taps = _score(self), _taps_off(self)
             self._typed_at = {**held, **{id(u): (u.frame.x, u.frame.y, dict(u.frame.port_faces))
                                          for u in self.units if is_control(u) and u not in loose
                                          and u.frame is not None and u.pin_ is None}}
@@ -3383,7 +3430,7 @@ class Flowsheet:
                         break
                     router.route(self)
                 new = _score(self)
-                kept = (len(off()) < len(loose) and new[1] <= taps and covered(self) <= notes
+                kept = (len(off()) < len(loose) and new[1] <= taps
                         and not any(n > before[0][k] for k, n in new[0].items()))
             except Exception:
                 kept = False
