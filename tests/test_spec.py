@@ -431,6 +431,8 @@ def _round_trip(unit):
         (lambda: units.Vessel("D-301", supports="skirt"), {"supports": "skirt"}),
         (lambda: units.Vessel("D-302", supports="bracket"), {"supports": "bracket"}),
         (lambda: units.Reactor("R-101", agitator="anchor"), {"agitator": "anchor"}),
+        (lambda: units.Tank("TK-101", agitator="turbine"), {"agitator": "turbine"}),
+        (lambda: units.Vessel("D-303", agitator="anchor"), {"agitator": "anchor"}),
         (
             lambda: units.Reactor("R-201", internals="packing"),
             {"internals": "packing"},

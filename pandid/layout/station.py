@@ -17,18 +17,13 @@ if TYPE_CHECKING:
     from pandid.units import Unit
 
 
-def _frame(unit: Unit, x: float, y: float, *, mirror: bool | str = False,
-           orientation: float = 0) -> Frame:
-    """Return a unit's frame moved to ``(x, y)`` with a new transform.
+def _frame(unit: Unit, *, mirror: bool | str = False, orientation: float = 0) -> Frame:
+    """Return a unit's frame at the origin with a new transform.
 
     Parameters
     ----------
     unit : Unit
         Placed unit.
-    x : float
-        New left edge.
-    y : float
-        New top edge.
     mirror : bool or str, default=False
         ``"x"`` (or ``True``), ``"y"`` or ``"xy"``: axes to flip.
     orientation : float, default=0
@@ -45,7 +40,7 @@ def _frame(unit: Unit, x: float, y: float, *, mirror: bool | str = False,
                     mirrored=mirror in (True, "x", "xy"),
                     mirror_y=mirror in ("y", "xy"))
     width, height = resolve_size(unit, probe)
-    return replace(probe, x=x, y=y, w=width, h=height, label_pos=None, port_faces={})
+    return replace(probe, x=0, y=0, w=width, h=height, label_pos=None, port_faces={})
 
 
 def _station_frames(assembly: StationAssembly, left: float, y: float,
@@ -82,9 +77,9 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
     cursor = left
     for unit in (reversed(main) if mirrored else main):
         mirror = member_mirror(mirrored, unit in (takeoff, rejoin))
-        probe = _frame(unit, cursor, 0, mirror=mirror)
+        probe = _frame(unit, mirror=mirror)
         inlet_y = port_point(unit, probe, "inlet")[1]
-        frames[unit] = replace(probe, y=y - inlet_y)
+        frames[unit] = replace(probe, x=cursor, y=y - inlet_y)
         cursor += probe.w + assembly.gap
 
     for drain in (station.upstream_drain, station.downstream_drain):
@@ -94,7 +89,7 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
         assert incoming is not None
         junction = incoming.source.owner
         x = port_point(junction, frames[junction], "branch")[0]
-        probe = _frame(drain, 0, 0, orientation=90)
+        probe = _frame(drain, orientation=90)
         inlet = port_point(drain, probe, "inlet")
         frames[drain] = replace(probe, x=x - inlet[0],
                                 y=y + assembly.drain_drop - inlet[1])
@@ -106,7 +101,7 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
         else:
             centre = sum(port_point(tee, frames[tee], "branch")[0]
                          for tee in (takeoff, rejoin)) / 2
-        probe = _frame(station.bypass, 0, 0, mirror="x" if mirrored else False)
+        probe = _frame(station.bypass, mirror="x" if mirrored else False)
         inlet = port_point(station.bypass, probe, "inlet")
         frames[station.bypass] = replace(
             probe, x=centre - probe.w / 2,

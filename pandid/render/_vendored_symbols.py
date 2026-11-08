@@ -215,6 +215,13 @@ def register_vendored(registry):
         directional=True,
     ), 'default')
 
+    registry.register('heater', Symbol(
+        svg='<g id="sym_heater_electric"><rect x="60.0" y="0.0" width="80.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="15.0" width="40.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="70.0" y="17.5" width="60.0" height="15.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="70.0" y="42.5" width="60.0" height="15.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="70.0" y="67.5" width="60.0" height="15.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 25.0 L 70.0 25.0 M 40.0 50.0 L 70.0 50.0 M 40.0 75.0 L 70.0 75.0 M 85.0 17.5 L 85.0 32.5 M 100.0 17.5 L 100.0 32.5 M 115.0 17.5 L 115.0 32.5 M 85.0 42.5 L 85.0 57.5 M 100.0 42.5 L 100.0 57.5 M 115.0 42.5 L 115.0 57.5 M 85.0 67.5 L 85.0 82.5 M 100.0 67.5 L 100.0 82.5 M 115.0 67.5 L 115.0 82.5 M 25.0 40.0 L 15.0 40.0 L 15.0 60.0 L 25.0 60.0 M 15.0 50.0 L 22.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=140.0, height=100.0,
+        ports={'inlet': (100.0, 100.0), 'outlet': (100.0, 0.0), 'utility_in': (0.0, 50.0)},
+        drawio_shape='mxgraph.pid.heat_exchangers.electric_heater',
+    ), 'electric')
+
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_spiral"><rect x="0.0" y="0.0" width="100.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="27.5" ry="27.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 50.0 L 10.0 50.0 M 90.0 50.0 L 100.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=100.0,
@@ -658,6 +665,20 @@ def register_vendored(registry):
         ports={'tube_in': (0.0, 7.5), 'tube_out': (0.0, 22.5), 'shell_in': (45.875, 6.0), 'shell_out': (45.875, 24.0)},
         drawio_shape='mxgraph.pid.heat_exchangers.u-tube_heat_exchanger',
     ), 'u_tube')
+
+    registry.register('hex', Symbol(
+        svg='<g id="sym_hex_floating_head"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 15.0 0.0 L 15.0 30.0 M 0.0 15.0 L 15.0 15.0 M 15.0 12.5 L 79.0 12.5 M 15.0 7.5 L 79.0 7.5 M 15.0 17.5 L 79.0 17.5 M 15.0 22.5 L 79.0 22.5" fill="none" stroke="#111" stroke-width="2.0"/><rect x="79.0" y="5.0" width="6.0" height="20.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=30.0,
+        ports={'tube_in': (0.0, 7.5), 'tube_out': (0.0, 22.5), 'shell_in': (25.0, 0.0), 'shell_out': (93.0, 30.0)},
+        drawio_shape='mxgraph.pid.heat_exchangers.heat_exchanger_(floating_head)',
+    ), 'floating_head')
+
+    registry.register('hex', Symbol(
+        svg='<g id="sym_hex_coil_tube"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 15.0 0.0 L 15.0 30.0 M 85.0 0.0 L 85.0 30.0 M 15.0 15.0 L 26.0 15.0 L 29.0 7.5 L 35.0 22.5 L 41.0 7.5 L 47.0 22.5 L 53.0 7.5 L 58.0 22.5 L 65.0 7.5 L 71.0 22.5 L 74.0 15.0 L 85.0 15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=30.0,
+        ports={'tube_in': (0.0, 15.0), 'tube_out': (100.0, 15.0), 'shell_in': (75.0, 0.0), 'shell_out': (25.0, 30.0)},
+        drawio_shape='mxgraph.pid.heat_exchangers.heat_exchanger_(coil_tubes)',
+    ), 'coil_tube')
 
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_straight_tubes"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 15.0 0.0 L 15.0 30.0 M 85.0 0.0 L 85.0 30.0 M 85.0 7.5 L 15.0 7.5 M 85.0 15.0 L 15.0 15.0 M 85.0 22.5 L 15.0 22.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',

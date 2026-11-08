@@ -80,7 +80,14 @@ DEVICES = {
     # --- Compressors --------------------------------------------------
     ("compressor", "default"): ("CentrifugalCompressor", """Centrifugal compressor: dynamic compression for large gas flows."""),
     ("compressor", "reciprocating"): ("ReciprocatingCompressor", """Reciprocating compressor: a piston in a cylinder."""),
-    ("compressor", "rotary"): ("RotaryCompressor", """Rotary compressor: screws or lobes."""),
+    ("compressor", "rotary"): ("RotaryCompressor", """Rotary lobe compressor: two rotors in a casing.
+
+    For a screw machine, use :class:`ScrewCompressor`.
+"""),
+    ("compressor", "screw"): ("ScrewCompressor", """Screw compressor: two meshing screws.
+
+    ISO 10628-2 item 16.8, X8161.
+"""),
     ("compressor", "liquid_ring"): ("LiquidRingCompressor", """Liquid-ring compressor: a rotating liquid seal does the work."""),
 
     # --- Fans ----------------------------------------------------------
@@ -117,6 +124,13 @@ DEVICES = {
 
     Product runs top to bottom; the heating medium runs through the
     jacket.
+"""),
+
+    # --- Heaters --------------------------------------------------------
+    ("heater", "electric"): ("ElectricHeater", """Electric heater: heating elements in the process body.
+
+    ``utility_in`` is the supply into the terminal box. ISO 10628-2
+    item 3.13, X8132.
 """),
 
     # --- Evaporators --------------------------------------------------
@@ -354,6 +368,7 @@ OWNS = {
     "ShellAndTubeExchanger": {
         "default": "default", "shell_tube": "shell_tube", "u_tube": "u_tube",
         "straight_tubes": "straight_tubes", "finned": "finned", "hairpin": "hairpin",
+        "floating_head": "floating_head", "coil_tube": "coil_tube",
     },
     "MagneticSeparator": {
         "default": "permanent_magnet", "electromagnetic": "electromagnetic",
@@ -510,6 +525,8 @@ STAYS_ON_BASE = {
     ("tank", "conical_bottom"): "floor: a discharge cone",
     ("tank", "conical_ends"): "roof and floor: a cone at each end",
     ("tank", "dished_roof_conical_bottom"): "roof and floor",
+    ("tank", "flat_roof"): "roof: flat (ISO item 1.1 301)",
+    ("tank", "open_top"): "roof: none, open to the air (ISO item 1.2 2061)",
     ("column", "packed"): "drawn internal: beds of packing on their support grids",
     ("reducer", "default"): "Reducer's own drawing (the concentric body)",
     ("reducer", "concentric"): "body style, and the same drawing as the default",

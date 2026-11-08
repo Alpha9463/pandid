@@ -1977,15 +1977,15 @@ def _own_detail(variant: str, height: float) -> list[tuple[str, float, float]]:
     return []
 
 
-def vessel_side(variant: str, width: float, height: float) -> tuple[float, float]:
+def vessel_side(variant: str, height: float) -> tuple[float, float]:
     """Return the stretch of a shell's west edge its outline meets.
 
     Parameters
     ----------
     variant : str
         One of :data:`VESSEL_SIZES`.
-    width, height : float
-        The shell's box.
+    height : float
+        The shell's height.
 
     Returns
     -------
@@ -2045,6 +2045,66 @@ _VESSEL_EXTENT = 0.7
 _SUPPORT_CLEARANCE = {"inlet": ARROWHEAD / 2 + MIN_HEAD_CLEARANCE, "outlet": MIN_HEAD_CLEARANCE}
 
 
+def stirred(body: Symbol) -> Symbol:
+    """Return a tank or vessel with its roof left to an agitator's motor.
+
+    The vent moves to the top of the east wall's band and the relief to
+    the top of the west wall's. No inlet or outlet is offered the roof;
+    one drawn there moves to the first wall its menu offers.
+
+    Parameters
+    ----------
+    body : Symbol
+        Upright tank or vessel.
+
+    Returns
+    -------
+    Symbol
+        The body with its nozzles moved.
+    """
+    w, h = body.width, body.height
+    ports = dict(body.ports)
+    menus = {name: {face: xy for face, xy in menu.items() if face != "N" or name not in
+                    ("inlet", "outlet")} for name, menu in body.port_faces.items()}
+    families = {role: {face: xy for face, xy in menu.items() if face != "N"}
+                for role, menu in body.family_faces.items()}
+    for role in ("inlet", "outlet"):
+        if role in ports and outward_dir(*ports[role], w, h) == "N":
+            ports[role] = next(iter(menus[role].values()))
+    # Each wall's x, from where the inlets and outlets meet it.
+    walls = {outward_dir(x, y, w, h): x
+             for menu in (*menus.values(), *families.values()) for x, y in menu.values()}
+    for name, face in (("vent", "E"), ("relief", "W")):
+        if name in ports:
+            ports[name] = (walls[face], body.bands[face][0])
+            menus.pop(name)
+    return replace(body, ports=ports, port_faces=menus, family_faces=families,
+                   bands={face: band for face, band in body.bands.items() if face != "N"})
+
+
+def carrying(kind: str, body: Symbol, overlays: "tuple[Overlay, ...]") -> Symbol:
+    """Return a body as it carries its parts: stirred under a motor.
+
+    Parameters
+    ----------
+    kind : str
+        Body kind.
+    body : Symbol
+        The body.
+    overlays : tuple[Overlay, ...]
+        Parts drawn on it.
+
+    Returns
+    -------
+    Symbol
+        :func:`stirred` for a tank or vessel with a motor over it, else
+        ``body``.
+    """
+    if kind in ("tank", "vessel") and any(o.group == 20 for o in overlays):
+        return stirred(body)
+    return body
+
+
 @lru_cache(maxsize=None)
 def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
                  ports: "tuple[tuple[str, tuple[float, float]], ...]",
@@ -2078,7 +2138,8 @@ def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
         body = default_registry.get(kind, variant)
     else:
         body = vessel_shell(variant, *size)
-        drawn = replace(body, ports={**body.ports, **dict(ports)}) if ports else body
+        drawn = carrying(kind, body, overlays)
+        drawn = replace(drawn, ports={**drawn.ports, **dict(ports)}) if ports else drawn
         base = compose(drawn, [(o, default_registry.part(o.group, o.name)) for o in overlays])
     boxes = overlay_boxes(body, overlays)
     oy = -min([0.0, *(o.y * body.height for o in overlays)])
@@ -3705,7 +3766,7 @@ _FAN_R = 3 * M
 
 
 def _fan_chord(sign: int) -> str:
-    """Return one chord of item 17.1, clipped to the circle.
+    """Return one chord of items 16.1 and 17.1, clipped to the circle.
 
     The chord runs through the grid points (-1.5 M, -2.5 M) and
     (2.5 M, -1.5 M) from the centre, mirrored below the axis.
@@ -3749,6 +3810,44 @@ _FAN_GENERAL = Symbol(
     width=2 * _FAN_R, height=2 * _FAN_R,
     ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
     iso_reg="X8164",
+)
+
+
+def _screw_flight(sign: int) -> str:
+    """Return one screw of item 16.8, a zigzag across the centre.
+
+    Its corners are 2/3 M apart along the axis and alternate between
+    the axis and 2/3 M off it, with a half step at each end.
+
+    Parameters
+    ----------
+    sign : int
+        ``-1`` for the screw above the axis, ``1`` for the one below.
+
+    Returns
+    -------
+    str
+        Path data for the screw.
+    """
+    step = 2 * M / 3
+    # Corners k = -2..2; the upper screw is off the axis at even k, the
+    # lower one at odd k.
+    corners = [(k * step, sign * step * ((k + (sign < 0)) % 2)) for k in range(-2, 3)]
+    ends = [(-2.5 * step, sign * step / 2), (2.5 * step, sign * step / 2)]
+    points = [ends[0], *corners, ends[1]]
+    return "M " + " L ".join(f"{_FAN_R + x:.4f} {_FAN_R + y:.4f}" for x, y in points) + " "
+
+
+# Item 16.8, X8161, the screw compressor: item 16.1's circle and chords
+# with two meshing screws across the centre.
+_COMPRESSOR_SCREW = Symbol(
+    svg='<g id="sym_compressor_screw">'
+        f'<circle cx="{_FAN_R:g}" cy="{_FAN_R:g}" r="{_FAN_R:g}" {_OUTLINE}/>'
+        f'<path d="{_fan_chord(-1)}{_fan_chord(1)}{_screw_flight(-1)}{_screw_flight(1)}" '
+        f'{_INK}/></g>',
+    width=2 * _FAN_R, height=2 * _FAN_R,
+    ports={"suction": (0.0, _FAN_R), "discharge": (2 * _FAN_R, _FAN_R)},
+    iso_reg="X8161",
 )
 
 # Centrifugal fan: a scroll round the eye, discharging east along its
@@ -4528,6 +4627,60 @@ _BUNKER = Symbol(
 )
 
 
+# ISO 10628-2 items 1.1 and 1.2: rectangular tanks 8 M wide, filled a
+# module above the floor on either wall and drawn off the middle of the
+# floor, with the drain 2 M in from the west wall. The walls and floor
+# are held a module off each end for families.
+_RECT_W = 8 * M
+_RECT_FILL = {"W": (0.0, -M), "E": (_RECT_W, -M)}
+
+
+def _rect_tank(name: str, height: float, closed: bool, iso_reg: str) -> Symbol:
+    """Return a rectangular tank, closed by a flat roof or open.
+
+    Parameters
+    ----------
+    name : str
+        Suffix of the group id.
+    height : float
+        Wall height.
+    closed : bool
+        Draw the roof, with the vent and relief a quarter in from each
+        wall and a fill in its middle.
+    iso_reg : str
+        Registration number of the row.
+
+    Returns
+    -------
+    Symbol
+        The tank.
+    """
+    fill = {face: (x, height + y) for face, (x, y) in _RECT_FILL.items()}
+    roof = {"vent": (2 * M, 0.0), "relief": (6 * M, 0.0)} if closed else {}
+    outline = (f'<rect x="0" y="0" width="{_RECT_W:g}" height="{height:g}" {_OUTLINE}/>'
+               if closed else
+               f'<path d="M 0 0 L 0 {height:g} L {_RECT_W:g} {height:g} L {_RECT_W:g} 0" {_INK}/>')
+    walls = (M, height - M)
+    return Symbol(
+        svg=f'<g id="sym_tank_{name}">{outline}</g>',
+        width=_RECT_W, height=height,
+        ports={"inlet": fill["W"], "outlet": (4 * M, height), **roof, "drain": (2 * M, height)},
+        port_faces={"inlet": {**fill, **({"N": (4 * M, 0.0)} if closed else {})}},
+        bands={"W": walls, "E": walls, "S": (M, _RECT_W - M),
+               **({"N": (M, _RECT_W - M)} if closed else {})},
+        family_faces={"outlet": dict(fill)},
+        gravity_fixed=True,
+        iso_reg=iso_reg,
+    )
+
+
+# Item 1.1, 301, tank, vessel: 12 M tall under a flat roof.
+_FLAT_ROOF_TANK = _rect_tank("flat_roof", 12 * M, True, "301")
+
+# Item 1.2, 2061, container, tank, cistern: 6 M tall, open at the top.
+_OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
+
+
 # Mixer-settler: a closed box whose west compartment is the mixer. The
 # dispersion overflows the partition into the settler, and the light
 # phase overflows the weir into the launder at the east end.
@@ -4884,7 +5037,7 @@ class SymbolRegistry:
             return self.get(kind, variant)
         key = (kind, variant, tuple(overlays), tuple(ports))
         if key not in self._composed:
-            body = self.get(kind, variant)
+            body = carrying(kind, self.get(kind, variant), overlays)
             if ports:
                 body = replace(body, ports={**body.ports, **dict(ports)})
             self._composed[key] = compose(
@@ -5323,6 +5476,8 @@ class SymbolRegistry:
         self._register_flotation_cell()
         self.register("silo", _SILO)
         self.register("silo", _BUNKER, "bunker")
+        self.register("tank", _FLAT_ROOF_TANK, "flat_roof")
+        self.register("tank", _OPEN_TOP_TANK, "open_top")
         self.register("mixer_settler", _MIXER_SETTLER)
         self.register("deaerator", _DEAERATOR)
         self._register_kilns()
@@ -5330,6 +5485,7 @@ class SymbolRegistry:
         self._register_flow_elements()
         self._register_fans()
         self._register_pumps()
+        self._register_compressors()
 
     def _register_fans(self):
         """Register the general, centrifugal and axial fans."""
@@ -5344,6 +5500,10 @@ class SymbolRegistry:
         self.register("pump", _PUMP_DIAPHRAGM, "diaphragm")
         self.register("pump", _PUMP_LOBE, "lobe")
         self.register("pump", _PUMP_VERTICAL_TURBINE, "vertical_turbine")
+
+    def _register_compressors(self):
+        """Register the screw compressor, ISO 10628-2 item 16.8 (X8161)."""
+        self.register("compressor", _COMPRESSOR_SCREW, "screw")
 
     def _register_steam_trap(self):
         """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""
