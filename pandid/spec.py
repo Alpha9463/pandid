@@ -712,9 +712,10 @@ _LOOP_KEYS = {"variable", "number"}
 _PACKAGE_KEYS = {"name", "units", "description", "reference"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
-    "color", "dasharray", "ends", "inline_at", "logical_to",
+    "color", "dasharray", "ends", "inline_at", "logical_to", "markers",
     *LINE_NUMBER_FIELDS, *TREATMENTS,
 }
+_MARKER_KEYS = {"kind", "at", "before", "after", "number"}
 _COMPONENT_KEYS = {"name", "formula"}
 # Constructor keywords only some classes take, and their readers.
 _KIND_READERS: dict[str, Callable[[Any, str], Any]] = {
@@ -1648,6 +1649,21 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         stream.properties = dict(properties)
     if "tabulate" in data:
         stream.tabulate = _flag(data["tabulate"], f"{where}.tabulate")
+    if "markers" in data:
+        markers = data["markers"]
+        if not isinstance(markers, list):
+            raise SpecError(f"{where}.markers must be a list of markers, got {markers!r}")
+        for k, item in enumerate(markers):
+            at = f"{where}.markers[{k}]"
+            entry = _mapping(item, at)
+            _check_keys(entry, _MARKER_KEYS, at)
+            for key in ("kind", "at"):
+                if key not in entry:
+                    raise SpecError(f"{at}: a marker needs {key!r}, got {dict(entry)!r}")
+            texts = _read_fields(entry, at, ((("before", "after", "number"), _text),))
+            with _blame(at):
+                stream.mark(_text(entry["kind"], f"{at}.kind"), _number(entry["at"], f"{at}.at"),
+                            **texts)
     if "via" in data:
         stream.via(_points(data["via"], f"{where}.via"))
     return stream
@@ -3358,6 +3374,12 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["properties"] = dict(stream.properties)
     if stream.tabulate:
         entry["tabulate"] = True
+    if stream.markers:
+        entry["markers"] = [
+            {"kind": m.kind, "at": m.at,
+             **{key: getattr(m, key) for key in ("before", "after", "number")
+                if getattr(m, key) is not None}}
+            for m in stream.markers]
     if stream._inline_at is not None:
         entry["inline_at"] = stream._inline_at
     if stream._logical_to is not None:

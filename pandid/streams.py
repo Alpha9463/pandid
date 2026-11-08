@@ -49,6 +49,34 @@ STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS | {MECHANICAL}
 #: Treatments drawn along a pipe: ``tracing``, ``insulated``, ``jacketed``.
 TREATMENTS = ("tracing", "insulated", "jacketed")
 
+#: What :meth:`Stream.mark` puts at a point on a line.
+MARKER_KINDS = ("battery limit", "limit of supply", "tie-in", "spec break")
+
+
+@dataclass(frozen=True)
+class LineMarker:
+    """A mark at one point of a line.
+
+    Attributes
+    ----------
+    kind : str
+        One of :data:`MARKER_KINDS`.
+    at : float
+        Fraction of the line's drawn length, strictly between 0 and 1.
+    before, after : str or None
+        Text on the upstream and downstream sides: the parties either
+        side of a limit, or the piping classes either side of a spec
+        break.
+    number : str or None
+        A tie-in's number.
+    """
+
+    kind: str
+    at: float
+    before: str | None = None
+    after: str | None = None
+    number: str | None = None
+
 #: Accepted colour shapes: a keyword, a hex colour of 3, 4, 6 or 8
 #: digits, or an ``rgb``/``rgba``/``hsl``/``hsla`` function.
 _COLOR = re.compile(
@@ -223,6 +251,9 @@ class Stream:
 
     Treatments are checked when set; set on a split line's handle, they
     apply to its whole run.
+    markers : list[LineMarker]
+        Limits, tie-ins and spec breaks marked on the line with
+        :meth:`mark`.
     """
 
     name: str
@@ -247,6 +278,7 @@ class Stream:
     tracing: str | None = None
     insulated: bool = False
     jacketed: bool = False
+    markers: list[LineMarker] = field(default_factory=list)
     _is_recycle: bool = field(default=False, init=False, repr=False)
     # Sequence last written by automatic numbering.
     _auto_sequence: str | None = field(default=None, init=False, repr=False)
@@ -358,6 +390,84 @@ class Stream:
         _LINE_COMPONENTS.warn(self)
         return {f: "" if getattr(self, f) is None else str(getattr(self, f))
                 for f in LINE_NUMBER_FIELDS}
+
+    def mark(self, kind: str, at: float, *, before: str | None = None,
+             after: str | None = None, number: str | None = None) -> LineMarker:
+        """Mark a battery limit, limit of supply, tie-in or spec break on the line.
+
+        A limit (ISO 10628-1 5.6) is drawn as a boundary across the line
+        with a diamond at its top, ``before`` and ``after`` beside the
+        diamond. A tie-in is a hexagon on the line holding its number; a
+        spec break is a bar across the line with ``before`` and ``after``
+        either side of it. Marked on a split line's handle, ``at`` runs
+        along the whole run.
+
+        Parameters
+        ----------
+        kind : str
+            One of :data:`MARKER_KINDS`.
+        at : float
+            Fraction of the line's drawn length, strictly between 0 and 1.
+        before, after : str or None, optional
+            Text on the upstream and downstream sides: the parties at a
+            limit, or the piping classes at a spec break, which needs both.
+        number : str or None, optional
+            A tie-in's number, which it needs.
+
+        Returns
+        -------
+        LineMarker
+            The marker, also kept in :attr:`markers`.
+
+        Raises
+        ------
+        TypeError
+            If ``at`` is not a number or a text is not text.
+        ValueError
+            If the kind is unknown, ``at`` is not strictly between 0 and
+            1, a text the kind needs is missing or blank, one it does not
+            take is given, or the line is a signal line.
+        """
+        if kind not in MARKER_KINDS:
+            raise ValueError(
+                f"{_names(self)}{kind!r} is not a line marker. Mark one of "
+                f"{', '.join(repr(k) for k in MARKER_KINDS)}"
+            )
+        if self.kind in SIGNAL_KINDS:
+            raise ValueError(
+                f"{_names(self)}a {self.kind} signal line takes no {kind}. Mark it on "
+                f"the pipe it serves"
+            )
+        check_real(at, f"{_names(self)}{kind} at")
+        if not 0.0 < at < 1.0:
+            raise ValueError(
+                f"{_names(self)}{kind} at={at!r} must lie strictly between 0 and 1, "
+                f"a fraction of the line's drawn length"
+            )
+        given = {"before": before, "after": after, "number": number}
+        needs = {"tie-in": ("number",), "spec break": ("before", "after")}.get(kind, ())
+        takes = ("number",) if kind == "tie-in" else ("before", "after")
+        for key, value in given.items():
+            if value is None:
+                if key in needs:
+                    raise ValueError(
+                        f"{_names(self)}a {kind} needs {key}=: "
+                        + ("mark(\"tie-in\", at=..., number=\"TI-101\")" if kind == "tie-in"
+                           else "mark(\"spec break\", at=..., before=\"A1A\", after=\"B2B\")")
+                    )
+                continue
+            if key not in takes:
+                raise ValueError(
+                    f"{_names(self)}a {kind} takes {' and '.join(f'{k}=' for k in takes)}, "
+                    f"not {key}="
+                )
+            if not isinstance(value, str):
+                raise TypeError(f"{_names(self)}{kind} {key}={value!r} must be text")
+            if not value.strip():
+                raise ValueError(f"{_names(self)}{kind} {key}={value!r} is blank")
+        marker = LineMarker(kind, float(at), before, after, number)
+        self.markers.append(marker)
+        return marker
 
     def via(self, waypoints: list[tuple[float, float]]) -> "Stream":
         """Route the stream through exact waypoints.
