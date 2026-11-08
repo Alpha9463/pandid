@@ -50,7 +50,7 @@ from pandid.render.svg import (
 )
 from pandid.render.symbols import _GROUP, Symbol, default_registry, expander, overlay_boxes
 from pandid.render.weights import LineWeight
-from pandid.units import _drawn_parts
+from pandid.units import _BALLOON_SYMBOLS, _drawn_parts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -224,8 +224,8 @@ def test_the_export_reports_a_title_block_cell_it_had_to_abbreviate():
 # A sheet carrying one of everything.
 
 
-#: Registered ``(kind, variant)`` pairs selected by ``display=``.
-_BY_DISPLAY = {("instrument", "panel"): "central", ("instrument", "aux"): "subsidiary"}
+#: Registered balloon variants, and the symbol type and display that draw each.
+_BY_DISPLAY = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items()}
 
 
 @pytest.fixture(scope="module")
@@ -238,8 +238,9 @@ def every_symbol_sheet() -> Flowsheet:
         for variant in default_registry.variants(cls.kind):
             tag = f"{cls.kind[:3].upper()}-{n}"
             # Location bars are selected by display rather than by symbol kind.
-            if (cls.kind, variant) in _BY_DISPLAY:
-                unit = cls(tag, display=_BY_DISPLAY[cls.kind, variant])
+            if cls is units.Instrument and variant in _BY_DISPLAY:
+                shape, display = _BY_DISPLAY[variant]
+                unit = cls(tag, variant=shape, display=display)
             else:
                 # A Separator's characteristic drawings are asked for by characteristic=.
                 how = (

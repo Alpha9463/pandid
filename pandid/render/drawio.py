@@ -416,6 +416,9 @@ _APPROXIMATIONS = {
         "ellipse", "the square around the balloon that puts the function in a "
                    "shared display, and the bar that puts it in the control room",
         fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
+    # A circle inscribed in a square.
+    ("instrument", "shared_field"): _Approximation(
+        None, "", fill=_BALLOON_FILL, inscribed="ellipse", weight=LineWeight.DETAIL.width),
     ("instrument", "computer"): _Approximation(
         "hexagon", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     # A diamond inscribed in a square.

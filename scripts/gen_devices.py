@@ -457,6 +457,7 @@ STAYS_ON_BASE = {
     ("instrument", "panel"): "a function, not a device",
     ("instrument", "aux"): "a function, not a device",
     ("instrument", "shared"): "a function, not a device",
+    ("instrument", "shared_field"): "a function, not a device",
     ("instrument", "computer"): "a function, not a device",
     ("instrument", "sis"): "a function, not a device",
     ("instrument", "logic"): "a function, not a device",

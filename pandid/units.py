@@ -3730,6 +3730,7 @@ _BALLOON_SYMBOLS = {
     ("default", "field"): "default",
     ("default", "central"): "panel",
     ("default", "subsidiary"): "aux",
+    ("shared", "field"): "shared_field",
     ("shared", "central"): "shared",
 }
 
@@ -3739,8 +3740,9 @@ _BALLOON_SHAPES = {drawn: shape for (shape, _display), drawn in _BALLOON_SYMBOLS
 # Display implied by a symbol type.
 _IMPLIED_DISPLAY = {"shared": "central"}
 
-# Variant spellings refused by name, and the display each means.
-_DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
+# Registered variants refused as spellings, and the symbol type and
+# display each means.
+_DISPLAY_VARIANTS = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items() if drawn != pair[0]}
 
 #: Deprecation of a unit face given as ``at=``.
 _AT_FACE = Deprecation(
@@ -3904,10 +3906,13 @@ class Instrument(Unit):
         """
         meant = _DISPLAY_VARIANTS.get(variant)
         if meant is not None:
+            shape, where = meant
+            spelled = (f"display={where!r}" if shape == "default"
+                       else f"variant={shape!r}, display={where!r}")
             raise ValueError(
                 f"{name}: variant={variant!r} says where the information is "
                 f"available, which is the display= axis: write "
-                f"display={meant!r}. What the instrument *does* is variant="
+                f"{spelled}. What the instrument *does* is variant="
             )
         if display is None:
             display = _IMPLIED_DISPLAY.get(variant, "field")

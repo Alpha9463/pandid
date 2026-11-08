@@ -1402,6 +1402,19 @@ def test_a_square_says_where_it_is_without_being_asked():
     assert U.Instrument("FIC", 301, variant="shared", display="central").variant == "shared"
 
 
+def test_a_square_in_the_field_draws_no_bar_and_reads_back_in_the_field():
+    """Check that a field shared square draws no location bar and its spec keeps the field."""
+    from pandid.render.symbols import default_registry
+
+    fs = Flowsheet("field square")
+    fs.add(U.Instrument("FI", 301, variant="shared", display="field"))
+    (read,) = Flowsheet.from_dict(fs.to_dict()).units
+    for inst in (fs.units[0], read):
+        assert isinstance(inst, U.Instrument)
+        assert (inst.symbol_type, inst.display) == ("shared", "field")
+        assert "<line" not in default_registry.get("instrument", inst.variant).svg
+
+
 def test_a_display_is_registered_artwork_and_not_a_stripe_over_any_outline():
     """Check that an unregistered symbol and display pair is refused, naming those that are."""
     with pytest.raises(ValueError) as excinfo:
