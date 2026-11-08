@@ -23,6 +23,7 @@ from pandid.units import (
     Heater,
     Kiln,
     Mill,
+    PigTrap,
     Pump,
     Reactor,
     ScreeningDevice,
@@ -78,6 +79,10 @@ __all__ = [
     "Scrubber",
     "VenturiScrubber",
     "KnockoutDrum",
+    "BootedDrum",
+    "ThreePhaseSeparator",
+    "PigLauncher",
+    "PigReceiver",
     "DustCollector",
     "RotaryDrumFilter",
     "FilterPress",
@@ -870,6 +875,105 @@ class KnockoutDrum(Separator):
 
     vapor: Port
     liquid: Port
+
+
+class BootedDrum(Separator):
+    """Booted drum: a horizontal drum with a water boot under its east end.
+
+    ``feed`` enters the west head, ``vapor`` leaves the top, ``liquid``
+    the bottom and ``water`` the boot.
+
+    Parameters are those of :class:`~pandid.units.Separator`.
+    """
+
+    VARIANTS = ("default", "boot")
+    VARIANT_ALIASES = {"default": "boot"}
+    PORTS = [
+        ("vapor", "outlet", "vapor"),
+        ("liquid", "outlet", "liquid"),
+        ("water", "outlet", "liquid"),
+    ]
+
+    vapor: Port
+    liquid: Port
+    water: Port
+
+
+class ThreePhaseSeparator(Separator):
+    """Three-phase separator: a horizontal drum with a weir near its east end.
+
+    ``feed`` enters the west head and ``vapor`` leaves the top; ``water``
+    is drawn off ahead of the weir and ``liquid`` beyond it.
+
+    Parameters are those of :class:`~pandid.units.Separator`.
+    """
+
+    VARIANTS = ("default", "three_phase")
+    VARIANT_ALIASES = {"default": "three_phase"}
+    PORTS = [
+        ("vapor", "outlet", "vapor"),
+        ("liquid", "outlet", "liquid"),
+        ("water", "outlet", "liquid"),
+    ]
+
+    vapor: Port
+    liquid: Port
+    water: Port
+
+
+class PigLauncher(PigTrap):
+    """Pig launcher: a barrel behind a closure, sending the pig out of ``main``.
+
+    The line into ``kicker`` drives the pig from the barrel into the
+    main line.
+
+    Parameters are those of :class:`~pandid.units.PigTrap`.
+    """
+
+    VARIANTS = ("default", "launcher")
+    VARIANT_ALIASES = {"default": "launcher"}
+    PORTS = [
+        ("kicker", "inlet", "process"),
+        ("main", "outlet", "process"),
+        ("closure", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
+
+    kicker: Port
+    main: Port
+    closure: Port
+    vent: Port
+    relief: Port
+    drain: Port
+
+
+class PigReceiver(PigTrap):
+    """Pig receiver: a barrel behind a closure, taking the pig in at ``main``.
+
+    The line leaves at ``kicker`` once the pig is in the barrel.
+
+    Parameters are those of :class:`~pandid.units.PigTrap`.
+    """
+
+    VARIANTS = ("default", "receiver")
+    VARIANT_ALIASES = {"default": "receiver"}
+    PORTS = [
+        ("main", "inlet", "process"),
+        ("kicker", "outlet", "process"),
+        ("closure", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
+
+    main: Port
+    kicker: Port
+    closure: Port
+    vent: Port
+    relief: Port
+    drain: Port
 
 
 class DustCollector(Filter):

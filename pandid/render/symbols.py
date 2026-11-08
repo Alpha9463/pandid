@@ -5028,6 +5028,318 @@ _SHAFT_PORTS = {
 }
 
 
+# Water and oil and gas units (practice), each built to its box: every
+# feature keeps its own size, and the shell or barrel takes the rest.
+
+#: Membrane module: the permeate channel's depth under the top wall,
+#: the membrane's dash and gap, and each letter's width, height and
+#: spacing.
+_PERMEATE_D, _MEMBRANE_DASH, _MEMBRANE_GAP = M, 1.5 * M, 0.5 * M
+_GLYPH_W, _GLYPH_H, _GLYPH_GAP = M, 1.5 * M, 0.5 * M
+
+#: Each lettered membrane grade, and its letters as strokes in a glyph
+#: box ``_GLYPH_W`` wide and ``_GLYPH_H`` tall.
+MEMBRANE_GRADES = {"ro": "RO", "nf": "NF", "uf": "UF", "mf": "MF"}
+_GLYPHS = {
+    "R": "M 0 15 L 0 0 L 10 0 L 10 7.5 L 0 7.5 M 5 7.5 L 10 15",
+    "O": "M 5 0 A 5 7.5 0 0 1 5 15 A 5 7.5 0 0 1 5 0",
+    "N": "M 0 15 L 0 0 L 10 15 L 10 0",
+    "F": "M 10 0 L 0 0 L 0 15 M 0 7.5 L 7.5 7.5",
+    "U": "M 0 0 L 0 10 A 5 5 0 0 0 10 10 L 10 0",
+    "M": "M 0 15 L 0 0 L 5 7.5 L 10 0 L 10 15",
+}
+
+#: A membrane module's natural box, and the least it is drawn in.
+MEMBRANE_SIZE, _MEMBRANE_LEAST = (12 * M, 4 * M), (6 * M, 3 * M)
+
+
+def _glyph_path(d: str, x: float, y: float) -> str:
+    """Return a glyph's path moved to ``(x, y)``.
+
+    Parameters
+    ----------
+    d : str
+        Path data of ``M``, ``L`` and ``A`` commands in the glyph box.
+    x, y : float
+        Where the glyph box's top-left corner goes.
+
+    Returns
+    -------
+    str
+        Path data in the drawing's coordinates.
+    """
+    out, tokens, i = [], d.split(), 0
+    while i < len(tokens):
+        cmd = tokens[i]
+        n = 7 if cmd == "A" else 2
+        v = [float(t) for t in tokens[i + 1:i + 1 + n]]
+        if cmd == "A":
+            v[5], v[6] = v[5] + x, v[6] + y
+        else:
+            v = [v[0] + x, v[1] + y]
+        out.append(cmd + " " + " ".join(_n(t) for t in v))
+        i += 1 + n
+    return " ".join(out)
+
+
+def _too_small(what: str, width: float, height: float,
+               least: "tuple[float, float]") -> ValueError:
+    """Return the refusal of a box too small for a drawing's features.
+
+    Parameters
+    ----------
+    what : str
+        The drawing, as the message names it.
+    width, height : float
+        The box.
+    least : tuple[float, float]
+        Least width and height.
+
+    Returns
+    -------
+    ValueError
+        The refusal, naming the least box.
+    """
+    return ValueError(
+        f"a box {width:g} x {height:g} is too small to draw {what}, which needs a box "
+        f"at least {least[0]:g} wide and {least[1]:g} tall; give width= and height= at "
+        f"least that, or leave them unset"
+    )
+
+
+@lru_cache(maxsize=None)
+def membrane_symbol(variant: str = "default", width: float | None = None,
+                    height: float | None = None) -> Symbol:
+    """Return a membrane module built to a box.
+
+    A housing split by the membrane, dashed, a module under its top
+    wall: the feed channel below it, lettered with the grade, and the
+    permeate channel above.
+
+    Parameters
+    ----------
+    variant : str, default="default"
+        ``"default"``, or a grade in :data:`MEMBRANE_GRADES`.
+    width, height : float, optional
+        Box; :data:`MEMBRANE_SIZE` where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The module, fed at the west end, its concentrate drawn off the
+        east end and its permeate off the top at the east end.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the channels and the letters.
+    """
+    w = float(MEMBRANE_SIZE[0] if width is None else width)
+    h = float(MEMBRANE_SIZE[1] if height is None else height)
+    if w < _MEMBRANE_LEAST[0] or h < _MEMBRANE_LEAST[1]:
+        raise _too_small("a membrane module", w, h, _MEMBRANE_LEAST)
+    pitch = _MEMBRANE_DASH + _MEMBRANE_GAP
+    count = int((w + _MEMBRANE_GAP) / pitch)
+    start = (w - count * pitch + _MEMBRANE_GAP) / 2
+    dashes = " ".join(f"M {_n(start + k * pitch)} {_n(_PERMEATE_D)} "
+                      f"L {_n(start + k * pitch + _MEMBRANE_DASH)} {_n(_PERMEATE_D)}"
+                      for k in range(count))
+    feed_y = (_PERMEATE_D + h) / 2
+    letters = MEMBRANE_GRADES.get(variant, "")
+    span = len(letters) * _GLYPH_W + max(len(letters) - 1, 0) * _GLYPH_GAP
+    glyphs = " ".join(_glyph_path(_GLYPHS[c], (w - span) / 2 + i * (_GLYPH_W + _GLYPH_GAP),
+                                  feed_y - _GLYPH_H / 2)
+                      for i, c in enumerate(letters))
+    art = (f'<rect x="0" y="0" width="{_n(w)}" height="{_n(h)}" {_OUTLINE}/>'
+           f'<path d="{dashes}" {_DETAIL}/>'
+           + (f'<path d="{glyphs}" {_DETAIL}/>' if glyphs else ""))
+    natural = (w, h) == MEMBRANE_SIZE
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    name = "sym_membrane" + ("" if variant == "default" else f"_{variant}")
+    return Symbol(
+        svg=f'<g id="{name}{suffix}">{art}</g>',
+        width=w, height=h,
+        ports={"feed": (0.0, feed_y), "concentrate": (w, feed_y),
+               "permeate": (w - M, 0.0)},
+        id_suffix=suffix,
+    )
+
+
+#: Pig trap: the closure's thickness, the reducer's length, the main
+#: nozzle's length and bore, and the barrel's natural length and the
+#: closure's natural height.
+_CLOSURE_T, _PIG_REDUCER, _PIG_MAIN_L, _PIG_MAIN_D = 0.5 * M, 2 * M, 1.5 * M, M
+PIG_TRAP_SIZE = (12 * M, 4 * M)
+
+#: Pig trap nozzles along the barrel, from the closure: the kicker, the
+#: vent, the relief, and the drain on the underside.
+_PIG_KICKER, _PIG_VENT, _PIG_RELIEF, _PIG_DRAIN = M, 4 * M, 6 * M, 7 * M
+
+
+@lru_cache(maxsize=None)
+def pig_trap_symbol(variant: str = "launcher", width: float | None = None,
+                    height: float | None = None) -> Symbol:
+    """Return a pig launcher or receiver built to a box.
+
+    A closure on the end of a barrel, which a reducer takes down to the
+    main line's nozzle. The launcher's closure is at its west end, the
+    receiver's at its east end.
+
+    Parameters
+    ----------
+    variant : str, default="launcher"
+        ``"launcher"`` or ``"receiver"``.
+    width, height : float, optional
+        Box; :data:`PIG_TRAP_SIZE` where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The trap, with ``closure`` on the closure, ``main`` on the main
+        nozzle, the kicker, vent and relief on top of the barrel and the
+        drain under it.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the closure, reducer and main nozzle.
+    """
+    w = float(PIG_TRAP_SIZE[0] if width is None else width)
+    h = float(PIG_TRAP_SIZE[1] if height is None else height)
+    ends = _CLOSURE_T + _PIG_REDUCER + _PIG_MAIN_L
+    least = (ends + _PIG_DRAIN + M, 2 * _PIG_MAIN_D)
+    if w < least[0] or h < least[1]:
+        raise _too_small(f"a pig {variant}", w, h, least)
+    c, rim = h / 2, _CLOSURE_T
+    barrel_end = w - _PIG_REDUCER - _PIG_MAIN_L
+    main = w - _PIG_MAIN_L
+    bore = _PIG_MAIN_D / 2
+
+    def x(along: float) -> float:
+        """Return a launcher's x as the variant draws it.
+
+        Parameters
+        ----------
+        along : float
+            x on the launcher.
+
+        Returns
+        -------
+        float
+            x on this variant.
+        """
+        return along if variant == "launcher" else w - along
+
+    outline = (
+        f"M {_n(x(0))} 0 L {_n(x(rim))} 0 L {_n(x(rim))} {_n(h)} L {_n(x(0))} {_n(h)} Z "
+        f"M {_n(x(rim))} {_n(rim)} L {_n(x(barrel_end))} {_n(rim)} "
+        f"L {_n(x(main))} {_n(c - bore)} L {_n(x(w))} {_n(c - bore)} "
+        f"L {_n(x(w))} {_n(c + bore)} L {_n(x(main))} {_n(c + bore)} "
+        f"L {_n(x(barrel_end))} {_n(h - rim)} L {_n(x(rim))} {_n(h - rim)} "
+        f"M {_n(x(barrel_end))} {_n(rim)} L {_n(x(barrel_end))} {_n(h - rim)} "
+        f"M {_n(x(main))} {_n(c - bore)} L {_n(x(main))} {_n(c + bore)}"
+    )
+    natural = (w, h) == PIG_TRAP_SIZE
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    return Symbol(
+        svg=f'<g id="sym_pig_trap_{variant}{suffix}"><path d="{outline}" {_OUTLINE}/></g>',
+        width=w, height=h,
+        ports={"closure": (x(0), c), "main": (x(w), c),
+               "kicker": (x(rim + _PIG_KICKER), rim), "vent": (x(rim + _PIG_VENT), rim),
+               "relief": (x(rim + _PIG_RELIEF), rim),
+               "drain": (x(rim + _PIG_DRAIN), h - rim)},
+        id_suffix=suffix,
+        gravity_fixed=True,
+    )
+
+
+#: Horizontal drum: its head depth, the boot's bore, depth and bottom
+#: head, its offset from the east tangent line, and the weir's offset
+#: from that line and height as a share of the drum's diameter.
+_DRUM_HEAD_D = 0.75 * M
+_BOOT_D, _BOOT_DEPTH, _BOOT_HEAD, _BOOT_OFF = 1.2 * M, 1.2 * M, 0.3 * M, 2 * M
+_WEIR_OFF, _WEIR_SHARE = 3 * M, 0.6
+
+#: Each drum's natural box: the drum 12 M by 3 M, a booted one with its
+#: boot beneath.
+DRUM_SIZES = {"boot": (12 * M, 3 * M + _BOOT_DEPTH + _BOOT_HEAD), "three_phase": (12 * M, 3 * M)}
+
+
+@lru_cache(maxsize=None)
+def three_phase_drum_symbol(variant: str, width: float | None = None,
+                            height: float | None = None) -> Symbol:
+    """Return a horizontal drum with a boot, or with a weir, built to a box.
+
+    Parameters
+    ----------
+    variant : str
+        ``"boot"``: a water boot under the east end. ``"three_phase"``:
+        a weir across the drum near its east end.
+    width, height : float, optional
+        Box; :data:`DRUM_SIZES` where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The drum, fed at its west head, the vapour drawn off the top and
+        the liquid and water off the bottom.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the heads, the boot or the weir.
+    """
+    w = float(DRUM_SIZES[variant][0] if width is None else width)
+    h = float(DRUM_SIZES[variant][1] if height is None else height)
+    under = _BOOT_DEPTH + _BOOT_HEAD if variant == "boot" else 0.0
+    least = (2 * _DRUM_HEAD_D + _WEIR_OFF + 3 * M, under + 2 * M)
+    if w < least[0] or h < least[1]:
+        raise _too_small("a " + ("booted drum" if variant == "boot" else "three-phase "
+                                 "separator"), w, h, least)
+    d = h - under
+    x0, x1, c = _DRUM_HEAD_D, w - _DRUM_HEAD_D, d / 2
+    head = f"A {_n(_DRUM_HEAD_D)} {_n(c)} 0 0 1"
+    outline = (f"M {_n(x0)} 0 L {_n(x1)} 0 {head} {_n(x1)} {_n(d)} L {_n(x0)} {_n(d)} "
+               f"{head} {_n(x0)} 0 Z M {_n(x0)} 0 L {_n(x0)} {_n(d)} "
+               f"M {_n(x1)} 0 L {_n(x1)} {_n(d)}")
+    art = f'<path d="{outline}" {_OUTLINE}/>'
+    vapor = (x1 - M, 0.0)
+    if variant == "boot":
+        bx = x1 - _BOOT_OFF
+        b0, b1 = bx - _BOOT_D / 2, bx + _BOOT_D / 2
+        art += (f'<path d="M {_n(b0)} {_n(d)} L {_n(b0)} {_n(d + _BOOT_DEPTH)} '
+                f'A {_n(_BOOT_D / 2)} {_n(_BOOT_HEAD)} 0 0 0 {_n(b1)} {_n(d + _BOOT_DEPTH)} '
+                f'L {_n(b1)} {_n(d)}" {_OUTLINE}/>')
+        ports = {"liquid": (w / 2, d), "water": (bx, h)}
+    else:
+        wx = x1 - _WEIR_OFF
+        art += (f'<line x1="{_n(wx)}" y1="{_n(d)}" x2="{_n(wx)}" '
+                f'y2="{_n(d * (1 - _WEIR_SHARE))}" {_DETAIL}/>')
+        ports = {"water": ((x0 + wx) / 2, d), "liquid": ((wx + x1) / 2, d)}
+    natural = (w, h) == DRUM_SIZES[variant]
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    return Symbol(
+        svg=f'<g id="sym_separator_{variant}{suffix}">{art}</g>',
+        width=w, height=h,
+        ports={"feed": (0.0, c), "vapor": vapor, **ports},
+        id_suffix=suffix,
+        gravity_fixed=True,
+    )
+
+
+for _variant in MEMBRANE_GRADES:
+    _BUILT_TO_SIZE[("membrane", _variant)] = lambda unit: _named(
+        unit, membrane_symbol, unit.variant, unit.width, unit.height)
+_BUILT_TO_SIZE[("membrane", "default")] = lambda unit: _named(
+    unit, membrane_symbol, "default", unit.width, unit.height)
+for _variant in ("launcher", "receiver"):
+    _BUILT_TO_SIZE[("pig_trap", _variant)] = lambda unit: _named(
+        unit, pig_trap_symbol, unit.variant, unit.width, unit.height)
+for _variant in DRUM_SIZES:
+    _BUILT_TO_SIZE[("separator", _variant)] = lambda unit: _named(
+        unit, three_phase_drum_symbol, unit.variant, unit.width, unit.height)
+
+
 class SymbolRegistry:
     """Catalogue of symbols keyed by ``(kind, variant)``, and ISO parts.
 
@@ -5601,6 +5913,17 @@ class SymbolRegistry:
         self._register_fans()
         self._register_pumps()
         self._register_compressors()
+        self._register_water_oil_gas()
+
+    def _register_water_oil_gas(self):
+        """Register the membrane modules, pig traps and three-phase drums."""
+        self.register("membrane", membrane_symbol())
+        for grade in MEMBRANE_GRADES:
+            self.register("membrane", membrane_symbol(grade), grade)
+        for end in ("launcher", "receiver"):
+            self.register("pig_trap", pig_trap_symbol(end), end)
+        for drum in DRUM_SIZES:
+            self.register("separator", three_phase_drum_symbol(drum), drum)
 
     def _register_fans(self):
         """Register the general, centrifugal and axial fans."""

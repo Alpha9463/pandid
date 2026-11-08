@@ -470,6 +470,9 @@ OWN_OUTLINE = frozenset({
     ("compressor", "screw"),
     ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
     ("stockpile", "default"),
+    ("membrane", "default"), ("membrane", "ro"), ("membrane", "nf"), ("membrane", "uf"),
+    ("membrane", "mf"), ("pig_trap", "launcher"), ("pig_trap", "receiver"),
+    ("separator", "boot"), ("separator", "three_phase"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what

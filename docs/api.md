@@ -116,6 +116,14 @@ The names depend on the class and variant. Common patterns are:
   stacked at `feed`, on top, and reclaimed at `reclaim`, under it. Both are
   built to the `width` and `height` they are given: a longer mill carries more
   balls, and a wider pile has a flat top.
+- A `MembraneModule` takes `feed` and gives `concentrate` and `permeate`;
+  `variant="ro"`, `"nf"`, `"uf"` or `"mf"` letters its grade. A
+  `PigLauncher` sends the pig out of `main`, driven in at `kicker`; a
+  `PigReceiver` takes it in at `main` and lets the line out at `kicker`. Both
+  have `closure`, `vent`, `relief` and `drain`.
+- A `BootedDrum` (`Separator(variant="boot")`) or `ThreePhaseSeparator`
+  (`variant="three_phase"`) takes one `feed` and gives `vapor`, `liquid` and
+  `water`: the water from the boot, or from ahead of the weir.
 - A `MixerSettler` uses `light_in`, `heavy_in`, `light_out` and `heavy_out`;
   `agitator=` names the stirrer in its mixer. An `ExtractionColumn` takes the
   heavy phase at `feed_1` on its top stage and the light phase at `feed_2` on
