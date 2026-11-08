@@ -81,24 +81,9 @@ KIND_MAP = {
     ("valve", "pinch"):     ("valves", "Pinch Valve",       {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
 
-    # --- Valves that draw their operator: ``actuator`` on its crown ---
-    # "Solenoid Valve Closed" is draw.io's name; the drawing states no position.
-    ("valve", "motor"):     ("valves", "Motor Operated Valve",
-                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
-    ("valve", "solenoid"):  ("valves", "Solenoid Valve Closed",
-                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
-    ("valve", "hydraulic"): ("valves", "Hydraulic Valve",
-                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
-    # Control valve: a diaphragm actuator drawn above the body.
-    ("valve", "control"):   ("valves", "Pneumatic Operated",
-                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
-    ("valve", "manual"):    ("valves", "Manual Operated Valve",
-                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
     # Knife gate: rising stem through a handwheel bar spanning x 30..70 at y = 0.
     ("valve", "knife"):     ("valves", "Knife Valve",
                              {"inlet": "W", "outlet": "E", "actuator": "N"}),
-    ("valve", "butterfly_pneumatic"): ("valves", "Pneumatic Operated Butterfly Valve",
-                                       {"inlet": "W", "outlet": "E", "actuator": "N"}),
     # Self-acting regulator: ``actuator`` is the external pilot connection at the top.
     ("valve", "regulator"): ("valves", "Back Pressure Regulator 1",
                              {"inlet": "W", "outlet": "E", "actuator": ("N", 49.0)}),
@@ -830,13 +815,12 @@ HALF_SCALE_FITTINGS = (
     "blind", "paddle_blind", "paddle_spacer",
 )
 
-# Three valves.xml shapes are off that file's module, so each takes its own
+# Two valves.xml shapes are off that file's module, so each takes its own
 # factor: the PSV and the relief valve scale their seat or bonnet to 15.0 across
-# the run, and the pneumatic butterfly takes a pair that draws its body 24.5 x 15.0.
+# the run.
 SCALE = {"valve": 0.25, "fitting": 0.25,
          "vent": 0.25, "funnel": 0.25,
          ("valve", "psv"): 15.0 / 42, ("valve", "relief"): 15.0 / 40,
-         ("valve", "butterfly_pneumatic"): (24.5 / 60, 15.0 / 40),
          **{("fitting", variant): 0.5 for variant in HALF_SCALE_FITTINGS},
          # ...and the two open ends taken from the same 50-unit file.
          ("vent", "exhaust_head"): 0.5, ("vent", "breather"): 0.5,

@@ -21,7 +21,7 @@ def _sheet():
     """A metering line with a control valve on it, ready for a flow loop."""
     fs = Flowsheet("loops")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
-    fv = fs.add(U.Valve("CV-300", variant="control")).pin(x=300, y=180)
+    fv = fs.add(U.Valve("CV-300", actuator="diaphragm")).pin(x=300, y=180)
     prod = fs.add(U.Product("Product")).pin(x=520, y=170)
     line = fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)
@@ -121,7 +121,7 @@ def test_a_number_that_is_already_free_of_the_series_never_collides():
     """Check that tagging units from a loop spends no number."""
     fs = Flowsheet("elements", loop_number_start=504)
     flow = fs.add_loop("F")
-    cv = fs.add(U.Valve(flow.tag("CV"), variant="control"))
+    cv = fs.add(U.Valve(flow.tag("CV"), actuator="diaphragm"))
     fe = fs.add(U.Fitting(flow.tag("FE"), variant="venturi"))
     assert (cv.name, fe.name) == ("CV-504", "FE-504")
     assert fs.add_loop("T").name == "T-505"  # the valve reserved nothing
@@ -133,7 +133,7 @@ def test_the_number_is_allocated_once_and_never_renumbered(number: int | None, e
     fs, line = _sheet()
     loop = fs.add_loop("F", number)
     ft = fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
-    cv = fs.add(U.Valve(loop.tag("CV"), variant="control")).pin(x=300, y=300)
+    cv = fs.add(U.Valve(loop.tag("CV"), actuator="diaphragm")).pin(x=300, y=300)
     vent = fs.add(U.Product("Vent")).pin(x=520, y=300)
     fs.connect(cv.outlet, vent.inlet)  # more topology, and so more renumbering
     fs.add_loop("L")  # a later declaration does not renumber an earlier one
@@ -478,7 +478,7 @@ def _feedback_sheet():
     fs = Flowsheet("feedback")
     feed = fs.add(U.Feed("Feed")).pin(port="outlet", x=60, y=200)
     drum = fs.add(U.Vessel("V-101")).pin(x=220, port="inlet", y=200)
-    lv = fs.add(U.Valve("LV-101", variant="control")).pin(x=470, port="inlet", y=200)
+    lv = fs.add(U.Valve("LV-101", actuator="diaphragm")).pin(x=470, port="inlet", y=200)
     prod = fs.add(U.Product("Product")).pin(port="inlet", x=640, y=200)
     fs.connect(feed.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
@@ -563,7 +563,7 @@ def test_a_long_hand_loop_with_no_kind_draws_what_the_helper_draws(by_unit):
     assert one_liner.to_svg() == long_hand.to_svg()
 
 
-def _valve_on_a_line(cls: type[U.Valve], actuator: str):
+def _valve_on_a_line(cls: type[U.Valve], actuator: str | None):
     """Return a sheet with a valve built with ``actuator`` in one line, the line and the valve."""
     fs = Flowsheet("actuated")
     feed, valve = fs.add(U.Feed("Feed")), fs.add(cls("XV-101", actuator=actuator))
@@ -574,12 +574,13 @@ def _valve_on_a_line(cls: type[U.Valve], actuator: str):
 
 _ACTUATED = [
     (U.Valve, "diaphragm", "pneumatic"),
-    (ControlValve, "", "pneumatic"),
+    (ControlValve, None, "pneumatic"),
+    (U.Valve, "piston", "pneumatic"),
     (U.Valve, "", "pneumatic"),
     (U.Valve, "motor", "electric"),
-    (MotorOperatedValve, "", "electric"),
+    (MotorOperatedValve, None, "electric"),
     (U.Valve, "solenoid", "electric"),
-    (SolenoidValve, "", "electric"),
+    (SolenoidValve, None, "electric"),
     (U.Valve, "hydraulic", "electric"),
 ]
 
@@ -697,7 +698,7 @@ def test_the_output_may_name_the_nozzle_it_lands_on():
 def test_the_letters_follow_from_the_measured_variable():
     """Check that the transmitter and controller letters follow the measured variable."""
     fs, drum, lv = _feedback_sheet()
-    fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=340, port="inlet", y=340)
+    fv = fs.add(U.Valve("FV-101", actuator="diaphragm")).pin(x=340, port="inlet", y=340)
     run = drum.outlet.stream
     assert run is not None  # a level is read off the vessel, a flow off the line
 
@@ -941,7 +942,7 @@ _REJECTIONS = [
         _stroke_the_valve_already,
         lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv),
         lambda fs, drum, lv: fs.add_control_loop(
-            "L", 101, measuring=drum, acting_on=fs.add(U.Valve("LV-102", variant="control"))
+            "L", 101, measuring=drum, acting_on=fs.add(U.Valve("LV-102", actuator="diaphragm"))
         ),
         "already connected",
         id="the final element is already stroked",
@@ -1142,7 +1143,7 @@ def test_a_loop_refused_at_its_second_line_leaves_the_sheet_whole():
     """Check that a refusal at the second signal line leaves the sheet unchanged."""
     fs = Flowsheet("short", stream_naming_scheme=lambda n: {1: "S1"}[n])
     drum = fs.add(U.Vessel("V-101"))
-    lv = fs.add(U.Valve("LV-101", variant="control"))
+    lv = fs.add(U.Valve("LV-101", actuator="diaphragm"))
     before = _snapshot(fs)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

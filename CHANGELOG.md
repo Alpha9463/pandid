@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mills and feeders take one at their new `drive`:
   `fs.connect(motor.shaft, pump.drive)` draws the motor beside the machine on a
   short straight shaft.
+- `MembraneModule` draws a membrane module, lettered RO, NF, UF or MF with
+  `variant=`; `PigLauncher` and `PigReceiver` draw pig traps; and
+  `BootedDrum` and `ThreePhaseSeparator` draw horizontal drums with a water
+  boot or a weir, drawn off at `water`.
 - `connect(..., tracing="steam", insulated=True, jacketed=True)` draws a pipe
   traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
   in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers
@@ -48,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bars across it: `fs.add_instrument("UY", 301, variant="logic", display="central")`.
 - Signal lines take `kind="hydraulic"`, drawn with a footed stroke at each mark,
   and `kind="wireless"`, drawn as a wave: `fs.connect(ft, fic, kind="wireless")`.
+- A valve draws any actuator on any body with a stem, the piston cylinder
+  included: `Valve("XV-101", variant="ball", actuator="piston")`, where
+  `actuator=` is `"diaphragm"`, `"piston"`, `"motor"`, `"solenoid"`,
+  `"hydraulic"` or `"handwheel"`.
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,
@@ -160,6 +168,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 These are removed in 0.4.0.
 
+- The valve variants that drew a body and its actuator together,
+  `"control"`, `"butterfly_pneumatic"`, `"motor"`, `"solenoid"`, `"hydraulic"`
+  and `"manual"`, are deprecated: name the body with `variant=` and the
+  actuator with `actuator=`, as in `Valve(variant="butterfly",
+  actuator="diaphragm")`.
+- `normal_position="closed"` on a butterfly valve with a diaphragm actuator,
+  `variant="butterfly_pneumatic"` before, is deprecated: drop it, keeping any
+  `fail=` already given, or give `fail="closed"` if the valve fails shut.
 - `pandid.document.equipment_list()`, the drawn box, and the spec box
   `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
 - `duty` on `Reactor(variant="jacketed")`, which now draws `jacket_in`. Use

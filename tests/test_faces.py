@@ -226,7 +226,7 @@ def test_a_balloons_pick_survives_being_re_placed_by_the_router():
     """Keep an attached balloon's choice when routing replaces its frame."""
     fs = Flowsheet("loop")
     feed = fs.add(units.Feed("Feed")).pin(x=60, y=270)
-    fv = fs.add(units.Valve("FV-1", variant="control")).pin(x=260, y=280)
+    fv = fs.add(units.Valve("FV-1", actuator="diaphragm")).pin(x=260, y=280)
     vessel = fs.add(units.Vessel("V-1", width=90, height=140)).pin(x=480, y=210)
     prod = fs.add(units.Product("P")).pin(x=700, y=265)
     fs.connect(feed.outlet, fv.inlet)
@@ -246,7 +246,7 @@ def test_a_balloons_pick_survives_being_re_placed_by_the_router():
 def test_two_signals_from_the_same_side_do_not_land_on_one_point():
     """Give two signals with the same cheapest face separate faces."""
     fs = Flowsheet("stack")
-    fv = fs.add(units.Valve("FV-1", variant="control")).pin(x=300, y=180)
+    fv = fs.add(units.Valve("FV-1", actuator="diaphragm")).pin(x=300, y=180)
     feed = fs.add(units.Feed("F")).pin(x=100, y=175)
     prod = fs.add(units.Product("P")).pin(x=520, y=175)
     fs.connect(feed.outlet, fv.inlet)

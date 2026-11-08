@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate pandid/devices.py, one class per scheduled device.
 
-Three tables hold the mapping:
+Four tables hold the mapping:
 
 ``DEVICES``
     ``(kind, variant)`` to class name and docstring.
@@ -10,6 +10,9 @@ Three tables hold the mapping:
     ``{class-local variant: registry variant}``.
 ``STAYS_ON_BASE``
     Every drawing without a class, with the reason.
+``ACTUATED``
+    Valve classes named for their actuator, to the actuator and
+    docstring; each draws every body that takes one.
 
 :func:`claims` stops generation unless every registered
 ``(kind, variant)`` is claimed exactly once.
@@ -177,6 +180,27 @@ DEVICES = {
     ("separator", "scrubber"): ("Scrubber", """Wet scrubber: a wash liquid cleans a gas."""),
     ("separator", "venturi_scrubber"): ("VenturiScrubber", """Venturi scrubber: wash injected into an accelerating throat."""),
     ("separator", "knockout"): ("KnockoutDrum", """Knock-out drum: an upright drum with a demister pad."""),
+    ("separator", "boot"): ("BootedDrum", """Booted drum: a horizontal drum with a water boot under its east end.
+
+    ``feed`` enters the west head, ``vapor`` leaves the top, ``liquid``
+    the bottom and ``water`` the boot.
+"""),
+    ("separator", "three_phase"): ("ThreePhaseSeparator", """Three-phase separator: a horizontal drum with a weir near its east end.
+
+    ``feed`` enters the west head and ``vapor`` leaves the top; ``water``
+    is drawn off ahead of the weir and ``liquid`` beyond it.
+"""),
+
+    # --- Pig traps ------------------------------------------------------
+    ("pig_trap", "launcher"): ("PigLauncher", """Pig launcher: a barrel behind a closure, sending the pig out of ``main``.
+
+    The line into ``kicker`` drives the pig from the barrel into the
+    main line.
+"""),
+    ("pig_trap", "receiver"): ("PigReceiver", """Pig receiver: a barrel behind a closure, taking the pig in at ``main``.
+
+    The line leaves at ``kicker`` once the pig is in the barrel.
+"""),
 
     # --- Filters ------------------------------------------------------
     ("filter", "gas"): ("DustCollector", """Dust collector: a gas filter with a hopper under the medium.
@@ -329,17 +353,6 @@ DEVICES = {
 
     # --- Valves -------------------------------------------------------
     ("valve", "three_way"): ("ThreeWayValve", """Three-way valve: the run switches to a third leg, ``branch``."""),
-    ("valve", "control"): ("ControlValve", """Control valve: the valve a controller modulates.
-
-    Drawn as the general body with a diaphragm actuator (ISO 15519-2
-    A.3.41); ``butterfly_pneumatic`` draws a butterfly body. The
-    ``default`` body raises on ``normal_position="closed"``; use
-    ``fail="closed"``.
-"""),
-    ("valve", "solenoid"): ("SolenoidValve", """Solenoid valve: an electrically operated on/off valve.
-
-    It takes a ``fail`` position and may be shown normally closed.
-"""),
     ("valve", "relief"): ("ReliefValve", """Pressure relief valve: opens itself at the set pressure.
 
     ``default`` draws the bonnet-on-a-stem body and ``psv`` the
@@ -350,10 +363,6 @@ DEVICES = {
 
     ``actuator`` is the external pilot line. A ``fail`` position or
     ``normal_position="closed"`` raises.
-"""),
-    ("valve", "motor"): ("MotorOperatedValve", """Motor-operated valve: a block valve on an electric actuator.
-
-    It takes a ``fail`` position and may be shown normally closed.
 """),
     ("valve", "check"): ("CheckValve", """Check valve: passes flow one way and shuts against the other.
 
@@ -423,9 +432,6 @@ OWNS = {
         "default": "gas", "fixed_bed": "gas_fixed_bed", "belt": "gas_belt",
     },
     "RotaryDrumFilter": {"default": "rotary", "scraper": "rotary_scraper"},
-    "ControlValve": {
-        "default": "control", "butterfly_pneumatic": "butterfly_pneumatic",
-    },
     "ReliefValve": {"default": "relief", "psv": "psv"},
     "FlowElement": {
         "default": "venturi", "venturi": "venturi", "flow_nozzle": "flow_nozzle",
@@ -438,6 +444,26 @@ OWNS = {
         "ultrasonic_clamp_on": "ultrasonic_clamp_on", "thermal_mass": "thermal_mass",
         "flume": "flume", "weir": "weir",
     },
+}
+
+
+# class -> (actuator, docstring). The class draws that actuator on every
+# body that takes one with the default nozzles.
+ACTUATED = {
+    "ControlValve": ("diaphragm", """Control valve: the valve a controller modulates.
+
+    A diaphragm actuator (ISO 15519-2 A.3.41) on the body ``variant=``
+    names. It raises on ``normal_position="closed"``; use
+    ``fail="closed"``.
+"""),
+    "SolenoidValve": ("solenoid", """Solenoid valve: an electrically operated on/off valve.
+
+    It takes a ``fail`` position and may be shown normally closed.
+"""),
+    "MotorOperatedValve": ("motor", """Motor-operated valve: a block valve on an electric actuator.
+
+    It takes a ``fail`` position and may be shown normally closed.
+"""),
 }
 
 
@@ -574,6 +600,11 @@ STAYS_ON_BASE = {
     ("filter", "belt"): "medium: a cloth on rollers, in a liquid casing",
     ("filter", "fixed_bed"): "medium: a granular bed, in a liquid casing",
     ("separator", "horizontal"): "attitude: the same separator lying down",
+    ("membrane", "default"): "MembraneModule's own drawing (no grade lettered)",
+    ("membrane", "ro"): "membrane grade: reverse osmosis, lettered RO",
+    ("membrane", "nf"): "membrane grade: nanofiltration, lettered NF",
+    ("membrane", "uf"): "membrane grade: ultrafiltration, lettered UF",
+    ("membrane", "mf"): "membrane grade: microfiltration, lettered MF",
     ("valve", "default"): "Valve's own drawing (the gate body)",
     ("valve", "gate"): "body style, and the same drawing as the default",
     ("valve", "globe"): "body style",
@@ -586,8 +617,6 @@ STAYS_ON_BASE = {
     ("valve", "knife"): "body style",
     ("valve", "angle"): "body style: the seat turns the flow a quarter",
     ("valve", "bleed"): "body style: the small drain valve tapped off a header",
-    ("valve", "manual"): "operator style: a handwheel drawn on the body",
-    ("valve", "hydraulic"): "operator style: a hydraulic cylinder drawn on the body",
     ("fitting", "default"): "Fitting's own drawing (a flanged joint)",
     ("fitting", "flange"): "body style, and the same drawing as the default",
     ("fitting", "strainer"): "body style",
@@ -812,6 +841,33 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     }
 
 
+def actuated_spec(class_name: str, actuator: str, doc: str) -> dict:
+    """Return the spec of a valve class named for its actuator.
+
+    Parameters
+    ----------
+    class_name : str
+        Generated class name.
+    actuator : str
+        Actuator the class draws.
+    doc : str
+        Class docstring.
+
+    Returns
+    -------
+    dict
+        Name, base, doc, variants, aliases, ports and actuator.
+    """
+    from pandid.render.symbols import STEM_FOOT
+
+    ports = ports_for(units.Valve, "default")
+    variants = tuple(v for v in STEM_FOOT if ports_for(units.Valve, v) == ports)
+    return {
+        "name": class_name, "base": "Valve", "doc": doc,
+        "variants": variants, "aliases": {}, "ports": ports, "actuator": actuator,
+    }
+
+
 HEADER = '''"""Named equipment classes, one per scheduled device.
 
 GENERATED by scripts/gen_devices.py. Do not edit by hand.
@@ -846,6 +902,8 @@ def render() -> str:
     claims()
     specs = [spec_of(class_name, kind, variant, doc)
              for (kind, variant), (class_name, doc) in DEVICES.items()]
+    specs += [actuated_spec(class_name, actuator, doc)
+              for class_name, (actuator, doc) in ACTUATED.items()]
 
     taken = set(units.__all__)
     clashes = sorted(spec["name"] for spec in specs if spec["name"] in taken)
@@ -887,6 +945,8 @@ def emit(spec: dict) -> str:
     ]
     if spec["aliases"]:
         body.append(f"    VARIANT_ALIASES = {_dict(spec['aliases'])}")
+    if spec.get("actuator"):
+        body.append(f"    ACTUATOR = {_q(spec['actuator'])}")
     # Unit._declared_ports reads the nearest PORTS up the class tree.
     if spec["ports"] != getattr(units, spec["base"])._declared_ports():
         body.append(f"    PORTS = {_ports_source(spec['ports'])}")

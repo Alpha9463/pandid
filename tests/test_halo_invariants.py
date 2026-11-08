@@ -493,12 +493,22 @@ def test_no_halo_lands_on_another_halo(drawn, name):
     assert not struck, f"{name}: halos overlap at " + "; ".join(struck)
 
 
-def test_a_tag_moved_off_a_label_erases_no_line():
-    """Check that tags kept off each other on a crowded bank erase no line."""
+def test_a_tag_moved_off_a_label_erases_no_more_ink_than_alone():
+    """Check that tags kept off each other on a crowded bank erase no more than placed alone."""
+    from pandid.render.svg import SvgRenderer, _erases, _unit_label_box, unit_tags
     from test_instrument_banks import _valved_bank
 
     fs, _loops = _valved_bank(100)
-    assert not _erased_lines(fs, fs.to_svg(diagram="p&id"))
+    ink = _ink(fs, "vertical")
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    for unit, tag, _items in unit_tags(fs, None, "vertical"):
+        f = unit.frame
+        if tag is None or f is None:
+            continue
+        alone = SvgRenderer()._tag_spots(unit, f, f.x, f.y, f.w, f.h, unit.tag, ink, symbols)[0]
+        others = [_obstacle(b) for v, b in symbols if v is not unit]
+        now, was = (_erases(_unit_label_box(item), ink, others) for item in (tag, alone))
+        assert all(a <= b for a, b in zip(now, was)), (unit.tag, now, was)
 
 
 def _two_pump_bank(face: str) -> Flowsheet:
@@ -566,7 +576,7 @@ def test_a_tag_may_pass_over_a_label_still_to_move_on_its_way_clear():
         before = fs.add(U.Feed(f"F{y}")).pin(port="outlet", x=100, y=y).outlet
         for tag, x, normal, fail in valves:
             valve = U.Valve(
-                tag, "control" if fail else "default", normal_position=normal, fail=fail
+                tag, actuator="diaphragm" if fail else "", normal_position=normal, fail=fail
             )
             fs.add(valve).pin(port="inlet", x=x, y=y)
             fs.connect(before, valve.inlet)

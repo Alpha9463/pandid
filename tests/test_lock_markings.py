@@ -82,7 +82,7 @@ def test_a_lock_and_the_other_position_are_refused():
 
 def test_a_locked_valve_has_no_fail_position():
     with pytest.raises(ValueError, match="has no fail position. Drop fail= or the lock"):
-        U.Valve("XV-1", variant="solenoid", lock="LO", fail="closed")
+        U.Valve("XV-1", actuator="solenoid", lock="LO", fail="closed")
 
 
 def test_a_lock_that_is_not_one_names_the_four():

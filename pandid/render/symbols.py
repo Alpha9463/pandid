@@ -2638,85 +2638,173 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
 #: Valve variants whose body is darkened when normally closed.
 NC_DARKENS = frozenset({
     "default", "gate", "globe", "ball", "needle", "plug", "pinch", "three_way",
-    "angle", "bleed", "manual", "motor", "solenoid", "hydraulic",
+    "angle", "bleed",
 })
 
 #: Valve variants that may not be normally closed
 #: (PIP PIC001 4.2.2.10).
-NC_FORBIDDEN = frozenset({"control", "regulator", "relief", "psv"})
+NC_FORBIDDEN = frozenset({"regulator", "relief", "psv"})
 
-# Valve body and actuator pairings.
+#: Actuators that draw a control valve, which may not be normally
+#: closed (PIP PIC001 4.2.2.10).
+NC_FORBIDDEN_ACTUATORS = frozenset({"diaphragm"})
 
-#: ``(body, actuator)`` to the variant whose artwork draws the pair.
-ACTUATED: dict[tuple[str, str], str] = {
-    ("default", "diaphragm"): "control",
-    ("gate", "diaphragm"): "control",
-    ("butterfly", "diaphragm"): "butterfly_pneumatic",
-    # Lettered operator boxes.
-    ("default", "motor"): "motor",
-    ("gate", "motor"): "motor",
-    ("default", "solenoid"): "solenoid",
-    ("gate", "solenoid"): "solenoid",
-    ("default", "hydraulic"): "hydraulic",
-    ("gate", "hydraulic"): "hydraulic",
-    ("default", "handwheel"): "manual",
-    ("gate", "handwheel"): "manual",
+# Valve actuators, drawn on the stem of a body (ISO 15519-2 A.3.40 to
+# A.3.45; ISO 14617-1 4.7 and Table B.1).
+
+#: Bodies that carry an actuator, and how far below the body's top edge
+#: the stem lands: on the crossing of the cones, the top of a ball,
+#: globe or plug seat, the Saunders weir, the butterfly disc, the
+#: needle, the pinch bar or the knife's yoke.
+STEM_FOOT: dict[str, float] = {
+    "default": 7.5, "gate": 7.5, "three_way": 7.5, "angle": 7.5,
+    "globe": 2.5, "ball": 2.5, "plug": 2.5, "saunders": 2.0,
+    "butterfly": 6.25, "needle": 1.25, "pinch": 5.175, "knife": 0.0,
 }
 
 #: Actuators that may be named.
-ACTUATORS: tuple[str, ...] = ("diaphragm", "motor", "solenoid", "hydraulic",
+ACTUATORS: tuple[str, ...] = ("diaphragm", "piston", "motor", "solenoid", "hydraulic",
                               "handwheel")
 
+#: Actuators worked by a power supply, which take a fail position.
+POWERED_ACTUATORS = frozenset(ACTUATORS) - {"handwheel"}
 
-def variant_actuator(variant: str) -> str:
-    """Return the actuator a valve variant draws, from :data:`ACTUATED`.
+# Diaphragm actuator: a dome on its chord (ISO 15519-2 A.3.41).
+_DOME_R = 5.0
+
+# Cylinder actuator, its piston across the middle (ISO 15519-2 A.3.43).
+_CYLINDER_W, _CYLINDER_H = 10.0, 15.0
+
+# Lettered operator box, a piston across its middle.
+_BOX_W, _BOX_H = 15.0, 7.5
+
+# Letter size, halo and baseline of each lettered box.
+_BOX_TYPE = 4.5
+_BOX_HALO = 1.125
+_BOX_LETTERS = {"motor": ("M", 5.35), "solenoid": ("S", 4.1), "hydraulic": ("H", 5.35)}
+
+# Handwheel: the stem rises above the body, then turns along the bar.
+_HANDWHEEL_RISE, _HANDWHEEL_BAR = 1.25, 7.5
+
+# Ink of an actuator: a filled head and a bare stroke.
+_HEAD_INK = 'fill="white" stroke="#111" stroke-width="2"'
+_STEM_INK = 'fill="none" stroke="#111" stroke-width="2"'
+
+
+def actuator_art(actuator: str, x: float, depth: float) -> "tuple[str, float]":
+    """Return an actuator and its stem, and its height above the body.
+
+    The crown is at ``y = 0`` and the body's top edge at the returned
+    height; the stem runs down to ``depth`` below that edge.
 
     Parameters
     ----------
-    variant : str
-        Resolved valve variant.
+    actuator : str
+        One of :data:`ACTUATORS`.
+    x : float
+        Stem axis.
+    depth : float
+        Stem foot below the body's top edge.
 
     Returns
     -------
-    str
-        One of :data:`ACTUATORS`, or ``""`` if the variant draws none.
+    tuple[str, float]
+        SVG elements, and the actuator's height above the body.
     """
-    return next((a for (_, a), drawn in ACTUATED.items() if drawn == variant), "")
+    letter = ""
+    if actuator == "diaphragm":
+        rise = top = _DOME_R
+        head = (f'<path d="M {_n(x - _DOME_R)} {_n(rise)} '
+                f'A {_n(_DOME_R)} {_n(_DOME_R)} 0 0 1 {_n(x)} 0 '
+                f'A {_n(_DOME_R)} {_n(_DOME_R)} 0 0 1 {_n(x + _DOME_R)} {_n(rise)} Z" '
+                f'{_HEAD_INK}/>')
+    elif actuator == "piston":
+        rise, top = _CYLINDER_H, _CYLINDER_H / 2
+        left, right = x - _CYLINDER_W / 2, x + _CYLINDER_W / 2
+        head = (f'<rect x="{_n(left)}" y="0" width="{_n(_CYLINDER_W)}" '
+                f'height="{_n(_CYLINDER_H)}" {_HEAD_INK}/>'
+                f'<path d="M {_n(left)} {_n(top)} L {_n(right)} {_n(top)}" {_STEM_INK}/>')
+    elif actuator in _BOX_LETTERS:
+        rise, top = _BOX_H, _BOX_H / 2
+        left, right = x - _BOX_W / 2, x + _BOX_W / 2
+        head = (f'<rect x="{_n(left)}" y="0" width="{_n(_BOX_W)}" height="{_n(_BOX_H)}" '
+                f'{_HEAD_INK}/>'
+                f'<path d="M {_n(left)} {_n(top)} L {_n(right)} {_n(top)}" {_STEM_INK}/>')
+        text, baseline = _BOX_LETTERS[actuator]
+        type_ = (f'x="{_n(x)}" y="{_n(baseline)}" font-family="sans-serif" '
+                 f'font-size="{_n(_BOX_TYPE)}" text-anchor="middle"')
+        letter = (f'<text {type_} fill="white" stroke="white" stroke-width="{_n(_BOX_HALO)}" '
+                  f'stroke-linejoin="round">{text}</text>'
+                  f'<text {type_} fill="#111">{text}</text>')
+    else:
+        rise = _HANDWHEEL_RISE
+        return (f'<path d="M {_n(x)} {_n(rise + depth)} L {_n(x)} 0 '
+                f'L {_n(x + _HANDWHEEL_BAR)} 0" {_STEM_INK}/>'), rise
+    stem = f'<path d="M {_n(x)} {_n(top)} L {_n(x)} {_n(rise + depth)}" {_STEM_INK}/>'
+    return head + stem + letter, rise
 
 
-def actuated_variant(body: str, actuator: str) -> str:
-    """Return the variant drawing ``body`` with ``actuator`` on it.
+def actuated(body: Symbol, variant: str, actuator: str) -> Symbol:
+    """Return a valve body with an actuator drawn on its stem.
+
+    The actuator keeps its own size, the box grows above the body to
+    hold it, and the ``actuator`` signal port moves to its crown.
 
     Parameters
     ----------
-    body : str
-        Body variant.
+    body : Symbol
+        Valve body.
+    variant : str
+        Body variant, a key of :data:`STEM_FOOT`.
     actuator : str
         One of :data:`ACTUATORS`.
 
     Returns
     -------
-    str
-        Variant from :data:`ACTUATED`.
+    Symbol
+        The body and its actuator.
 
     Raises
     ------
     ValueError
-        If no variant draws the pairing.
+        If the body's artwork is not one ``<g>`` group.
     """
-    drawn = ACTUATED.get((body, actuator))
-    if drawn is not None:
-        return drawn
-    pairs = ", ".join(
-        f"variant={b!r}, actuator={a!r}" for b, a in sorted(ACTUATED) if b != "gate"
-    )
-    raise ValueError(
-        f"no symbol draws a {body!r} body with a {actuator!r} actuator on it. The "
-        f"draw.io P&ID stencil set this package vendors draws each actuated valve "
-        f"as one fused shape rather than as a body plus an operator, so only the "
-        f"pairings it ships can be drawn: {pairs} (and 'gate' wherever 'default' "
-        f"appears, which is the same drawing). Ask for the body on its own if the "
-        f"sheet does not have to say what strokes it."
+    match = _GROUP.match(body.svg)
+    if match is None:
+        raise ValueError(
+            f"{body.symbol_id()}: cannot carry an actuator -- its artwork is not a "
+            f"single <g> group to draw the actuator into"
+        )
+    head, inner, tail = match.groups()
+    x = body.ports["actuator"][0]
+    art, rise = actuator_art(actuator, x, STEM_FOOT[variant])
+
+    def down(xy: "tuple[float, float]") -> "tuple[float, float]":
+        """Return a body point moved below the actuator.
+
+        Parameters
+        ----------
+        xy : tuple[float, float]
+            Point in body coordinates.
+
+        Returns
+        -------
+        tuple[float, float]
+            Point in the grown box.
+        """
+        return (xy[0], round(xy[1] + rise, 4))
+
+    return replace(
+        body,
+        svg=f'{head}<g transform="translate(0,{_n(rise)})">{inner}</g>{art}{tail}',
+        height=round(body.height + rise, 4),
+        ports={**{name: down(xy) for name, xy in body.ports.items()}, "actuator": (x, 0.0)},
+        port_faces={name: {face: down(xy) for face, xy in menu.items()}
+                    for name, menu in body.port_faces.items() if name != "actuator"},
+        id_suffix=f"{body.id_suffix}_{actuator}",
+        drawio_shape="",
+        drawio_body_shape=body.drawio_shape,
+        iso_reg="",
     )
 
 
@@ -2736,11 +2824,6 @@ FAIL_POSITIONS: dict[str, str] = {
 #: Locks and car seals, each to the position it holds the valve in.
 LOCKS: dict[str, str] = {"LO": "open", "LC": "closed", "CSO": "open", "CSC": "closed"}
 
-#: Valve variants with a powered actuator, which take a fail position.
-FAIL_ACTUATED = frozenset({
-    "control", "butterfly_pneumatic", "solenoid", "motor", "hydraulic",
-})
-
 
 def fail_marking(unit) -> str:
     """Return the fail-position letters for a valve, or ``""``.
@@ -2758,17 +2841,16 @@ def fail_marking(unit) -> str:
     Raises
     ------
     ValueError
-        If the variant has no powered actuator but declares ``fail``.
+        If the valve has no powered actuator but declares ``fail``.
     """
     declared = getattr(unit, "fail", "") or ""
     if not declared:
         return ""
-    if getattr(unit, "variant", "") not in FAIL_ACTUATED:
+    if getattr(unit, "actuator_type", "") not in POWERED_ACTUATORS:
         raise ValueError(
-            f"{getattr(unit, 'name', unit.kind)}: declared fail={declared!r}, but "
-            f"variant {getattr(unit, 'variant', '')!r} has no actuator to lose its "
-            f"motive power. The variants that take a fail position are: "
-            f"{', '.join(sorted(FAIL_ACTUATED))}."
+            f"{getattr(unit, 'name', unit.kind)}: declared fail={declared!r}, but it "
+            f"has no powered actuator to lose its motive power. Give it one: "
+            f"actuator= one of {', '.join(repr(a) for a in sorted(POWERED_ACTUATORS))}."
         )
     return FAIL_POSITIONS[declared]
 
@@ -3470,8 +3552,9 @@ TUMBLING_MILLS = {
 #: from the shell's ends.
 _BALL_R, _BALL_PITCH, _ROD_GAP, _MEDIA_INSET = M / 2, 1.5 * M, 0.75 * M, M
 
-#: Least shell length and diameter a tumbling mill is drawn with.
-_MILL_LEAST = (2 * M, 3 * M)
+#: Least shell length and diameter a tumbling mill is drawn with: the
+#: media's inset at each end and a module of media between.
+_MILL_LEAST = (2 * _MEDIA_INSET + M, 3 * M)
 
 
 def tumbling_mill_too_small(variant: str, width: float, height: float) -> ValueError:
@@ -4857,9 +4940,13 @@ _OPEN_TOP_TANK = _rect_tank("open_top", 6 * M, False, "2061")
 STOCKPILE_W, STOCKPILE_H = 10 * M, 4 * M
 _PILE_OVER, _PILE_GAP, _PILE_DOTS = M, 1.5 * M, 0.25 * M
 
+#: Least height of a pile: slopes long enough for the break and a module
+#: of solid slope either side of it.
+_PILE_LEAST_H = (_PILE_GAP + 2 * M) * math.sqrt(0.5)
 
-def stockpile_too_narrow(width: float, height: float) -> ValueError:
-    """Return the refusal of a box too narrow for its pile.
+
+def stockpile_too_small(width: float, height: float) -> ValueError:
+    """Return the refusal of a box too small for its pile.
 
     Parameters
     ----------
@@ -4869,13 +4956,15 @@ def stockpile_too_narrow(width: float, height: float) -> ValueError:
     Returns
     -------
     ValueError
-        The refusal, naming the least width.
+        The refusal, naming the least height and the least width.
     """
-    least = 2 * (_PILE_OVER + height)
+    tall = max(height, _PILE_LEAST_H)
+    least = 2 * (_PILE_OVER + tall)
     return ValueError(
-        f"a box {width:g} wide is too small to draw a stockpile {height:g} high on its "
-        f"slopes of one in one, which needs a width of at least {least:g}; give "
-        f"width={least:g} or more, or a smaller height"
+        f"a box {width:g} x {height:g} is too small to draw a stockpile on slopes of "
+        f"one in one, which needs a height of at least {_PILE_LEAST_H:.4g} for each "
+        f"slope's dotted break and a width of at least {least:g} for a height of "
+        f"{tall:.4g}; give height= and width= at least that, or leave them unset"
     )
 
 
@@ -4897,12 +4986,13 @@ def stockpile_symbol(width: float | None = None, height: float | None = None) ->
     Raises
     ------
     ValueError
-        If the box is too narrow for the pile's slopes.
+        If the box is too low for the slopes' breaks, or too narrow for
+        the slopes.
     """
     w = float(STOCKPILE_W if width is None else width)
     h = float(STOCKPILE_H if height is None else height)
-    if h <= 0 or w < 2 * (_PILE_OVER + h):
-        raise stockpile_too_narrow(w, h)
+    if h < _PILE_LEAST_H or w < 2 * (_PILE_OVER + h):
+        raise stockpile_too_small(w, h)
     unit = math.sqrt(0.5)
     strokes, dots = [f"M 0 {_n(h)} L {_n(w)} {_n(h)}"], []
     for toe, way in ((_PILE_OVER, 1.0), (w - _PILE_OVER, -1.0)):
@@ -5129,6 +5219,318 @@ _SHAFT_PORTS = {
 }
 
 
+# Water and oil and gas units (practice), each built to its box: every
+# feature keeps its own size, and the shell or barrel takes the rest.
+
+#: Membrane module: the permeate channel's depth under the top wall,
+#: the membrane's dash and gap, and each letter's width, height and
+#: spacing.
+_PERMEATE_D, _MEMBRANE_DASH, _MEMBRANE_GAP = M, 1.5 * M, 0.5 * M
+_GLYPH_W, _GLYPH_H, _GLYPH_GAP = M, 1.5 * M, 0.5 * M
+
+#: Each lettered membrane grade, and its letters as strokes in a glyph
+#: box ``_GLYPH_W`` wide and ``_GLYPH_H`` tall.
+MEMBRANE_GRADES = {"ro": "RO", "nf": "NF", "uf": "UF", "mf": "MF"}
+_GLYPHS = {
+    "R": "M 0 15 L 0 0 L 10 0 L 10 7.5 L 0 7.5 M 5 7.5 L 10 15",
+    "O": "M 5 0 A 5 7.5 0 0 1 5 15 A 5 7.5 0 0 1 5 0",
+    "N": "M 0 15 L 0 0 L 10 15 L 10 0",
+    "F": "M 10 0 L 0 0 L 0 15 M 0 7.5 L 7.5 7.5",
+    "U": "M 0 0 L 0 10 A 5 5 0 0 0 10 10 L 10 0",
+    "M": "M 0 15 L 0 0 L 5 7.5 L 10 0 L 10 15",
+}
+
+#: A membrane module's natural box, and the least it is drawn in.
+MEMBRANE_SIZE, _MEMBRANE_LEAST = (12 * M, 4 * M), (6 * M, 3 * M)
+
+
+def _glyph_path(d: str, x: float, y: float) -> str:
+    """Return a glyph's path moved to ``(x, y)``.
+
+    Parameters
+    ----------
+    d : str
+        Path data of ``M``, ``L`` and ``A`` commands in the glyph box.
+    x, y : float
+        Where the glyph box's top-left corner goes.
+
+    Returns
+    -------
+    str
+        Path data in the drawing's coordinates.
+    """
+    out, tokens, i = [], d.split(), 0
+    while i < len(tokens):
+        cmd = tokens[i]
+        n = 7 if cmd == "A" else 2
+        v = [float(t) for t in tokens[i + 1:i + 1 + n]]
+        if cmd == "A":
+            v[5], v[6] = v[5] + x, v[6] + y
+        else:
+            v = [v[0] + x, v[1] + y]
+        out.append(cmd + " " + " ".join(_n(t) for t in v))
+        i += 1 + n
+    return " ".join(out)
+
+
+def _too_small(what: str, width: float, height: float,
+               least: "tuple[float, float]") -> ValueError:
+    """Return the refusal of a box too small for a drawing's features.
+
+    Parameters
+    ----------
+    what : str
+        The drawing, as the message names it.
+    width, height : float
+        The box.
+    least : tuple[float, float]
+        Least width and height.
+
+    Returns
+    -------
+    ValueError
+        The refusal, naming the least box.
+    """
+    return ValueError(
+        f"a box {width:g} x {height:g} is too small to draw {what}, which needs a box "
+        f"at least {least[0]:g} wide and {least[1]:g} tall; give width= and height= at "
+        f"least that, or leave them unset"
+    )
+
+
+@lru_cache(maxsize=None)
+def membrane_symbol(variant: str = "default", width: float | None = None,
+                    height: float | None = None) -> Symbol:
+    """Return a membrane module built to a box.
+
+    A housing split by the membrane, dashed, a module under its top
+    wall: the feed channel below it, lettered with the grade, and the
+    permeate channel above.
+
+    Parameters
+    ----------
+    variant : str, default="default"
+        ``"default"``, or a grade in :data:`MEMBRANE_GRADES`.
+    width, height : float, optional
+        Box; :data:`MEMBRANE_SIZE` where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The module, fed at the west end, its concentrate drawn off the
+        east end and its permeate off the top at the east end.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the channels and the letters.
+    """
+    w = float(MEMBRANE_SIZE[0] if width is None else width)
+    h = float(MEMBRANE_SIZE[1] if height is None else height)
+    if w < _MEMBRANE_LEAST[0] or h < _MEMBRANE_LEAST[1]:
+        raise _too_small("a membrane module", w, h, _MEMBRANE_LEAST)
+    pitch = _MEMBRANE_DASH + _MEMBRANE_GAP
+    count = int((w + _MEMBRANE_GAP) / pitch)
+    start = (w - count * pitch + _MEMBRANE_GAP) / 2
+    dashes = " ".join(f"M {_n(start + k * pitch)} {_n(_PERMEATE_D)} "
+                      f"L {_n(start + k * pitch + _MEMBRANE_DASH)} {_n(_PERMEATE_D)}"
+                      for k in range(count))
+    feed_y = (_PERMEATE_D + h) / 2
+    letters = MEMBRANE_GRADES.get(variant, "")
+    span = len(letters) * _GLYPH_W + max(len(letters) - 1, 0) * _GLYPH_GAP
+    glyphs = " ".join(_glyph_path(_GLYPHS[c], (w - span) / 2 + i * (_GLYPH_W + _GLYPH_GAP),
+                                  feed_y - _GLYPH_H / 2)
+                      for i, c in enumerate(letters))
+    art = (f'<rect x="0" y="0" width="{_n(w)}" height="{_n(h)}" {_OUTLINE}/>'
+           f'<path d="{dashes}" {_DETAIL}/>'
+           + (f'<path d="{glyphs}" {_DETAIL}/>' if glyphs else ""))
+    natural = (w, h) == MEMBRANE_SIZE
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    name = "sym_membrane" + ("" if variant == "default" else f"_{variant}")
+    return Symbol(
+        svg=f'<g id="{name}{suffix}">{art}</g>',
+        width=w, height=h,
+        ports={"feed": (0.0, feed_y), "concentrate": (w, feed_y),
+               "permeate": (w - M, 0.0)},
+        id_suffix=suffix,
+    )
+
+
+#: Pig trap: the closure's thickness, the reducer's length, the main
+#: nozzle's length and bore, and the barrel's natural length and the
+#: closure's natural height.
+_CLOSURE_T, _PIG_REDUCER, _PIG_MAIN_L, _PIG_MAIN_D = 0.5 * M, 2 * M, 1.5 * M, M
+PIG_TRAP_SIZE = (12 * M, 4 * M)
+
+#: Pig trap nozzles along the barrel, from the closure: the kicker, the
+#: vent, the relief, and the drain on the underside.
+_PIG_KICKER, _PIG_VENT, _PIG_RELIEF, _PIG_DRAIN = M, 4 * M, 6 * M, 7 * M
+
+
+@lru_cache(maxsize=None)
+def pig_trap_symbol(variant: str = "launcher", width: float | None = None,
+                    height: float | None = None) -> Symbol:
+    """Return a pig launcher or receiver built to a box.
+
+    A closure on the end of a barrel, which a reducer takes down to the
+    main line's nozzle. The launcher's closure is at its west end, the
+    receiver's at its east end.
+
+    Parameters
+    ----------
+    variant : str, default="launcher"
+        ``"launcher"`` or ``"receiver"``.
+    width, height : float, optional
+        Box; :data:`PIG_TRAP_SIZE` where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The trap, with ``closure`` on the closure, ``main`` on the main
+        nozzle, the kicker, vent and relief on top of the barrel and the
+        drain under it.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the closure, reducer and main nozzle.
+    """
+    w = float(PIG_TRAP_SIZE[0] if width is None else width)
+    h = float(PIG_TRAP_SIZE[1] if height is None else height)
+    ends = _CLOSURE_T + _PIG_REDUCER + _PIG_MAIN_L
+    least = (ends + _PIG_DRAIN + M, 2 * _PIG_MAIN_D)
+    if w < least[0] or h < least[1]:
+        raise _too_small(f"a pig {variant}", w, h, least)
+    c, rim = h / 2, _CLOSURE_T
+    barrel_end = w - _PIG_REDUCER - _PIG_MAIN_L
+    main = w - _PIG_MAIN_L
+    bore = _PIG_MAIN_D / 2
+
+    def x(along: float) -> float:
+        """Return a launcher's x as the variant draws it.
+
+        Parameters
+        ----------
+        along : float
+            x on the launcher.
+
+        Returns
+        -------
+        float
+            x on this variant.
+        """
+        return along if variant == "launcher" else w - along
+
+    outline = (
+        f"M {_n(x(0))} 0 L {_n(x(rim))} 0 L {_n(x(rim))} {_n(h)} L {_n(x(0))} {_n(h)} Z "
+        f"M {_n(x(rim))} {_n(rim)} L {_n(x(barrel_end))} {_n(rim)} "
+        f"L {_n(x(main))} {_n(c - bore)} L {_n(x(w))} {_n(c - bore)} "
+        f"L {_n(x(w))} {_n(c + bore)} L {_n(x(main))} {_n(c + bore)} "
+        f"L {_n(x(barrel_end))} {_n(h - rim)} L {_n(x(rim))} {_n(h - rim)} "
+        f"M {_n(x(barrel_end))} {_n(rim)} L {_n(x(barrel_end))} {_n(h - rim)} "
+        f"M {_n(x(main))} {_n(c - bore)} L {_n(x(main))} {_n(c + bore)}"
+    )
+    natural = (w, h) == PIG_TRAP_SIZE
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    return Symbol(
+        svg=f'<g id="sym_pig_trap_{variant}{suffix}"><path d="{outline}" {_OUTLINE}/></g>',
+        width=w, height=h,
+        ports={"closure": (x(0), c), "main": (x(w), c),
+               "kicker": (x(rim + _PIG_KICKER), rim), "vent": (x(rim + _PIG_VENT), rim),
+               "relief": (x(rim + _PIG_RELIEF), rim),
+               "drain": (x(rim + _PIG_DRAIN), h - rim)},
+        id_suffix=suffix,
+        gravity_fixed=True,
+    )
+
+
+#: Horizontal drum: its head depth, the boot's bore, depth and bottom
+#: head, its offset from the east tangent line, and the weir's offset
+#: from that line and height as a share of the drum's diameter.
+_DRUM_HEAD_D = 0.75 * M
+_BOOT_D, _BOOT_DEPTH, _BOOT_HEAD, _BOOT_OFF = 1.2 * M, 1.2 * M, 0.3 * M, 2 * M
+_WEIR_OFF, _WEIR_SHARE = 3 * M, 0.6
+
+#: Each drum's natural box: the drum 12 M by 3 M, a booted one with its
+#: boot beneath.
+DRUM_SIZES = {"boot": (12 * M, 3 * M + _BOOT_DEPTH + _BOOT_HEAD), "three_phase": (12 * M, 3 * M)}
+
+
+@lru_cache(maxsize=None)
+def three_phase_drum_symbol(variant: str, width: float | None = None,
+                            height: float | None = None) -> Symbol:
+    """Return a horizontal drum with a boot, or with a weir, built to a box.
+
+    Parameters
+    ----------
+    variant : str
+        ``"boot"``: a water boot under the east end. ``"three_phase"``:
+        a weir across the drum near its east end.
+    width, height : float, optional
+        Box; :data:`DRUM_SIZES` where ``None``.
+
+    Returns
+    -------
+    Symbol
+        The drum, fed at its west head, the vapour drawn off the top and
+        the liquid and water off the bottom.
+
+    Raises
+    ------
+    ValueError
+        If the box cannot hold the heads, the boot or the weir.
+    """
+    w = float(DRUM_SIZES[variant][0] if width is None else width)
+    h = float(DRUM_SIZES[variant][1] if height is None else height)
+    under = _BOOT_DEPTH + _BOOT_HEAD if variant == "boot" else 0.0
+    least = (2 * _DRUM_HEAD_D + _WEIR_OFF + 3 * M, under + 2 * M)
+    if w < least[0] or h < least[1]:
+        raise _too_small("a " + ("booted drum" if variant == "boot" else "three-phase "
+                                 "separator"), w, h, least)
+    d = h - under
+    x0, x1, c = _DRUM_HEAD_D, w - _DRUM_HEAD_D, d / 2
+    head = f"A {_n(_DRUM_HEAD_D)} {_n(c)} 0 0 1"
+    outline = (f"M {_n(x0)} 0 L {_n(x1)} 0 {head} {_n(x1)} {_n(d)} L {_n(x0)} {_n(d)} "
+               f"{head} {_n(x0)} 0 Z M {_n(x0)} 0 L {_n(x0)} {_n(d)} "
+               f"M {_n(x1)} 0 L {_n(x1)} {_n(d)}")
+    art = f'<path d="{outline}" {_OUTLINE}/>'
+    vapor = (x1 - M, 0.0)
+    if variant == "boot":
+        bx = x1 - _BOOT_OFF
+        b0, b1 = bx - _BOOT_D / 2, bx + _BOOT_D / 2
+        art += (f'<path d="M {_n(b0)} {_n(d)} L {_n(b0)} {_n(d + _BOOT_DEPTH)} '
+                f'A {_n(_BOOT_D / 2)} {_n(_BOOT_HEAD)} 0 0 0 {_n(b1)} {_n(d + _BOOT_DEPTH)} '
+                f'L {_n(b1)} {_n(d)}" {_OUTLINE}/>')
+        ports = {"liquid": (w / 2, d), "water": (bx, h)}
+    else:
+        wx = x1 - _WEIR_OFF
+        art += (f'<line x1="{_n(wx)}" y1="{_n(d)}" x2="{_n(wx)}" '
+                f'y2="{_n(d * (1 - _WEIR_SHARE))}" {_DETAIL}/>')
+        ports = {"water": ((x0 + wx) / 2, d), "liquid": ((wx + x1) / 2, d)}
+    natural = (w, h) == DRUM_SIZES[variant]
+    suffix = "" if natural else f"_{w:g}x{h:g}"
+    return Symbol(
+        svg=f'<g id="sym_separator_{variant}{suffix}">{art}</g>',
+        width=w, height=h,
+        ports={"feed": (0.0, c), "vapor": vapor, **ports},
+        id_suffix=suffix,
+        gravity_fixed=True,
+    )
+
+
+for _variant in MEMBRANE_GRADES:
+    _BUILT_TO_SIZE[("membrane", _variant)] = lambda unit: _named(
+        unit, membrane_symbol, unit.variant, unit.width, unit.height)
+_BUILT_TO_SIZE[("membrane", "default")] = lambda unit: _named(
+    unit, membrane_symbol, "default", unit.width, unit.height)
+for _variant in ("launcher", "receiver"):
+    _BUILT_TO_SIZE[("pig_trap", _variant)] = lambda unit: _named(
+        unit, pig_trap_symbol, unit.variant, unit.width, unit.height)
+for _variant in DRUM_SIZES:
+    _BUILT_TO_SIZE[("separator", _variant)] = lambda unit: _named(
+        unit, three_phase_drum_symbol, unit.variant, unit.width, unit.height)
+
+
 class SymbolRegistry:
     """Catalogue of symbols keyed by ``(kind, variant)``, and ISO parts.
 
@@ -5139,8 +5541,11 @@ class SymbolRegistry:
     def __init__(self):
         """Create the registry and register the default symbols."""
         self._symbols: dict[tuple[str, str], Symbol] = {}
-        # Caches of derived symbols.
-        self._darkened: dict[tuple[str, str], Symbol] = {}
+        # Caches of derived symbols: darkened per (kind, variant,
+        # actuator), and valve bodies with an actuator per (variant,
+        # actuator).
+        self._darkened: dict[tuple[str, str, str], Symbol] = {}
+        self._actuated: dict[tuple[str, str], Symbol] = {}
         # Closed-state drawings.
         self._closed: dict[tuple[str, str], Symbol] = {}
         # Fittings turned end for end (expanders).
@@ -5168,7 +5573,11 @@ class SymbolRegistry:
             Variant name.
         """
         self._symbols[(kind, variant)] = template
-        self._darkened.pop((kind, variant), None)
+        for dark in [k for k in self._darkened if k[:2] == (kind, variant)]:
+            del self._darkened[dark]
+        if kind == "valve":
+            for pair in [k for k in self._actuated if k[0] == variant]:
+                del self._actuated[pair]
         self._closed.pop((kind, variant), None)
         self._expanders.pop((kind, variant), None)
         for key in [k for k in self._composed if k[:2] == (kind, variant)]:
@@ -5351,8 +5760,9 @@ class SymbolRegistry:
         """Return the symbol to draw a unit with.
 
         Starts from :meth:`get`, then uses, in order, a symbol built
-        to the unit's size, the body with its parts, a normally closed
-        drawing, or a reducer turned end for end.
+        to the unit's size, the body with its parts, the body with its
+        actuator, a normally closed drawing, or a reducer turned end
+        for end.
 
         Parameters
         ----------
@@ -5380,20 +5790,48 @@ class SymbolRegistry:
         overlays = tuple(getattr(unit, "overlays", ()) or ())
         if overlays:
             return self.composed(unit.kind, variant, overlays)
+        actuator = getattr(unit, "actuator_type", "")
+        if actuator:
+            sym = self.actuated(variant, actuator)
         mark = closed_marking(unit, self)
         if mark == "stencil":
             return self._closed[(unit.kind, variant)]
         if mark == "fill":
-            key = (unit.kind, variant)
-            if key not in self._darkened:
-                self._darkened[key] = darkened(sym)
-            return self._darkened[key]
+            dark = (unit.kind, variant, actuator)
+            if dark not in self._darkened:
+                self._darkened[dark] = darkened(sym)
+            return self._darkened[dark]
         if getattr(unit, "large_end", "inlet") == "outlet":
             key = (unit.kind, variant)
             if key not in self._expanders:
                 self._expanders[key] = expander(sym)
             return self._expanders[key]
         return sym
+
+    def actuated(self, variant: str, actuator: str) -> Symbol:
+        """Return a valve body with an actuator drawn on its stem.
+
+        Parameters
+        ----------
+        variant : str
+            Body variant, a key of :data:`STEM_FOOT`.
+        actuator : str
+            One of :data:`ACTUATORS`.
+
+        Returns
+        -------
+        Symbol
+            The body and its actuator, cached.
+
+        Raises
+        ------
+        ValueError
+            If the body is not registered.
+        """
+        key = (variant, actuator)
+        if key not in self._actuated:
+            self._actuated[key] = actuated(self.get("valve", variant), variant, actuator)
+        return self._actuated[key]
 
     def variants(self, kind: str) -> list[str]:
         """Return the variants registered for a kind, ``default`` first.
@@ -5711,6 +6149,17 @@ class SymbolRegistry:
         self._register_fans()
         self._register_pumps()
         self._register_compressors()
+        self._register_water_oil_gas()
+
+    def _register_water_oil_gas(self):
+        """Register the membrane modules, pig traps and three-phase drums."""
+        self.register("membrane", membrane_symbol())
+        for grade in MEMBRANE_GRADES:
+            self.register("membrane", membrane_symbol(grade), grade)
+        for end in ("launcher", "receiver"):
+            self.register("pig_trap", pig_trap_symbol(end), end)
+        for drum in DRUM_SIZES:
+            self.register("separator", three_phase_drum_symbol(drum), drum)
 
     def _register_fans(self):
         """Register the general, centrifugal and axial fans."""

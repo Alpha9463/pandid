@@ -172,7 +172,7 @@ def _pen(state):
 
 # mxGraph anchors a <text> by its own box, SVG by the baseline, so each valign
 # needs the distance from that edge down to the baseline (as a fraction of the
-# em). Only the operator letters on actuated valves ("M"/"H"/"S") use text.
+# em). draw.io letters the operators of its actuated valves ("M"/"H"/"S").
 _TEXT_ANCHOR = {"left": "start", "center": "middle", "right": "end"}
 _TEXT_BASELINE = {"top": 0.8, "middle": 0.35, "bottom": -0.2}
 
