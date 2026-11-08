@@ -106,6 +106,14 @@ The names depend on the class and variant. Common patterns are:
   for ISO items 20.7 and 20.8) turns it through its `shaft`:
   `fs.connect(motor.shaft, pump.drive)`. The motor is drawn beside the
   machine, on the side its `drive` faces, joined by a short straight shaft.
+- Other drivers turn a machine the same way: a `Turbine` and a `DieselEngine`
+  through their `shaft`, and a `Gearbox` between a driver and its machine,
+  taking the driver at its `drive` and turning the machine with its `shaft`.
+  A `Generator` (`variant="ac"` or `"dc"`) is driven at its `drive`:
+  `fs.connect(turbine.shaft, generator.drive)`. A unit whose only lines are
+  shafts is drawn beside its partner; two piped machines on one shaft, such as
+  a turbine and the compressor it drives, are stacked where their shaft ends
+  face each other, and the shaft is drawn straight wherever they do.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`
