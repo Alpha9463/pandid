@@ -218,7 +218,36 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     point, (nx, ny) = face_point(host, host.frame, face)
     fs = inst.flowsheet
     moved = nozzle_tap(inst) if fs is not None and fs._clear_taps else None
+    axial = axial_start(inst) if fs is not None and fs._axial_taps else None
+    if moved is None and axial is not None:
+        return axial, (-ny, nx)
     return _on_body(inst, host, face, moved or point), (-ny, nx)
+
+
+def axial_start(inst: "Instrument") -> Point | None:
+    """Return where a side tap on a drawing laid along its axis starts.
+
+    On a symbol with ``axial_taps``, a tap from its own W or E face
+    starts at the box's centre (:func:`~pandid.portgeom.axial_tap`).
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    Point or None
+        The centre start, or None if the tap stays on the face.
+    """
+    from pandid.portgeom import axial_tap
+    from pandid.streams import Stream
+
+    host = inst.host
+    if (isinstance(host, Stream) or host is None or host.frame is None
+            or inst.relation == "near"):
+        return None
+    return axial_tap(host, host.frame, free_face(inst) or inst.face or "E")
 
 
 #: Variables a balloon measures on a machine its host carries, such as

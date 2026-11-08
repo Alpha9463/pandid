@@ -45,6 +45,7 @@ __all__ = [
     "FlotationCell",
     "Deaerator",
     "Silo",
+    "Stockpile",
     "MixerSettler",
     "Crystallizer",
     "Absorber",
@@ -1674,8 +1675,8 @@ def _recompose(unit: "Unit", old: str) -> None:
                     f"{type(unit).__name__}({unit.name!r}, ..., variant={unit.variant!r}) "
                     f"instead"
                 )
-            _compose_onto(unit, *unit._composition)
             unit._check_parts()
+            _compose_onto(unit, *unit._composition)
             added = current[len(built):]
             if added:
                 drawn = _placed(stated, unit.variant) + added
@@ -2406,8 +2407,19 @@ class _MultiPortVessel(_FaceFamilies):
 
     _VARIANT_BUILDS = True
 
-    # Variants an agitator may hang in.
+    # Variants an agitator may hang in, and the agitator hung.
     _STIRRABLE: tuple[str, ...] = ()
+    agitator: str | None = None
+
+    def _check_parts(self) -> None:
+        """Refuse an agitator on a variant that cannot carry one.
+
+        Raises
+        ------
+        ValueError
+            If the unit has an agitator and its variant cannot carry one.
+        """
+        _refuse_agitator(self)
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
@@ -2716,13 +2728,13 @@ class _MultiPortVessel(_FaceFamilies):
             self.kind, self.variant, tuple(on.items()), parts, ports, size), scale)
 
 
-def _refuse_agitator(unit: "Tank | Vessel") -> None:
+def _refuse_agitator(unit: "_MultiPortVessel") -> None:
     """Refuse an agitator on a variant that cannot carry one.
 
     Parameters
     ----------
-    unit : Tank or Vessel
-        Unit with its ``agitator`` set.
+    unit : _MultiPortVessel
+        Tank or vessel with its ``agitator`` set.
 
     Raises
     ------
@@ -2869,7 +2881,7 @@ class Vessel(_MultiPortVessel):
     ):
         super().__init__(name, variant=variant, **options)
         self.agitator = agitator
-        _refuse_agitator(self)
+        self._check_parts()
         self.manholes = _on_walls(self, "manholes", manholes)
         self.sockets = _on_walls(self, "sockets", sockets)
         self._init_connections(inputs, outputs)
@@ -2977,7 +2989,7 @@ class Tank(_MultiPortVessel):
     ):
         super().__init__(name, variant=variant, **options)
         self.agitator = agitator
-        _refuse_agitator(self)
+        self._check_parts()
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
         self._init_connections(inputs, outputs)
@@ -3224,8 +3236,9 @@ class Fitting(_NormallyPositioned):
     plate a metering orifice draws too), ``rotameter``,
     ``rupture_disc``, ``sight_glass``,
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``,
-    ``bellows``, ``blind``, ``damper``, ``spool``, ``static_mixer``
-    (ISO 10628-2 item 12.2 X2673), ``rotary_mixer`` (item 12.1
+    ``bellows``, ``blind``, ``paddle_blind`` (ISO 10628-2 item 24.9),
+    ``paddle_spacer`` (item 24.10), ``damper``, ``spool``,
+    ``static_mixer`` (item 12.2 X2673), ``rotary_mixer`` (item 12.1
     X2672), ``mixing_path`` (item 12.3 X8184), ``steam_trap`` (item
     24.15, 2181), ``hose``, ``coupling``, ``clamped_coupling``,
     ``flange`` (the default) and the flame arrestors
@@ -3646,7 +3659,10 @@ class Mill(CrushingMachine):
 
     Variants, by ISO item: ``"default"`` (general, 11.8), ``"hammer"``
     (11.9), ``"impact"`` (11.10), ``"roller"`` (11.11) and
-    ``"vibration"`` (11.12). Drawn one way up; ``validate`` reports a
+    ``"vibration"`` (11.12). The tumbling mills ``"ball"``, ``"rod"``,
+    ``"sag"`` and ``"ag"`` are drums on a trunnion at each end, fed
+    through the west one and discharged through the east one, built to
+    the box they are given. Drawn one way up; ``validate`` reports a
     turned mill as ``gravity-turned``. Parameters are those of
     :class:`Unit`.
     """
@@ -5122,6 +5138,24 @@ class Deaerator(Unit):
         ("steam", "inlet", "utility"),
         ("outlet", "outlet", "liquid"),
     ]
+
+
+class Stockpile(Unit):
+    """Open stockpile of bulk solids, ISO 10628-2 item 1.29 2065.
+
+    Solids are stacked at ``feed``, on top of the pile, and reclaimed at
+    ``reclaim``, under it. The pile is 4 M high on slopes of one in one;
+    a ``width`` wider than the pile's base gives it a flat top, and a
+    ``height`` raises it on the same slopes. ``validate`` reports a
+    turned stockpile as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
+    """
+
+    feed: Port
+    reclaim: Port
+
+    kind = "stockpile"
+    PORTS = [("feed", "inlet", "feed"), ("reclaim", "outlet", "process")]
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:

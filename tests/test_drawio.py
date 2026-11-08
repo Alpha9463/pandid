@@ -2937,6 +2937,8 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
     shell = (
         _drawn_parts(unit, unit.__dict__["overlays"])[0]
         if unit.kind in ("vessel", "tank")
+        else default_registry.get(unit.kind, unit.variant)
+        if any(o.group == 20 for o in sym.overlays)
         else None
     )
     boxes = [] if shell is None else overlay_boxes(shell, sym.overlays)
@@ -2961,8 +2963,8 @@ def test_a_composed_symbol_still_draws_its_body(composed_sheet):
             c for k, c in cells.items() if c.get("value") == unit.name and c.get("vertex") == "1"
         )
         style = _style(cell)
-        if unit.kind in ("vessel", "tank"):
-            # A vessel's shell, or a stirred tank's body, is exported as drawn.
+        if unit.kind in ("vessel", "tank") or any(o.group == 20 for o in sym.overlays):
+            # A vessel's shell, or a body under its motor, is exported as drawn.
             assert _inline_stencil(style.get("shape", "")) is not None
         elif sym.drawio_body_shape:
             assert style.get("shape") == sym.drawio_body_shape

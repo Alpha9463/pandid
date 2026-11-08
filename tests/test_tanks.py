@@ -8,7 +8,7 @@ import pytest
 from test_drawio import _inline_stencil
 from test_symbol_invariants import Segment, _collect_segments, _nearest_distance
 
-from pandid import Feed, Flowsheet, Product, Tank, Vessel
+from pandid import Feed, Flowsheet, Product, Reactor, Tank, Vessel
 from pandid.portgeom import port_faces, resolve_size
 from pandid.render.iso_parts import MOTOR_D, MOTOR_GAP
 from pandid.render.symbols import default_registry, overlay_boxes
@@ -281,3 +281,47 @@ def test_draw_io_draws_a_stirred_tank_under_a_round_motor_on_its_shaft():
     assert "agitators.agitator_(turbine)" in (stirrer.get("style") or "")
     x, y, w, _ = _geometry(stirrer)
     assert (x + w / 2, y) == pytest.approx((35, MOTOR_D))
+
+
+@pytest.mark.parametrize(
+    ("make", "variant"),
+    [
+        (lambda: Tank("TK-101", agitator="turbine"), "floating_roof"),
+        (lambda: Vessel("V-101", agitator="anchor"), "horizontal"),
+    ],
+    ids=["tank-to-floating-roof", "vessel-to-drum"],
+)
+def test_a_stirred_body_reassigned_to_a_variant_that_cannot_carry_it_is_refused(make, variant):
+    """Check that reassigning the variant refuses as the constructor does, and keeps the old one."""
+    unit = make()
+    with pytest.raises(ValueError, match=f"variant {variant!r} cannot carry agitator="):
+        unit.variant = variant
+    assert unit.variant == "default"
+    fs = Flowsheet("Kept")
+    fs.add(unit)
+    fs.to_svg()
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        Reactor("R-1"),
+        Reactor("R-2", width=150, height=120),
+        Reactor("R-3", variant="jacketed", agitator="anchor", width=80, height=170),
+    ],
+    ids=["reactor", "wide-reactor", "tall-jacketed-reactor"],
+)
+def test_draw_io_draws_a_stirred_reactor_under_its_motor_inside_its_cell(unit):
+    """Check that the export draws a reactor's body under its motor, not stretched over it."""
+    cells, cid = _exported(unit)
+    stencil = _outline(cells, cid)
+    _, _, _, h = _geometry(cells[cid])
+    scale = h / float(stencil.get("h", "nan"))
+    ys = [float(step.get("y", "nan")) for step in stencil.iter() if step.get("y") is not None]
+    motor = cells[f"{cid}-p{len(unit.__dict__['overlays']) - 1}"]
+    assert "shape=ellipse" in (motor.get("style") or "")
+    _, top, _, tall = _geometry(motor)
+    # The motor heads the cell, and the body hangs below it to the cell's foot.
+    assert top == pytest.approx(0, abs=0.01)
+    assert min(ys) * scale > top + tall
+    assert max(ys) * scale == pytest.approx(h, abs=0.05)
