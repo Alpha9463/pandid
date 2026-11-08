@@ -3203,7 +3203,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
 
 
 def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
-    """Return the box round the units, labels, routes and package frames.
+    """Return the box round the units, labels, routes, pipe marks and package frames.
 
     Parameters
     ----------
@@ -3229,7 +3229,8 @@ def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
     for u in fs.units:
         if u.frame is None:
             raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-    for bx0, by0, bx1, by1 in (*(unit_box(u, u.frame) for u in fs.units), *labels):
+    for bx0, by0, bx1, by1 in (*(unit_box(u, u.frame) for u in fs.units), *labels,
+                               *(m.box for m in pipe_marks(fs))):
         x0, y0 = min(x0, bx0), min(y0, by0)
         x1, y1 = max(x1, bx1), max(y1, by1)
     for s in fs.streams:

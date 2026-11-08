@@ -262,7 +262,7 @@ def _over_notes(fs) -> list["Issue"]:
 
 
 def _crowded_marks(fs) -> list["Issue"]:
-    """Return a warning for each line whose marks find no clear run.
+    """Return a warning for each line drawn without its marks.
 
     Parameters
     ----------
@@ -272,29 +272,26 @@ def _crowded_marks(fs) -> list["Issue"]:
     Returns
     -------
     list[Issue]
-        ``line-mark-crowded`` for each line whose tracing, insulation or
-        jacket marks meet a unit, another line, a tap line, a hatch, a
-        placed annotation or another line's marks, or overrun their run.
+        ``line-mark-crowded`` for each traced, insulated or jacketed line
+        with no straight run long enough for its marks clear of units,
+        other lines, tap lines, hatches, placed annotations and other
+        lines' marks.
     """
-    from pandid.render.pipe_marks import MARK_END_CLEAR, MARK_GAP, MARK_LENGTH, pipe_marks
+    from pandid.render.pipe_marks import MARK_END_CLEAR, MARK_GAP, MARK_LENGTH, crowded_marks
 
     names = {"jacket": "jacket", "tracer": "tracing", "insulation": "insulation"}
     out = []
-    for mark in pipe_marks(fs):
-        if mark.clear:
-            continue
-        words = [names[k] for part in mark.kinds for k in part]
+    for line, kinds in crowded_marks(fs):
+        words = [names[k] for part in kinds for k in part]
         what = ", ".join(words[:-1]) + (" and " if len(words) > 1 else "") + words[-1]
-        need = (len(mark.kinds) * MARK_LENGTH + (len(mark.kinds) - 1) * MARK_GAP
-                + 2 * MARK_END_CLEAR)
-        name, many = mark.stream.name, len(words) > 1
+        need = len(kinds) * MARK_LENGTH + (len(kinds) - 1) * MARK_GAP + 2 * MARK_END_CLEAR
+        name, many = line.name, len(words) > 1
         out.append(Issue(
             "warning", "line-mark-crowded",
             f"{name} has no straight run {need:g} px long clear of units and other "
             f"lines for its {what} mark{'s' if many else ''}, so "
-            f"{'they are' if many else 'it is'} drawn where "
-            f"{'they meet' if many else 'it meets'} the fewest. Lengthen a straight "
-            f"run of {name}, or move the units and lines beside it apart"))
+            f"{'they are' if many else 'it is'} not drawn. Lengthen a straight run of "
+            f"{name}, or move the units and lines beside it apart"))
     return out
 
 

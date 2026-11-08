@@ -268,11 +268,12 @@ produces names such as `6"-P-1001-A1A` instead of `S1`.
 `"electric"`, or any medium) for a traced line (ISO 10628-2 25.6),
 `insulated=True` for an insulated one (25.9; 25.8 when traced too) and
 `jacketed=True` for a jacketed one (25.7). `insulation=` is only the line
-number's code and draws nothing. A line's marks stand together on its longest
-straight run with room for them clear of units and other lines; tags and line
-numbers keep off them. `validate()` reports `line-mark-crowded` where no run
-has room. Set on a split line's handle, a treatment applies to the whole run;
-signal lines take none.
+number's code and draws nothing. A line carries its marks once, together on
+its longest straight run with room for them clear of every unit, other line and
+note; its own segments come first, then its valve stations' pipework. Tags and
+line numbers keep off the marks. Where no run has room the marks are not drawn,
+and `validate()` reports `line-mark-crowded`. Set on a split line's handle, a
+treatment applies to the whole run; signal lines take none.
 
 A returned `Stream` exposes `source`, `dest`, `kind`, `name`, `route`,
 `properties`, `color`, `dasharray`, `ends`, `tracing`, `insulated` and

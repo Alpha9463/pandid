@@ -1,12 +1,14 @@
 """Tracing, insulation and jacket marks drawn along a pipe.
 
 The marks are ISO 10628-2:2012 items 25.6 (traced), 25.7 (jacketed),
-25.8 (traced and insulated) and 25.9 (insulated). A line's marks stand
-together on one straight run of it: the first run, longest first, with
-room for them clear of units, other lines, tap lines, pneumatic hatches,
-placed annotations and other lines' marks. The jacket is a pipe and is
-drawn on the main-flow rung; tracer and insulation are drawn on the
-detail rung.
+25.8 (traced and insulated) and 25.9 (insulated). ISO 10628-2 does not
+say how often a line carries its mark, so a line carries it once: its
+marks stand together on one straight run of the line, its own segments'
+runs longest first and then those of its valve stations' pipework,
+where they keep clear of every unit, other line, tap line, pneumatic
+hatch, placed annotation and other line's marks. A line with no such run
+carries none. The jacket is a pipe and is drawn on the main-flow rung;
+tracer and insulation are drawn on the detail rung.
 """
 
 from __future__ import annotations
@@ -78,9 +80,6 @@ class PipeMark(NamedTuple):
         Every stroke of the marks.
     box : tuple[float, float, float, float]
         The area the marks cover, as left, top, right, bottom.
-    clear : bool
-        Whether the marks keep clear of units, other lines, tap lines,
-        hatches, placed annotations and other lines' marks.
     """
 
     stream: "Stream"
@@ -90,7 +89,6 @@ class PipeMark(NamedTuple):
     before: float
     strokes: list[Stroke]
     box: tuple[float, float, float, float]
-    clear: bool
 
 
 def _parts(s: "Stream") -> list[tuple[str, ...]]:
@@ -261,10 +259,7 @@ def has_marks(fs: "Flowsheet") -> bool:
 
 
 def pipe_marks(fs: "Flowsheet") -> list[PipeMark]:
-    """Return the marks of every traced, insulated or jacketed line.
-
-    The segments of a split line that carry the same treatments carry
-    one set of marks between them.
+    """Return the marks of every traced, insulated or jacketed line with room.
 
     Parameters
     ----------
@@ -274,37 +269,78 @@ def pipe_marks(fs: "Flowsheet") -> list[PipeMark]:
     Returns
     -------
     list[PipeMark]
-        One entry per treated line with both ends placed, in stream
+        One entry per line that has a clear run for its marks, in stream
         order.
     """
+    return _place(fs)[0]
+
+
+def crowded_marks(fs: "Flowsheet") -> list[tuple["Stream", tuple[tuple[str, ...], ...]]]:
+    """Return each treated line that has no clear run for its marks.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[Stream, tuple[tuple[str, ...], ...]]]
+        The line, or its handle, and the marks it would carry, as
+        :attr:`PipeMark.kinds`.
+    """
+    return _place(fs)[1]
+
+
+def _place(fs: "Flowsheet") -> tuple[list[PipeMark], list]:
+    """Place the marks of every treated line that is drawn.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    tuple[list[PipeMark], list]
+        The marks placed, and each line with none, as :func:`crowded_marks`.
+    """
     if not has_marks(fs):
-        return []
+        return [], []
     from pandid.layout.compact import placed
     from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import hatch_boxes, tap_lines, tap_route
     from pandid.route_geometry import stream_polyline
 
+    drawn = {id(s): stream_polyline(s) for s in fs.streams
+             if s.source.owner.frame is not None and s.dest.owner.frame is not None}
+    # Each line's own segments, then its stations' pipework.
+    piped = {id(p) for s in fs.streams for p in s._logical_pipework}
+    lines: dict[int, tuple] = {}
+    for s in fs.streams:
+        if s._logical_root is None and id(s) not in piped:
+            lines[id(s)] = (s, [*(s._logical_segments or [s])], [*s._logical_pipework])
+    owner = {id(p): handle for handle, own, pipework in lines.values() for p in own + pipework}
     groups: dict[tuple, list] = {}
     for s in fs.streams:
         parts = _parts(s)
         if parts:
-            root = s._logical_root or s
-            groups.setdefault((id(root), tuple(parts)), []).append(s)
+            handle = owner.get(id(s), s)
+            groups.setdefault((id(handle), tuple(parts)), [handle]).append(s)
     if not groups:
-        return []
+        return [], []
 
-    lines = [(s, stream_polyline(s)) for s in fs.streams
-             if s.source.owner.frame is not None and s.dest.owner.frame is not None]
     blocks = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
     blocks += hatch_boxes(fs) + placed(fs)
     # Every segment a mark must not meet: tap lines', then each line's.
     taps = [tap_route(*tap) for tap in tap_lines(fs)]
     reach: list[tuple[Stream | None, int, tuple[float, float], tuple[float, float]]] = [
         (None, -1, a, b) for route in taps for a, b in zip(route, route[1:])]
-    reach += [(s, i, a, b) for s, points in lines
-              for i, (a, b) in enumerate(zip(points, points[1:]))]
+    reach += [(s, i, a, b) for s in fs.streams if id(s) in drawn
+              for i, (a, b) in enumerate(zip(drawn[id(s)], drawn[id(s)][1:]))]
     out: list[PipeMark] = []
+    crowded: list = []
 
     def build(parts, points, i, u0) -> "tuple[list[Stroke], tuple, tuple, tuple, float]":
         """Return the marks' strokes and box with their span from ``u0`` on a run.
@@ -345,31 +381,35 @@ def pipe_marks(fs: "Flowsheet") -> list[PipeMark]:
                      for (px, py), (qx, qy) in zip(points[:i], points[1:i + 1]))
         return strokes, box, (x1, y1), (x2, y2), before
 
-    for (_root, parts_key), streams in groups.items():
+    for (_handle, parts_key), (handle, *streams) in groups.items():
         parts = list(parts_key)
         span = len(parts) * MARK_LENGTH + (len(parts) - 1) * MARK_GAP
         boxes = blocks + [m.box for m in out]
-        runs = sorted(((s, points, i, n) for s, points in lines if any(s is t for t in streams)
-                       for i, n in _runs(points)), key=lambda run: -run[3])
-        # The first clear spot with room wins, else the one meeting fewest.
-        best: "tuple[int, PipeMark] | None" = None
-        for s, points, i, n in runs:
+        _, own, pipework = lines.get(id(handle), (handle, [handle], []))
+        candidates = []
+        for tier in (own, pipework):
+            runs = [(s, drawn[id(s)], i, n) for s in tier
+                    if any(s is t for t in streams) and id(s) in drawn
+                    for i, n in _runs(drawn[id(s)])]
+            candidates += sorted(runs, key=lambda run: -run[3])
+        chosen = None
+        for s, points, i, n in candidates:
             room = n - 2 * MARK_END_CLEAR - span
-            steps = int(room / 2 // M) if room >= 0 else 0
+            if room < 0:
+                continue
+            steps = int(room / 2 // M)
             for k in sorted(range(-steps, steps + 1), key=abs):
                 strokes, box, start, end, before = build(parts, points, i,
                                                          (n - span) / 2 + k * M)
-                hits = (sum(boxes_overlap(box, b) for b in boxes)
-                        + sum(segment_crosses_box(a, b, box) for t, j, a, b in reach
-                              if not (t is s and j == i)))
-                clear = room >= 0 and hits == 0
-                if best is None or (hits, not clear) < (best[0], not best[1].clear):
-                    best = hits, PipeMark(s, parts_key, start, end, before, strokes, box, clear)
-                if clear:
+                if (not any(boxes_overlap(box, b) for b in boxes)
+                        and not any(segment_crosses_box(a, b, box) for t, j, a, b in reach
+                                    if not (t is s and j == i))):
+                    chosen = PipeMark(s, parts_key, start, end, before, strokes, box)
                     break
-            if best is not None and best[1].clear:
+            if chosen is not None:
                 break
-        if best is not None:
-            out.append(best[1])
-    return out
-
+        if chosen is not None:
+            out.append(chosen)
+        elif any(id(s) in drawn for s in streams):
+            crowded.append((handle, parts_key))
+    return out, crowded

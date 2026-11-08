@@ -136,7 +136,6 @@ def test_the_svg_draws_every_stroke_and_the_line_number_keeps_off_them() -> None
     mark = pipe_marks(fs)[0]
     for (x1, y1), (x2, y2), _w in mark.strokes:
         assert f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}"' in svg
-    assert mark.clear
     assert fs.validate() == []
     root = ET.fromstring(svg)
     number = next(
@@ -181,19 +180,45 @@ def test_marks_drawn_over_a_placed_note_count_as_the_line() -> None:
     assert ("line", line.name) in covered(fs)
 
 
-def test_marks_with_no_clear_run_are_reported() -> None:
-    """Report a jacketed line too short for its mark, and what to do."""
+def test_marks_with_no_clear_run_are_not_drawn_and_are_reported() -> None:
+    """Draw no jacket on a line too short for it, and say what to do."""
     fs = Flowsheet("Short")
     feed, product = fs.add(Feed("F")), fs.add(Product("P"))
     feed.pin(x=100, y=100)
     product.pin(x=160, y=100)
     fs.connect(feed.outlet, product.inlet, jacketed=True)
-    fs.route()
+    svg = fs.to_svg(diagram="p&id")
+    assert "<line" not in svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
     assert [i.message for i in fs.validate() if i.code == "line-mark-crowded"] == [
         "S1 has no straight run 80 px long clear of units and other lines for its jacket "
-        "mark, so it is drawn where it meets the fewest. Lengthen a straight run of S1, "
-        "or move the units and lines beside it apart"
+        "mark, so it is not drawn. Lengthen a straight run of S1, or move the units and "
+        "lines beside it apart"
     ]
+
+
+def test_a_line_through_a_valve_station_carries_one_mark_clear_of_every_unit() -> None:
+    """Draw one insulation mark for a line and its station, on a run clear of every unit."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+
+    fs = Flowsheet("Steam")
+    feed, product = fs.add(Feed("F")), fs.add(Product("P"))
+    line = fs.connect(feed.outlet, product.inlet, insulated=True)
+    fs.add_valve_station("CV-101", on=line)
+    svg = fs.to_svg(diagram="p&id")
+    body = svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
+    strokes = [
+        tuple(map(float, m.groups()))
+        for m in re.finditer(
+            r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"', body
+        )
+    ]
+    # One 25.9 mark: two band edges and three hatch strokes.
+    assert len(strokes) == 5
+    boxes = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
+    for x1, y1, x2, y2 in strokes:
+        assert not any(segment_crosses_box((x1, y1), (x2, y2), box) for box in boxes)
+    assert [i for i in fs.validate() if i.code == "line-mark-crowded"] == []
 
 
 def test_a_treated_line_with_an_unplaced_end_draws_no_mark() -> None:
@@ -319,3 +344,17 @@ def test_each_mark_is_drawn_where_iso_10628_2_puts_it(treated: str) -> None:
     expected = {_key(*stroke) for stroke in _EXPECTED[treated]}
     assert _svg_strokes(fs.to_svg(diagram="p&id")) == expected
     assert _drawio_strokes(fs.to_drawio()) == expected
+
+
+def test_the_drawing_bounds_take_in_marks_that_reach_past_the_units() -> None:
+    """Bound the drawing round a traced and insulated band that stands above its units."""
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import drawing_bounds
+
+    fs, _ = _line(tracing="steam", insulated=True)
+    (mark,) = pipe_marks(fs)
+    top = min(unit_box(u, u.frame)[1] for u in fs.units if u.frame is not None)
+    assert mark.box[1] < top, "the fixture stopped reaching past the units"
+    x0, y0, x1, y1 = drawing_bounds(fs)
+    assert x0 <= mark.box[0] and y0 <= mark.box[1]
+    assert x1 >= mark.box[2] and y1 >= mark.box[3]
