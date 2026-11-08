@@ -1614,8 +1614,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True,
                     f"({x2:g}, {y2:g}){more}. ISO 15519-1:2010 12.1 has connecting "
                     f"lines oriented horizontally or vertically. {cure}"))
 
-            length = sum(abs(pts[k + 1][0] - pts[k][0]) + abs(pts[k + 1][1] - pts[k][1])
-                         for k in range(len(pts) - 1))
+            length = path_length(pts)
             direct = abs(dp[0] - sp[0]) + abs(dp[1] - sp[1])
             if direct > 1 and length > 3.0 * direct:
                 warnings.append(Issue("warning", "route-detour",
