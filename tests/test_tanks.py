@@ -1,8 +1,12 @@
 """Check the rectangular tanks of ISO 10628-2 items 1.1 and 1.2, and stirred tanks and vessels."""
 
+import math
+import re
 import xml.etree.ElementTree as ET
 
 import pytest
+from test_drawio import _inline_stencil
+from test_symbol_invariants import Segment, _collect_segments, _nearest_distance
 
 from pandid import Feed, Flowsheet, Product, Tank, Vessel
 from pandid.portgeom import port_faces, resolve_size
@@ -140,18 +144,140 @@ def test_a_stirred_tank_with_its_vent_and_relief_piped_draws_clean():
     assert [i for i in fs.validate() if i.severity == "error"] == []
 
 
-def test_draw_io_draws_a_stirred_tank_under_a_round_motor():
-    """Check that the export draws the tank body in place and the motor as a circle."""
-    fs = Flowsheet("Export")
-    feed = fs.add(Feed("F"))
-    tank = fs.add(Tank("TK-101", agitator="turbine", width=70, height=120))
-    fs.connect(feed.outlet, tank.inlet)
-    cells = {c.get("id"): c for c in ET.fromstring(fs.to_drawio()).iter("mxCell")}
-    cid = next(k for k, c in cells.items() if c.get("value") == "TK-101")
-    assert "shape=stencil(" in (cells[cid].get("style") or "")
-    motor = cells[f"{cid}-p1"].find("mxGeometry")
-    assert motor is not None
-    assert (float(motor.get("width", "nan")), float(motor.get("height", "nan"))) == (
-        MOTOR_D,
-        MOTOR_D,
+# The marks that tell each drawing apart, read back from what each backend emits.
+
+
+def _emitted(unit: Unit) -> "tuple[list[Segment], float, float]":
+    """Return the ink a unit is drawn with on a sheet of its own, in its box, and the box."""
+    fs = Flowsheet("Emitted")
+    fs.add(unit)
+    svg = fs.to_svg()
+    use = re.search(
+        r'<use href="#([^"]+)" x="[^"]+" y="[^"]+" width="([^"]+)" height="([^"]+)"', svg
     )
+    assert use is not None
+    ref, w, h = use.group(1), float(use.group(2)), float(use.group(3))
+    sym = re.search(
+        rf'<symbol id="{re.escape(ref)}" viewBox="0 0 (\S+) (\S+)"[^>]*>(.*?)</symbol>', svg, re.S
+    )
+    assert sym is not None
+    sx, sy = w / float(sym.group(1)), h / float(sym.group(2))
+    ink = _collect_segments(f'<g xmlns="http://www.w3.org/2000/svg">{sym.group(3)}</g>')
+    return [((a[0] * sx, a[1] * sy), (b[0] * sx, b[1] * sy)) for a, b in ink], w, h
+
+
+def _bare(ink: "list[Segment]", points: "list[tuple[float, float]]") -> list:
+    """Return the points no ink passes within a unit of."""
+    return [p for p in points if _nearest_distance(p, ink) > 1.0]
+
+
+def _along(a: "tuple[float, float]", b: "tuple[float, float]", n: int = 9) -> list:
+    """Return ``n`` points strictly between ``a`` and ``b``."""
+    return [
+        (a[0] + (b[0] - a[0]) * i / (n + 1), a[1] + (b[1] - a[1]) * i / (n + 1))
+        for i in range(1, n + 1)
+    ]
+
+
+def test_the_sheet_draws_the_flat_roof_tank_closed_by_its_roof():
+    """Check that item 1.1 is drawn as four walls, its roof inked from wall to wall."""
+    ink, w, h = _emitted(Tank("TK-101", variant="flat_roof"))
+    assert (w, h) == (80, 120)
+    corners = [(0, 0), (80, 0), (80, 120), (0, 120)]
+    for a, b in zip(corners, corners[1:] + corners[:1]):
+        assert _bare(ink, _along(a, b)) == [], f"no ink from {a} to {b}"
+
+
+def test_the_sheet_draws_the_open_top_tank_open():
+    """Check that item 1.2 is drawn as two walls and a floor, and nothing across its top."""
+    ink, w, h = _emitted(Tank("TK-101", variant="open_top"))
+    assert (w, h) == (80, 60)
+    for a, b in [((0, 0), (0, 60)), ((0, 60), (80, 60)), ((80, 60), (80, 0))]:
+        assert _bare(ink, _along(a, b)) == [], f"no ink from {a} to {b}"
+    top = _along((10, 0), (70, 0))
+    assert _bare(ink, top) == top, "the open tank is drawn with a roof"
+
+
+@pytest.mark.parametrize(
+    ("unit", "roof"),
+    [
+        (Tank("TK-1", variant="flat_roof", agitator="turbine"), True),
+        (Tank("TK-2", variant="flat_roof", agitator="turbine", width=70, height=200), True),
+        (Tank("TK-3", variant="open_top", agitator="propeller", width=200, height=100), False),
+        (Vessel("V-1", agitator="anchor", width=120, height=150), False),
+    ],
+    ids=["flat-roof", "tall-flat-roof", "wide-open-top", "wide-vessel"],
+)
+def test_the_sheet_draws_a_round_motor_over_the_roof_on_a_shaft_into_the_body(unit, roof):
+    """Check the item 1.27 marks: a 2 M motor 1 M above the body, its shaft running into it."""
+    ink, w, h = _emitted(unit)
+    r, top = MOTOR_D / 2, MOTOR_D + MOTOR_GAP
+    rim = [
+        (w / 2 + r * math.cos(k * math.pi / 6), r + r * math.sin(k * math.pi / 6))
+        for k in range(12)
+    ]
+    assert _bare(ink, rim) == [], "the motor is not a circle 2 M across at the top of the box"
+    assert _bare(ink, _along((w / 2, MOTOR_D), (w / 2, top + 2 * M))) == [], "no shaft"
+    if roof:
+        assert _bare(ink, _along((0, top), (w, top))) == [], "the roof is not under the motor"
+    beside = [(x, r) for x in (w / 2 - 2 * MOTOR_D, w / 2 + 2 * MOTOR_D)]
+    assert _bare(ink, beside) == beside, "the body reaches up beside the motor"
+
+
+def _exported(unit: Unit) -> "tuple[dict[str, ET.Element], str]":
+    """Return the draw.io cells a unit exports as on a sheet of its own, and its cell id."""
+    fs = Flowsheet("Export")
+    fs.add(unit)
+    cells = {c.get("id", ""): c for c in ET.fromstring(fs.to_drawio()).iter("mxCell")}
+    return cells, next(k for k, c in cells.items() if c.get("value") == unit.name)
+
+
+def _geometry(cell: ET.Element) -> "tuple[float, ...]":
+    """Return a cell's ``x``, ``y``, ``width`` and ``height``."""
+    box = cell.find("mxGeometry")
+    assert box is not None
+    return tuple(float(box.get(k, "nan")) for k in ("x", "y", "width", "height"))
+
+
+def _outline(cells: "dict[str, ET.Element]", cid: str) -> ET.Element:
+    """Return the inline stencil a cell is drawn with."""
+    shape = re.search(r"shape=(stencil\([^)]*\))", cells[cid].get("style") or "")
+    assert shape, f"{cid} is not drawn with its own outline"
+    stencil = _inline_stencil(shape.group(1))
+    assert stencil is not None
+    return stencil
+
+
+def test_draw_io_draws_the_flat_roof_tank_closed_and_the_open_top_open():
+    """Check that the export draws item 1.1 as a filled box and item 1.2 as an open stroke."""
+    cells, cid = _exported(Tank("TK-101", variant="flat_roof"))
+    rects = [
+        tuple(float(r.get(k, "nan")) for k in ("x", "y", "w", "h"))
+        for r in _outline(cells, cid).iter("rect")
+    ]
+    assert rects == [(0, 0, 80, 120)]
+    cells, cid = _exported(Tank("TK-102", variant="open_top"))
+    outline = _outline(cells, cid)
+    path = outline.find("foreground/path")
+    assert path is not None
+    steps = [(step.tag, float(step.get("x", "nan")), float(step.get("y", "nan"))) for step in path]
+    assert steps == [("move", 0, 0), ("line", 0, 60), ("line", 80, 60), ("line", 80, 0)]
+    assert outline.find("foreground/rect") is None
+    assert outline.find("foreground/fillstroke") is None
+
+
+def test_draw_io_draws_a_stirred_tank_under_a_round_motor_on_its_shaft():
+    """Check that the export puts a 2 M motor on top, the stirrer under it, and the body below."""
+    tank = Tank("TK-101", variant="flat_roof", agitator="turbine", width=70, height=200)
+    cells, cid = _exported(tank)
+    stencil = _outline(cells, cid)
+    roof = next(stencil.iter("rect"))
+    # The body's roof, in the cell's own units.
+    drawn = float(roof.get("y", "nan")) / float(stencil.get("h", "nan")) * _geometry(cells[cid])[3]
+    assert drawn == pytest.approx(MOTOR_D + MOTOR_GAP, abs=0.01)
+    stirrer, motor = cells[f"{cid}-p0"], cells[f"{cid}-p1"]
+    assert "shape=ellipse" in (motor.get("style") or "")
+    assert _geometry(motor) == pytest.approx((25, 0, MOTOR_D, MOTOR_D))
+    assert "agitators.agitator_(turbine)" in (stirrer.get("style") or "")
+    x, y, w, _ = _geometry(stirrer)
+    assert (x + w / 2, y) == pytest.approx((35, MOTOR_D))
