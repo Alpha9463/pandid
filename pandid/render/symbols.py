@@ -3681,6 +3681,137 @@ _FAN_AXIAL = Symbol(
 )
 
 
+# ISO 10628-2 group 15, liquid pumps, on item 15.1's outline: a 6 M
+# circle with a chevron from its crown and foot to the discharge.
+_PUMP_R = 3 * M
+_PUMP_OUTLINE = (
+    f'<circle cx="{_PUMP_R:g}" cy="{_PUMP_R:g}" r="{_PUMP_R:g}" {_OUTLINE}/>'
+    f'<path d="M {_PUMP_R:g} 0 L {2 * _PUMP_R:g} {_PUMP_R:g} L {_PUMP_R:g} {2 * _PUMP_R:g}" '
+    f'{_INK}/>'
+)
+_PUMP_PORTS = {"suction": (0.0, _PUMP_R), "discharge": (2 * _PUMP_R, _PUMP_R)}
+
+
+def _group_15_pump(variant: str, mark: str, iso_reg: str = "") -> Symbol:
+    """Return a pump drawn on item 15.1's outline.
+
+    Parameters
+    ----------
+    variant : str
+        Pump variant, for the drawing's id.
+    mark : str
+        SVG drawn inside the outline.
+    iso_reg : str, default=""
+        ISO registration number, or empty for a practice drawing.
+
+    Returns
+    -------
+    Symbol
+        The pump.
+    """
+    return Symbol(
+        svg=f'<g id="sym_pump_{variant}">{_PUMP_OUTLINE}{mark}</g>',
+        width=2 * _PUMP_R, height=2 * _PUMP_R,
+        ports=dict(_PUMP_PORTS),
+        iso_reg=iso_reg,
+    )
+
+
+# Item 15.5, X8093, progressive cavity: one sine period 2 M long and
+# 1 M deep across the centre.
+_PUMP_PROGRESSIVE_CAVITY = _group_15_pump(
+    "progressive_cavity",
+    f'<path d="M {_PUMP_R - M:g} {_PUMP_R:g} '
+    f'A {M / 2:g} {M / 2:g} 0 0 0 {_PUMP_R:g} {_PUMP_R:g} '
+    f'A {M / 2:g} {M / 2:g} 0 0 1 {_PUMP_R + M:g} {_PUMP_R:g}" {_INK}/>',
+    "X8093")
+
+# Item 15.6, X8094, reciprocating piston: a rod 2 M long across the
+# centre, ending in a piston 2 M across.
+_PUMP_RECIPROCATING = _group_15_pump(
+    "reciprocating",
+    f'<path d="M {_PUMP_R - M:g} {_PUMP_R:g} L {_PUMP_R + M:g} {_PUMP_R:g} '
+    f'M {_PUMP_R + M:g} {_PUMP_R - M:g} L {_PUMP_R + M:g} {_PUMP_R + M:g}" {_INK}/>',
+    "X8094")
+
+#: Radius of item 15.7's diaphragm, the arc from the crown to the foot
+#: that bows 1.5 M towards the suction.
+PUMP_DIAPHRAGM_R = 3.75 * M
+
+# Item 15.7, X8095, diaphragm.
+_PUMP_DIAPHRAGM = _group_15_pump(
+    "diaphragm",
+    f'<path d="M {_PUMP_R:g} 0 A {PUMP_DIAPHRAGM_R:g} {PUMP_DIAPHRAGM_R:g} 0 0 0 '
+    f'{_PUMP_R:g} {2 * _PUMP_R:g}" {_INK}/>',
+    "X8095")
+
+#: Radius of one lobe of a lobe pump's rotor.
+LOBE_R = 0.6 * M
+
+#: Half the width of a lobe rotor's waist.
+LOBE_WAIST = 0.25 * M
+
+
+def _lobe_rotor(x: float, y: float, vertical: bool) -> str:
+    """Return one two-lobed rotor.
+
+    Parameters
+    ----------
+    x, y : float
+        Rotor centre.
+    vertical : bool
+        Lobes above and below the centre, else either side of it.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    dx, dy = (LOBE_WAIST, 0.0) if vertical else (0.0, LOBE_WAIST)
+    arc = f"A {LOBE_R:g} {LOBE_R:g} 0 1 0"
+    return (f'<path d="M {x - dx:g} {y - dy:g} {arc} {x + dx:g} {y + dy:g} '
+            f'{arc} {x - dx:g} {y - dy:g} Z" {_INK}/>')
+
+
+# A rotary lobe pump: two two-lobed rotors meshing where item 15.3
+# draws its gears, half a module towards the suction.
+_PUMP_LOBE = _group_15_pump(
+    "lobe",
+    _lobe_rotor(_PUMP_R - M / 2, _PUMP_R - 1.2 * M, vertical=False)
+    + _lobe_rotor(_PUMP_R - M / 2, _PUMP_R + 0.8 * M, vertical=True))
+
+#: Depth of a vertical turbine pump's discharge head.
+VTP_HEAD_H = 2 * M
+
+#: Length of its column from the head to the bowl.
+VTP_COLUMN = 4 * M
+
+#: Width of its column.
+VTP_COLUMN_W = M
+
+_VTP_BOWL_Y = VTP_HEAD_H + VTP_COLUMN + _PUMP_R
+_VTP_H = _VTP_BOWL_Y + _PUMP_R
+# Where the column's walls meet the bowl.
+_VTP_COLUMN_FOOT = _VTP_BOWL_Y - math.sqrt(_PUMP_R ** 2 - (VTP_COLUMN_W / 2) ** 2)
+
+# A vertical turbine pump: item 15.1's outline as the bowl, discharging
+# up a column to a head with a side outlet, and drawing from below.
+_PUMP_VERTICAL_TURBINE = Symbol(
+    svg='<g id="sym_pump_vertical_turbine">'
+        f'<rect x="0" y="0" width="{2 * _PUMP_R:g}" height="{VTP_HEAD_H:g}" {_OUTLINE}/>'
+        + "".join(
+            f'<line x1="{x:g}" y1="{VTP_HEAD_H:g}" x2="{x:g}" y2="{_VTP_COLUMN_FOOT:.4f}" '
+            f'{_INK}/>'
+            for x in (_PUMP_R - VTP_COLUMN_W / 2, _PUMP_R + VTP_COLUMN_W / 2))
+        + f'<circle cx="{_PUMP_R:g}" cy="{_VTP_BOWL_Y:g}" r="{_PUMP_R:g}" {_OUTLINE}/>'
+        f'<path d="M 0 {_VTP_BOWL_Y:g} L {_PUMP_R:g} {_VTP_BOWL_Y - _PUMP_R:g} '
+        f'L {2 * _PUMP_R:g} {_VTP_BOWL_Y:g}" {_INK}/></g>',
+    width=2 * _PUMP_R, height=_VTP_H,
+    ports={"suction": (_PUMP_R, _VTP_H), "discharge": (2 * _PUMP_R, VTP_HEAD_H / 2)},
+    gravity_fixed=True,
+)
+
+
 # ISO 10628-2 item 24.15, registered 2181: the steam trap.
 
 #: Steam trap body diameter.
@@ -5035,12 +5166,21 @@ class SymbolRegistry:
         self._register_steam_trap()
         self._register_flow_elements()
         self._register_fans()
+        self._register_pumps()
 
     def _register_fans(self):
         """Register the general, centrifugal and axial fans."""
         self.register("blower", _FAN_GENERAL, "general")
         self.register("blower", _FAN_CENTRIFUGAL, "centrifugal")
         self.register("blower", _FAN_AXIAL, "axial")
+
+    def _register_pumps(self):
+        """Register the group-15 and practice pumps."""
+        self.register("pump", _PUMP_PROGRESSIVE_CAVITY, "progressive_cavity")
+        self.register("pump", _PUMP_RECIPROCATING, "reciprocating")
+        self.register("pump", _PUMP_DIAPHRAGM, "diaphragm")
+        self.register("pump", _PUMP_LOBE, "lobe")
+        self.register("pump", _PUMP_VERTICAL_TURBINE, "vertical_turbine")
 
     def _register_steam_trap(self):
         """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""
