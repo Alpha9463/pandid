@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from _render_cases import SCENARIOS as SCENARIOS, copy_settled_case
+from _render_cases import SCENARIOS as SCENARIOS, _script, copy_settled_case
 from pandid.document import equipment_table
 from pandid.render.debug import _BOX, _PORT
 from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
@@ -67,6 +67,21 @@ def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
     assert at_this_version != at_another, "the version is not in the rendered file at all"
     assert _normalize(at_this_version) == _normalize(at_another)
     _check_golden(name, at_another)
+
+
+_SAMPLES = _script("drawio_samples")
+_AGENT = re.compile(r'(<mxfile[^>]*agent=)"[^"]*"')
+
+
+@pytest.mark.parametrize("stem", sorted(_SAMPLES.SAMPLES))
+def test_each_drawio_sample_is_its_example_as_exported_now(settled_gallery, stem):
+    """Match each committed draw.io sample to its example's export, apart from the version."""
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
+    exported = fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _SAMPLES._EXPORTED})
+    committed = (_SAMPLES.OUT / f"{stem}.drawio").read_text(encoding="utf-8")
+    assert _AGENT.sub(r"", committed) == _AGENT.sub(r"", exported), (
+        f"drawio-samples/{stem}.drawio is stale: run python scripts/drawio_samples.py"
+    )
 
 
 _DEBUG_CIRCLE = re.compile(
