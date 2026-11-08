@@ -524,3 +524,80 @@ def test_the_tee_advice_gives_both_connections_the_lines_treatments() -> None:
     """Name the tracing and insulation both connections through the tee take."""
     advice, _ = _tee_advice(tracing="steam", insulated=True)
     assert "Give both connections through T tracing='steam', insulated=True." in advice
+
+
+def _through_tee(centre: float) -> tuple[Flowsheet, dict[str, Stream]]:
+    """Return the line of :func:`_line` drawn through a tee centred at x=centre.
+
+    The streams are keyed by the connect() call the tee advice names.
+    """
+    from pandid.units import Tee
+
+    fs = Flowsheet("Tee")
+    feed, product, drain = fs.add(Feed("F")), fs.add(Product("P")), fs.add(Product("D"))
+    tee = fs.add(Tee("T"))
+    feed.pin(x=100, y=100)
+    product.pin(x=400, y=100)
+    # The tee's box is 12 px, its ports either side of its centre on the line.
+    tee.pin(x=centre - 6, y=94)
+    drain.pin(x=centre, y=250)
+    streams = {
+        "fs.connect(F.outlet, T.inlet)": fs.connect(feed.outlet, tee.inlet),
+        "fs.connect(T.outlet, P.inlet)": fs.connect(tee.outlet, product.inlet),
+    }
+    fs.connect(tee.branch, drain.inlet)
+    return fs, streams
+
+
+def test_a_marker_within_the_tees_span_is_given_a_choice_of_side() -> None:
+    """Name both sides for a spec break where the tee goes, and draw each choice beside it."""
+    from pandid.units import Tee
+
+    fs, line = _line()
+    line.mark("spec break", at=0.5, before="A1A", after="B2B")
+    fs.route()
+    with pytest.raises(ValueError) as refused:
+        fs.add(Tee("T"), on=line, at=0.5)
+    advice = str(refused.value)
+    assert "The spec break at=0.5 on S1 falls within T's span" in advice
+    options = re.findall(r"on the stream (fs\.connect\([^)]*\)) returns, (\.mark\([^)]*\))", advice)
+    assert [side for side, _ in options] == [
+        "fs.connect(F.outlet, T.inlet)",
+        "fs.connect(T.outlet, P.inlet)",
+    ]
+    # The tee's ports at x=244 and x=256; each choice a module clear of them.
+    for (side, call), want in zip(options, (234.0, 266.0)):
+        sheet, streams = _through_tee(250.0)
+        eval("stream" + call, {"stream": streams[side]})  # noqa: S307
+        sheet.route()
+        (drawn,) = line_markers(sheet)
+        assert drawn.point == pytest.approx((want, 100.0), abs=0.05)
+
+
+def test_a_marker_past_a_valve_is_marked_again_where_it_was_drawn() -> None:
+    """Re-mark a spec break on the segment past a valve, through the tee, where it was."""
+    from pandid.units import Tee
+
+    fs, line = _line()
+    valve = fs.add(ControlValve("FV"), on=line, at=0.4)
+    outlet = valve.outlet.stream
+    assert outlet is not None
+    outlet.mark("spec break", at=0.5, before="A1A", after="B2B")
+    fs.route()
+    (drawn,) = line_markers(fs)
+    with pytest.raises(ValueError) as refused:
+        fs.add(Tee("T"), on=line, at=0.7)
+    advice = str(refused.value)
+    assert "put back what S1 carries, each where it sits now: FV" in advice
+    # On the 300 px line, FV's centre is at x=220 and the tee's at x=310.
+    sheet, streams = _through_tee(310.0)
+    # FV where it sits now: 120 px along the 204 px run up to the tee's inlet.
+    sheet.add(ControlValve("FV"), on=streams["fs.connect(F.outlet, T.inlet)"], at=120 / 204)
+    advised = re.findall(r"on (fs\.connect\([^)]*\)), ((?:\.mark\([^)]*\)(?: and )?)+)", advice)
+    assert advised, advice
+    for side, calls in advised:
+        for call in re.findall(r"\.mark\([^)]*\)", calls):
+            eval("stream" + call, {"stream": streams[side]})  # noqa: S307
+    sheet.route()
+    (moved,) = line_markers(sheet)
+    assert moved.point == pytest.approx(drawn.point, abs=0.05)

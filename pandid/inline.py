@@ -114,15 +114,9 @@ def _carried(fs: Flowsheet, line: Stream, segments: list[Stream], device: Unit,
     str
         The devices and valve stations on the line in flow order, then
         the balloons on it or its parts; then the treatments both new
-        connections take; then each marker, with the connection it falls
-        on and its fraction of that connection, which keeps it where it
-        is drawn when the tee's ports sit either side of ``at`` on the
-        drawn line, or, with no ``at``, a call for one. ``""`` when it
-        carries none.
+        connections take; then its markers, as :func:`_remarked` puts
+        them. ``""`` when it carries none.
     """
-    from pandid.geometry import Frame
-    from pandid.portgeom import port_point, resolve_size
-    from pandid.route_geometry import stream_polyline
     from pandid.streams import TREATMENTS
     from pandid.units import Instrument
 
@@ -143,37 +137,116 @@ def _carried(fs: Flowsheet, line: Stream, segments: list[Stream], device: Unit,
                         if getattr(line, key) not in (None, False))
     if treated:
         out += f". Give both connections through {tee} {treated}"
-    if line.markers and at is None:
-        out += (f". {line.name} carries markers: give {tee} an at= in fs.add(..., on="
+    return out + _remarked(line, segments, device, at)
+
+
+def _remarked(line: Stream, segments: list[Stream], device: Unit, at: float | None) -> str:
+    """Return a sentence marking a line's markers again on its connections
+    through a tee.
+
+    Every marker on the line or any of its segments goes on the connection
+    it falls on, at the fraction of that connection that keeps it where it
+    is drawn: the tee's centre sits ``at`` along the line through its
+    devices, as on= puts a device, and its ports either side. Where the
+    line is not drawn, the fractions come from the segments' devices. A
+    marker within the tee's span is given a choice of side instead.
+
+    Parameters
+    ----------
+    line : Stream
+        Line handle.
+    segments : list[Stream]
+        The line's physical segments in flow order.
+    device : Unit
+        The tee.
+    at : float or None
+        The tee's fraction of the line, or ``None`` to go last.
+
+    Returns
+    -------
+    str
+        The sentence, or ``""`` when the line carries no marker.
+    """
+    from pandid.geometry import Frame
+    from pandid.layout.attach import logical_stream_path
+    from pandid.portgeom import port_point, resolve_size
+    from pandid.render.weights import M
+    from pandid.route_geometry import stream_polyline
+
+    owned = [(k if k else -1, m) for k, s in enumerate(segments) for m in s.markers]
+    if not owned:
+        return ""
+    tee = device.name
+    if at is None:
+        return (f". {line.name} carries markers: give {tee} an at= in fs.add(..., on="
                 f"{line.name}, at=...) to be told where each goes")
-    elif line.markers and at is not None:
-        source, dest = _ends(segments)
-        # The drawn length, and half the tee's span between its ports; as
-        # fractions where the line is not drawn.
-        total, half = 1.0, 0.0
-        if all(s.source.owner.frame is not None and s.dest.owner.frame is not None
-               for s in segments):
-            total = sum(math.dist(a, b) for s in segments
-                        for a, b in zip(stream_polyline(s), stream_polyline(s)[1:]))
-            w, h = resolve_size(device)
-            frame = Frame(x=0.0, y=0.0, w=w, h=h)
-            half = math.dist(port_point(device, frame, "inlet"),
-                             port_point(device, frame, "outlet")) / 2
-        split = at * total
-        sides: dict[str, list[str]] = {}
-        for m in line.markers:
-            texts = "".join(f", {key}={getattr(m, key)!r}" for key in ("before", "after", "number")
-                            if getattr(m, key) is not None)
-            if m.at < at:
-                side, fraction = f"fs.connect({source}, {tee}.inlet)", m.at * total / (split - half)
-            else:
-                side = f"fs.connect({tee}.outlet, {dest})"
-                fraction = (m.at * total - split - half) / (total - split - half)
-            where = f"{min(max(fraction, 0.001), 0.999):.4g}"
-            sides.setdefault(side, []).append(f".mark({m.kind!r}, at={where}{texts})")
+    source, dest = _ends(segments)
+    up, down = f"fs.connect({source}, {tee}.inlet)", f"fs.connect({tee}.outlet, {dest})"
+    if all(s.source.owner.frame is not None and s.dest.owner.frame is not None
+           for s in segments):
+        polylines = [stream_polyline(s) for s in segments]
+        lengths = [sum(math.dist(a, b) for a, b in zip(p, p[1:])) for p in polylines]
+        # The tee's centre: ``at`` along the line through its devices,
+        # found on the drawn segments.
+        path = logical_stream_path(line)
+        left = at * sum(math.dist(a, b) for a, b in zip(path, path[1:]))
+        centre = path[-1]
+        for a, b in zip(path, path[1:]):
+            n = math.dist(a, b)
+            if n > 0 and left <= n:
+                centre = (a[0] + (b[0] - a[0]) * left / n, a[1] + (b[1] - a[1]) * left / n)
+                break
+            left -= n
+        best = (math.inf, 0.0)
+        walked = 0.0
+        for p in polylines:
+            for a, b in zip(p, p[1:]):
+                n = math.dist(a, b)
+                t = 0.0 if n == 0 else max(0.0, min(1.0, ((centre[0] - a[0]) * (b[0] - a[0])
+                                                         + (centre[1] - a[1]) * (b[1] - a[1]))
+                                                        / (n * n)))
+                foot = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+                best = min(best, (math.dist(foot, centre), walked + n * t))
+                walked += n
+        split = best[1]
+        w, h = resolve_size(device)
+        frame = Frame(x=0.0, y=0.0, w=w, h=h)
+        half = math.dist(port_point(device, frame, "inlet"), port_point(device, frame, "outlet")) / 2
+        room = M
+    else:
+        bounds = [0.0, *(position(s) or 0.0 for s in segments[:-1]), 1.0]
+        lengths = [b - a for a, b in zip(bounds, bounds[1:])]
+        split, half, room = at, 0.0, 0.0
+    total = sum(lengths)
+    upstream, downstream = split - half, total - split - half
+    sides: dict[str, list[str]] = {}
+    choices = []
+    for k, m in owned:
+        texts = "".join(f", {key}={getattr(m, key)!r}" for key in ("before", "after", "number")
+                        if getattr(m, key) is not None)
+        drawn = m.at * total if k < 0 else sum(lengths[:k]) + m.at * lengths[k]
+        before = drawn / upstream if upstream > 0 else 1.0
+        after = (drawn - split - half) / downstream if downstream > 0 else 0.0
+        if 0 < before < 1:
+            sides.setdefault(up, []).append(f".mark({m.kind!r}, at={before:.4g}{texts})")
+        elif 0 < after < 1:
+            sides.setdefault(down, []).append(f".mark({m.kind!r}, at={after:.4g}{texts})")
+        else:
+            # Within the tee's span: a module clear of it on either side.
+            near = (upstream - room) / upstream if upstream > room else 0.5
+            far = room / downstream if downstream > room else 0.5
+            choices.append(
+                f"the {m.kind} at={m.at:g} on {line.name} falls within {tee}'s span, so it "
+                f"cannot stay where it is: choose its side, before {tee} on the stream {up} "
+                f"returns, .mark({m.kind!r}, at={near:.4g}{texts}), or after it on the stream "
+                f"{down} returns, .mark({m.kind!r}, at={far:.4g}{texts})")
+    out = ""
+    if sides:
         out += (f". Mark again what {line.name} marks, on the stream each connect() call "
                 f"returns: " + "; ".join(f"on {side}, {' and '.join(calls)}"
                                          for side, calls in sides.items()))
+    for choice in choices:
+        out += ". " + choice[0].upper() + choice[1:]
     return out
 
 
