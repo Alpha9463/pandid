@@ -402,7 +402,7 @@ def measure_table(tb) -> tuple[float, float]:
     tuple[float, float]
         Width and height in drawing units.
     """
-    size, ncol, col_w, row_h = _table_layout(tb)
+    size, _, col_w, row_h = _table_layout(tb)
     title_h = size + _TABLE_TITLE if tb.title else 0
     nrows = len(tb.rows) + (1 if tb.headers else 0)
     return _total(col_w), title_h + nrows * row_h
