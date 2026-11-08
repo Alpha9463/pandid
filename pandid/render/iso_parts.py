@@ -598,13 +598,14 @@ _AGITATOR_X, _AGITATOR_W, _AGITATOR_FOOT = 0.26, 0.48, 0.76
 
 
 def agitator_overlays(name: str, kind: str, variant: str,
-                      drawn: "tuple[float, float] | None" = None) -> tuple:
+                      drawn: "tuple[float, float] | None" = None,
+                      foot: "float | None" = None) -> tuple:
     """Return an agitator and its motor placed on a vertical body.
 
     The stirrer is drawn in proportion to the body. On a body drawn
     at ``drawn``, the motor is :data:`MOTOR_D` across and
-    :data:`MOTOR_GAP` above it; otherwise it is a third of the body's
-    width.
+    :data:`MOTOR_GAP` above it, and the stirrer reaches ``foot``;
+    otherwise the motor is a third of the body's width.
 
     Parameters
     ----------
@@ -616,6 +617,10 @@ def agitator_overlays(name: str, kind: str, variant: str,
         Body variant.
     drawn : tuple[float, float], optional
         Width and height the body is drawn at.
+    foot : float, optional
+        Depth the stirrer reaches on a body drawn at ``drawn``, as a
+        fraction of its height; the foot of the body's west wall band
+        if omitted.
 
     Returns
     -------
@@ -636,11 +641,14 @@ def agitator_overlays(name: str, kind: str, variant: str,
     if drawn is None:
         # The height that keeps the motor round on this body.
         width, height, gap = _MOTOR_WIDTH, _MOTOR_WIDTH * body.width / body.height, _MOTOR_GAP
+        foot = _AGITATOR_FOOT
     else:
         width, height, gap = MOTOR_D / drawn[0], MOTOR_D / drawn[1], MOTOR_GAP / drawn[1]
+        if foot is None:
+            foot = body.bands.get("W", (0.0, _AGITATOR_FOOT * body.height))[1] / body.height
     return (
         # The shaft reaches up to the motor.
-        Overlay(28, name, _AGITATOR_X, -gap, _AGITATOR_W, _AGITATOR_FOOT + gap),
+        Overlay(28, name, _AGITATOR_X, -gap, _AGITATOR_W, foot + gap),
         # The motor, centred above the head.
         Overlay(20, "motor", (1 - width) / 2, -(gap + height), width, height),
     )

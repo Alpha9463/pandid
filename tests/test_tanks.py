@@ -71,6 +71,16 @@ def test_a_stirred_body_takes_its_motor_and_drive_and_leaves_the_roof_to_it(unit
     assert "N" not in port_faces(unit, "in_1")
 
 
+@pytest.mark.parametrize("unit", _STIRRED, ids=_STIRRED_IDS)
+def test_the_stirrer_stops_at_the_foot_of_the_straight_wall(unit):
+    """Check that the stirrer hangs in the straight shell, clear of a cone or bottom head."""
+    sym = default_registry.for_unit(unit)
+    body = _drawn_parts(unit, unit.__dict__["overlays"])[0]
+    # The body's top, below the motor.
+    shift = -min(0.0, *(o.y * body.height for o in sym.overlays))
+    assert overlay_boxes(body, sym.overlays)[-2][3] == pytest.approx(body.bands["W"][1] + shift)
+
+
 def test_a_body_without_an_agitator_has_no_drive():
     """Check that only a stirred tank or vessel has a drive."""
     assert "drive" not in Tank("TK-101").ports

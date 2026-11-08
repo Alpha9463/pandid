@@ -1867,7 +1867,8 @@ def _body_drawn(unit: "Unit", natural: "Symbol",
     return width, height
 
 
-def _stirred_at(unit: "Unit", overlays: tuple, drawn: "tuple[float, float]") -> tuple:
+def _stirred_at(unit: "Unit", overlays: tuple, drawn: "tuple[float, float]",
+                foot: "float | None" = None) -> tuple:
     """Return a unit's parts with its agitator placed for a drawn body.
 
     Parameters
@@ -1878,6 +1879,9 @@ def _stirred_at(unit: "Unit", overlays: tuple, drawn: "tuple[float, float]") -> 
         Its parts.
     drawn : tuple[float, float]
         Width and height its body is drawn at.
+    foot : float, optional
+        Depth the stirrer reaches, as a fraction of the body's height;
+        the foot of the registered body's west wall band if omitted.
 
     Returns
     -------
@@ -1889,7 +1893,7 @@ def _stirred_at(unit: "Unit", overlays: tuple, drawn: "tuple[float, float]") -> 
         return overlays
     from pandid.render.iso_parts import agitator_overlays
 
-    stirrer, motor = agitator_overlays(name, unit.kind, unit.variant, drawn)
+    stirrer, motor = agitator_overlays(name, unit.kind, unit.variant, drawn, foot)
     return tuple(stirrer if o.group == 28 else motor if o.group == 20 else o for o in overlays)
 
 
@@ -2001,7 +2005,8 @@ def _shell_parts(unit: "Unit", overlays: tuple, faces: "tuple[tuple[str, str], .
             Parts, then the sockets' ports.
         """
         drawn = _stirred_at(unit, tuple(seated(anchored(o, natural, body), body, unit.variant)
-                                        for o in overlays), (body.width, body.height))
+                                        for o in overlays), (body.width, body.height),
+                            body.bands["W"][1] / body.height)
         walls, ports, _ = wall_overlays(unit.kind, unit.variant, drawn, manholes, sockets,
                                         (None, None), unit.name, body)
         return drawn + walls, ports
