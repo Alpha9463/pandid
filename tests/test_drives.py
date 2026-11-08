@@ -7,11 +7,10 @@ from test_drawio import _inline_stencil, _model, _style
 
 from pandid import Blower, Conveyor, Feed, Flowsheet, Mill, Motor, Product, Pump, Reactor
 from pandid.layout.attach import _free_face
-from pandid.layout.drives import SHAFT
 from pandid.portgeom import resolve_port, unit_box
 from pandid.render.symbols import default_registry
 from pandid.route_geometry import stream_polyline
-from pandid.routing.visibility import VisibilityGraph
+from pandid.routing.visibility import Rect, VisibilityGraph
 
 
 def _driven(machine, inlet: str, outlet: str, variant: str = "general"):
@@ -42,7 +41,7 @@ def test_a_motor_stands_on_its_pump_a_short_straight_shaft_above_the_drive(pump_
     drive = resolve_port(pump, pump.frame, "drive")
     end = resolve_port(motor, motor.frame, "shaft")
     assert (drive.face, end.face) == ("N", "S")
-    assert end.point == (drive.point[0], drive.point[1] - SHAFT)
+    assert end.point == (drive.point[0], drive.point[1] - 20.0)
     assert stream_polyline(shaft) == [end.point, drive.point]
     assert shaft.kind == "mechanical"
     assert [i for i in fs.validate() if i.severity == "error"] == []
@@ -69,7 +68,7 @@ def test_a_mill_takes_its_motor_on_the_east():
     drive = resolve_port(mill, mill.frame, "drive")
     end = resolve_port(motor, motor.frame, "shaft")
     assert (drive.face, end.face) == ("E", "W")
-    assert end.point == (drive.anchor[0] + SHAFT, drive.point[1])
+    assert end.point == (drive.anchor[0] + 20.0, drive.point[1])
     assert stream_polyline(shaft) == [end.point, drive.point]
 
 
@@ -84,6 +83,13 @@ def test_the_layout_keeps_room_for_the_motor_above_a_belt_conveyor():
         for b in (unit_box(u, u.frame) for u in others)
     )
     assert box[1] >= 0.0
+
+
+def test_a_shaft_blocks_the_lanes_across_it(pump_sheet):
+    """Check that the router may not run a line between a motor and its pump."""
+    fs, _, shaft, _ = pump_sheet
+    (x1, y1), (x2, y2) = stream_polyline(shaft)
+    assert Rect(x1, x2, y1, y2) in VisibilityGraph(fs).obstacles
 
 
 def test_an_unconnected_drive_takes_no_routing_track():
@@ -187,19 +193,95 @@ def _stencil_steps(path: ET.Element) -> list:
     ]
 
 
+#: ISO 10628-2 items 20.6 to 20.8 on the 10-unit module: a 4 M rim, an M
+#: in one stroke, and under it a tilde for AC or a bar for DC.
+_RIM = {"cx": 20.0, "cy": 20.0, "r": 20.0}
+_LETTER = [
+    ("M", [12.5, 30]),
+    ("L", [12.5, 10]),
+    ("L", [20, 20]),
+    ("L", [27.5, 10]),
+    ("L", [27.5, 30]),
+]
+_TILDE = [("M", [10, 35]), ("A", [7.5, 7.5, 0, 0, 1, 20, 35]), ("A", [7.5, 7.5, 0, 0, 0, 30, 35])]
+_BAR = [("M", [10, 35]), ("L", [30, 35])]
+_MOTOR_STROKES = {"general": _LETTER, "ac": _LETTER + _TILDE, "dc": _LETTER + _BAR}
+
+
+@pytest.mark.parametrize("variant", ["general", "ac", "dc"])
+def test_the_sheet_draws_each_motor_as_its_iso_row(variant):
+    """Check the emitted motor: the rim, the M, and only its own supply mark."""
+    fs, _, _ = _driven(Pump("P-1"), "suction", "discharge", variant=variant)
+    doc = ET.fromstring(fs.to_svg())
+    sym = next(el for el in doc.iter() if el.get("id") == f"sym_motor_{variant}")
+    (rim,) = [el for el in sym if el.tag.endswith("circle")]
+    assert {k: float(rim.get(k, "nan")) for k in _RIM} == _RIM
+    strokes = [step for el in sym if el.tag.endswith("path") for step in _steps(el.get("d", ""))]
+    assert strokes == _MOTOR_STROKES[variant]
+
+
 @pytest.mark.parametrize("variant", ["general", "ac", "dc"])
 def test_draw_io_gets_the_motor_and_a_bare_shaft(variant):
-    """Check that draw.io traces the motor's own strokes and draws the shaft bare."""
+    """Check that draw.io draws the motor's rim and strokes and the shaft bare."""
     fs, motor, shaft = _driven(Pump("P-1"), "suction", "discharge", variant=variant)
     cells = list(_model(fs, check=False).iter("mxCell"))
     cell = next(c for c in cells if c.get("value") == motor.name)
     stencil = _inline_stencil(_style(cell).get("shape", ""))
     assert stencil is not None, f"{motor.name} exports as a box, not its outline"
-    drawn = ET.fromstring(default_registry.get("motor", variant).svg)
-    assert [_stencil_steps(p) for p in stencil.iter("path")] == [
-        _steps(el.get("d", "")) for el in drawn.iter() if el.tag == "path"
-    ]
-    assert len(list(stencil.iter("ellipse"))) == 1
-    edge = next(c for c in cells if c.get("id") == f"s{fs.streams.index(shaft)}")
-    style = _style(edge)
-    assert (edge.get("value"), style["endArrow"], style["startArrow"]) == ("", "none", "none")
+    (rim,) = stencil.iter("ellipse")
+    assert [float(rim.get(k, "nan")) for k in ("x", "y", "w", "h")] == [0.0, 0.0, 40.0, 40.0]
+    strokes = [step for p in stencil.iter("path") for step in _stencil_steps(p)]
+    assert strokes == _MOTOR_STROKES[variant]
+    pipe = _style(next(c for c in cells if c.get("id") == "s0"))
+    style = _style(next(c for c in cells if c.get("id") == f"s{fs.streams.index(shaft)}"))
+    assert (style["endArrow"], style["startArrow"], style.get("dashed", "0")) == (
+        "none",
+        "none",
+        "0",
+    )
+    assert style["strokeWidth"] == pipe["strokeWidth"]
+    assert all(c.get("value") != shaft.name for c in cells)
+
+
+#: Where each driven machine takes its driver, by registered drawing.
+_DRIVES = {
+    ("pump", "default"): (30.0, 0.0),
+    ("pump", "gear"): (28.5, 0.0),
+    ("pump", "screw"): (30.175, 0.0),
+    ("pump", "peristaltic"): (60.0, 32.0),
+    ("pump", "submersible"): (51.77, 0.0),
+    ("pump", "vacuum"): (49.5, 0.0),
+    ("compressor", "default"): (30.0, 0.0),
+    ("compressor", "reciprocating"): (54.5, 13.0),
+    ("compressor", "rotary"): (41.0, 45.5),
+    ("compressor", "liquid_ring"): (90.0, 45.0),
+    ("blower", "general"): (30.0, 0.0),
+    ("blower", "centrifugal"): (30.0, 0.0),
+    ("blower", "axial"): (30.0, 0.0),
+    ("conveyor", "default"): (70.0, 0.0),
+    ("conveyor", "screw"): (75.0, 0.0),
+    ("feeder", "general"): (40.0, 20.0),
+    ("feeder", "rotary_valve"): (40.0, 20.0),
+    ("feeder", "rotary_table"): (0.0, 37.5),
+    ("feeder", "metering"): (74.0, 33.0),
+    **{
+        (kind, variant): (90.0, 30.0)
+        for kind, variants in (
+            ("crushing_machine", ("default",)),
+            ("crusher", ("default", "cone", "hammer", "impact", "jaw", "roller")),
+            ("mill", ("default", "hammer", "impact", "roller", "vibration")),
+        )
+        for variant in variants
+    },
+}
+
+
+def test_each_driven_machine_takes_its_driver_where_drawn():
+    """Check every drawing's drive: on the crown, or on a side its crown is taken."""
+    drives = {
+        (kind, variant): default_registry.get(kind, variant).ports["drive"]
+        for kind in ("pump", "compressor", "blower", "conveyor", "feeder", "crushing_machine")
+        + ("crusher", "mill")
+        for variant in default_registry.variants(kind)
+    }
+    assert drives == _DRIVES
