@@ -20,6 +20,7 @@ from pandid.units import (
     Fitting,
     Furnace,
     HeatExchanger,
+    Heater,
     Kiln,
     Mill,
     Pump,
@@ -58,6 +59,7 @@ __all__ = [
     "PlateExchanger",
     "SpiralExchanger",
     "ThinFilmEvaporator",
+    "ElectricHeater",
     "CalandriaEvaporator",
     "FallingFilmEvaporator",
     "ClimbingFilmEvaporator",
@@ -382,7 +384,16 @@ class ShellAndTubeExchanger(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    VARIANTS = ("default", "shell_tube", "u_tube", "straight_tubes", "finned", "hairpin")
+    VARIANTS = (
+        "default",
+        "shell_tube",
+        "u_tube",
+        "straight_tubes",
+        "finned",
+        "hairpin",
+        "floating_head",
+        "coil_tube",
+    )
     PORTS = [
         ("shell_in", "inlet", "process"),
         ("shell_out", "outlet", "process"),
@@ -556,6 +567,23 @@ class ThinFilmEvaporator(HeatExchanger):
     jacket_out: Port
     product_in: Port
     product_out: Port
+
+
+class ElectricHeater(Heater):
+    """Electric heater: heating elements in the process body.
+
+    ``utility_in`` is the supply into the terminal box. ISO 10628-2
+    item 3.13, X8132.
+
+    Parameters are those of :class:`~pandid.units.Heater`.
+    """
+
+    VARIANTS = ("default", "electric")
+    VARIANT_ALIASES = {"default": "electric"}
+
+    inlet: Port
+    outlet: Port
+    utility_in: Port
 
 
 class CalandriaEvaporator(Evaporator):
@@ -1587,6 +1615,11 @@ class GasHolder(Tank):
 
     VARIANTS = ("default", "gas_holder")
     VARIANT_ALIASES = {"default": "gas_holder"}
+    PORTS = [
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
 
     vent: Port
     relief: Port

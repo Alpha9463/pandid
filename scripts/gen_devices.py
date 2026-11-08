@@ -123,6 +123,13 @@ DEVICES = {
     jacket.
 """),
 
+    # --- Heaters --------------------------------------------------------
+    ("heater", "electric"): ("ElectricHeater", """Electric heater: heating elements in the process body.
+
+    ``utility_in`` is the supply into the terminal box. ISO 10628-2
+    item 3.13, X8132.
+"""),
+
     # --- Evaporators --------------------------------------------------
     ("evaporator", "calandria"): ("CalandriaEvaporator", """Calandria evaporator: short tubes round a central downcomer."""),
     ("evaporator", "falling_film"): ("FallingFilmEvaporator", """Falling-film evaporator: liquor flows down long heated tubes."""),
@@ -373,6 +380,7 @@ OWNS = {
     "ShellAndTubeExchanger": {
         "default": "default", "shell_tube": "shell_tube", "u_tube": "u_tube",
         "straight_tubes": "straight_tubes", "finned": "finned", "hairpin": "hairpin",
+        "floating_head": "floating_head", "coil_tube": "coil_tube",
     },
     "MagneticSeparator": {
         "default": "permanent_magnet", "electromagnetic": "electromagnetic",
@@ -485,10 +493,20 @@ STAYS_ON_BASE = {
     ("instrument", "panel"): "a function, not a device",
     ("instrument", "aux"): "a function, not a device",
     ("instrument", "shared"): "a function, not a device",
+    ("instrument", "shared_field"): "a function, not a device",
     ("instrument", "computer"): "a function, not a device",
     ("instrument", "sis"): "a function, not a device",
     ("instrument", "logic"): "a function, not a device",
     ("instrument", "interlock"): "a function, not a device",
+    ("instrument", "shared_subsidiary"): "a function, not a device",
+    ("instrument", "computer_central"): "a function, not a device",
+    ("instrument", "computer_subsidiary"): "a function, not a device",
+    ("instrument", "sis_central"): "a function, not a device",
+    ("instrument", "sis_subsidiary"): "a function, not a device",
+    ("instrument", "logic_central"): "a function, not a device",
+    ("instrument", "logic_subsidiary"): "a function, not a device",
+    ("instrument", "interlock_central"): "a function, not a device",
+    ("instrument", "interlock_subsidiary"): "a function, not a device",
     ("vessel", "dished"): "head style, plus the brackets it stands on",
     ("vessel", "dome"): "head style: a raised manway dome",
     ("vessel", "horizontal"): "attitude: the same vessel lying down",
@@ -502,6 +520,8 @@ STAYS_ON_BASE = {
     ("tank", "conical_bottom"): "floor: a discharge cone",
     ("tank", "conical_ends"): "roof and floor: a cone at each end",
     ("tank", "dished_roof_conical_bottom"): "roof and floor",
+    ("tank", "flat_roof"): "roof: flat (ISO item 1.1 301)",
+    ("tank", "open_top"): "roof: none, open to the air (ISO item 1.2 2061)",
     ("column", "packed"): "drawn internal: beds of packing on their support grids",
     ("reducer", "default"): "Reducer's own drawing (the concentric body)",
     ("reducer", "concentric"): "body style, and the same drawing as the default",
