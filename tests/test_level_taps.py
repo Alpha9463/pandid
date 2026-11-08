@@ -395,3 +395,44 @@ def test_a_tap_off_the_placed_wall_is_an_error():
     ) as caught:
         fs.to_svg(diagram="p&id")
     assert "0.3 to 0.7" in str(caught.value)
+
+
+# --- round 3: separate impulse lines, and where a fluid element anchors -------
+
+
+@pytest.mark.parametrize(
+    "letters,element",
+    [
+        ("LT", "radar"),
+        ("LSH", "vibrating fork"),
+        ("LSHH", "electrode"),
+        ("TT", "thermowell"),
+        # An element is in the fluid whatever the letters measure.
+        ("ST", "radar"),
+    ],
+)
+def test_a_fluid_element_on_an_agitated_vessels_top_is_drawn_in_the_shell(letters, element):
+    """Anchor a fluid element's mark on the shell under the motor, not in the motor."""
+    fs = Flowsheet("agitated")
+    d = fs.add(units.Vessel("D", agitator="turbine")).pin(x=200, y=200)
+    fs.add_instrument(letters, 1, sensing=d, face="N", element=element)
+    fs.route()
+    _x0, y0, _x1, y1 = _box(d)
+    top = y1 - _SHELL_H
+    assert top > y0, "the premise: the motor stands on the shell"
+    marks = _marks(fs.to_svg(check=False))
+    ys = [float(y) for y in re.findall(r"[ML] [-\d.]+ ([-\d.]+)", marks)]
+    # The mark meets the shell's head and lies about it, not up in the motor.
+    assert min(ys) >= top - 6 and max(ys) > top
+
+
+def test_a_pressure_tap_on_an_agitated_vessels_top_meets_the_shell():
+    """Tap the shell for any variable but a machine's speed, element or none."""
+    fs = Flowsheet("agitated")
+    d = fs.add(units.Vessel("D", agitator="turbine")).pin(x=200, y=200)
+    fs.add_instrument("PI", 1, sensing=d, face="N")
+    fs.route()
+    x0, y0, _x1, y1 = _box(d)
+    assert y1 - y0 > _SHELL_H, "the premise: the motor stands on the shell"
+    (line,) = _polylines(_taps_group(fs.to_svg(check=False)))
+    assert [*line[0]] == pytest.approx([x0 + _SHELL_W / 2, y1 - _SHELL_H])
