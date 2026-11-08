@@ -208,3 +208,114 @@ def test_a_treated_line_with_an_unplaced_end_draws_no_mark() -> None:
     pump.frame = None
     assert pipe_marks(fs) == []
     assert "line-mark-crowded" not in [i.code for i in fs.validate()]
+
+
+# Guards: each mark is checked in the emitted SVG and draw.io against
+# strokes stated here, for the straight line from (100, 100) to (400, 100).
+# A mark is 50 long and centred on the run, from x=225 to x=275.
+
+#: Expected strokes per treatment, as (x1, y1, x2, y2, width).
+_EXPECTED = {
+    "insulated": {
+        (225.0, 90.0, 275.0, 90.0, 1.0),
+        (225.0, 110.0, 275.0, 110.0, 1.0),
+        (235.0, 90.0, 225.0, 100.0, 1.0),
+        (255.0, 90.0, 235.0, 110.0, 1.0),
+        (275.0, 90.0, 255.0, 110.0, 1.0),
+    },
+    "traced": {
+        (225.0, 90.0, 240.0, 90.0, 1.0),
+        (245.0, 90.0, 247.5, 90.0, 1.0),
+        (252.5, 90.0, 255.0, 90.0, 1.0),
+        (260.0, 90.0, 275.0, 90.0, 1.0),
+    },
+    "jacketed": {
+        (225.0, 90.0, 275.0, 90.0, 2.0),
+        (225.0, 110.0, 275.0, 110.0, 2.0),
+        (225.0, 90.0, 225.0, 110.0, 2.0),
+        (275.0, 90.0, 275.0, 110.0, 2.0),
+    },
+}
+_EXPECTED["traced and insulated"] = {
+    (225.0, 90.0, 240.0, 90.0, 1.0),
+    (245.0, 90.0, 247.5, 90.0, 1.0),
+    (252.5, 90.0, 255.0, 90.0, 1.0),
+    (260.0, 90.0, 275.0, 90.0, 1.0),
+    (225.0, 80.0, 275.0, 80.0, 1.0),
+    (225.0, 110.0, 275.0, 110.0, 1.0),
+    (235.0, 80.0, 225.0, 90.0, 1.0),
+    (255.0, 80.0, 225.0, 110.0, 1.0),
+    (275.0, 80.0, 245.0, 110.0, 1.0),
+    (275.0, 100.0, 265.0, 110.0, 1.0),
+}
+
+_TREATED = {
+    "insulated": {"insulated": True},
+    "traced": {"tracing": "steam"},
+    "jacketed": {"jacketed": True},
+    "traced and insulated": {"tracing": "steam", "insulated": True},
+}
+
+
+def _key(x1: float, y1: float, x2: float, y2: float, width: float) -> tuple:
+    """Return a stroke rounded and with its ends in order, for comparison."""
+    a, b = sorted([(round(x1, 1), round(y1, 1)), (round(x2, 1), round(y2, 1))])
+    return (*a, *b, round(width, 2))
+
+
+def _svg_strokes(svg: str) -> set[tuple]:
+    """Return every ``<line>`` in the SVG's streams group."""
+    body = svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
+    found = re.finditer(
+        r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)" '
+        r'stroke="[^"]*" stroke-width="([\d.]+)"',
+        body,
+    )
+    return {_key(*map(float, m.groups())) for m in found}
+
+
+def _drawio_strokes(xml: str) -> set[tuple]:
+    """Return every line child of the first edge, placed as mxGraph places it.
+
+    A relative child's top-left sits at the point ``(x + 1) / 2`` along
+    the edge plus its offset; a line shape runs across its box's middle,
+    turned by ``rotation`` about the centre. The result is shifted so the
+    edge starts at (100, 100).
+    """
+    root = ET.fromstring(xml)
+    cells = {c.get("id"): c for c in root.iter("mxCell")}
+    edge = cells["s0"]
+    style = dict(kv.split("=", 1) for kv in (edge.get("style") or "").split(";") if "=" in kv)
+    ends = []
+    for side, key in (("source", "exit"), ("target", "entry")):
+        geo = cells[edge.get(side)].find("mxGeometry")
+        assert geo is not None
+        x, y, w, h = (float(geo.get(k, "0")) for k in ("x", "y", "width", "height"))
+        ends.append((x + float(style[key + "X"]) * w, y + float(style[key + "Y"]) * h))
+    (ax, ay), (bx, by) = ends
+    assert ay == pytest.approx(by) and bx - ax == pytest.approx(300.0)
+    out = set()
+    for cell in cells.values():
+        if cell.get("parent") != "s0" or "shape=line" not in (cell.get("style") or ""):
+            continue
+        geo = cell.find("mxGeometry")
+        offset = geo.find("mxPoint") if geo is not None else None
+        assert geo is not None and offset is not None
+        side = float(geo.get("width", "nan"))
+        cx = ax + (float(geo.get("x", "nan")) + 1) / 2 * 300.0 + float(offset.get("x", "nan"))
+        cy = ay + float(offset.get("y", "nan"))
+        cx, cy = cx + side / 2 - ax + 100, cy + side / 2 - ay + 100
+        mark = dict(kv.split("=", 1) for kv in (cell.get("style") or "").split(";") if "=" in kv)
+        turn = math.radians(float(mark["rotation"]))
+        dx, dy = math.cos(turn) * side / 2, math.sin(turn) * side / 2
+        out.add(_key(cx - dx, cy - dy, cx + dx, cy + dy, float(mark["strokeWidth"])))
+    return out
+
+
+@pytest.mark.parametrize("treated", sorted(_TREATED))
+def test_each_mark_is_drawn_where_iso_10628_2_puts_it(treated: str) -> None:
+    """Draw each mark's strokes, and only those, in SVG and in draw.io."""
+    fs, _ = _line(**_TREATED[treated])
+    expected = {_key(*stroke) for stroke in _EXPECTED[treated]}
+    assert _svg_strokes(fs.to_svg(diagram="p&id")) == expected
+    assert _drawio_strokes(fs.to_drawio()) == expected
