@@ -18,6 +18,7 @@ from pandid.render.line_markers import (
     line_markers,
     text_box,
 )
+from pandid.render.furniture import text_width
 from pandid.streams import Stream
 
 
@@ -207,3 +208,171 @@ def test_a_marker_drawn_over_a_unit_is_reported_with_the_call_that_moves_it() ->
         "the tie-in at=0.02 on S1 is drawn over F. Mark it elsewhere along S1: drop it from "
         "S1.markers and call S1.mark('tie-in', at=..., number='TI-1')"
     ]
+
+
+# Guards: each marker is checked in the emitted SVG and draw.io against
+# geometry stated here, for the straight line from (100, 100) to (400, 100)
+# marked at its middle, (250, 100).
+
+#: Half the tie-in hexagon's width: half its number, then a 5 pad and a 7.5 point.
+_HEX = text_width("TI-101", 10) / 2 + 12.5
+
+_GUARDED = {
+    "battery limit": (
+        {"before": "ISBL", "after": "OSBL"},
+        {(250.0, 75.0, 250.0, 105.0), (250.0, 115.0, 250.0, 135.0), (250.0, 45.0, 250.0, 75.0)},
+        {("diamond", ((250.0, 45.0), (265.0, 60.0), (250.0, 75.0), (235.0, 60.0)))},
+        {("end", 230.0, 60.0, "ISBL"), ("start", 270.0, 60.0, "OSBL")},
+    ),
+    "limit of supply": (
+        {"before": "VENDOR", "after": "OWNER"},
+        {(250.0, 75.0, 250.0, 105.0), (250.0, 115.0, 250.0, 135.0), (250.0, 45.0, 250.0, 75.0)},
+        {("diamond", ((250.0, 45.0), (265.0, 60.0), (250.0, 75.0), (235.0, 60.0)))},
+        {("end", 230.0, 60.0, "VENDOR"), ("start", 270.0, 60.0, "OWNER")},
+    ),
+    "tie-in": (
+        {"number": "TI-101"},
+        set(),
+        {
+            (
+                "hexagon",
+                (
+                    (250 - _HEX, 100.0),
+                    (250 - _HEX + 7.5, 90.0),
+                    (250 + _HEX - 7.5, 90.0),
+                    (250 + _HEX, 100.0),
+                    (250 + _HEX - 7.5, 110.0),
+                    (250 - _HEX + 7.5, 110.0),
+                ),
+            )
+        },
+        {("middle", 250.0, 100.0, "TI-101")},
+    ),
+    "spec break": (
+        {"before": "A1A", "after": "B2B"},
+        {(250.0, 90.0, 250.0, 110.0)},
+        set(),
+        {("end", 245.0, 90.0, "A1A"), ("start", 255.0, 90.0, "B2B")},
+    ),
+}
+
+
+def _r(value: float) -> float:
+    """Return a coordinate rounded for comparison."""
+    return round(value, 1)
+
+
+def _segment(x1: float, y1: float, x2: float, y2: float) -> tuple:
+    """Return a stroke rounded, its ends in order."""
+    a, b = sorted([(_r(x1), _r(y1)), (_r(x2), _r(y2))])
+    return (*a, *b)
+
+
+def _shape(kind: str, points) -> tuple:
+    """Return an outline rounded, as its kind and sorted vertices."""
+    return kind, tuple(sorted((_r(x), _r(y)) for x, y in points))
+
+
+def _expected(kind: str) -> tuple[set, set, set]:
+    """Return a marker's stated strokes, outlines and text, rounded."""
+    _, lines, shapes, texts = _GUARDED[kind]
+    return (
+        {_segment(*line) for line in lines},
+        {_shape(k, points) for k, points in shapes},
+        {(anchor, _r(x), _r(y), text) for anchor, x, y, text in texts},
+    )
+
+
+def _svg_marker(svg: str) -> tuple[set, set, set]:
+    """Return the strokes, outlines and text in the SVG's streams group."""
+    body = svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
+    lines = {
+        _segment(*map(float, m.groups()))
+        for m in re.finditer(
+            r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"', body
+        )
+    }
+    shapes = set()
+    for m in re.finditer(r'<polygon points="([^"]+)" fill="(\w+)"', body):
+        points = [tuple(map(float, p.split(","))) for p in m.group(1).split()]
+        shapes.add(_shape("diamond" if len(points) == 4 else "hexagon", points))
+        assert m.group(2) == ("none" if len(points) == 4 else "white")
+    texts = {
+        (m.group(3), _r(float(m.group(1))), _r(float(m.group(2))), m.group(4))
+        for m in re.finditer(
+            r'<text x="([-\d.]+)" y="([-\d.]+)" font-family="sans-serif" font-size="10" '
+            r'text-anchor="(\w+)" dominant-baseline="middle" fill="[^"]*">([^<]*)</text>',
+            body,
+        )
+    }
+    return lines, shapes, texts
+
+
+def _drawio_marker(xml: str) -> tuple[set, set, set]:
+    """Return the marker children of the first edge, placed as mxGraph places them.
+
+    A relative child's top-left sits at the point ``(x + 1) / 2`` along the
+    edge plus its offset. A line shape runs across its box's middle, turned
+    by ``rotation``; a rhombus joins its sides' midpoints; a hexagon cuts
+    ``size`` off each end. The result is shifted so the edge starts at
+    (100, 100).
+    """
+    root = ET.fromstring(xml)
+    cells = {c.get("id"): c for c in root.iter("mxCell")}
+    edge = cells["s0"]
+
+    def style(cell: ET.Element) -> dict[str, str]:
+        """Return a cell's style as a mapping."""
+        return dict(kv.split("=", 1) for kv in (cell.get("style") or "").split(";") if "=" in kv)
+
+    ends = []
+    for side, key in (("source", "exit"), ("target", "entry")):
+        geo = cells[edge.get(side)].find("mxGeometry")
+        assert geo is not None
+        x, y, w, h = (float(geo.get(k, "0")) for k in ("x", "y", "width", "height"))
+        ends.append((x + float(style(edge)[key + "X"]) * w, y + float(style(edge)[key + "Y"]) * h))
+    (ax, ay), (bx, by) = ends
+    assert ay == pytest.approx(by) and bx - ax == pytest.approx(300.0)
+    lines, shapes, texts = set(), set(), set()
+    for cell in cells.values():
+        if cell.get("parent") != "s0":
+            continue
+        geo = cell.find("mxGeometry")
+        offset = geo.find("mxPoint") if geo is not None else None
+        assert geo is not None and offset is not None
+        w, h = float(geo.get("width", "nan")), float(geo.get("height", "nan"))
+        x0 = 100 + (float(geo.get("x", "nan")) + 1) / 2 * 300.0 + float(offset.get("x", "nan"))
+        y0 = 100 + float(offset.get("y", "nan"))
+        cx, cy, kind = x0 + w / 2, y0 + h / 2, style(cell)
+        if kind.get("shape") == "line":
+            turn = math.radians(float(kind["rotation"]))
+            dx, dy = math.cos(turn) * w / 2, math.sin(turn) * w / 2
+            lines.add(_segment(cx - dx, cy - dy, cx + dx, cy + dy))
+        elif kind.get("shape") == "rhombus":
+            assert kind["fillColor"] == "none"
+            shapes.add(_shape("diamond", [(cx, y0), (x0 + w, cy), (cx, y0 + h), (x0, cy)]))
+        elif kind.get("shape") == "hexagon":
+            assert kind["fillColor"] == "#ffffff"
+            k = float(kind["size"])
+            hexagon = [(x0, cy), (x0 + k, y0), (x0 + w - k, y0), (x0 + w, cy),
+                       (x0 + w - k, y0 + h), (x0 + k, y0 + h)]  # fmt: skip
+            shapes.add(_shape("hexagon", hexagon))
+        else:
+            align = kind["align"]
+            anchor, x = {"left": ("start", x0), "center": ("middle", cx), "right": ("end", x0 + w)}[
+                align
+            ]
+            texts.add((anchor, _r(x), _r(cy), cell.get("value") or ""))
+    return lines, shapes, texts
+
+
+@pytest.mark.parametrize("kind", sorted(_GUARDED))
+def test_each_marker_is_drawn_as_stated_in_svg_and_drawio(kind: str) -> None:
+    """Draw each marker's strokes, outlines and text, and only those, in both backends."""
+    fs, line = _line()
+    line.mark(kind, at=0.5, **_GUARDED[kind][0])
+    expected = _expected(kind)
+    lines, shapes, texts = _svg_marker(fs.to_svg(diagram="p&id"))
+    # Leave out the line's own number, S1.
+    assert (lines, shapes, {t for t in texts if t[3] != line.name}) == expected
+    assert _drawio_marker(fs.to_drawio()) == expected
