@@ -274,7 +274,8 @@ def pipe_marks(fs: "Flowsheet") -> list[PipeMark]:
     Returns
     -------
     list[PipeMark]
-        One entry per treated line, in stream order.
+        One entry per treated line with both ends placed, in stream
+        order.
     """
     if not has_marks(fs):
         return []
@@ -293,7 +294,8 @@ def pipe_marks(fs: "Flowsheet") -> list[PipeMark]:
     if not groups:
         return []
 
-    lines = [(s, stream_polyline(s)) for s in fs.streams]
+    lines = [(s, stream_polyline(s)) for s in fs.streams
+             if s.source.owner.frame is not None and s.dest.owner.frame is not None]
     blocks = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
     blocks += hatch_boxes(fs) + placed(fs)
     # Every segment a mark must not meet: tap lines', then each line's.

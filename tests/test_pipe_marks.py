@@ -194,3 +194,17 @@ def test_marks_with_no_clear_run_are_reported() -> None:
         "mark, so it is drawn where it meets the fewest. Lengthen a straight run of S1, "
         "or move the units and lines beside it apart"
     ]
+
+
+def test_a_treated_line_with_an_unplaced_end_draws_no_mark() -> None:
+    """Validate a sheet whose treated line ends at a unit with no place."""
+    from pandid import Pump
+
+    fs = Flowsheet("Unplaced")
+    feed, pump, product = fs.add(Feed("F")), fs.add(Pump("P-1")), fs.add(Product("P"))
+    fs.connect(feed.outlet, pump.suction, insulated=True)
+    fs.connect(pump.discharge, product.inlet)
+    fs.layout()
+    pump.frame = None
+    assert pipe_marks(fs) == []
+    assert "line-mark-crowded" not in [i.code for i in fs.validate()]
