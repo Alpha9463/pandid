@@ -4578,7 +4578,10 @@ class HeatExchanger(_VariantPorted):
 
 
 class Heater(Unit):
-    """Single-stream heater; ``utility_in`` takes the heating medium."""
+    """Single-stream heater; ``utility_in`` takes the heating medium.
+
+    On ``variant="electric"``, ``utility_in`` is the electrical supply.
+    """
 
     inlet: Port
     outlet: Port

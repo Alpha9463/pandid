@@ -116,6 +116,13 @@ DEVICES = {
     jacket.
 """),
 
+    # --- Heaters --------------------------------------------------------
+    ("heater", "electric"): ("ElectricHeater", """Electric heater: heating elements in the process body.
+
+    ``utility_in`` is the supply into the terminal box. ISO 10628-2
+    item 3.13, X8132.
+"""),
+
     # --- Evaporators --------------------------------------------------
     ("evaporator", "calandria"): ("CalandriaEvaporator", """Calandria evaporator: short tubes round a central downcomer."""),
     ("evaporator", "falling_film"): ("FallingFilmEvaporator", """Falling-film evaporator: liquor flows down long heated tubes."""),
@@ -366,6 +373,7 @@ OWNS = {
     "ShellAndTubeExchanger": {
         "default": "default", "shell_tube": "shell_tube", "u_tube": "u_tube",
         "straight_tubes": "straight_tubes", "finned": "finned", "hairpin": "hairpin",
+        "floating_head": "floating_head", "coil_tube": "coil_tube",
     },
     "MagneticSeparator": {
         "default": "permanent_magnet", "electromagnetic": "electromagnetic",
