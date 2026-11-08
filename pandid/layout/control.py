@@ -379,11 +379,15 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
         through units other than balloons on that line and the end of a
         line leaving its own nozzle straight out of the face, tap lines
         through units or tag halos, and runs two lines or tap lines
-        share.
+        share; and ``covered <what>`` once for each thing
+        :func:`~pandid.layout.compact.covered` finds drawn over a placed
+        annotation, so a drawing that draws anything new over one grows
+        a count.
     """
     from collections import Counter
 
     from pandid.layout.attach import stream_path
+    from pandid.layout.compact import covered
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
     from pandid.portgeom import COMPASS, resolve_port, unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -452,6 +456,7 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     flaws["line-on-line"] = sum(
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
+    flaws.update(f"covered {kind} {key}" for kind, key in covered(fs))
     return flaws
 
 

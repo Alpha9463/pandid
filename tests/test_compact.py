@@ -347,6 +347,21 @@ def test_a_label_drawn_over_a_placed_note_counts(
     assert covered(fs)
 
 
+def test_the_judged_counts_name_each_thing_drawn_over_a_placed_note() -> None:
+    """Check that the counts every redraw is judged by hold one per thing over a note, by name."""
+    from pandid.layout.control import _flaws
+
+    fs = _chain()
+    fs.route()
+    x0, y0, x1, _ = _labels(fs)["P-101 tag"]
+    w, h = measure_annotation(notes(NOTE))
+    _note_box(fs, (x0 + x1 - w) / 2, y0 + 3.0 - h)
+
+    over = {k: n for k, n in _flaws(fs).items() if k.startswith("covered ")}
+    assert over == {f"covered {kind} {key}": 1 for kind, key in covered(fs)}
+    assert "covered label ('P-101', 0)" in over
+
+
 def test_a_package_label_drawn_over_a_placed_note_counts() -> None:
     """Check that the keep check counts a package's tag over a placed note."""
     from pandid.package import frame as package_frame

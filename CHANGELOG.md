@@ -113,6 +113,9 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- Each step that `route()` or `layout()` keeps only where it draws no worse
+  also puts the drawing back where it draws a unit, line or label over a note
+  or table placed with `position=` that the drawing before kept clear of it.
 - Where its drawing does not settle and the sheet declares no loop, `route()`
   also lays the sheet out again from that drawing and draws it again, and keeps
   the new drawing where it is better, so a bank of tapped pumps is drawn on the

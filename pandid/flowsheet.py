@@ -3008,7 +3008,7 @@ class Flowsheet:
         the drawing before them, unless the author has stated drawing
         coordinates since; then it starts from the drawing shown.
         """
-        from pandid.layout.compact import close_bands, covered, empty_bands, onto_sheet
+        from pandid.layout.compact import close_bands, empty_bands, onto_sheet
         from pandid.routing.lanes import _score
 
         # Move the drawing onto the sheet, close what layout left, then
@@ -3018,11 +3018,11 @@ class Flowsheet:
             cuts = find(self)
             if not any(cuts):
                 continue
-            drawn, judged, notes = self._drawing(), _score(self), covered(self)
+            drawn, judged = self._drawing(), _score(self)
             close_bands(self, cuts)
             new = _score(self)
-            grew = new[1] > judged[1] or any(n > judged[0][k] for k, n in new[0].items())
-            if grew or not covered(self) <= notes or (better and not _beats(new, judged)):
+            grew = not new[1] <= judged[1] or any(n > judged[0][k] for k, n in new[0].items())
+            if grew or (better and not _beats(new, judged)):
                 self._put_drawing(drawn)
                 continue
             if self._main is None:
@@ -3393,7 +3393,6 @@ class Flowsheet:
             Whether the new places are kept.
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, pinned_axes
-        from pandid.layout.compact import covered
         from pandid.layout.control import _taps_off, place_control
         from pandid.layout.stages import is_control
         from pandid.routing.lanes import _score
@@ -3417,7 +3416,7 @@ class Flowsheet:
             if not any(is_control(u) for u in loose):
                 return False
             prior, unplaced = self._geometry(), list(self.unplaced_instruments)
-            before, taps, notes = _score(self), _taps_off(self), covered(self)
+            before, taps = _score(self), _taps_off(self)
             self._typed_at = {**held, **{id(u): (u.frame.x, u.frame.y, dict(u.frame.port_faces))
                                          for u in self.units if is_control(u) and u not in loose
                                          and u.frame is not None and u.pin_ is None}}
@@ -3429,7 +3428,7 @@ class Flowsheet:
                         break
                     router.route(self)
                 new = _score(self)
-                kept = (len(off()) < len(loose) and new[1] <= taps and covered(self) <= notes
+                kept = (len(off()) < len(loose) and new[1] <= taps
                         and not any(n > before[0][k] for k, n in new[0].items()))
             except Exception:
                 kept = False

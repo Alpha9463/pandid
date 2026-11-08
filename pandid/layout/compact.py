@@ -69,7 +69,8 @@ def covered(fs: Flowsheet) -> set[tuple]:
     set[tuple]
         A key for each unit, line, tag or letter beside a unit, package
         label, letter code, line number and number leader that meets a
-        placed annotation.
+        placed annotation, by name, so keys from two drawings of a sheet
+        compare.
     """
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
@@ -113,15 +114,15 @@ def covered(fs: Flowsheet) -> set[tuple]:
         return any(segment_crosses_box(a, b, note)
                    for a, b in zip(points, points[1:]) for note in notes)
 
-    out: set[tuple] = {("unit", id(u)) for u in fs.units if u.frame is not None
+    out: set[tuple] = {("unit", u.name) for u in fs.units if u.frame is not None
                        and over(unit_box(u, u.frame))}
-    out |= {("line", id(s)) for s in fs.streams if crosses(stream_path(s))}
+    out |= {("line", s.name) for s in fs.streams if crosses(stream_path(s))}
     frames = [(pkg, package_frame(pkg)) for pkg in fs.packages]
-    packages = [((id(pkg), k), item) for pkg, frame in frames if frame is not None
+    packages = [((pkg.name, k), item) for pkg, frame in frames if frame is not None
                 for k, item in enumerate(package_labels(pkg, frame))]
     for joints in (None, "none"):
         for direction in ("vertical", "horizontal"):
-            items = packages + [((id(u), k), item) for u, _, drawn in unit_tags(fs, joints, direction)
+            items = packages + [((u.name, k), item) for u, _, drawn in unit_tags(fs, joints, direction)
                                 for k, item in enumerate(drawn)]
             out |= {("label", key) for key, item in items if over(_unit_label_box(item))}
             labels = [b for b in (_unit_label_box(item) for _, item in items) if b is not None]
