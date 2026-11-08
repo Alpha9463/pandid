@@ -1111,8 +1111,9 @@ def test_every_registered_symbol_is_quiet_on_a_nozzle_pinned_run(kind, variant):
     if cls is None:
         pytest.skip(f"{kind} has no built-in Unit class")
     unit = cls("U-1", **_drawing(cls, variant))
-    ins = [n for n, p in unit.ports.items() if p.direction == "inlet" and p.role != "signal"]
-    outs = [n for n, p in unit.ports.items() if p.direction == "outlet" and p.role != "signal"]
+    piped = [n for n, p in unit.ports.items() if p.role not in ("signal", "shaft", "drive")]
+    ins = [n for n in piped if unit.ports[n].direction == "inlet"]
+    outs = [n for n in piped if unit.ports[n].direction == "outlet"]
     if not ins or not outs:
         pytest.skip(f"{kind}/{variant} is not an in-line device ({ins} -> {outs})")
 

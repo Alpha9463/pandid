@@ -524,7 +524,9 @@ KIND_MAP = {
     # The process coil enters at (0, 54.5) and leaves at (80, 79.5).
     ("furnace", "default"): ("vessels", "Furnace",
                              {"inlet": ("W", 54.5), "outlet": ("E", 79.5), "fuel": "S"}),
-    ("turbine", "default"): ("pumps", "Turbine", {"inlet": "W", "outlet": "E"}),
+    # The shaft leaves from under the casing's wide end.
+    ("turbine", "default"): ("pumps", "Turbine",
+                             {"inlet": "W", "outlet": "E", "shaft": ("AT", 69.0, 56.25)}),
     # Cooling tower: the nozzles are named for the side (water, air), as on ``hex``;
     # ``makeup`` and ``blowdown`` flank ``water_out`` on the basin floor, and both
     # drawings offer the same six. Induced draft: the air leaves the stack top and

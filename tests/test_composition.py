@@ -1097,7 +1097,11 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "screening_device/vibrating": "X2605",
     "screening_device/rotating_drum": "X8029",
     "screening_device/basket_reel": "X8030",
-    # Group 20, items 20.6 to 20.8: the electric motor.
+    # Group 20: the gearbox, the generator and the electric motor.
+    "gearbox/default": "X8167",
+    "generator/general": "C0079",
+    "generator/ac": "X8154",
+    "generator/dc": "X8155",
     "motor/general": "C0082",
     "motor/ac": "X8157",
     "motor/dc": "X8158",

@@ -78,6 +78,9 @@ __all__ = [
     "ScreeningDevice",
     "Kneader",
     "Motor",
+    "Gearbox",
+    "Generator",
+    "DieselEngine",
     "Instrument",
     "Block",
 ]
@@ -3209,14 +3212,18 @@ class Flare(Unit):
 class Turbine(Unit):
     """Steam or gas turbine, or expander.
 
-    Parameters are those of :class:`Unit`.
+    ``shaft`` turns the machine it drives, from under the casing's wide
+    end: ``fs.connect(turbine.shaft, generator.drive)``. Parameters are
+    those of :class:`Unit`.
     """
 
     inlet: Port
     outlet: Port
+    shaft: Port
 
     kind = "turbine"
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
+             ("shaft", "outlet", "shaft")]
 
 
 class _VariantPorted(Unit):
@@ -3452,6 +3459,54 @@ class Motor(Unit):
 
     kind = "motor"
     VARIANT_ALIASES = {"default": "general"}
+    PORTS = [("shaft", "outlet", "shaft")]
+
+
+class Gearbox(Unit):
+    """Gearbox between a driver and its machine, ISO 10628-2 item 20.2.
+
+    ``drive`` takes the driver's shaft and ``shaft`` turns the machine:
+    ``fs.connect(motor.shaft, gearbox.drive)`` and
+    ``fs.connect(gearbox.shaft, pump.drive)``. The sheet draws the train
+    in line beside the machine. Parameters are those of :class:`Unit`.
+    """
+
+    drive: Port
+    shaft: Port
+
+    kind = "gearbox"
+    PORTS = [("drive", "inlet", "drive"), ("shaft", "outlet", "shaft")]
+
+
+class Generator(Unit):
+    """Electric generator, ISO 10628-2 items 20.3 to 20.5.
+
+    ``drive`` takes the shaft of its driver,
+    ``fs.connect(turbine.shaft, generator.drive)``, and the sheet draws
+    the generator beside it on a short straight shaft. Variants, by ISO
+    item: ``"general"`` (20.3, the default), ``"ac"`` (20.4) and
+    ``"dc"`` (20.5). Parameters are those of :class:`Unit`.
+    """
+
+    drive: Port
+
+    kind = "generator"
+    VARIANT_ALIASES = {"default": "general"}
+    PORTS = [("drive", "inlet", "drive")]
+
+
+class DieselEngine(Unit):
+    """Diesel engine driving a machine through its shaft.
+
+    ``shaft`` turns the machine it is connected to,
+    ``fs.connect(engine.shaft, generator.drive)``, and the sheet draws
+    the engine beside it on a short straight shaft. Parameters are those
+    of :class:`Unit`.
+    """
+
+    shaft: Port
+
+    kind = "diesel_engine"
     PORTS = [("shaft", "outlet", "shaft")]
 
 

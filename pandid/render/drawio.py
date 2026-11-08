@@ -403,6 +403,8 @@ OWN_OUTLINE = frozenset({
     ("fitting", "magnetic"), ("fitting", "ultrasonic_clamp_on"),
     ("fitting", "thermal_mass"), ("fitting", "flume"),
     ("motor", "general"), ("motor", "ac"), ("motor", "dc"),
+    ("gearbox", "default"), ("generator", "general"), ("generator", "ac"),
+    ("generator", "dc"), ("diesel_engine", "default"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what

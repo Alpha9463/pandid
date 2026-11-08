@@ -411,9 +411,10 @@ _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "centrifuge", "column", "compressor", "conveyor",
     "cooler", "cooling_tower", "crusher", "crushing_machine", "crystallizer",
     "deaerator", "dryer", "ejector", "elevator", "evaporator", "feeder", "filter",
-    "flare", "flotation_cell", "furnace", "heater", "hex", "kiln", "kneader",
-    "mill", "mixer_settler", "motor", "pump", "reactor", "screening_device",
-    "separator", "silo", "stack", "tank", "thickener", "turbine", "vessel",
+    "diesel_engine", "flare", "flotation_cell", "furnace", "gearbox", "generator",
+    "heater", "hex", "kiln", "kneader", "mill", "mixer_settler", "motor", "pump",
+    "reactor", "screening_device", "separator", "silo", "stack", "tank",
+    "thickener", "turbine", "vessel",
 })
 
 # Equipment-table description of a kind whose name is not its title.
