@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mills and feeders take one at their new `drive`:
   `fs.connect(motor.shaft, pump.drive)` draws the motor beside the machine on a
   short straight shaft.
+- `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
+  and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
+  `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
+  the motor above the roof and its `drive`.
+- Every balloon symbol, computer, SIS, logic and interlock included, takes
+  `display="central"` or `display="subsidiary"` and draws one or two location
+  bars across it: `fs.add_instrument("UY", 301, variant="logic", display="central")`.
+- Signal lines take `kind="hydraulic"`, drawn with a footed stroke at each mark,
+  and `kind="wireless"`, drawn as a wave: `fs.connect(ft, fic, kind="wireless")`.
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,
@@ -133,6 +142,11 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A shared display's square in the field,
+  `Instrument("FI", 301, variant="shared", display="field")`, is drawn without
+  the central bar, and its spec reads back in the field.
+- Balloons exported to draw.io draw their location bars, and a shared display
+  balloon its square.
 - Each step that `route()` or `layout()` keeps only where it draws no worse
   also puts the drawing back where it draws a unit, line or label over a note
   or table placed with `position=` that the drawing before kept clear of it.

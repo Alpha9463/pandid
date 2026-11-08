@@ -366,6 +366,8 @@ class _Approximation(NamedTuple):
         A second built-in filling the same box.
     pieces : tuple[_Piece, ...]
         Built-ins placed within the cell instead of ``shape``.
+    marks : tuple[_Piece, ...]
+        Built-ins drawn over ``shape``.
     """
 
     shape: str | None
@@ -377,6 +379,59 @@ class _Approximation(NamedTuple):
     keys: tuple = ()
     inscribed: "str | None" = None
     pieces: "tuple[_Piece, ...]" = ()
+    marks: "tuple[_Piece, ...]" = ()
+
+
+def _location_bars(variant: str, shape: "str | None") -> "tuple[_Piece, ...]":
+    """Return a balloon's location bars as line pieces across a stand-in.
+
+    Each bar keeps its height in the balloon and runs between the
+    stand-in's sides.
+
+    Parameters
+    ----------
+    variant : str
+        Registered balloon variant.
+    shape : str or None
+        Stand-in outline: ``"ellipse"``, ``"hexagon"``, ``"rhombus"``,
+        or ``None`` for the rectangle.
+
+    Returns
+    -------
+    tuple[_Piece, ...]
+        One level line per bar, as fractions of the balloon.
+    """
+    sym = default_registry.get("instrument", variant)
+    out = []
+    for y in re.findall(r'<line x1="[\d.]+" y1="([\d.]+)"', sym.svg):
+        off = abs(float(y) / sym.height - 0.5)
+        # Inset of the stand-in's side at this height.
+        inset = {"ellipse": 0.5 - math.sqrt(0.25 - off * off), "rhombus": off,
+                 "hexagon": off / 2}.get(shape or "", 0.0)
+        out.append(_Piece("line", inset, float(y) / sym.height, 1.0 - 2 * inset, 0.0))
+    return tuple(out)
+
+
+def _balloon(shape: "str | None", variant: str,
+             inscribed: "str | None" = None) -> _Approximation:
+    """Return the stand-in for a balloon, its location bars drawn over it.
+
+    Parameters
+    ----------
+    shape : str or None
+        Built-in outline; ``None`` is the rectangle.
+    variant : str
+        Registered balloon variant.
+    inscribed : str or None, optional
+        Built-in drawn inside the outline.
+
+    Returns
+    -------
+    _Approximation
+        Stand-in at the detail weight (ISO 10628-1 5.3.1 c)).
+    """
+    return _Approximation(shape, "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width,
+                          inscribed=inscribed, marks=_location_bars(variant, shape))
 
 
 # Relative aspect change allowed before a symbol counts as reshaped.
@@ -402,6 +457,7 @@ OWN_OUTLINE = frozenset({
     ("pump", "lobe"), ("pump", "vertical_turbine"),
     ("fitting", "magnetic"), ("fitting", "ultrasonic_clamp_on"),
     ("fitting", "thermal_mass"), ("fitting", "flume"),
+    ("tank", "flat_roof"), ("tank", "open_top"),
     ("motor", "general"), ("motor", "ac"), ("motor", "dc"),
     ("gearbox", "default"), ("generator", "general"), ("generator", "ac"),
     ("generator", "dc"), ("diesel_engine", "default"),
@@ -410,28 +466,18 @@ OWN_OUTLINE = frozenset({
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
 _APPROXIMATIONS = {
-    # Instrument balloons, at the detail weight (ISO 10628-1 5.3.1 c)).
-    ("instrument", "default"): _Approximation(
-        "ellipse", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    ("instrument", "panel"): _Approximation(
-        "ellipse", "the bar across the balloon that puts the instrument in a panel",
-        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    ("instrument", "aux"): _Approximation(
-        "ellipse", "the double bar that puts the instrument in an auxiliary panel",
-        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    ("instrument", "shared"): _Approximation(
-        "ellipse", "the square around the balloon that puts the function in a "
-                   "shared display, and the bar that puts it in the control room",
-        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    ("instrument", "computer"): _Approximation(
-        "hexagon", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    # A diamond inscribed in a square.
-    ("instrument", "sis"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=LineWeight.DETAIL.width),
-    ("instrument", "logic"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=LineWeight.DETAIL.width),
-    ("instrument", "interlock"): _Approximation(
-        "rhombus", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
+    # Instrument balloons: a circle, a circle in a square, a hexagon, a
+    # diamond in a square and a diamond, each in the field, central and
+    # subsidiary.
+    **{("instrument", variant): _balloon(shape, variant, inscribed)
+       for shape, inscribed, variants in (
+           ("ellipse", None, ("default", "panel", "aux")),
+           (None, "ellipse", ("shared_field", "shared", "shared_subsidiary")),
+           ("hexagon", None, ("computer", "computer_central", "computer_subsidiary")),
+           (None, "rhombus", ("sis", "sis_central", "sis_subsidiary",
+                              "logic", "logic_central", "logic_subsidiary")),
+           ("rhombus", None, ("interlock", "interlock_central", "interlock_subsidiary")))
+       for variant in variants},
     # Junctions and boundaries.
     ("mixer", "default"): _Approximation("triangle", ""),
     ("splitter", "default"): _Approximation("triangle", "", flip_h=True),
@@ -1259,18 +1305,25 @@ class DrawioRenderer:
         if u.kind == "instrument":
             letters, number = split_tag(getattr(u, "type", "") or u.tag,
                                         getattr(u, "number", "") or "")
+            display = getattr(u, "display", "field")
+            diamond = getattr(u, "symbol_type", u.variant) in _DIAMOND_BALLOONS
             # A diamond carries the number alone.
-            if getattr(u, "variant", "default") in _DIAMOND_BALLOONS:
-                parts = [number or letters.upper()]
-            else:
-                parts = [letters.upper(), number]
+            parts = [number or letters.upper()] if diamond else [letters.upper(), number]
             parts = [part for part in parts if part]
             text = "<br>".join(_html_text(part) for part in parts)
+            offset = (0.0, 0.0)
+            if display != "field" and diamond:
+                # The number sits under the bars, as on the sheet.
+                offset = (0.0, fit.length(8.0 if display == "subsidiary" else 7.0))
+            elif display != "field" and len(parts) > 1:
+                # Letters above the bars and the number below, as on the
+                # sheet.
+                text = f'<div style="line-height:{fmt(fit.length(21.0), 2)}px">{text}</div>'
             # One size for both lines, capped to fit the balloon.
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
                           "align=center",
                           _drawn_type(_TAG_TYPE, fit, lines=len(parts),
-                                      box=unit_box(u, u.frame))], (0.0, 0.0)
+                                      box=unit_box(u, u.frame))], offset
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
@@ -1392,7 +1445,7 @@ class DrawioRenderer:
     @staticmethod
     def _pieces(u, approx: "_Approximation | None", cid: str,
                 w: float, h: float, fit: "_Fit") -> list[str]:
-        """Return a multi-piece stand-in as one child cell per built-in.
+        """Return a stand-in's pieces and marks, one child cell per built-in.
 
         Each piece turns and mirrors with the parent.
 
@@ -1414,14 +1467,14 @@ class DrawioRenderer:
         Returns
         -------
         list[str]
-            Cell XML lines; empty without pieces.
+            Cell XML lines; empty without pieces or marks.
         """
-        if approx is None or not approx.pieces:
+        if approx is None or not (approx.pieces or approx.marks):
             return []
         rot = _xform(u.frame)[0]
         turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
-        for i, piece in enumerate(approx.pieces):
+        for i, piece in enumerate((*approx.pieces, *approx.marks)):
             px, py, pw, ph = _placed_rect(u.frame, piece.x, piece.y, piece.w, piece.h)
             keys = [] if piece.shape is None else [f"shape={piece.shape}"]
             style = ";".join([
@@ -1434,7 +1487,7 @@ class DrawioRenderer:
 
     @staticmethod
     def _shell(u) -> "Symbol | None":
-        """Return the shell a vessel built to size is drawn on.
+        """Return the body a vessel or a stirred tank is drawn in place on.
 
         Parameters
         ----------
@@ -1444,11 +1497,12 @@ class DrawioRenderer:
         Returns
         -------
         Symbol or None
-            The shell, or ``None`` for a unit drawn at its symbol's size.
+            A vessel's shell built to size, or a stirred tank's body
+            under its motor; ``None`` for any other unit.
         """
         from pandid.units import _built_to_size, _drawn_parts
 
-        if not _built_to_size(u):
+        if not (_built_to_size(u) or (u.kind == "tank" and getattr(u, "agitator", None))):
             return None
         return _drawn_parts(u, tuple(getattr(u, "overlays", ()) or ()))[0]
 
@@ -1661,7 +1715,11 @@ class DrawioRenderer:
                 f"strokeColor={s.color or _LINE_INK}",
                 f"strokeWidth={fit.length(_stream_rung(signal).width):g}",
             ]
-            if n in hops:
+            wireless = s.kind == "wireless"
+            if wireless:
+                # The wave's crests are a curved edge's control points.
+                keys.append("curved=1")
+            if n in hops and not wireless:
                 # draw.io's jumpSize for a hop of HOP_R on this line, at least 1.
                 weight = fit.length(_stream_rung(signal).width)
                 size = max(1, round(2.0 * (fit.length(HOP_R) - weight) + 2.0))
@@ -1695,7 +1753,7 @@ class DrawioRenderer:
                             keys.append("horizontal=0")
 
             style = ";".join(keys) + ";"
-            waypoints = points[1:-1]
+            waypoints = (_svg.wave_points(points) if wireless else points)[1:-1]
             along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
                 *(['            <Array as="points">',
@@ -2117,7 +2175,7 @@ _LABEL_SIDE = {
 }
 
 
-# The pneumatic cross-hatch
+# The pneumatic and hydraulic marks
 
 # Hatch stroke angle on a horizontal run, in clockwise degrees, and
 # stroke length.
@@ -2126,10 +2184,11 @@ _HATCH_LEN = round(2 * math.hypot(*_svg.HATCH_ARM), 2)
 
 
 def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
-    """Return the pneumatic cross-hatches and the flanged-joint marks on one line.
+    """Return the signal marks and the flanged-joint marks on one line.
 
-    Each hatch is two strokes and each flange two bars, every one a
-    ``line`` child vertex of the edge placed by arc length.
+    A pneumatic mark is two strokes, a hydraulic mark a stroke and its
+    foot, and each flange two bars, every one a ``line`` child vertex
+    of the edge placed by arc length.
 
     Parameters
     ----------
@@ -2149,9 +2208,9 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
     Returns
     -------
     list[str]
-        XML lines for the hatch cells, then the flange cells.
+        XML lines for the mark cells, then the flange cells.
     """
-    from pandid.render.svg import pneumatic_marks
+    from pandid.render.svg import MARKED_KINDS, signal_marks
 
     total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
                 for (ax, ay), (bx, by) in zip(points, points[1:]))
@@ -2161,12 +2220,23 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
     # Per family: id letter, stroke length, and each mark's arc length,
     # rotation and stroke offsets. A further quarter turn makes a flange
     # bar cross the run.
+    spots = signal_marks(points) if s.kind in MARKED_KINDS else []
+    strokes = _svg.HATCH_ALONG if s.kind == "pneumatic" else (0.0,)
+    along, across = _svg.HATCH_ARM
+    # A hydraulic stroke's foot, centred half its length on from the
+    # stroke's first end.
+    feet = [] if s.kind != "hydraulic" else [
+        (m.along, 0.0 if m.horizontal else 90.0,
+         [(fit.length(_svg.HYDRAULIC_FOOT / 2 - along), fit.length(across)) if m.horizontal
+          else (fit.length(-across), fit.length(_svg.HYDRAULIC_FOOT / 2 - along))])
+        for m in spots]
     families = (
         ("h", _HATCH_LEN, [
             (m.along, _HATCH_ANGLE if m.horizontal else _HATCH_ANGLE + 90.0,
              [(fit.length(off), 0.0) if m.horizontal else (0.0, fit.length(off))
-              for off in _svg.HATCH_ALONG])
-            for m in (pneumatic_marks(points) if s.kind == "pneumatic" else [])]),
+              for off in strokes])
+            for m in spots]),
+        ("t", _svg.HYDRAULIC_FOOT, feet),
         ("f", _svg.FLANGE_TICK, [
             (m.along, m.angle + 90.0,
              [(math.cos(math.radians(m.angle)) * step, math.sin(math.radians(m.angle)) * step)

@@ -11,6 +11,7 @@ import math
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
+from functools import partial
 from typing import TYPE_CHECKING, Any, NoReturn, TypedDict, TypeVar, Unpack
 
 from pandid._checks import check_real, check_whole, is_real, is_whole, suggest
@@ -1838,6 +1839,75 @@ def _built_to_size(unit: "Unit") -> bool:
             and default_registry.get(unit.kind, unit.variant) is vessel_shell(unit.variant))
 
 
+def _body_drawn(unit: "Unit", natural: "Symbol",
+                size: "tuple[float | None, float | None]") -> "tuple[float, float]":
+    """Return the size a unit's body is drawn at, under its motor.
+
+    Parameters
+    ----------
+    unit : Unit
+        Tank or evaporator drawn at its symbol's size.
+    natural : Symbol
+        Its body at its own size.
+    size : tuple[float or None, float or None]
+        Stated width and height of the drawn box, on the drawing's axes.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height of the body.
+
+    Raises
+    ------
+    ValueError
+        If the stated height leaves no room for the body under the
+        motor.
+    """
+    from pandid.render.iso_parts import MOTOR_D, MOTOR_GAP
+
+    width = natural.width if size[0] is None else size[0]
+    if size[1] is None:
+        return width, natural.height
+    height = size[1] - (MOTOR_D + MOTOR_GAP if getattr(unit, "agitator", None) else 0.0)
+    if height <= 0:
+        raise ValueError(
+            f"{unit.name}: a height of {size[1]:g} leaves no room for the body under its "
+            f"agitator's motor, which stands {MOTOR_D + MOTOR_GAP:g} above it; give a "
+            f"height above {MOTOR_D + MOTOR_GAP:g}, or leave height= unset"
+        )
+    return width, height
+
+
+def _stirred_at(unit: "Unit", overlays: tuple, drawn: "tuple[float, float]",
+                foot: "float | None" = None) -> tuple:
+    """Return a unit's parts with its agitator placed for a drawn body.
+
+    Parameters
+    ----------
+    unit : Unit
+        Tank, vessel or evaporator.
+    overlays : tuple[Overlay, ...]
+        Its parts.
+    drawn : tuple[float, float]
+        Width and height its body is drawn at.
+    foot : float, optional
+        Depth the stirrer reaches, as a fraction of the body's height;
+        the foot of the registered body's west wall band if omitted.
+
+    Returns
+    -------
+    tuple[Overlay, ...]
+        The parts, with the agitator and its motor placed for ``drawn``.
+    """
+    name = getattr(unit, "agitator", None)
+    if name is None:
+        return overlays
+    from pandid.render.iso_parts import agitator_overlays
+
+    stirrer, motor = agitator_overlays(name, unit.kind, unit.variant, drawn, foot)
+    return tuple(stirrer if o.group == 28 else motor if o.group == 20 else o for o in overlays)
+
+
 def _drawn_parts(unit: "Unit", overlays: tuple, faces: "dict[str, str] | None" = None) -> tuple:
     """Return the body a unit is drawn on, with every part placed on it.
 
@@ -1880,6 +1950,7 @@ def _drawn_parts(unit: "Unit", overlays: tuple, faces: "dict[str, str] | None" =
     size = (unit.height, unit.width) if quarter else (unit.width, unit.height)
     natural = default_registry.get(unit.kind, unit.variant)
     if not _built_to_size(unit):
+        overlays = _stirred_at(unit, overlays, _body_drawn(unit, natural, size))
         if not manholes and not sockets:
             return natural, overlays, (), (1.0, 1.0)
         walls, ports, scale = wall_overlays(unit.kind, unit.variant, overlays, manholes,
@@ -1944,8 +2015,9 @@ def _shell_parts(unit: "Unit", overlays: tuple, faces: "tuple[tuple[str, str], .
         tuple
             Parts, then the sockets' ports.
         """
-        drawn = tuple(seated(anchored(o, natural, body), body, unit.variant)
-                      for o in overlays)
+        drawn = _stirred_at(unit, tuple(seated(anchored(o, natural, body), body, unit.variant)
+                                        for o in overlays), (body.width, body.height),
+                            body.bands["W"][1] / body.height)
         walls, ports, _ = wall_overlays(unit.kind, unit.variant, drawn, manholes, sockets,
                                         (None, None), unit.name, body)
         return drawn + walls, ports
@@ -2330,6 +2402,9 @@ class _MultiPortVessel(_FaceFamilies):
 
     _VARIANT_BUILDS = True
 
+    # Variants an agitator may hang in.
+    _STIRRABLE: tuple[str, ...] = ()
+
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the symbol anchor, resolving ``inlet``/``outlet``.
 
@@ -2346,19 +2421,20 @@ class _MultiPortVessel(_FaceFamilies):
         return super()._symbol_anchor(self._canonical_port_name(port_name))
 
     def _registry_symbol(self):
-        """Return the variant's registered symbol.
+        """Return the variant's registered symbol, stirred if agitated.
 
         Returns
         -------
         Symbol or None
             The symbol, or ``None`` for an unregistered variant.
         """
-        from pandid.render.symbols import default_registry
+        from pandid.render.symbols import default_registry, stirred
 
         try:
-            return default_registry.get(self.kind, self.variant)
+            sym = default_registry.get(self.kind, self.variant)
         except ValueError:
             return None
+        return stirred(sym) if getattr(self, "agitator", None) else sym
 
     def _home_face(self, role: str) -> str:
         """Return the face the artwork draws a role's port on.
@@ -2639,6 +2715,56 @@ class _MultiPortVessel(_FaceFamilies):
             self.kind, self.variant, tuple(on.items()), parts, ports, size), scale)
 
 
+def _refuse_agitator(unit: "Tank | Vessel") -> None:
+    """Refuse an agitator on a variant that cannot carry one.
+
+    Parameters
+    ----------
+    unit : Tank or Vessel
+        Unit with its ``agitator`` set.
+
+    Raises
+    ------
+    ValueError
+        If the unit has an agitator and its variant cannot carry one.
+    """
+    if unit.agitator is not None and unit.variant not in unit._STIRRABLE:
+        raise ValueError(
+            f"{unit.name}: {type(unit).__name__} variant {unit.variant!r} cannot carry "
+            f"agitator={unit.agitator!r}; variants that can: {', '.join(unit._STIRRABLE)}"
+        )
+
+
+def _stirrer(kind: str, name: str, variant: str) -> tuple:
+    """Return an agitator and its motor on a body at its own size.
+
+    Parameters
+    ----------
+    kind : str
+        ``"tank"`` or ``"vessel"``.
+    name : str
+        Group-28 agitator name.
+    variant : str
+        Body variant.
+
+    Returns
+    -------
+    tuple[Overlay, Overlay]
+        The agitator, then the motor.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a registered agitator, or the variant is
+        unregistered.
+    """
+    from pandid.render.iso_parts import agitator_overlays
+    from pandid.render.symbols import default_registry
+
+    body = default_registry.get(kind, variant)
+    return agitator_overlays(name, kind, variant, (body.width, body.height))
+
+
 class Vessel(_MultiPortVessel):
     """Pressure vessel for holdup.
 
@@ -2676,6 +2802,13 @@ class Vessel(_MultiPortVessel):
         ISO 10628-2 26.6 sockets, placed as ``manholes`` are. Each is
         an outlet port, ``socket_1``, ``socket_2``, ... in the order
         given. Set at construction only.
+    agitator : str or None, default=None
+        Stirrer hung from the top head, one of :class:`Reactor`'s
+        ``agitator`` names, with its motor above it as in ISO 10628-2
+        item 1.27; the motor carries ``drive``. The vent and relief
+        then leave the top of the east and west walls. Not on
+        ``"horizontal"``, ``"dome"`` or ``"swaged"``. Set at
+        construction only.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
@@ -2684,9 +2817,9 @@ class Vessel(_MultiPortVessel):
     ------
     ValueError
         If a count or face is invalid, a face is absent or full on the
-        artwork, the support is unknown, the variant cannot carry it,
-        or a manhole or socket is not a ``(face, fraction)`` pair on a
-        straight wall of the variant.
+        artwork, the support or agitator is unknown, the variant cannot
+        carry it, or a manhole or socket is not a ``(face, fraction)``
+        pair on a straight wall of the variant.
     """
 
     # Numbered nozzles a count can build.
@@ -2715,8 +2848,11 @@ class Vessel(_MultiPortVessel):
         ("drain", "outlet", "liquid"),
     ]
 
-    COMPOSITION = {"supports": None}
-    _FIXED_AT_CONSTRUCTION = frozenset({"supports", "manholes", "sockets"})
+    COMPOSITION = {"supports": None, "agitator": None}
+    _FIXED_AT_CONSTRUCTION = frozenset({"supports", "manholes", "sockets", "agitator"})
+
+    # Upright shells an agitator may hang in.
+    _STIRRABLE = ("default", "dished", "electrical_heating", "insulated", "jacketed")
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -2727,16 +2863,25 @@ class Vessel(_MultiPortVessel):
         supports: str | None = None,
         manholes: "Sequence[tuple[str, float]]" = (),
         sockets: "Sequence[tuple[str, float]]" = (),
+        agitator: str | None = None,
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
+        self.agitator = agitator
+        _refuse_agitator(self)
         self.manholes = _on_walls(self, "manholes", manholes)
         self.sockets = _on_walls(self, "sockets", sockets)
         self._init_connections(inputs, outputs)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
 
-        _compose_onto(self, ("supports", supports, lambda name, _body: support_overlays(name)))
+        _compose_onto(
+            self,
+            ("supports", supports, lambda name, _body: support_overlays(name)),
+            ("agitator", agitator, partial(_stirrer, self.kind)),
+        )
+        if agitator is not None:
+            self._add_port("drive", "inlet", "energy")
         _hold_walls(self)
 
 
@@ -2744,10 +2889,13 @@ class Tank(_MultiPortVessel):
     """Storage tank.
 
     Variants are ``"default"`` (dished roof), ``"conical"``,
-    ``"floating_roof"``, ``"sphere"``, ``"conical_bottom"``,
-    ``"conical_ends"``, ``"dished_roof_conical_bottom"`` and
-    ``"gas_holder"``. A tank has :class:`Vessel`'s ports and
-    ``inputs``/``outputs`` families.
+    ``"flat_roof"``, ``"open_top"``, ``"floating_roof"``,
+    ``"sphere"``, ``"conical_bottom"``, ``"conical_ends"``,
+    ``"dished_roof_conical_bottom"`` and ``"gas_holder"``.
+    ``"flat_roof"`` and ``"open_top"`` are the closed and the open
+    rectangular tank of ISO 10628-2 items 1.1 and 1.2. A tank has
+    :class:`Vessel`'s ports and ``inputs``/``outputs`` families; an
+    open top has no ``vent`` or ``relief``.
 
     Flat-floored variants fill low on the west shell and
     hopper-bottomed ones at the crown; :meth:`nozzle` moves an inlet to
@@ -2761,15 +2909,24 @@ class Tank(_MultiPortVessel):
         Number of inlets or outlets, or one face per port.
     variant : str, default="default"
         Tank drawing.
+    agitator : str or None, default=None
+        Stirrer hung from the roof, one of :class:`Reactor`'s
+        ``agitator`` names, with its motor above it as in ISO 10628-2
+        item 1.27; the motor carries ``drive``. The vent and relief
+        then leave the top of the east and west walls, and no inlet
+        takes the roof. Not on ``"floating_roof"``, ``"sphere"`` or
+        ``"gas_holder"``. Set at construction only.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
-        ``reference``, as for :class:`Unit`.
+        ``reference``, as for :class:`Unit`. ``height`` includes the
+        motor.
 
     Raises
     ------
     ValueError
-        If a count or face is invalid, or a face is absent or full on
-        the variant's artwork.
+        If a count or face is invalid, a face is absent or full on the
+        variant's artwork, or the agitator is unknown or the variant
+        cannot carry it.
     """
 
     # Numbered nozzles a count can build.
@@ -2786,16 +2943,27 @@ class Tank(_MultiPortVessel):
     outlets: tuple[Port, ...]
     inlet: Port
     outlet: Port
+    # Absent on "open_top".
     vent: Port
     relief: Port
     drain: Port
 
     kind = "tank"
-    PORTS = [
+    # __init__ adds the variant's ports.
+    PORTS: list[tuple[str, str, str]] = []
+    _DEFAULT_PORTS = [
         ("vent", "outlet", "vapor"),
         ("relief", "outlet", "process"),
         ("drain", "outlet", "liquid"),
     ]
+    _VARIANT_PORTS = {"open_top": [("drain", "outlet", "liquid")]}
+
+    COMPOSITION = {"agitator": None}
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator"})
+
+    # Fixed roofs, and the open top, an agitator may hang from.
+    _STIRRABLE = ("default", "conical", "conical_bottom", "conical_ends",
+                  "dished_roof_conical_bottom", "flat_roof", "open_top")
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -2803,10 +2971,18 @@ class Tank(_MultiPortVessel):
         inputs: "int | Sequence[str]" = 1,
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
+        agitator: str | None = None,
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
+        self.agitator = agitator
+        _refuse_agitator(self)
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
         self._init_connections(inputs, outputs)
+        _compose_onto(self, ("agitator", agitator, partial(_stirrer, self.kind)))
+        if agitator is not None:
+            self._add_port("drive", "inlet", "energy")
 
 
 class Blower(_FluidMover):
@@ -3827,7 +4003,12 @@ _BALLOON_SYMBOLS = {
     ("default", "field"): "default",
     ("default", "central"): "panel",
     ("default", "subsidiary"): "aux",
+    ("shared", "field"): "shared_field",
     ("shared", "central"): "shared",
+    ("shared", "subsidiary"): "shared_subsidiary",
+    **{(shape, display): f"{shape}_{display}"
+       for shape in ("computer", "sis", "logic", "interlock")
+       for display in ("central", "subsidiary")},
 }
 
 # Registered variant -> symbol type.
@@ -3836,8 +4017,9 @@ _BALLOON_SHAPES = {drawn: shape for (shape, _display), drawn in _BALLOON_SYMBOLS
 # Display implied by a symbol type.
 _IMPLIED_DISPLAY = {"shared": "central"}
 
-# Variant spellings refused by name, and the display each means.
-_DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
+# Registered variants refused as spellings, and the symbol type and
+# display each means.
+_DISPLAY_VARIANTS = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items() if drawn != pair[0]}
 
 #: Deprecation of a unit face given as ``at=``.
 _AT_FACE = Deprecation(
@@ -3916,8 +4098,8 @@ class Instrument(Unit):
     # Pool names, which are also each pool's first member.
     _SIGNAL_POOLS = ("sig_in", "sig_out")
 
-    # Variants that may be drawn several times under one tag.
-    _REPEATABLE_VARIANTS = frozenset({"sis", "logic", "interlock"})
+    # Symbol types that may be drawn several times under one tag.
+    _REPEATABLE_TYPES = frozenset({"sis", "logic", "interlock"})
 
     def __init__(  # numpydoc ignore=GL08
         self,
@@ -4001,10 +4183,13 @@ class Instrument(Unit):
         """
         meant = _DISPLAY_VARIANTS.get(variant)
         if meant is not None:
+            shape, where = meant
+            spelled = (f"display={where!r}" if shape == "default"
+                       else f"variant={shape!r}, display={where!r}")
             raise ValueError(
                 f"{name}: variant={variant!r} says where the information is "
                 f"available, which is the display= axis: write "
-                f"display={meant!r}. What the instrument *does* is variant="
+                f"{spelled}. What the instrument *does* is variant="
             )
         if display is None:
             display = _IMPLIED_DISPLAY.get(variant, "field")
@@ -4022,14 +4207,12 @@ class Instrument(Unit):
             return pair
         if display == "field":
             return variant
-        drawn = ", ".join(
-            f"variant={v!r} display={d!r}" for (v, d) in _BALLOON_SYMBOLS if d != "field"
-        )
+        drawn = ", ".join(repr(shape) for shape in dict.fromkeys(s for s, _ in _BALLOON_SYMBOLS))
         raise ValueError(
             f"{name}: no balloon is drawn for variant={variant!r} with "
             f"display={display!r}. A location bar is registered artwork rather than "
-            f"a stripe laid over any outline, and the pairs drawn today are {drawn}. "
-            f"Ask for display='field', or for one of those"
+            f"a stripe laid over any outline, and the symbol types drawn with one are "
+            f"variant= {drawn}. Ask for display='field', or for one of those"
         )
 
     # Signal pools. sig_in and sig_out are the first members; others are
@@ -4114,10 +4297,11 @@ class Instrument(Unit):
         return (
             isinstance(other, Instrument)
             and other.tag == self.tag
-            and self.variant in self._REPEATABLE_VARIANTS
+            and self.symbol_type in self._REPEATABLE_TYPES
+            and self.display == other.display
             # A logic square draws the sis symbol.
-            and ("sis" if self.variant == "logic" else self.variant)
-            == ("sis" if other.variant == "logic" else other.variant)
+            and ("sis" if self.symbol_type == "logic" else self.symbol_type)
+            == ("sis" if other.symbol_type == "logic" else other.symbol_type)
         )
 
     def annotate(

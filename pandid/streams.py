@@ -34,7 +34,8 @@ _LINE_COMPONENTS = Deprecation(
 PROCESS_KINDS = frozenset({"material", "energy"})
 
 #: Kinds that carry a signal; they join signal-role ports only.
-SIGNAL_KINDS = frozenset({"electric", "pneumatic", "data", "capillary", "software"})
+SIGNAL_KINDS = frozenset({"electric", "pneumatic", "hydraulic", "wireless", "data",
+                          "capillary", "software"})
 
 #: The kind of a shaft from a driver's ``shaft`` to a machine's ``drive``.
 MECHANICAL = "mechanical"
