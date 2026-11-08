@@ -1233,6 +1233,7 @@ class BallMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class RodMill(Mill):
@@ -1250,6 +1251,7 @@ class RodMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class SAGMill(Mill):
@@ -1267,6 +1269,7 @@ class SAGMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class AGMill(Mill):
@@ -1284,6 +1287,7 @@ class AGMill(Mill):
 
     feed: Port
     discharge: Port
+    drive: Port
 
 
 class ScrewConveyor(Conveyor):

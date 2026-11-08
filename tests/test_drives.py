@@ -270,6 +270,10 @@ _DRIVES = {
     ("feeder", "rotary_valve"): (40.0, 20.0),
     ("feeder", "rotary_table"): (0.0, 37.5),
     ("feeder", "metering"): (74.0, 33.0),
+    ("mill", "ball"): (60.0, 0.0),
+    ("mill", "rod"): (70.0, 0.0),
+    ("mill", "sag"): (40.0, 0.0),
+    ("mill", "ag"): (40.0, 0.0),
     **{
         (kind, variant): (90.0, 30.0)
         for kind, variants in (

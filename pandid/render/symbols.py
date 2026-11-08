@@ -3510,7 +3510,8 @@ def tumbling_mill_symbol(variant: str, width: float | None = None,
     Returns
     -------
     Symbol
-        The drum, its trunnions and its charge.
+        The drum, its trunnions and its charge, its drive on the
+        shell's crown.
 
     Raises
     ------
@@ -3554,7 +3555,7 @@ def tumbling_mill_symbol(variant: str, width: float | None = None,
     return Symbol(
         svg=f'<g id="sym_mill_{variant}{suffix}"><path d="{outline}" {_OUTLINE}/>{media}</g>',
         width=w, height=h,
-        ports={"feed": (0.0, c), "discharge": (w, c)},
+        ports={"feed": (0.0, c), "discharge": (w, c), "drive": ((x0 + x1) / 2, 0.0)},
         id_suffix=suffix,
         gravity_fixed=True,
     )
