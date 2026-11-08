@@ -1020,7 +1020,7 @@ def seated(overlay: "Overlay", body: "Symbol", variant: str) -> "Overlay":
 
     w, h = body.width, body.height
     if overlay.name in ("bracket", "ring"):
-        lo, hi = vessel_side(variant, w, h)
+        lo, hi = vessel_side(variant, h)
         top = min(max(overlay.y * h, lo - overlay.h * h), hi)
         return replace(overlay, y=top / h)
     if overlay.name not in ("leg", "skirt"):

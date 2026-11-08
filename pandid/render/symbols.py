@@ -1953,15 +1953,15 @@ def _own_detail(variant: str, height: float) -> list[tuple[str, float, float]]:
     return []
 
 
-def vessel_side(variant: str, width: float, height: float) -> tuple[float, float]:
+def vessel_side(variant: str, height: float) -> tuple[float, float]:
     """Return the stretch of a shell's west edge its outline meets.
 
     Parameters
     ----------
     variant : str
         One of :data:`VESSEL_SIZES`.
-    width, height : float
-        The shell's box.
+    height : float
+        The shell's height.
 
     Returns
     -------
