@@ -115,6 +115,11 @@ These are removed in 0.4.0.
 
 ### Fixed
 
+- A shared display's square in the field,
+  `Instrument("FI", 301, variant="shared", display="field")`, is drawn without
+  the central bar, and its spec reads back in the field.
+- Balloons exported to draw.io draw their location bars, and a shared display
+  balloon its square.
 - Each step that `route()` or `layout()` keeps only where it draws no worse
   also puts the drawing back where it draws a unit, line or label over a note
   or table placed with `position=` that the drawing before kept clear of it.

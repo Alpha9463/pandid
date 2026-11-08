@@ -366,6 +366,8 @@ class _Approximation(NamedTuple):
         A second built-in filling the same box.
     pieces : tuple[_Piece, ...]
         Built-ins placed within the cell instead of ``shape``.
+    marks : tuple[_Piece, ...]
+        Built-ins drawn over ``shape``.
     """
 
     shape: str | None
@@ -377,6 +379,59 @@ class _Approximation(NamedTuple):
     keys: tuple = ()
     inscribed: "str | None" = None
     pieces: "tuple[_Piece, ...]" = ()
+    marks: "tuple[_Piece, ...]" = ()
+
+
+def _location_bars(variant: str, shape: "str | None") -> "tuple[_Piece, ...]":
+    """Return a balloon's location bars as line pieces across a stand-in.
+
+    Each bar keeps its height in the balloon and runs between the
+    stand-in's sides.
+
+    Parameters
+    ----------
+    variant : str
+        Registered balloon variant.
+    shape : str or None
+        Stand-in outline: ``"ellipse"``, ``"hexagon"``, ``"rhombus"``,
+        or ``None`` for the rectangle.
+
+    Returns
+    -------
+    tuple[_Piece, ...]
+        One level line per bar, as fractions of the balloon.
+    """
+    sym = default_registry.get("instrument", variant)
+    out = []
+    for y in re.findall(r'<line x1="[\d.]+" y1="([\d.]+)"', sym.svg):
+        off = abs(float(y) / sym.height - 0.5)
+        # Inset of the stand-in's side at this height.
+        inset = {"ellipse": 0.5 - math.sqrt(0.25 - off * off), "rhombus": off,
+                 "hexagon": off / 2}.get(shape or "", 0.0)
+        out.append(_Piece("line", inset, float(y) / sym.height, 1.0 - 2 * inset, 0.0))
+    return tuple(out)
+
+
+def _balloon(shape: "str | None", variant: str,
+             inscribed: "str | None" = None) -> _Approximation:
+    """Return the stand-in for a balloon, its location bars drawn over it.
+
+    Parameters
+    ----------
+    shape : str or None
+        Built-in outline; ``None`` is the rectangle.
+    variant : str
+        Registered balloon variant.
+    inscribed : str or None, optional
+        Built-in drawn inside the outline.
+
+    Returns
+    -------
+    _Approximation
+        Stand-in at the detail weight (ISO 10628-1 5.3.1 c)).
+    """
+    return _Approximation(shape, "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width,
+                          inscribed=inscribed, marks=_location_bars(variant, shape))
 
 
 # Relative aspect change allowed before a symbol counts as reshaped.
@@ -403,31 +458,16 @@ OWN_OUTLINE = frozenset({
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
 _APPROXIMATIONS = {
-    # Instrument balloons, at the detail weight (ISO 10628-1 5.3.1 c)).
-    ("instrument", "default"): _Approximation(
-        "ellipse", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    ("instrument", "panel"): _Approximation(
-        "ellipse", "the bar across the balloon that puts the instrument in a panel",
-        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    ("instrument", "aux"): _Approximation(
-        "ellipse", "the double bar that puts the instrument in an auxiliary panel",
-        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    ("instrument", "shared"): _Approximation(
-        "ellipse", "the square around the balloon that puts the function in a "
-                   "shared display, and the bar that puts it in the control room",
-        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    # A circle inscribed in a square.
-    ("instrument", "shared_field"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="ellipse", weight=LineWeight.DETAIL.width),
-    ("instrument", "computer"): _Approximation(
-        "hexagon", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    # A diamond inscribed in a square.
-    ("instrument", "sis"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=LineWeight.DETAIL.width),
-    ("instrument", "logic"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=LineWeight.DETAIL.width),
-    ("instrument", "interlock"): _Approximation(
-        "rhombus", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
+    # Instrument balloons: a circle, a circle in a square, a hexagon, a
+    # diamond in a square and a diamond, with their location bars.
+    **{("instrument", variant): _balloon(shape, variant, inscribed)
+       for shape, inscribed, variants in (
+           ("ellipse", None, ("default", "panel", "aux")),
+           (None, "ellipse", ("shared_field", "shared")),
+           ("hexagon", None, ("computer",)),
+           (None, "rhombus", ("sis", "logic")),
+           ("rhombus", None, ("interlock",)))
+       for variant in variants},
     # Junctions and boundaries.
     ("mixer", "default"): _Approximation("triangle", ""),
     ("splitter", "default"): _Approximation("triangle", "", flip_h=True),
@@ -1255,18 +1295,25 @@ class DrawioRenderer:
         if u.kind == "instrument":
             letters, number = split_tag(getattr(u, "type", "") or u.tag,
                                         getattr(u, "number", "") or "")
+            display = getattr(u, "display", "field")
+            diamond = getattr(u, "symbol_type", u.variant) in _DIAMOND_BALLOONS
             # A diamond carries the number alone.
-            if getattr(u, "variant", "default") in _DIAMOND_BALLOONS:
-                parts = [number or letters.upper()]
-            else:
-                parts = [letters.upper(), number]
+            parts = [number or letters.upper()] if diamond else [letters.upper(), number]
             parts = [part for part in parts if part]
             text = "<br>".join(_html_text(part) for part in parts)
+            offset = (0.0, 0.0)
+            if display != "field" and diamond:
+                # The number sits under the bars, as on the sheet.
+                offset = (0.0, fit.length(8.0 if display == "subsidiary" else 7.0))
+            elif display != "field" and len(parts) > 1:
+                # Letters above the bars and the number below, as on the
+                # sheet.
+                text = f'<div style="line-height:{fmt(fit.length(21.0), 2)}px">{text}</div>'
             # One size for both lines, capped to fit the balloon.
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
                           "align=center",
                           _drawn_type(_TAG_TYPE, fit, lines=len(parts),
-                                      box=unit_box(u, u.frame))], (0.0, 0.0)
+                                      box=unit_box(u, u.frame))], offset
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
@@ -1388,7 +1435,7 @@ class DrawioRenderer:
     @staticmethod
     def _pieces(u, approx: "_Approximation | None", cid: str,
                 w: float, h: float, fit: "_Fit") -> list[str]:
-        """Return a multi-piece stand-in as one child cell per built-in.
+        """Return a stand-in's pieces and marks, one child cell per built-in.
 
         Each piece turns and mirrors with the parent.
 
@@ -1410,14 +1457,14 @@ class DrawioRenderer:
         Returns
         -------
         list[str]
-            Cell XML lines; empty without pieces.
+            Cell XML lines; empty without pieces or marks.
         """
-        if approx is None or not approx.pieces:
+        if approx is None or not (approx.pieces or approx.marks):
             return []
         rot = _xform(u.frame)[0]
         turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
-        for i, piece in enumerate(approx.pieces):
+        for i, piece in enumerate((*approx.pieces, *approx.marks)):
             px, py, pw, ph = _placed_rect(u.frame, piece.x, piece.y, piece.w, piece.h)
             keys = [] if piece.shape is None else [f"shape={piece.shape}"]
             style = ";".join([

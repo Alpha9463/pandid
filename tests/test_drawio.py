@@ -835,6 +835,44 @@ def test_a_balloon_carries_its_letters_over_its_number():
     assert style["fillColor"] == "#ffffff"
 
 
+@pytest.mark.parametrize(
+    "variant,display", [("default", "central"), ("default", "subsidiary"), ("shared", "central")]
+)
+def test_a_barred_balloon_exports_its_location_bars(variant, display):
+    """Draw each location bar as a level line across the stand-in, and the tag off it."""
+    fs = Flowsheet("bars")
+    inst = fs.add_instrument("LIC", 101, variant=variant, display=display).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, check=False)
+    assert "drawio-approximated" not in [w.code for w in fs.warnings]
+    box = cells["u0"].find("mxGeometry")
+    assert box is not None
+    w, h = float(box.get("width", 0)), float(box.get("height", 0))
+    sym = default_registry.get("instrument", inst.variant)
+    want = [float(y) / sym.height for y in re.findall(r'<line x1="[\d.]+" y1="([\d.]+)"', sym.svg)]
+    assert len(want) == (1 if display == "central" else 2)
+
+    bars = [c for cid, c in cells.items() if cid.startswith("u0-s")]
+    assert [_style(c)["shape"] for c in bars] == ["line"] * len(want)
+    geometry = [g for c in bars if (g := c.find("mxGeometry")) is not None]
+    got = [(float(g.get("y", 0)) + float(g.get("height", 0)) / 2) / h for g in geometry]
+    assert got == pytest.approx(want, abs=1e-3)
+    # Side to side, but for the narrowing of a diamond away from its waist.
+    assert (
+        min(float(g.get("width", 0)) for g in geometry)
+        >= (0.75 if variant == "interlock" else 0.9) * w
+    )
+
+    tag = cells["u0"]
+    offset = tag.find("mxGeometry/mxPoint[@as='offset']")
+    if variant in ("sis", "logic", "interlock"):
+        # The number alone, moved down under the bars.
+        assert offset is not None and float(offset.get("y", 0)) >= 7 * h / sym.height
+    else:
+        # Letters and number spread to clear the bars between them.
+        assert "line-height" in (tag.get("value") or "")
+
+
 def test_only_the_balloons_are_drawn_opaque():
     """Use opaque fill only for built-in balloon shapes."""
     from pandid.render.drawio import _APPROXIMATIONS as table
