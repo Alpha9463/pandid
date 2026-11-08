@@ -1084,6 +1084,30 @@ def block_box_too_small(owner: str, face: str, count: int, axis: str,
     )
 
 
+def location_bars(balloon: Symbol, name: str,
+                  bars: "tuple[tuple[float, float, float], ...]") -> Symbol:
+    """Return a balloon with location bars drawn across it.
+
+    Parameters
+    ----------
+    balloon : Symbol
+        Balloon drawn without bars.
+    name : str
+        Registered variant of the barred balloon.
+    bars : tuple[tuple[float, float, float], ...]
+        Each bar's ``(y, x1, x2)``.
+
+    Returns
+    -------
+    Symbol
+        The barred balloon.
+    """
+    svg = re.sub(r'id="sym_instrument_\w+"', f'id="sym_instrument_{name}"', balloon.svg, count=1)
+    lines = "".join(f'<line x1="{x1:g}" y1="{y:g}" x2="{x2:g}" y2="{y:g}" stroke="black" '
+                    f'stroke-width="2"/>' for y, x1, x2 in bars)
+    return replace(balloon, svg=svg.removesuffix("</g>") + lines + "</g>")
+
+
 # Faces in drawing order.
 _BLOCK_FACES = ("W", "E", "N", "S")
 
@@ -3681,6 +3705,137 @@ _FAN_AXIAL = Symbol(
 )
 
 
+# ISO 10628-2 group 15, liquid pumps, on item 15.1's outline: a 6 M
+# circle with a chevron from its crown and foot to the discharge.
+_PUMP_R = 3 * M
+_PUMP_OUTLINE = (
+    f'<circle cx="{_PUMP_R:g}" cy="{_PUMP_R:g}" r="{_PUMP_R:g}" {_OUTLINE}/>'
+    f'<path d="M {_PUMP_R:g} 0 L {2 * _PUMP_R:g} {_PUMP_R:g} L {_PUMP_R:g} {2 * _PUMP_R:g}" '
+    f'{_INK}/>'
+)
+_PUMP_PORTS = {"suction": (0.0, _PUMP_R), "discharge": (2 * _PUMP_R, _PUMP_R)}
+
+
+def _group_15_pump(variant: str, mark: str, iso_reg: str = "") -> Symbol:
+    """Return a pump drawn on item 15.1's outline.
+
+    Parameters
+    ----------
+    variant : str
+        Pump variant, for the drawing's id.
+    mark : str
+        SVG drawn inside the outline.
+    iso_reg : str, default=""
+        ISO registration number, or empty for a practice drawing.
+
+    Returns
+    -------
+    Symbol
+        The pump.
+    """
+    return Symbol(
+        svg=f'<g id="sym_pump_{variant}">{_PUMP_OUTLINE}{mark}</g>',
+        width=2 * _PUMP_R, height=2 * _PUMP_R,
+        ports=dict(_PUMP_PORTS),
+        iso_reg=iso_reg,
+    )
+
+
+# Item 15.5, X8093, progressive cavity: one sine period 2 M long and
+# 1 M deep across the centre.
+_PUMP_PROGRESSIVE_CAVITY = _group_15_pump(
+    "progressive_cavity",
+    f'<path d="M {_PUMP_R - M:g} {_PUMP_R:g} '
+    f'A {M / 2:g} {M / 2:g} 0 0 0 {_PUMP_R:g} {_PUMP_R:g} '
+    f'A {M / 2:g} {M / 2:g} 0 0 1 {_PUMP_R + M:g} {_PUMP_R:g}" {_INK}/>',
+    "X8093")
+
+# Item 15.6, X8094, reciprocating piston: a rod 2 M long across the
+# centre, ending in a piston 2 M across.
+_PUMP_RECIPROCATING = _group_15_pump(
+    "reciprocating",
+    f'<path d="M {_PUMP_R - M:g} {_PUMP_R:g} L {_PUMP_R + M:g} {_PUMP_R:g} '
+    f'M {_PUMP_R + M:g} {_PUMP_R - M:g} L {_PUMP_R + M:g} {_PUMP_R + M:g}" {_INK}/>',
+    "X8094")
+
+#: Radius of item 15.7's diaphragm, the arc from the crown to the foot
+#: that bows 1.5 M towards the suction.
+PUMP_DIAPHRAGM_R = 3.75 * M
+
+# Item 15.7, X8095, diaphragm.
+_PUMP_DIAPHRAGM = _group_15_pump(
+    "diaphragm",
+    f'<path d="M {_PUMP_R:g} 0 A {PUMP_DIAPHRAGM_R:g} {PUMP_DIAPHRAGM_R:g} 0 0 0 '
+    f'{_PUMP_R:g} {2 * _PUMP_R:g}" {_INK}/>',
+    "X8095")
+
+#: Radius of one lobe of a lobe pump's rotor.
+LOBE_R = 0.6 * M
+
+#: Half the width of a lobe rotor's waist.
+LOBE_WAIST = 0.25 * M
+
+
+def _lobe_rotor(x: float, y: float, vertical: bool) -> str:
+    """Return one two-lobed rotor.
+
+    Parameters
+    ----------
+    x, y : float
+        Rotor centre.
+    vertical : bool
+        Lobes above and below the centre, else either side of it.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    dx, dy = (LOBE_WAIST, 0.0) if vertical else (0.0, LOBE_WAIST)
+    arc = f"A {LOBE_R:g} {LOBE_R:g} 0 1 0"
+    return (f'<path d="M {x - dx:g} {y - dy:g} {arc} {x + dx:g} {y + dy:g} '
+            f'{arc} {x - dx:g} {y - dy:g} Z" {_INK}/>')
+
+
+# A rotary lobe pump: two two-lobed rotors meshing where item 15.3
+# draws its gears, half a module towards the suction.
+_PUMP_LOBE = _group_15_pump(
+    "lobe",
+    _lobe_rotor(_PUMP_R - M / 2, _PUMP_R - 1.2 * M, vertical=False)
+    + _lobe_rotor(_PUMP_R - M / 2, _PUMP_R + 0.8 * M, vertical=True))
+
+#: Depth of a vertical turbine pump's discharge head.
+VTP_HEAD_H = 2 * M
+
+#: Length of its column from the head to the bowl.
+VTP_COLUMN = 4 * M
+
+#: Width of its column.
+VTP_COLUMN_W = M
+
+_VTP_BOWL_Y = VTP_HEAD_H + VTP_COLUMN + _PUMP_R
+_VTP_H = _VTP_BOWL_Y + _PUMP_R
+# Where the column's walls meet the bowl.
+_VTP_COLUMN_FOOT = _VTP_BOWL_Y - math.sqrt(_PUMP_R ** 2 - (VTP_COLUMN_W / 2) ** 2)
+
+# A vertical turbine pump: item 15.1's outline as the bowl, discharging
+# up a column to a head with a side outlet, and drawing from below.
+_PUMP_VERTICAL_TURBINE = Symbol(
+    svg='<g id="sym_pump_vertical_turbine">'
+        f'<rect x="0" y="0" width="{2 * _PUMP_R:g}" height="{VTP_HEAD_H:g}" {_OUTLINE}/>'
+        + "".join(
+            f'<line x1="{x:g}" y1="{VTP_HEAD_H:g}" x2="{x:g}" y2="{_VTP_COLUMN_FOOT:.4f}" '
+            f'{_INK}/>'
+            for x in (_PUMP_R - VTP_COLUMN_W / 2, _PUMP_R + VTP_COLUMN_W / 2))
+        + f'<circle cx="{_PUMP_R:g}" cy="{_VTP_BOWL_Y:g}" r="{_PUMP_R:g}" {_OUTLINE}/>'
+        f'<path d="M 0 {_VTP_BOWL_Y:g} L {_PUMP_R:g} {_VTP_BOWL_Y - _PUMP_R:g} '
+        f'L {2 * _PUMP_R:g} {_VTP_BOWL_Y:g}" {_INK}/></g>',
+    width=2 * _PUMP_R, height=_VTP_H,
+    ports={"suction": (_PUMP_R, _VTP_H), "discharge": (2 * _PUMP_R, VTP_HEAD_H / 2)},
+    gravity_fixed=True,
+)
+
+
 # ISO 10628-2 item 24.15, registered 2181: the steam trap.
 
 #: Steam trap body diameter.
@@ -3729,6 +3884,175 @@ _STEAM_TRAP = Symbol(
     stretchable=False,
     trim=True,
     iso_reg="2181",
+)
+
+
+# Primary flow elements drawn in a box on the run, the size of the
+# vendored ones.
+
+#: Side of a flow element's box.
+FE_BOX = 25.0
+
+_FE_FRAME = f'<rect x="0" y="0" width="{FE_BOX:g}" height="{FE_BOX:g}" {_OUTLINE}/>'
+_FE_PORTS = {"inlet": (0.0, FE_BOX / 2), "outlet": (FE_BOX, FE_BOX / 2)}
+
+#: Radius of one turn of a magnetic flowmeter's field coil.
+MAG_TURN_R = 1.5
+
+#: Turns in each field coil.
+MAG_TURNS = 4
+
+#: Field coil's inset from the box's top and bottom.
+MAG_INSET = 4.0
+
+
+def _field_coil(y: float, sweep: int) -> str:
+    """Return a field coil centred across the box.
+
+    Parameters
+    ----------
+    y : float
+        Height of the coil's ends.
+    sweep : int
+        SVG arc sweep flag: 0 bulges the turns down, 1 up.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    x = FE_BOX / 2 - MAG_TURNS * MAG_TURN_R
+    turns = "".join(
+        f" A {MAG_TURN_R:g} {MAG_TURN_R:g} 0 0 {sweep} "
+        f"{x + 2 * MAG_TURN_R * (k + 1):g} {y:g}"
+        for k in range(MAG_TURNS))
+    return f'<path d="M {x:g} {y:g}{turns}" {_INK}/>'
+
+
+# ISO 15519-2 A.4.48, the magnetic flowmeter: a field coil above and
+# below the run, each turned towards it.
+_FE_MAGNETIC = Symbol(
+    svg='<g id="sym_fitting_magnetic">' + _FE_FRAME
+        + _field_coil(MAG_INSET, 0) + _field_coil(FE_BOX - MAG_INSET, 1) + '</g>',
+    width=FE_BOX, height=FE_BOX,
+    ports=dict(_FE_PORTS),
+    trim=True,
+)
+
+#: Radii of the two wave arcs at each clamp-on transducer.
+CLAMP_WAVE_R = (4.0, 7.0)
+
+# The clamp-on meter's box, down to the run's ink under its bottom edge.
+_CLAMP_H = FE_BOX + LineWeight.MAIN_FLOW.width / 2
+
+
+def _transducer(cx: float, cy: float, start: "tuple[float, float]",
+                end: "tuple[float, float]") -> str:
+    """Return the wave arcs of one transducer, centred on a box corner.
+
+    Parameters
+    ----------
+    cx, cy : float
+        The corner.
+    start, end : tuple[float, float]
+        Unit directions from the corner to each arc's ends, taken
+        counter-clockwise.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    d = "".join(
+        f"M {cx + r * start[0]:g} {cy + r * start[1]:g} A {r:g} {r:g} 0 0 0 "
+        f"{cx + r * end[0]:g} {cy + r * end[1]:g} "
+        for r in CLAMP_WAVE_R)
+    return f'<path d="{d.strip()}" {_INK}/>'
+
+
+# ISO 15519-2 A.4.47, the clamp-on ultrasonic flowmeter: the box sits on
+# the pipe, whose run passes along its bottom edge, with a transducer in
+# two opposite corners.
+_FE_CLAMP_ON = Symbol(
+    svg='<g id="sym_fitting_ultrasonic_clamp_on">' + _FE_FRAME
+        + _transducer(FE_BOX, 0.0, (-1.0, 0.0), (0.0, 1.0))
+        + _transducer(0.0, FE_BOX, (1.0, 0.0), (0.0, -1.0)) + '</g>',
+    width=FE_BOX, height=_CLAMP_H,
+    ports={"inlet": (0.0, FE_BOX), "outlet": (FE_BOX, FE_BOX)},
+    trim=True,
+)
+
+#: Where the two thermal probes stand across the box.
+THERMAL_PROBE_X = (9.0, 16.0)
+
+#: Length of a thermal probe's stem from the box's top.
+THERMAL_STEM = 10.0
+
+#: Radius of a thermal probe's sensing tip.
+THERMAL_TIP_R = 2.0
+
+# The thermal mass flowmeter: twin probes, heated and reference, hung
+# into the run.
+_FE_THERMAL_MASS = Symbol(
+    svg='<g id="sym_fitting_thermal_mass">' + _FE_FRAME
+        + "".join(
+            f'<line x1="{x:g}" y1="0" x2="{x:g}" y2="{THERMAL_STEM:g}" {_INK}/>'
+            f'<circle cx="{x:g}" cy="{THERMAL_STEM + THERMAL_TIP_R:g}" '
+            f'r="{THERMAL_TIP_R:g}" {_INK}/>'
+            for x in THERMAL_PROBE_X)
+        + '</g>',
+    width=FE_BOX, height=FE_BOX,
+    ports=dict(_FE_PORTS),
+    trim=True,
+)
+
+#: Width of a flume's open mouth at each end.
+FLUME_MOUTH = 19.0
+
+#: Width of a flume's throat.
+FLUME_THROAT = 9.0
+
+#: Length of the converging and diverging walls.
+FLUME_TAPER = 10.0
+
+#: Length of the throat.
+FLUME_THROAT_L = 5.0
+
+_FLUME_W = 2 * FLUME_TAPER + FLUME_THROAT_L
+_FLUME_H = FLUME_MOUTH
+
+
+def _flume_wall(y_mouth: float, y_throat: float) -> str:
+    """Return one wall of a flume in plan.
+
+    Parameters
+    ----------
+    y_mouth : float
+        Height of the wall at both mouths.
+    y_throat : float
+        Height of the wall along the throat.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    return (f'<path d="M 0 {y_mouth:g} L {FLUME_TAPER:g} {y_throat:g} '
+            f'L {FLUME_TAPER + FLUME_THROAT_L:g} {y_throat:g} '
+            f'L {_FLUME_W:g} {y_mouth:g}" {_INK}/>')
+
+
+# A flume in plan: the walls close in to a throat and open out again,
+# and the run passes along its axis.
+_FE_FLUME = Symbol(
+    svg='<g id="sym_fitting_flume">'
+        + _flume_wall(0.0, (FLUME_MOUTH - FLUME_THROAT) / 2)
+        + _flume_wall(FLUME_MOUTH, (FLUME_MOUTH + FLUME_THROAT) / 2)
+        + f'<line x1="0" y1="{_FLUME_H / 2:g}" x2="{_FLUME_W:g}" y2="{_FLUME_H / 2:g}" '
+          f'{_INK}/></g>',
+    width=_FLUME_W, height=_FLUME_H,
+    ports={"inlet": (0.0, _FLUME_H / 2), "outlet": (_FLUME_W, _FLUME_H / 2)},
+    trim=True,
 )
 
 
@@ -4720,14 +5044,17 @@ class SymbolRegistry:
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, rim=_inst_rim, label_pos="center",
             stretchable=False, trim=True), "aux")
-        # Shared display: a circle in a square with one bar
-        # (ISO 15519-2 Table 1).
-        self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="2"/></g>',
+        # Shared display: a circle in a square, with one bar for a
+        # central display (ISO 15519-2 Table 1).
+        _shared = Symbol(
+            svg='<g id="sym_instrument_shared_field"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            trim=True), "shared")
-        self.register("instrument", Symbol(
+            trim=True)
+        self.register("instrument", _shared, "shared_field")
+        self.register("instrument", location_bars(_shared, "shared", ((22.0, 2.0, 42.0),)),
+                      "shared")
+        _computer = Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
             # pv sits 1 unit below the hexagon's flat bottom.
             width=44.0, height=44.0, label_pos="center", stretchable=False,
@@ -4738,7 +5065,8 @@ class SymbolRegistry:
                         for n in _inst_ports},
             rim=((11.0, 3.0), (33.0, 3.0), (43.0, 22.0), (33.0, 41.0), (11.0, 41.0),
                  (1.0, 22.0)),
-            trim=True), "computer")
+            trim=True)
+        self.register("instrument", _computer, "computer")
         # ISA-5.1 trip and logic symbols. Ports sit on the diamond's
         # vertices.
         _logic_ports = {'pv': (20.0, 39.0), 'sig_in': (1.0, 20.0), 'sig_out': (39.0, 20.0)}
@@ -4752,14 +5080,31 @@ class SymbolRegistry:
             ports=_logic_ports, trim=True)
         self.register("instrument", _sis, "sis")
         self.register("instrument", _sis, "logic")
-        self.register("instrument", Symbol(
+        _interlock = Symbol(
             svg='<g id="sym_instrument_interlock">'
                 '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
                 '</g>',
             width=40.0, height=40.0, label_pos="center", stretchable=False,
             ports=_logic_ports, rim=((20.0, 1.0), (39.0, 20.0), (20.0, 39.0), (1.0, 20.0)),
-            trim=True),
-            "interlock")
+            trim=True)
+        self.register("instrument", _interlock, "interlock")
+        # Location bars (ISO 15519-2 Table 1) on the other outlines, each
+        # ending on the outline: a subsidiary display's pair 6 apart, or 4
+        # on a diamond.
+        for outline, shapes, central, subsidiary in (
+            (_shared, ("shared",), None, ((19.0, 2.0, 42.0), (25.0, 2.0, 42.0))),
+            (_computer, ("computer",), ((22.0, 1.0, 43.0),),
+             ((19.0, 2.58, 41.42), (25.0, 2.58, 41.42))),
+            (_sis, ("sis", "logic"), ((20.0, 1.0, 39.0),),
+             ((18.0, 1.0, 39.0), (22.0, 1.0, 39.0))),
+            (_interlock, ("interlock",), ((20.0, 1.0, 39.0),),
+             ((18.0, 3.0, 37.0), (22.0, 3.0, 37.0))),
+        ):
+            for display, bars in (("central", central), ("subsidiary", subsidiary)):
+                if bars is not None:
+                    barred = location_bars(outline, f"{shapes[0]}_{display}", bars)
+                    for shape in shapes:
+                        self.register("instrument", barred, f"{shape}_{display}")
 
         # Tubular reactor: a rectangular shell with a serpentine tube. The
         # shell is 64 tall, so three feeds fit 16 apart in half its W face.
@@ -4864,7 +5209,9 @@ class SymbolRegistry:
         self.register("deaerator", _DEAERATOR)
         self._register_kilns()
         self._register_steam_trap()
+        self._register_flow_elements()
         self._register_fans()
+        self._register_pumps()
 
     def _register_fans(self):
         """Register the general, centrifugal and axial fans."""
@@ -4872,9 +5219,24 @@ class SymbolRegistry:
         self.register("blower", _FAN_CENTRIFUGAL, "centrifugal")
         self.register("blower", _FAN_AXIAL, "axial")
 
+    def _register_pumps(self):
+        """Register the group-15 and practice pumps."""
+        self.register("pump", _PUMP_PROGRESSIVE_CAVITY, "progressive_cavity")
+        self.register("pump", _PUMP_RECIPROCATING, "reciprocating")
+        self.register("pump", _PUMP_DIAPHRAGM, "diaphragm")
+        self.register("pump", _PUMP_LOBE, "lobe")
+        self.register("pump", _PUMP_VERTICAL_TURBINE, "vertical_turbine")
+
     def _register_steam_trap(self):
         """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""
         self.register("fitting", _STEAM_TRAP, "steam_trap")
+
+    def _register_flow_elements(self):
+        """Register the hand-drawn primary flow elements."""
+        self.register("fitting", _FE_MAGNETIC, "magnetic")
+        self.register("fitting", _FE_CLAMP_ON, "ultrasonic_clamp_on")
+        self.register("fitting", _FE_THERMAL_MASS, "thermal_mass")
+        self.register("fitting", _FE_FLUME, "flume")
 
     def _register_composed(self):
         """Register the three composed group-8 separators."""
