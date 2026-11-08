@@ -247,6 +247,22 @@ def test_a_unit_laid_out_again_keeps_off_a_controller_held_at_its_frozen_line() 
     ] == []
 
 
+def test_a_unit_kept_clear_of_a_pinned_transmitter_draws_no_tap_line_through_a_valve() -> None:
+    """Draw FT-101's tap line clear of FV-101 once a pump is kept clear of FT-101."""
+    from pandid.devices import ControlValve
+
+    fs = Flowsheet("Pumped feed")
+    feed, pump = fs.add(U.Feed("F")), fs.add(U.Pump("P-101"))
+    product = fs.add(U.Product("P"))
+    line = fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, product.inlet)
+    valve = fs.add(ControlValve("FV-101"), on=line, at=0.5)
+    loop = fs.add_control_loop("F", 101, measuring=line, acting_on=valve)
+    loop.transmitter.pin(x=300, y=125)
+    fs.to_svg(diagram="p&id")
+    assert fs.validate() == []
+
+
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
     """Check that a hung controller stands clear of a balloon pinned by grid rank."""
     fs = Flowsheet("grid")

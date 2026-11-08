@@ -2633,3 +2633,21 @@ def test_no_gallery_sheet_draws_a_valve_under_an_arrowhead(settled_gallery):
         if issue.code == "valve-under-arrowhead"
     ]
     assert found == []
+
+
+def test_a_tap_line_through_a_unit_is_reported() -> None:
+    """Report PI-101's tap line, drawn through FV-101, and name the pin that moves it."""
+    from pandid import ControlValve, Feed, Product, Pump
+
+    fs = Flowsheet("Tapped feed")
+    feed, pump, product = fs.add(Feed("F")), fs.add(Pump("P-101")), fs.add(Product("P"))
+    line = fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, product.inlet)
+    fs.add(ControlValve("FV-101"), on=line, at=0.5)
+    fs.add_instrument("PI", 101, sensing=line, at=0.2).pin(x=300, y=160)
+    fs.route()
+    found = [i.message for i in fs.validate() if i.code == "tap-crosses-unit"]
+    assert found == [
+        "PI-101's tap line is drawn through FV-101. Move PI-101 clear of it: "
+        "call .pin(x=..., y=...) on PI-101"
+    ]
