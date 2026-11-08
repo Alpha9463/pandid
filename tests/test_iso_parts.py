@@ -6,7 +6,7 @@ import re
 import pytest
 
 from pandid.render import iso_parts
-from pandid.render.weights import LineWeight
+from pandid.render.weights import M, LineWeight
 from pandid.render.symbols import Overlay, Symbol, compose, default_registry
 from test_symbol_invariants import _collect_segments
 
@@ -300,14 +300,13 @@ def test_a_stirred_vessel_is_drawn_with_the_motor_that_turns_it():
     assert (stirrer.group, stirrer.name) == (28, "turbine")
     assert (motor.group, motor.name) == (20, "motor")
     reactor = default_registry.get("reactor", "default")
-    # A third of the shell's width, centred.
-    assert motor.w == pytest.approx(1 / 3)
+    # 2 M across, centred, and round on the body it is placed on.
+    assert motor.w * reactor.width == pytest.approx(2 * M)
     assert motor.x + motor.w / 2 == pytest.approx(0.5)
-    # Round on the body it is placed on.
-    assert motor.h * reactor.height == pytest.approx(motor.w * reactor.width)
-    # A ninth of the body's height above the crown, met by the stirrer's rectangle.
-    assert motor.y + motor.h == pytest.approx(-1 / 9)
-    assert stirrer.y == pytest.approx(-1 / 9)
+    assert motor.h * reactor.height == pytest.approx(2 * M)
+    # 1 M above the crown, met by the stirrer's rectangle.
+    assert (motor.y + motor.h) * reactor.height == pytest.approx(-M)
+    assert stirrer.y * reactor.height == pytest.approx(-M)
     # The blade stays put; only the top edge goes negative.
     assert stirrer.y + stirrer.h == pytest.approx(0.76)
 

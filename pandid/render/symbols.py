@@ -5006,7 +5006,9 @@ class SymbolRegistry:
                  or _BUILT_TO_SIZE.get((unit.kind, None)))
         if build is not None:
             return build(unit)
-        overlays = tuple(getattr(unit, "overlays", ()) or ())
+        from pandid.units import drawn_overlays
+
+        overlays = drawn_overlays(unit)
         if overlays:
             return self.composed(unit.kind, variant, overlays)
         mark = closed_marking(unit, self)

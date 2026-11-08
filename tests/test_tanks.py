@@ -8,7 +8,7 @@ import pytest
 from test_drawio import _inline_stencil
 from test_symbol_invariants import Segment, _collect_segments, _nearest_distance
 
-from pandid import Feed, Flowsheet, Product, Tank, Vessel
+from pandid import Feed, Flowsheet, Product, Reactor, Tank, Vessel
 from pandid.portgeom import port_faces, resolve_size
 from pandid.render.iso_parts import MOTOR_D, MOTOR_GAP
 from pandid.render.symbols import default_registry, overlay_boxes
@@ -205,8 +205,19 @@ def test_the_sheet_draws_the_open_top_tank_open():
         (Tank("TK-2", variant="flat_roof", agitator="turbine", width=70, height=200), True),
         (Tank("TK-3", variant="open_top", agitator="propeller", width=200, height=100), False),
         (Vessel("V-1", agitator="anchor", width=120, height=150), False),
+        (Reactor("R-1"), False),
+        (Reactor("R-2", width=150, height=120), False),
+        (Reactor("R-3", variant="jacketed", agitator="turbine", width=80, height=170), False),
     ],
-    ids=["flat-roof", "tall-flat-roof", "wide-open-top", "wide-vessel"],
+    ids=[
+        "flat-roof",
+        "tall-flat-roof",
+        "wide-open-top",
+        "wide-vessel",
+        "reactor",
+        "wide-reactor",
+        "tall-jacketed-reactor",
+    ],
 )
 def test_the_sheet_draws_a_round_motor_over_the_roof_on_a_shaft_into_the_body(unit, roof):
     """Check the item 1.27 marks: a 2 M motor 1 M above the body, its shaft running into it."""
@@ -300,3 +311,4 @@ def test_a_stirred_body_reassigned_to_a_variant_that_cannot_carry_it_is_refused(
     fs = Flowsheet("Kept")
     fs.add(unit)
     fs.to_svg()
+

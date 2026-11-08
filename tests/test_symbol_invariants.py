@@ -1115,7 +1115,8 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
     from pandid.portgeom import _drawn_placements, resolve_size
 
     for unit, want in (
-        (U.Reactor("R"), (0.0, 50.0 + 62.0 / 3 + 100.0 / 9)),
+        # The shell's middle, under the motor 2 M across and 1 M above the head.
+        (U.Reactor("R"), (0.0, 50.0 + 30.0)),
         (U.Separator("V"), (0.0, 50.0)),
         (U.Separator("V", variant="knockout"), (0.0, 55.0)),
         (U.Separator("V", variant="cyclone"), (0.0, 12.0)),
