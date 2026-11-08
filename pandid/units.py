@@ -2156,6 +2156,21 @@ class _Families(Unit):
     _listed: frozenset[str]
     _stated: set[str]
 
+    def _registry_symbol(self):
+        """Return the variant's registered symbol.
+
+        Returns
+        -------
+        Symbol or None
+            The symbol, or ``None`` for an unregistered variant.
+        """
+        from pandid.render.symbols import default_registry
+
+        try:
+            return default_registry.get(self.kind, self.variant)
+        except ValueError:
+            return None
+
     def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return the faces a family port may take, its own face first.
 
@@ -2428,13 +2443,10 @@ class _MultiPortVessel(_FaceFamilies):
         Symbol or None
             The symbol, or ``None`` for an unregistered variant.
         """
-        from pandid.render.symbols import default_registry, stirred
+        from pandid.render.symbols import stirred
 
-        try:
-            sym = default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-        return stirred(sym) if getattr(self, "agitator", None) else sym
+        sym = super()._registry_symbol()
+        return stirred(sym) if sym is not None and getattr(self, "agitator", None) else sym
 
     def _home_face(self, role: str) -> str:
         """Return the face the artwork draws a role's port on.
@@ -4021,6 +4033,74 @@ _IMPLIED_DISPLAY = {"shared": "central"}
 # display each means.
 _DISPLAY_VARIANTS = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items() if drawn != pair[0]}
 
+#: Function block symbols, and the words an author may type for each:
+#: ISO 15519-2 A.6.06, A.6.09, A.6.10 and A.6.12 to A.6.18, and ISA-5.1
+#: practice.
+FUNCTIONS: "dict[str, tuple[str, ...]]" = {
+    "Σ": ("sum",),
+    "Σ/n": ("average",),
+    "Δ": ("difference",),
+    "×": ("multiply",),
+    "÷": ("divide",),
+    "√": ("sqrt", "square root"),
+    "dx/dt": ("derivative",),
+    "∫": ("integral",),
+    "f(x)": ("characterize",),
+    "±": ("bias",),
+    "K": ("gain",),
+    "Pt1": ("lag",),
+    ">": ("high select",),
+    "<": ("low select",),
+    "MAX": ("max",),
+    "MIN": ("min",),
+}
+
+# A signal conversion, such as I/P: ISA-5.1's input and output signal
+# letters, which differ.
+_CONVERSION = re.compile(r"([ABDEHIOPR])/(?!\1)[ABDEHIOPR]")
+
+# Each spelling an author may type, and the symbol drawn for it.
+_FUNCTION_SPELLINGS = {word: drawn for drawn, words in FUNCTIONS.items()
+                       for word in (drawn, *words)}
+
+
+def function_symbol(name: str, function: str) -> str:
+    """Return the symbol a function block draws for what an author typed.
+
+    Parameters
+    ----------
+    name : str
+        Tag, for messages.
+    function : str
+        A symbol from :data:`FUNCTIONS` or one of its words, or a signal
+        conversion such as ``"I/P"``.
+
+    Returns
+    -------
+    str
+        The symbol drawn in the block.
+
+    Raises
+    ------
+    ValueError
+        If ``function`` is none of those.
+    """
+    typed = function.strip() if isinstance(function, str) else function
+    drawn = _FUNCTION_SPELLINGS.get(typed) if isinstance(typed, str) else None
+    if drawn is None and isinstance(typed, str):
+        drawn = _FUNCTION_SPELLINGS.get(typed.lower())
+    if drawn is None and isinstance(typed, str) and _CONVERSION.fullmatch(typed.upper()):
+        drawn = typed.upper()
+    if drawn is None:
+        words = ", ".join(f"{s!r}" + (f" ({', '.join(map(repr, w))})" if w else "")
+                          for s, w in FUNCTIONS.items())
+        raise ValueError(
+            f"{name}: function={function!r} draws no function block. Write one of "
+            f"{words}, or a signal conversion such as 'I/P' or 'E/P'"
+        )
+    return drawn
+
+
 #: Deprecation of a unit face given as ``at=``.
 _AT_FACE = Deprecation(
     what="at='N' (a unit face)",
@@ -4049,6 +4129,9 @@ class Instrument(Unit):
         ``"sis"``, ``"logic"`` or ``"interlock"``.
     display : str, optional
         One of :data:`DISPLAYS`; implied by ``variant`` when omitted.
+    function : str, optional
+        Function block drawn touching the balloon, such as ``"I/P"``
+        or ``"sqrt"``; see :func:`function_symbol`.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
@@ -4059,6 +4142,8 @@ class Instrument(Unit):
         Function letters and loop number.
     display : str
         Where the reading is available.
+    function : str or None
+        Symbol drawn in the function block, or ``None`` for no block.
     symbol_type : str
         Symbol type as given, without the display.
     host : Stream, Unit or None
@@ -4080,8 +4165,8 @@ class Instrument(Unit):
     TypeError
         If ``number`` is not ``None``, text or a whole number.
     ValueError
-        If ``display`` is unknown, ``variant`` is a display spelling, or
-        the pair has no drawing.
+        If ``display`` is unknown, ``variant`` is a display spelling, the
+        pair has no drawing, or ``function`` draws no block.
     """
 
     pv: Port
@@ -4108,6 +4193,7 @@ class Instrument(Unit):
         variant: str = "default",
         *,
         display: str | None = None,
+        function: str | None = None,
         **options: Unpack[_UnitOptions],
     ):
         letters, num = split_tag(type, number)
@@ -4115,6 +4201,7 @@ class Instrument(Unit):
         # _resolved_variant sets the final display.
         self.display = "field"
         variant = self._resolved_variant(name, variant, display)
+        self.function = None if function is None else function_symbol(name, function)
         super().__init__(name, variant=variant, **options)
         self.type = letters
         self.number = num
@@ -4841,11 +4928,11 @@ class Crystallizer(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import draft_tube_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: draft_tube_overlays(name)))
+                             lambda name, _body: hung_agitator("crystallizer", name)))
 
 
 class FlotationCell(Unit):
@@ -4903,11 +4990,11 @@ class FlotationCell(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import flotation_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: flotation_overlays(name)))
+                             lambda name, _body: hung_agitator("flotation_cell", name)))
 
 
 class Silo(_VariantPorted):
@@ -4992,11 +5079,11 @@ class MixerSettler(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import mixer_settler_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: mixer_settler_overlays(name)))
+                             lambda name, _body: hung_agitator("mixer_settler", name)))
 
 
 class Deaerator(Unit):
@@ -5137,24 +5224,9 @@ class _SeriesFamilies(_Families):
     :meth:`nozzle` or layout, to a face the series also offers.
     """
 
-    def _series_symbol(self):
-        """Return the variant's registered symbol, or None.
-
-        Returns
-        -------
-        Symbol or None
-            The symbol, or ``None`` for an unregistered variant.
-        """
-        from pandid.render.symbols import default_registry
-
-        try:
-            return default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-
     def _init_families(self) -> None:
         """Put each series member on its series' face."""
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.port_series if sym is not None else ()
         self._faces = {name: s.face for name in self.ports for s in series if s.matches(name)}
         self._listed, self._stated = frozenset(), set()
@@ -5174,7 +5246,7 @@ class _SeriesFamilies(_Families):
         list[str]
             Faces on the unit's own axes.
         """
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.series_for(port_name) if sym is not None else None
         faces = [] if series is None else [series.face, *(added and [s.face for s in series.also] or [])]
         home = self._faces[port_name]
@@ -5224,7 +5296,7 @@ class _SeriesFamilies(_Families):
             self.symbol(faces)
         except ValueError as exc:
             return str(exc)
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None:
             return None
         for name, face in faces.items():
@@ -5261,7 +5333,7 @@ class _SeriesFamilies(_Families):
 
         on = self._faces if faces is None else faces
         overlays = tuple(getattr(self, "overlays", ()) or ())
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None or all(
                 (series := sym.series_for(name)) is not None and series.face == face
                 for name, face in on.items()):

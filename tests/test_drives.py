@@ -274,6 +274,7 @@ _DRIVES = {
     ("compressor", "reciprocating"): (54.5, 13.0),
     ("compressor", "rotary"): (41.0, 45.5),
     ("compressor", "liquid_ring"): (90.0, 45.0),
+    ("compressor", "screw"): (30.0, 0.0),
     ("blower", "general"): (30.0, 0.0),
     ("blower", "centrifugal"): (30.0, 0.0),
     ("blower", "axial"): (30.0, 0.0),

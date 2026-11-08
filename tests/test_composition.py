@@ -1062,6 +1062,8 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "pump/progressive_cavity": "X8093",
     "pump/reciprocating": "X8094",
     "pump/diaphragm": "X8095",
+    # Group 16, COMPRESSORS, VACUUM PUMPS.
+    "compressor/screw": "X8161",
     # Group 17, BLOWERS, FANS.
     "blower/general": "X8164",
     # Group 10, DRIER.

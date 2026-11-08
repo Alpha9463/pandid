@@ -15,6 +15,7 @@ from pandid.package import INSET as _PACKAGE_INSET, frame as package_frame
 from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
+from pandid.render.pipe_marks import pipe_marks
 from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking,
                                    default_registry, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
@@ -420,7 +421,8 @@ def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
     if pairs and flanges:
         ink = _ink(fs, direction)
         held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-        held += flanges + [_obstacle(b) for b in labels]
+        held += flanges + [_obstacle(m.box) for m in pipe_marks(fs)]
+        held += [_obstacle(b) for b in labels]
         # The hatch strokes stand off a pneumatic line, outside its ink.
         held += hatch_boxes(fs)
         for pair in pairs:
@@ -1391,6 +1393,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     ]
 
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
+    symbols += [_obstacle(m.box) for m in pipe_marks(fs)]
     symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [_obstacle(b) for b in package_edges(fs)]
@@ -2012,7 +2015,7 @@ def flanged_joint(port, want: str) -> bool:
         if want != "flanged" or kind not in _INLINE_BODIES:
             return False
         own = default_registry.get(kind, getattr(port.owner, "variant", "default")).drawio_shape
-        return own is None or own != default_registry.get("fitting", "flange").drawio_shape
+        return own != default_registry.get("fitting", "flange").drawio_shape
     return True
 
 
@@ -2123,6 +2126,92 @@ def arrow_marker_id(color: str) -> str:
     return ident("arrow", color.lstrip("#"))
 
 
+#: Side of the square function block drawn beside a balloon (ISA-5.1),
+#: and the size of the symbol written in it.
+FUNCTION_BOX = 22.0
+_FUNCTION_TYPE = 9.0
+
+# The corners a function block may take, preferred first: upper right,
+# upper left, lower right, lower left.
+_FUNCTION_CORNERS = ((1, -1), (-1, -1), (1, 1), (-1, 1))
+
+
+def _diagonal_reach(outline, width: float, height: float, sx: int, sy: int) -> float:
+    """Return how far along each axis a diagonal leaves an outline.
+
+    Parameters
+    ----------
+    outline : sequence of tuple[float, float]
+        Closed polygon in symbol coordinates; empty for the symbol box.
+    width, height : float
+        Symbol size.
+    sx, sy : int
+        The diagonal's direction on each axis, ``1`` or ``-1``.
+
+    Returns
+    -------
+    float
+        Offset on each axis from the symbol's centre to the outline.
+    """
+    cx, cy = width / 2, height / 2
+    rim = outline or ((0.0, 0.0), (width, 0.0), (width, height), (0.0, height))
+    reach = None
+    for (ax, ay), (bx, by) in zip(rim, (*rim[1:], rim[0])):
+        # Solve centre + t (sx, sy) = a + v (b - a) for t and v.
+        ex, ey = bx - ax, by - ay
+        det = sy * ex - sx * ey
+        if abs(det) < 1e-12:
+            continue
+        t = ((ay - cy) * ex - (ax - cx) * ey) / det
+        v = (sx * (ay - cy) - sy * (ax - cx)) / det
+        if t > 0 and -1e-9 <= v <= 1 + 1e-9:
+            reach = t if reach is None else min(reach, t)
+    return min(cx, cy) if reach is None else reach
+
+
+def function_spots(u, ink, symbols=(), labels=()) -> list:
+    """Return a balloon's function block at each corner, best first.
+
+    The block's inner corner sits where the diagonal from the balloon's
+    centre leaves its outline. Corners rank by what the block would
+    erase, then by the labels it would cover, then upper right, upper
+    left, lower right, lower left.
+
+    Parameters
+    ----------
+    u : Instrument
+        Placed balloon with a function.
+    ink : sequence of _Ink
+        Drawn lines.
+    symbols : sequence of tuple, optional
+        ``(unit, box)`` for every symbol and owner-less mark.
+    labels : sequence of tuple, optional
+        Boxes of other labels.
+
+    Returns
+    -------
+    list[tuple]
+        Label items, best first.
+    """
+    from pandid.portgeom import unit_box
+
+    sym = default_registry.for_unit(u)
+    x0, y0, x1, y1 = unit_box(u, u.frame)
+    scale = min((x1 - x0) / sym.width, (y1 - y0) / sym.height)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    others = [_obstacle(b) for v, b in symbols if v is not u]
+    ranked = []
+    for rank, (sx, sy) in enumerate(_FUNCTION_CORNERS):
+        reach = _diagonal_reach(sym.rim, sym.width, sym.height, sx, sy) * scale
+        out = reach + FUNCTION_BOX / 2
+        item = (cx + sx * out, cy + sy * out, "middle", "middle", "function", u.function)
+        box = _unit_label_box(item)
+        assert box is not None
+        ranked.append(((*_erases(box, ink, others),
+                        sum(1 for b in labels if boxes_overlap(box, b)), rank), item))
+    return [item for _, item in sorted(ranked)]
+
+
 def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     """Return the halo rectangle of an equipment tag.
 
@@ -2139,6 +2228,9 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     lx, ly, anchor, baseline, lpos, text = item
     if lpos == "center":
         return None
+    if lpos == "function":
+        half = FUNCTION_BOX / 2
+        return (lx - half, ly - half, lx + half, ly + half)
     hw = tag_width(text)
     hh = 15.0
     rx = lx - hw / 2 if anchor == "middle" else (lx - hw if anchor == "end" else lx)
@@ -3041,6 +3133,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
     hatches = hatch_boxes(fs)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    symbols += [(None, m.box) for m in pipe_marks(fs)]
     symbols += [(None, b) for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
     symbols += [(None, b) for b in package_edges(fs)]
@@ -3137,18 +3230,27 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
         for alone in (True, False):
             for u in fs.units:
                 f = u.frame
-                if f is None or u.kind in ("feed", "product", "instrument"):
+                # A balloon's tag is inside it; only its function block is
+                # placed here.
+                block = u.kind == "instrument" and getattr(u, "function", None)
+                if f is None or u.kind in ("feed", "product") or (
+                        u.kind == "instrument" and not block):
                     continue
                 x, y, w, h = f.x, f.y, f.w, f.h
                 others = [o for k, o in shown.items() if k != id(u)]
                 labels = None if alone else [b for o in others for b in o[0]]
-                spots = (sheet._tag_spots(u, f, x, y, w, h, u.tag, ink, symbols, labels,
-                                          hatches, step_out) if u.tag else [None])
-                if not step_out:
-                    spots = list(dict.fromkeys([spots[0], spots[-1]]))
-                for tag in spots:
+                if block:
+                    spots = function_spots(u, ink, [*symbols, *((None, b) for b in hatches)],
+                                           labels or ())
+                else:
+                    spots = (sheet._tag_spots(u, f, x, y, w, h, u.tag, ink, symbols, labels,
+                                              hatches, step_out) if u.tag else [None])
+                    if not step_out:
+                        spots = list(dict.fromkeys([spots[0], spots[-1]]))
+                for spot in spots:
+                    tag = None if block else spot
                     tag_box = None if tag is None else _unit_label_box(tag)
-                    items = [] if tag is None else [tag]
+                    items = [spot] if block else [] if tag is None else [tag]
                     # NC marking (ISO 15519-1 11.4.5).
                     if closed_marking(u, default_registry) == "NC":
                         items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
@@ -3199,7 +3301,7 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
 
 
 def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
-    """Return the box round the units, labels, routes and package frames.
+    """Return the box round the units, labels, routes, pipe marks and package frames.
 
     Parameters
     ----------
@@ -3225,7 +3327,8 @@ def drawing_bounds(fs, labels=()) -> "tuple[float, float, float, float]":
     for u in fs.units:
         if u.frame is None:
             raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-    for bx0, by0, bx1, by1 in (*(unit_box(u, u.frame) for u in fs.units), *labels):
+    for bx0, by0, bx1, by1 in (*(unit_box(u, u.frame) for u in fs.units), *labels,
+                               *(m.box for m in pipe_marks(fs))):
         x0, y0 = min(x0, bx0), min(y0, by0)
         x1, y1 = max(x1, bx1), max(y1, by1)
     for s in fs.streams:
@@ -4623,8 +4726,18 @@ class SvgRenderer:
         """
         out = ['  <g id="unit_labels">']
         for item in items:
-            lx, ly, anchor, baseline, _, text = item
+            lx, ly, anchor, baseline, lpos, text = item
             box = _unit_label_box(item)
+            if lpos == "function" and box is not None:
+                # A function block: an outlined square and its symbol.
+                rx, ry, rx1, ry1 = box
+                out.append(f'    <rect x="{rx:.1f}" y="{ry:.1f}" width="{rx1 - rx:.1f}" '
+                           f'height="{ry1 - ry:.1f}" fill="white" stroke="black" '
+                           f'stroke-width="{LineWeight.DETAIL.width:g}" />')
+                out.append(f'    <text x="{lx:.1f}" y="{ly:.1f}" font-family="sans-serif" '
+                           f'font-size="{_FUNCTION_TYPE:g}" text-anchor="middle" '
+                           f'dominant-baseline="middle">{escaped(text)}</text>')
+                continue
             if box is not None:
                 rx, ry, rx1, ry1 = box
                 out.append(f'    <rect x="{rx:.1f}" y="{ry:.1f}" width="{rx1 - rx:.1f}" '
@@ -4664,6 +4777,9 @@ class SvgRenderer:
             SVG lines.
         """
         stream_geoms = [(s, stream_polyline(s)) for s in fs.streams]
+        marks: dict[int, list] = {}
+        for mark in pipe_marks(fs):
+            marks.setdefault(id(mark.stream), []).append(mark)
         # Hops keyed by (stream, segment), in drawing order.
         hops: dict[tuple[int, int], list[_Hop]] = {}
         if crossing_style != "plain":
@@ -4728,6 +4844,13 @@ class SvgRenderer:
                         f'stroke="{color}" '
                         f'stroke-width="{LineWeight.DETAIL.width:g}" />'
                     )
+
+            # Tracing, insulation and jacket (ISO 10628-2 25.6-25.9).
+            for mark in marks.get(id(s), ()):
+                for (x1, y1), (x2, y2), weight in mark.strokes:
+                    lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
+                                 f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
+                                 f'stroke-width="{weight.width:g}" />')
 
             # Pneumatic and hydraulic marks (ISO 15519-2 A.1.08, A.1.09).
             for (x1, y1), (x2, y2) in _mark_strokes(s.kind, points):
