@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
+  and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
+  `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
+  the motor above the roof and its `drive`.
 - Every balloon symbol, computer, SIS, logic and interlock included, takes
   `display="central"` or `display="subsidiary"` and draws one or two location
   bars across it: `fs.add_instrument("UY", 301, variant="logic", display="central")`.

@@ -505,6 +505,8 @@ STAYS_ON_BASE = {
     ("tank", "conical_bottom"): "floor: a discharge cone",
     ("tank", "conical_ends"): "roof and floor: a cone at each end",
     ("tank", "dished_roof_conical_bottom"): "roof and floor",
+    ("tank", "flat_roof"): "roof: flat (ISO item 1.1 301)",
+    ("tank", "open_top"): "roof: none, open to the air (ISO item 1.2 2061)",
     ("column", "packed"): "drawn internal: beds of packing on their support grids",
     ("reducer", "default"): "Reducer's own drawing (the concentric body)",
     ("reducer", "concentric"): "body style, and the same drawing as the default",

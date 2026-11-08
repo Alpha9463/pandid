@@ -145,6 +145,8 @@ GRAVITY_FIXED = {
     ("tank", "conical_ends"),
     ("tank", "dished_roof_conical_bottom"),
     ("tank", "gas_holder"),
+    ("tank", "flat_roof"),
+    ("tank", "open_top"),
     ("cooling_tower", "default"),
     ("cooling_tower", "induced_draft"),
     ("cooling_tower", "forced_draft"),
