@@ -57,6 +57,10 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     elif cls in (units.Filter, units.Silo):
         table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}
+    elif cls is units.Tank:
+        # ``in_1`` and ``out_1`` are the families ``__init__`` adds.
+        table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
+        assert built == {spec[0] for spec in table} | {"in_1", "out_1"}
     elif cls is units.Valve:
         table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}

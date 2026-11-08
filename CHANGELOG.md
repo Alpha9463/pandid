@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
 - `element=` draws a thermowell, radar, vibrating-fork or electrode mark at a
   balloon's tap end: `fs.add_instrument("TT", 101, sensing=line, element="thermowell")`.
+- `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
+  and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
+  `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
+  the motor above the roof and its `drive`.
 - Every balloon symbol, computer, SIS, logic and interlock included, takes
   `display="central"` or `display="subsidiary"` and draws one or two location
   bars across it: `fs.add_instrument("UY", 301, variant="logic", display="central")`.
@@ -96,6 +100,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
   or thermal mass flowmeter, a flume and a weir:
   `FlowElement("FE-101", variant="magnetic")`.
+- `ShellAndTubeExchanger` draws a floating-head and a coil-tube exchanger,
+  `variant="floating_head"` and `variant="coil_tube"`, and `ElectricHeater`
+  draws the ISO 10628-2 electric heater, powered at `utility_in`.
 
 ### Changed
 
