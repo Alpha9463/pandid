@@ -6,7 +6,7 @@ import pytest
 from marks import _STENCILS, assert_inked, off_ink, svg_ink
 from test_symbol_invariants import _IDENTITY, _apply, _compose, _parse_transform, _script
 
-from pandid import Feed, Fitting, Flowsheet, PaddleBlind, PaddleSpacer, Product
+from pandid import Feed, Fitting, Flowsheet, PaddleBlind, PaddleSpacer, Product, Pump, Valve
 from pandid.portgeom import axial_tap, unit_box
 from pandid.render.svg import tap_lines
 from pandid.render.symbols import default_registry
@@ -128,3 +128,18 @@ def test_a_turned_disc_on_a_handle_takes_side_taps_on_its_turned_axis():
     assert axial_tap(blind, blind.frame, "S") == centre
     assert axial_tap(blind, blind.frame, "E") is None
     assert axial_tap(blind, blind.frame, "W") is None
+
+
+def test_a_side_tap_keeps_its_old_start_where_the_new_one_crosses_a_unit():
+    """Check the centre start is not taken where its tap line would cross a valve."""
+    fs = Flowsheet("Tap past a valve")
+    blind = fs.add(Fitting("SB-1", variant="blind"))
+    valve = fs.add(Valve("HV-1"))
+    pump = fs.add(Pump("P-1"))
+    fs.connect(fs.add(Feed("Feed")).outlet, pump.suction)
+    fs.connect(pump.discharge, blind.inlet)
+    fs.connect(blind.outlet, valve.inlet)
+    fs.connect(valve.outlet, fs.add(Product("Product")).inlet)
+    fs.add_instrument("PI", 1, sensing=blind)
+    fs.to_svg(diagram="p&id")
+    assert not [i for i in fs.validate() if i.code == "tap-crosses-unit"]
