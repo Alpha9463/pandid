@@ -2213,6 +2213,21 @@ class _Families(Unit):
     _listed: frozenset[str]
     _stated: set[str]
 
+    def _registry_symbol(self):
+        """Return the variant's registered symbol.
+
+        Returns
+        -------
+        Symbol or None
+            The symbol, or ``None`` for an unregistered variant.
+        """
+        from pandid.render.symbols import default_registry
+
+        try:
+            return default_registry.get(self.kind, self.variant)
+        except ValueError:
+            return None
+
     def _offered(self, port_name: str, added: bool = True) -> list[str]:
         """Return the faces a family port may take, its own face first.
 
@@ -2485,13 +2500,10 @@ class _MultiPortVessel(_FaceFamilies):
         Symbol or None
             The symbol, or ``None`` for an unregistered variant.
         """
-        from pandid.render.symbols import default_registry, stirred
+        from pandid.render.symbols import stirred
 
-        try:
-            sym = default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-        return stirred(sym) if getattr(self, "agitator", None) else sym
+        sym = super()._registry_symbol()
+        return stirred(sym) if sym is not None and getattr(self, "agitator", None) else sym
 
     def _home_face(self, role: str) -> str:
         """Return the face the artwork draws a role's port on.
@@ -4891,11 +4903,11 @@ class Crystallizer(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import draft_tube_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: draft_tube_overlays(name)))
+                             lambda name, _body: hung_agitator("crystallizer", name)))
 
 
 class FlotationCell(Unit):
@@ -4953,11 +4965,11 @@ class FlotationCell(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import flotation_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: flotation_overlays(name)))
+                             lambda name, _body: hung_agitator("flotation_cell", name)))
 
 
 class Silo(_VariantPorted):
@@ -5042,11 +5054,11 @@ class MixerSettler(Unit):
         **options: Unpack[_UnitOptions],
     ):
         super().__init__(name, variant=variant, **options)
-        from pandid.render.iso_parts import mixer_settler_overlays
+        from pandid.render.iso_parts import hung_agitator
 
         self.agitator = agitator
         _compose_onto(self, ("agitator", agitator,
-                             lambda name, _body: mixer_settler_overlays(name)))
+                             lambda name, _body: hung_agitator("mixer_settler", name)))
 
 
 class Deaerator(Unit):
@@ -5187,24 +5199,9 @@ class _SeriesFamilies(_Families):
     :meth:`nozzle` or layout, to a face the series also offers.
     """
 
-    def _series_symbol(self):
-        """Return the variant's registered symbol, or None.
-
-        Returns
-        -------
-        Symbol or None
-            The symbol, or ``None`` for an unregistered variant.
-        """
-        from pandid.render.symbols import default_registry
-
-        try:
-            return default_registry.get(self.kind, self.variant)
-        except ValueError:
-            return None
-
     def _init_families(self) -> None:
         """Put each series member on its series' face."""
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.port_series if sym is not None else ()
         self._faces = {name: s.face for name in self.ports for s in series if s.matches(name)}
         self._listed, self._stated = frozenset(), set()
@@ -5224,7 +5221,7 @@ class _SeriesFamilies(_Families):
         list[str]
             Faces on the unit's own axes.
         """
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         series = sym.series_for(port_name) if sym is not None else None
         faces = [] if series is None else [series.face, *(added and [s.face for s in series.also] or [])]
         home = self._faces[port_name]
@@ -5274,7 +5271,7 @@ class _SeriesFamilies(_Families):
             self.symbol(faces)
         except ValueError as exc:
             return str(exc)
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None:
             return None
         for name, face in faces.items():
@@ -5311,7 +5308,7 @@ class _SeriesFamilies(_Families):
 
         on = self._faces if faces is None else faces
         overlays = tuple(getattr(self, "overlays", ()) or ())
-        sym = self._series_symbol()
+        sym = self._registry_symbol()
         if sym is None or all(
                 (series := sym.series_for(name)) is not None and series.face == face
                 for name, face in on.items()):

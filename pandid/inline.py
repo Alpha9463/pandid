@@ -175,7 +175,9 @@ def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
     old_dest = selected.dest
     successor = Stream(name="", source=outlet, dest=old_dest, kind="material",
                        draw_as_recycle=selected.draw_as_recycle,
-                       color=selected.color, dasharray=selected.dasharray)
+                       color=selected.color, dasharray=selected.dasharray,
+                       tracing=selected.tracing, insulated=selected.insulated,
+                       jacketed=selected.jacketed)
     successor._inline_at = selected._inline_at
     successor._logical_root = line
     selected.dest = inlet
@@ -294,6 +296,8 @@ def insert_station(fs: Flowsheet, line: Stream, station: ValveStation, *,
         # Draw the station's own pipework as the line it sits on.
         for stream in pipework:
             stream.color, stream.dasharray = selected.color, selected.dasharray
+            stream.tracing, stream.insulated = selected.tracing, selected.insulated
+            stream.jacketed = selected.jacketed
         line._logical_pipework += pipework
         fs._station_assemblies[record] = replace(
             fs._station_assemblies[record], run=line, at=None if at is None else float(at),
