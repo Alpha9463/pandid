@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `line.mark("battery limit" | "limit of supply" | "tie-in" | "spec break",
   at=...)` marks a point of a line, drawn in SVG and draw.io and kept in the
   spec; a limit is drawn as ISO 10628-1 Figure 7 shows it.
+- `connect(..., tracing="steam", insulated=True, jacketed=True)` draws a pipe
+  traced, insulated or jacketed with the ISO 10628-2 marks (items 25.6 to 25.9)
+  in SVG and draw.io, keeps them in the spec, and keeps tags and line numbers
+  off them.
+- A balloon takes a function block, drawn touching it at a clear corner, in SVG
+  and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
+  or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
+  and ISA-5.1 symbols.
 - `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
   and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
   `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
@@ -98,6 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
   or thermal mass flowmeter, a flume and a weir:
   `FlowElement("FE-101", variant="magnetic")`.
+- `ShellAndTubeExchanger` draws a floating-head and a coil-tube exchanger,
+  `variant="floating_head"` and `variant="coil_tube"`, and `ElectricHeater`
+  draws the ISO 10628-2 electric heater, powered at `utility_in`.
+- `ScrewCompressor` draws the ISO 10628-2 screw compressor, and
+  `RotaryCompressor` stays the two-rotor lobe machine.
 
 ### Changed
 

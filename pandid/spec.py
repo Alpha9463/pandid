@@ -143,7 +143,7 @@ from pandid.ports import Port
 from pandid.stations import (
     DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP, DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
-from pandid.streams import LINE_NUMBER_FIELDS, Stream
+from pandid.streams import LINE_NUMBER_FIELDS, TREATMENTS, Stream
 from pandid.units import _IMPLIED_DISPLAY, Instrument, Unit, _Boundary
 
 
@@ -699,7 +699,7 @@ _UNIT_KEYS = {
 _INSTRUMENT_KEYS = {
     "type", "number", "variant", "display", "description", "reference", "width",
     "height", "label_pos", "new_line_number", "sensing", "acting_on", "near",
-    "at", "face", "offset", "angle", "pin", "port_faces", "quadrants",
+    "at", "face", "offset", "angle", "pin", "port_faces", "quadrants", "function",
 }
 # The three ways an instrument entry names its anchor.
 _ANCHOR_KEYS = ("sensing", "acting_on", "near")
@@ -713,7 +713,7 @@ _PACKAGE_KEYS = {"name", "units", "description", "reference"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
     "color", "dasharray", "ends", "inline_at", "logical_to", "markers",
-    *LINE_NUMBER_FIELDS,
+    *LINE_NUMBER_FIELDS, *TREATMENTS,
 }
 _MARKER_KEYS = {"kind", "at", "before", "after", "number"}
 _COMPONENT_KEYS = {"name", "formula"}
@@ -1229,7 +1229,7 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     if not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
-    kwargs = _read_fields(data, where, ((("variant", "display"), _text),
+    kwargs = _read_fields(data, where, ((("variant", "display", "function"), _text),
                                         (("description", "reference"), _drawn),
                                         (("width", "height"), _number)))
     with _blame(where):
@@ -1335,7 +1335,8 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
         at = entry["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
     kwargs.update(_read_fields(entry, where, ((("offset", "angle", "width", "height"), _number),
-                                              (("face", "variant", "display", "label_pos"),
+                                              (("face", "variant", "display", "label_pos",
+                                                "function"),
                                                _text),
                                               (("description", "reference"), _drawn))))
     # A text at: is a face, warned of once the entry is read.
@@ -1617,8 +1618,9 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
             )
     src = _read_endpoint(fs, data["from"], f"{where}.from")
     dst = _read_endpoint(fs, data["to"], f"{where}.to")
-    kwargs = _read_fields(data, where, ((("kind", "name"), _text),
-                                        (("draw_as_recycle",), _flag)))
+    kwargs = _read_fields(data, where, ((("kind", "name", "tracing"), _text),
+                                        (("draw_as_recycle", "insulated", "jacketed"),
+                                         _flag)))
     if "ends" in data:
         ends = data["ends"]
         if isinstance(ends, (list, tuple)) and len(ends) == 2:
@@ -2338,7 +2340,7 @@ def _read_beside(fs: Flowsheet, entry: Any, where: str) -> dict:
     return beside
 
 
-def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None) -> tuple:
+def _read_state(fs: Flowsheet, entry: Any, where: str) -> tuple:
     """Read a held state: its geometry and what it was laid out with.
 
     Parameters
@@ -2349,9 +2351,6 @@ def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None
         The state entry.
     where : str
         Entry path for error messages.
-    base : tuple or None, optional
-        Geometry its geometry was written against; None for the sheet
-        as drawn.
 
     Returns
     -------
@@ -2376,7 +2375,7 @@ def _read_state(fs: Flowsheet, entry: Any, where: str, base: tuple | None = None
         faces.append((unit, _flag(face.get("stock_face", False), f"{at}.stock_face"),
                       _number(face.get("nozzle_pitch", 0.0), f"{at}.nozzle_pitch")))
     unhung = data.get("unhung")
-    geometry = _read_geometry(fs, data.get("geometry", {}), f"{where}.geometry", base)
+    geometry = _read_geometry(fs, data.get("geometry", {}), f"{where}.geometry")
     return (geometry,
             None if unhung is None else _read_geometry(fs, unhung, f"{where}.unhung", geometry),
             _read_switches(data.get("switches", {}), _SWITCHES, f"{where}.switches"),
@@ -2851,7 +2850,7 @@ def _write_geometry(fs: Flowsheet, geometry: tuple, base: tuple | None = None) -
     return entry
 
 
-def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict[str, Any]:
+def _write_state(fs: Flowsheet, state: tuple) -> dict[str, Any]:
     """Write a held state: its geometry and what it was laid out with.
 
     Parameters
@@ -2860,9 +2859,6 @@ def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict
         Sheet written.
     state : tuple
         What ``Flowsheet._state()`` returned.
-    base : tuple or None, optional
-        Geometry to write its geometry against; None for the sheet as
-        drawn.
 
     Returns
     -------
@@ -2870,7 +2866,7 @@ def _write_state(fs: Flowsheet, state: tuple, base: tuple | None = None) -> dict
         The state entry.
     """
     geometry, unhung, switches, stock, beside = state
-    entry: dict[str, Any] = {"geometry": _write_geometry(fs, geometry, base)}
+    entry: dict[str, Any] = {"geometry": _write_geometry(fs, geometry)}
     if unhung is not None:
         entry["unhung"] = _write_geometry(fs, unhung, geometry)
     if values := _write_switches(_SWITCHES, switches):
@@ -3246,6 +3242,8 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
         entry["variant"] = inst.symbol_type
     if inst.display != "field" or inst.symbol_type in _IMPLIED_DISPLAY:
         entry["display"] = inst.display
+    if inst.function is not None:
+        entry["function"] = inst.function
     if inst.quadrants:
         by_name = {name: list(codes) for name, letter in _QUADRANT_KEYS.items()
                    for codes in [inst.quadrants.get(letter, ())] if codes}
@@ -3365,6 +3363,11 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
     if stream.ends is not None:
         entry["ends"] = (stream.ends if isinstance(stream.ends, str)
                          else list(stream.ends))
+    if stream.tracing is not None:
+        entry["tracing"] = stream.tracing
+    for key in ("insulated", "jacketed"):
+        if getattr(stream, key):
+            entry[key] = True
     if stream.route is not None and stream.route.manual:
         entry["via"] = [list(point) for point in stream.route.waypoints]
     if stream.properties:

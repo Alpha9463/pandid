@@ -3928,6 +3928,74 @@ _IMPLIED_DISPLAY = {"shared": "central"}
 # display each means.
 _DISPLAY_VARIANTS = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items() if drawn != pair[0]}
 
+#: Function block symbols, and the words an author may type for each:
+#: ISO 15519-2 A.6.06, A.6.09, A.6.10 and A.6.12 to A.6.18, and ISA-5.1
+#: practice.
+FUNCTIONS: "dict[str, tuple[str, ...]]" = {
+    "Σ": ("sum",),
+    "Σ/n": ("average",),
+    "Δ": ("difference",),
+    "×": ("multiply",),
+    "÷": ("divide",),
+    "√": ("sqrt", "square root"),
+    "dx/dt": ("derivative",),
+    "∫": ("integral",),
+    "f(x)": ("characterize",),
+    "±": ("bias",),
+    "K": ("gain",),
+    "Pt1": ("lag",),
+    ">": ("high select",),
+    "<": ("low select",),
+    "MAX": ("max",),
+    "MIN": ("min",),
+}
+
+# A signal conversion, such as I/P: ISA-5.1's input and output signal
+# letters, which differ.
+_CONVERSION = re.compile(r"([ABDEHIOPR])/(?!\1)[ABDEHIOPR]")
+
+# Each spelling an author may type, and the symbol drawn for it.
+_FUNCTION_SPELLINGS = {word: drawn for drawn, words in FUNCTIONS.items()
+                       for word in (drawn, *words)}
+
+
+def function_symbol(name: str, function: str) -> str:
+    """Return the symbol a function block draws for what an author typed.
+
+    Parameters
+    ----------
+    name : str
+        Tag, for messages.
+    function : str
+        A symbol from :data:`FUNCTIONS` or one of its words, or a signal
+        conversion such as ``"I/P"``.
+
+    Returns
+    -------
+    str
+        The symbol drawn in the block.
+
+    Raises
+    ------
+    ValueError
+        If ``function`` is none of those.
+    """
+    typed = function.strip() if isinstance(function, str) else function
+    drawn = _FUNCTION_SPELLINGS.get(typed) if isinstance(typed, str) else None
+    if drawn is None and isinstance(typed, str):
+        drawn = _FUNCTION_SPELLINGS.get(typed.lower())
+    if drawn is None and isinstance(typed, str) and _CONVERSION.fullmatch(typed.upper()):
+        drawn = typed.upper()
+    if drawn is None:
+        words = ", ".join(f"{s!r}" + (f" ({', '.join(map(repr, w))})" if w else "")
+                          for s, w in FUNCTIONS.items())
+        raise ValueError(
+            f"{name}: function={function!r} draws no function block. Write one of "
+            f"{words}, or a signal conversion such as 'I/P' or 'E/P'"
+        )
+    return drawn
+
+
 #: Deprecation of a unit face given as ``at=``.
 _AT_FACE = Deprecation(
     what="at='N' (a unit face)",
@@ -3956,6 +4024,9 @@ class Instrument(Unit):
         ``"sis"``, ``"logic"`` or ``"interlock"``.
     display : str, optional
         One of :data:`DISPLAYS`; implied by ``variant`` when omitted.
+    function : str, optional
+        Function block drawn touching the balloon, such as ``"I/P"``
+        or ``"sqrt"``; see :func:`function_symbol`.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
@@ -3966,6 +4037,8 @@ class Instrument(Unit):
         Function letters and loop number.
     display : str
         Where the reading is available.
+    function : str or None
+        Symbol drawn in the function block, or ``None`` for no block.
     symbol_type : str
         Symbol type as given, without the display.
     host : Stream, Unit or None
@@ -3987,8 +4060,8 @@ class Instrument(Unit):
     TypeError
         If ``number`` is not ``None``, text or a whole number.
     ValueError
-        If ``display`` is unknown, ``variant`` is a display spelling, or
-        the pair has no drawing.
+        If ``display`` is unknown, ``variant`` is a display spelling, the
+        pair has no drawing, or ``function`` draws no block.
     """
 
     pv: Port
@@ -4015,6 +4088,7 @@ class Instrument(Unit):
         variant: str = "default",
         *,
         display: str | None = None,
+        function: str | None = None,
         **options: Unpack[_UnitOptions],
     ):
         letters, num = split_tag(type, number)
@@ -4022,6 +4096,7 @@ class Instrument(Unit):
         # _resolved_variant sets the final display.
         self.display = "field"
         variant = self._resolved_variant(name, variant, display)
+        self.function = None if function is None else function_symbol(name, function)
         super().__init__(name, variant=variant, **options)
         self.type = letters
         self.number = num
@@ -4485,7 +4560,10 @@ class HeatExchanger(_VariantPorted):
 
 
 class Heater(Unit):
-    """Single-stream heater; ``utility_in`` takes the heating medium."""
+    """Single-stream heater; ``utility_in`` takes the heating medium.
+
+    On ``variant="electric"``, ``utility_in`` is the electrical supply.
+    """
 
     inlet: Port
     outlet: Port

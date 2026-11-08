@@ -83,6 +83,9 @@ Traps:
 - line.mark("battery limit", at=0.5, before="ISBL", after="OSBL") marks a
   point of a line; also "limit of supply", "tie-in" (number=) and
   "spec break" (before= and after= piping classes).
+- connect(..., tracing="steam", insulated=True, jacketed=True) draws a
+  pipe traced, insulated or jacketed; insulation= is only the line
+  number's code.
 - face= is a side of a unit, "N", "S", "E" or "W"; at= is a fraction
   along a line, 0..1 for an instrument and strictly between for a valve
   put in the line: fs.add_instrument("TI", 103, sensing=cooler, face="E"),
