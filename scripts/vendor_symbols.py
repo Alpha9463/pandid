@@ -318,6 +318,13 @@ KIND_MAP = {
     # the tie hangs below.
     ("fitting", "blind"):          ("piping", "Open Figure 8 Blind",
                                     {"inlet": ("W", 30.0), "outlet": ("E", 30.0)}),
+    # Paddle blind and paddle spacer, ISO 10628-2 items 24.9 and 24.10: one
+    # disc on a handle, solid or bored; the run passes through the disc at
+    # y = 10.
+    ("fitting", "paddle_blind"):   ("piping", "Blank",
+                                    {"inlet": ("W", 10.0), "outlet": ("E", 10.0)}),
+    ("fitting", "paddle_spacer"):  ("piping", "Spacer",
+                                    {"inlet": ("W", 10.0), "outlet": ("E", 10.0)}),
 
     # --- Variants (style choices within a class; same ports) ---
     # Heat exchanger styles.
@@ -709,6 +716,17 @@ GRAVITY_FIXED = {
     ("thickener", "default"): "open rim over a raked cone; the solids settle into it",
 }
 
+# Discs on a handle, drawn along their vertical centre line, as
+# ``Symbol.axial_taps``: a balloon tapping one from the side starts on the
+# drawing, not on the box edge beside the handle.
+# (kind, variant) -> what is drawn along the centre line
+AXIAL_TAPS = {
+    ("fitting", "blind"):         "two discs on a handle",
+    ("fitting", "orifice"):       "a bored disc on a handle",
+    ("fitting", "paddle_blind"):  "a solid disc on a handle",
+    ("fitting", "paddle_spacer"): "an open disc on a handle",
+}
+
 # Symbols whose arrowhead states a direction of flow that a mirror would reverse,
 # as ``Symbol.directional``.
 DIRECTIONAL = {
@@ -808,8 +826,8 @@ HALF_SCALE_FITTINGS = (
     # piping.xml: the in-line devices
     "strainer_y", "strainer_basket", "strainer_duplex",
     "bellows", "damper", "spool",
-    # ...and the spectacle blind, on the same module.
-    "blind",
+    # ...and the spectacle blind, paddle blind and spacer, on the same module.
+    "blind", "paddle_blind", "paddle_spacer",
 )
 
 # Three valves.xml shapes are off that file's module, so each takes its own
@@ -1057,7 +1075,8 @@ def render() -> str:
         )
     # Refuse a table entry for a symbol KIND_MAP does not draw.
     tables = {"CLOSED_SHAPES": CLOSED_SHAPES, "GRAVITY_FIXED": GRAVITY_FIXED,
-              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES,
+              "DIRECTIONAL": DIRECTIONAL, "AXIAL_TAPS": AXIAL_TAPS,
+              "BANDS": BANDS, "FAMILY_FACES": FAMILY_FACES,
               "SERIES_FACES": SERIES_FACES}
     for table_name, table in tables.items():
         orphans = sorted(key for key in table if key not in KIND_MAP)
@@ -1151,6 +1170,8 @@ def render() -> str:
             # must not be turned.
             if (kind, variant) in GRAVITY_FIXED:
                 lines.append("        gravity_fixed=True,")
+            if (kind, variant) in AXIAL_TAPS:
+                lines.append("        axial_taps=True,")
             if (kind, variant) in DIRECTIONAL:
                 if "<text" in inner:
                     raise SystemExit(

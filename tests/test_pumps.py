@@ -1,6 +1,7 @@
 """Check the ISO 10628-2 group-15 pumps and the practice pumps beside them."""
 
 import pytest
+from marks import assert_inked
 
 from pandid import (
     DiaphragmPump,
@@ -71,3 +72,37 @@ def test_a_line_through_each_new_pump_draws_clean(tmp_path):
     fs.render(str(tmp_path / "pumps.svg"), diagram="p&id")
     assert fs.validate() == []
     fs.render(str(tmp_path / "pumps.drawio"), diagram="p&id")
+
+
+#: Each pump's distinguishing mark: points its ink passes through, in
+#: drawing units of its box, from the rows' module counts. The group-15
+#: drawings are centred on (30, 30).
+MARKS = {
+    # 15.5: one sine period 2 M long and 1 M deep, down then up.
+    "progressive_cavity": [
+        (20, 30), (25, 35), (30, 30), (35, 25), (40, 30),
+        (21.46, 33.54), (28.54, 33.54), (31.46, 26.46), (38.54, 26.46),
+    ],
+    # 15.6: a rod 2 M long ending in a piston 2 M across.
+    "reciprocating": [(20, 30), (25, 30), (35, 30), (40, 20), (40, 25), (40, 35), (40, 40)],
+    # 15.7: the diaphragm, bowing 1.5 M from the crown-foot line.
+    "diaphragm": [(15, 30), (18.13, 15), (18.13, 45)],
+    # Two two-lobed rotors at x = 25: lobes of radius 6 either side of a
+    # waist 5 across, one rotor lying at y = 18 and one standing at y = 38.
+    "lobe": [
+        (13.55, 18), (36.45, 18), (19.55, 12), (30.45, 12), (19.55, 24), (30.45, 24),
+        (25, 26.55), (25, 49.45), (19, 32.55), (31, 32.55), (19, 43.45), (31, 43.45),
+    ],
+    # The head 2 M deep, the column 1 M wide and the bowl turned to discharge up it.
+    "vertical_turbine": [
+        (0, 10), (30, 0), (60, 10), (45, 20),
+        (25, 40), (35, 40),
+        (0, 90), (60, 90), (30, 120), (15, 75), (45, 75),
+    ],
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("variant", sorted(MARKS))
+def test_each_pump_draws_its_mark(variant: str):
+    """Check each pump's mark is on the ink of the SVG and the draw.io export."""
+    assert_inked(Pump("P-1", variant=variant), MARKS[variant])
