@@ -152,3 +152,26 @@ def test_a_closed_lock_on_a_gate_keeps_the_darkened_body():
     valve = U.Valve("HV-1", lock="CSC")
     assert 'fill="#111"' in default_registry.for_unit(valve).svg
     assert ">NC</text>" not in _on_a_line(valve).to_svg()
+
+
+def test_a_refused_position_change_leaves_a_locked_valve_as_it_was() -> None:
+    """Check that refusing a closed position on a car-sealed-open valve records nothing."""
+    fs = Flowsheet("x")
+    valve = fs.add(U.Valve("XV-1", variant="butterfly", actuator="diaphragm", lock="CSO"))
+    before = [(issue.code, issue.message) for issue in fs.validate()]
+
+    with pytest.raises(ValueError, match="holds it open"):
+        valve.normal_position = "closed"
+
+    assert valve.normal_position == "open"
+    assert [(issue.code, issue.message) for issue in fs.validate()] == before
+
+
+def test_the_advice_for_another_actuator_keeps_an_explicit_open_position() -> None:
+    """Check that the advice for a motor on a SolenoidValve keeps normal_position='open'."""
+    from pandid import devices
+
+    with pytest.raises(
+        ValueError, match=r"MotorOperatedValve\('XV-2', normal_position='open', lock='LC'\)"
+    ):
+        devices.SolenoidValve("XV-2", actuator="motor", normal_position="open", lock="LC")

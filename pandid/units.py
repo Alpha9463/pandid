@@ -1354,9 +1354,9 @@ class _NormallyPositioned(Unit):
                 f"{self.name}: normal_position is "
                 f"{' or '.join(repr(p) for p in self.NORMAL_POSITIONS)}, got {value!r}"
             )
+        self._check_held(value)
         if value == "closed":
             self._refuse_closed()
-        self._check_held(value)
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
@@ -1567,7 +1567,7 @@ class Valve(_NormallyPositioned):
                  **options}
         variant, self._actuator, retired = self._resolve(name, variant, actuator, {
             key: value for key, value in typed.items()
-            if value not in (None, "") and (key, value) != ("normal_position", "open")})
+            if value not in (None, "")})
         if lock and lock not in LOCKS:
             raise ValueError(
                 f"{name}: lock is one of {', '.join(repr(k) for k in LOCKS)}, got "
