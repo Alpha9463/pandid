@@ -214,11 +214,36 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         (ax, ay), (bx, by) = taps
         (_px, _py), (nx, ny) = face_point(host, host.frame, inst.face or "E")
         return ((ax + bx) / 2, (ay + by) / 2), (-ny, nx)
-    face = free_face(inst) or inst.face
-    (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
+    face = free_face(inst) or inst.face or "E"
+    point, (nx, ny) = face_point(host, host.frame, face)
     fs = inst.flowsheet
     moved = nozzle_tap(inst) if fs is not None and fs._clear_taps else None
-    return (moved or (px, py)), (-ny, nx)
+    return _on_body(host, face, moved or point), (-ny, nx)
+
+
+def _on_body(host: "Unit", face: str, point: Point) -> Point:
+    """Return a point on a face of a unit's box, moved onto its body.
+
+    Parameters
+    ----------
+    host : Unit
+        Placed unit.
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+    point : Point
+        Point on that face of the unit's box.
+
+    Returns
+    -------
+    Point
+        The point on the same face of the body, clear of the parts
+        drawn beyond it.
+    """
+    from pandid.portgeom import body_box
+
+    x0, y0, x1, y1 = body_box(host, host.frame)
+    x, y = point
+    return {"W": (x0, y), "E": (x1, y), "N": (x, y0), "S": (x, y1)}[face.upper()]
 
 
 def tap_points(inst: "Instrument") -> list[Point]:
@@ -278,6 +303,7 @@ def nozzle_tap(inst: "Instrument") -> Point | None:
         return None
     face = inst.face or "E"
     point, (nx, ny) = face_point(host, host.frame, face)
+    point = _on_body(host, face, point)
     nozzles = [port_point(host, host.frame, name)
                for name, port in host.ports.items() if port.stream is not None]
     wall = face_wall(host, host.frame, face)

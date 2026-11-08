@@ -57,7 +57,7 @@ def test_a_gauge_on_two_taps_draws_a_line_from_each_to_the_balloon():
     assert len(lines) == 2
     starts = sorted(line[0] for line in lines)
     upper, lower = y0 + 0.25 * (y1 - y0), y0 + 0.55 * (y1 - y0)
-    assert starts == pytest.approx([(x1, upper), (x1, lower)])
+    assert [v for xy in starts for v in xy] == pytest.approx([x1, upper, x1, lower])
     bx0, by0, bx1, by1 = _box(lg)
     centre = ((bx0 + bx1) / 2, (by0 + by1) / 2)
     for line in lines:
@@ -286,3 +286,32 @@ def test_a_tap_end_with_no_tap_line_is_reported(kwargs):
         fs.add(units.Instrument("LT", 101, **kwargs))
     found = [w for w in fs.validate() if w.code == "tap-end-undrawn"]
     assert len(found) == 1 and "sensing=" in found[0].message
+
+
+# --- taps on the shell, not on the parts it carries ----------------------------
+
+#: The default vertical vessel's shell: 62 wide, 100 tall.
+_SHELL_W, _SHELL_H = 62.0, 100.0
+
+
+def test_a_single_tap_on_a_face_with_a_manhole_starts_on_the_shell():
+    """Start a balloon's tap line on the shell, not at the manhole's reach."""
+    fs = Flowsheet("manhole")
+    drum = fs.add(units.Vessel("D-101", manholes=[("W", 0.5)])).pin(x=200, y=100)
+    fs.add_instrument("LT", 101, sensing=drum, face="W")
+    fs.route()
+    x0, y0, x1, _y1 = _box(drum)
+    assert x1 - x0 > _SHELL_W, "the premise: the manhole widens the drum's box"
+    (line,) = _polylines(_taps_group(fs.to_svg(check=False)))
+    assert line[0][0] == pytest.approx(x1 - _SHELL_W)
+
+
+def test_a_tap_on_a_stirred_vessels_top_stays_on_its_motor():
+    """Keep the motor a speed transmitter senses: only wall parts are left out."""
+    fs = Flowsheet("stirred")
+    rx = fs.add(units.Vessel("R-101", agitator="turbine", supports="leg")).pin(x=200, y=100)
+    fs.add_instrument("ST", 101, sensing=rx, face="N")
+    fs.route()
+    _x0, y0, _x1, _y1 = _box(rx)
+    (line,) = _polylines(_taps_group(fs.to_svg(check=False)))
+    assert line[0][1] == pytest.approx(y0)
