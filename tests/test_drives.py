@@ -72,6 +72,20 @@ def test_a_mill_takes_its_motor_on_the_east():
     assert stream_polyline(shaft) == [end.point, drive.point]
 
 
+def test_a_motor_keeps_its_shaft_to_the_mill_with_face_choice_off():
+    """Check a hung motor's shaft still faces its machine when faces are not chosen."""
+    fs = Flowsheet("Faces off")
+    fs.auto_faces = False
+    mill, motor = fs.add(Mill("ML")), fs.add(Motor("M"))
+    shaft = fs.connect(motor.shaft, mill.drive)
+    fs.to_svg()
+    drive = resolve_port(mill, mill.frame, "drive")
+    end = resolve_port(motor, motor.frame, "shaft")
+    assert end.face == "W"
+    assert stream_polyline(shaft) == [end.point, drive.point]
+    assert end.point == (drive.anchor[0] + 20.0, drive.point[1])
+
+
 def test_the_layout_keeps_room_for_the_motor_above_a_belt_conveyor():
     """Check that nothing else is drawn where the motor stands."""
     fs, motor, shaft = _driven(Conveyor("CV-1"), "feed", "discharge", variant="dc")
