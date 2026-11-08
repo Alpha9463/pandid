@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A balloon takes a function block, drawn touching it at a clear corner, in SVG
+  and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
+  or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
+  and ISA-5.1 symbols.
 - `CheckValve` draws the lift and swing checks of ISO 10628-2 (items 22.2 to
   22.4), a ball check, a dual-plate check, a stop-check and a foot valve:
   `CheckValve("NRV-101", variant="swing")`.
@@ -98,6 +102,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
   or thermal mass flowmeter, a flume and a weir:
   `FlowElement("FE-101", variant="magnetic")`.
+- `ShellAndTubeExchanger` draws a floating-head and a coil-tube exchanger,
+  `variant="floating_head"` and `variant="coil_tube"`, and `ElectricHeater`
+  draws the ISO 10628-2 electric heater, powered at `utility_in`.
 
 ### Changed
 
