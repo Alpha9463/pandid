@@ -468,6 +468,8 @@ OWN_OUTLINE = frozenset({
     ("fitting", "thermal_mass"), ("fitting", "flume"),
     ("tank", "flat_roof"), ("tank", "open_top"),
     ("compressor", "screw"),
+    ("mill", "ball"), ("mill", "rod"), ("mill", "sag"), ("mill", "ag"),
+    ("stockpile", "default"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -1297,7 +1299,8 @@ class DrawioRenderer:
         stencil = sym.drawio_shape or sym.drawio_body_shape
         body = self._shell(u)
         if body is None and not stencil and (u.kind, u.variant) in OWN_OUTLINE:
-            body = default_registry.get(u.kind, u.variant)
+            # A drawing with no parts is exported as built for its box.
+            body = default_registry.get(u.kind, u.variant) if sym.overlays else sym
         if body is not None:
             # A shell built to size, or a drawing exported as its own
             # outline, is drawn as built; its parts are child cells.
