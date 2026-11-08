@@ -373,7 +373,7 @@ def find_path(
                 f"suspect a coordinate that does not compare, or a cost that "
                 f"keeps falling."
             )
-        f, g, _, current, cur_dir, path = heapq.heappop(queue)
+        _, g, _, current, cur_dir, path = heapq.heappop(queue)
 
         if current == goal:
             return path
