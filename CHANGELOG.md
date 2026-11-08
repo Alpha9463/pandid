@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and says how to clear it: an `at=` for a valve alone on its line, the `at=`
   bounds that keep the line's order where other items share it, or the end or
   neighbour to move where pinned ends leave no room.
+- `validate()` warns `drawn-over-note` when a unit, line or label is drawn over
+  a note or table placed with `position=`, and names what to move.
 - `validate()` warns `tap-crosses-unit` when a balloon's tap line is drawn
   through a unit other than its own, and names the pin that moves it clear.
 - `fs.line_list()`, `fs.equipment_list()` and `fs.instrument_index()` return
@@ -82,10 +84,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feeds and draws on either wall at their stage height, and an upright
   `Separator` its feeds on either wall: `Reactor("R-1").nozzle("feed", "N")`.
   Layout moves one there toward its peer where that draws fewer bends.
+- `FlowElement` draws a metering orifice plate, a magnetic, clamp-on ultrasonic
+  or thermal mass flowmeter, a flume and a weir:
+  `FlowElement("FE-101", variant="magnetic")`.
 
 ### Changed
 
 - `Blower()` draws the ISO 10628-2 fan instead of a compressor.
+- `Fitting(variant="orifice")`, the restriction orifice, draws the ISO 10628-2
+  orifice plate, the same drawing as `FlowElement(variant="orifice")`.
 - `connect()` no longer needs `kind=` for a signal line: a line to a valve
   with a diaphragm actuator, or none drawn, is pneumatic and any other is
   electric. `add_control_loop()` infers its output line the same way, so a

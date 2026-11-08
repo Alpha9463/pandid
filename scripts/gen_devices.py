@@ -367,6 +367,9 @@ OWNS = {
         "positive_displacement": "positive_displacement",
         "v_cone": "v_cone", "wedge": "wedge", "target": "target",
         "pitot": "pitot", "averaging_pitot": "averaging_pitot",
+        "orifice": "orifice", "magnetic": "magnetic",
+        "ultrasonic_clamp_on": "ultrasonic_clamp_on", "thermal_mass": "thermal_mass",
+        "flume": "flume", "weir": "weir",
     },
 }
 
@@ -506,7 +509,6 @@ STAYS_ON_BASE = {
     ("fitting", "strainer_y"): "body style",
     ("fitting", "strainer_basket"): "body style",
     ("fitting", "strainer_duplex"): "body style",
-    ("fitting", "orifice"): "body style: a restriction orifice, which restricts rather than measures",
     ("fitting", "rotameter"): "body style: a variable-area meter carrying its own indication",
     ("fitting", "rupture_disc"): "body style",
     ("fitting", "sight_glass"): "body style",

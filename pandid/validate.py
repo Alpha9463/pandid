@@ -209,6 +209,58 @@ def _move_cure(u) -> str:
     return f"Move {u.name} clear of it: {_pin_call(u)}"
 
 
+def _over_notes(fs) -> list["Issue"]:
+    """Return a warning for each thing drawn over a placed note or table.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[Issue]
+        ``drawn-over-note`` for each unit, line, tag or letters beside a
+        unit, package label, letter code, line number and number leader
+        :func:`~pandid.layout.compact.covering` finds, naming the
+        annotations it meets and what to move.
+    """
+    from pandid.document import TableBox
+    from pandid.layout.compact import covering
+
+    notes = [a for a in fs.annotations if getattr(a, "position", None) is not None]
+    units = {u.name: u for u in fs.units}
+    out = []
+    for (kind, key), hit in covering(fs).items():
+        met = [notes[i] for i in sorted(hit)]
+        names = ["table" if isinstance(a, TableBox) else "note" for a in met]
+        where = " and ".join(
+            f"the {name}{f' {a.title!r}' if a.title else ''} placed at "
+            f"({a.position[0]:g}, {a.position[1]:g})" for name, a in zip(names, met))
+        other = f"give the {names[0]} another position=" if len(met) == 1 else (
+            "give each another position=")
+        verb, owner = "is drawn over", None
+        if kind == "unit":
+            thing, owner = key, units.get(key)
+        elif kind == "line":
+            thing, verb = f"stream {key}", "is drawn through"
+        elif kind == "label":
+            name, k = key
+            owner = units.get(name)
+            part = (("tag" if k == 0 and owner.tag else "letters") if owner is not None
+                    else ("tag" if k == 0 else "reference"))
+            thing = f"{name}'s {part}" if owner is not None else f"package {name}'s {part}"
+        elif kind == "number":
+            thing = f"stream {key}'s line number"
+        elif kind == "leader":
+            thing, verb = f"stream {key}'s line number leader", "is drawn through"
+        else:
+            thing = f"the letter code {key[1]}"
+        cure = f"{_move_cure(owner)}, or {other}" if owner is not None else other[0].upper() + other[1:]
+        out.append(Issue("warning", "drawn-over-note", f"{thing} {verb} {where}. {cure}"))
+    return out
+
+
 def _arrowhead_cure(u) -> str:
     """Return advice that sets a device clear of the arrowhead after it.
 
@@ -1161,7 +1213,8 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
     return errors + warnings
 
 
-def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
+def geometry_issues(fs: "Flowsheet", *, arrows: bool = True,
+                    notes: bool = True) -> list["Issue"]:
     """Return the findings that need resolved geometry, errors first.
 
     Parameters
@@ -1170,6 +1223,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         Sheet to check.
     arrows : bool, default=True
         Whether process lines carry arrowheads.
+    notes : bool, default=True
+        Report what is drawn over a placed note or table.
 
     Returns
     -------
@@ -1546,6 +1601,11 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                         f"{_move_cure(inst)}"))
                     break
 
+        # Soft: a unit, line or label drawn over a note or table placed by
+        # position.
+        if notes:
+            warnings += _over_notes(fs)
+
         lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
 
         # Soft: a valve or fitting under the arrowhead into the nozzle it feeds.
@@ -1670,7 +1730,7 @@ def _crowded_lines(lines: "Iterable[tuple[Stream, list[tuple[float, float]]]]"
 
 def validate(fs: "Flowsheet", *, arrows: bool = True,
              tabulates: bool = True,
-             table: bool | None = None) -> list["Issue"]:
+             table: bool | None = None, notes: bool = True) -> list["Issue"]:
     """Return all validation issues for the flowsheet, errors first.
 
     Parameters
@@ -1678,6 +1738,8 @@ def validate(fs: "Flowsheet", *, arrows: bool = True,
     fs : Flowsheet
         Sheet to check.
     arrows : bool, default=True
+        Passed to :func:`geometry_issues`.
+    notes : bool, default=True
         Passed to :func:`geometry_issues`.
     tabulates : bool, default=True
         Passed to :func:`model_issues`.
@@ -1690,6 +1752,6 @@ def validate(fs: "Flowsheet", *, arrows: bool = True,
         Errors, then warnings.
     """
     found = (model_issues(fs, tabulates=tabulates, table=table)
-             + geometry_issues(fs, arrows=arrows))
+             + geometry_issues(fs, arrows=arrows, notes=notes))
     return ([i for i in found if i.severity == "error"]
             + [i for i in found if i.severity == "warning"])
