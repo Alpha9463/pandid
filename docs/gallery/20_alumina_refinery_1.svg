@@ -776,9 +776,9 @@
     <symbol id="sym_hex_straight_tubes_s150x45" viewBox="0 0 100.0 30.0" overflow="visible"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="white" stroke="#111" stroke-width="1.33333"/><path d="M 15.0 0.0 L 15.0 30.0 M 85.0 0.0 L 85.0 30.0 M 85.0 7.5 L 15.0 7.5 M 85.0 15.0 L 15.0 15.0 M 85.0 22.5 L 15.0 22.5" fill="none" stroke="#111" stroke-width="1.33333"/></symbol>
     <symbol id="sym_mill" viewBox="0 0 100.0 60.0" overflow="visible"><path d="M 0 0 L 100 0 L 80 60 L 20 60 Z" fill="white" stroke="#111" stroke-width="2"/><path d="M 25 0 L 7.6923 23.0769 M 75 0 L 92.3077 23.0769" fill="none" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
+    <symbol id="sym_reactor_c6090194f_s80x170" viewBox="0 0 80 170" overflow="visible"><path d="M 0 40.50003 A 40 10.499998 0 0 1 40 30.000033 A 40 10.499998 0 0 1 80 40.50003 L 80 159.500002 A 40 10.499998 0 0 1 40 170 A 40 10.499998 0 0 1 0 159.500002 Z" fill="white" stroke="#111" stroke-width="1.999941"/><line x1="40" y1="19.999975" x2="40" y2="136.400428" fill="none" stroke="black" stroke-width="0.999998"/><rect x="20.8" y="107.300315" width="38.4" height="29.100113" fill="none" stroke="black" stroke-width="0.999998"/><path d="M 30.4 107.300315 L 30.4 136.400428 M 49.6 107.300315 L 49.6 136.400428" fill="none" stroke="black" stroke-width="0.999998"/><ellipse cx="40" cy="10.000002" rx="10" ry="10.000002" fill="none" stroke="black" stroke-width="1.000002"/><path d="M 36.25 15.000002 L 36.25 5.000001 L 40 10.000002 L 43.75 5.000001 L 43.75 15.000002" fill="none" stroke="black" stroke-width="1.000002"/></symbol>
     <symbol id="sym_reactor_jacketed_c7d2777c4_s90x210" viewBox="0 0 90 210" overflow="visible"><path d="M 79.615385 44.512526 L 79.615385 195.487528 A 34.615385 14.516813 0 0 1 45 210.004341 A 34.615385 14.516813 0 0 1 10.384615 195.487528 L 10.384615 44.512526 A 34.615385 14.516813 0 0 1 45 29.995713 A 34.615385 14.516813 0 0 1 79.615385 44.512526 Z M 10.384615 44.512526 L 79.615385 44.512526 M 10.384615 195.487528 L 79.615385 195.487528" fill="white" stroke="#111" stroke-width="2"/><rect x="0" y="53.948464" width="10.384615" height="132.103127" fill="white" stroke="#111" stroke-width="2"/><rect x="79.615385" y="53.948464" width="10.384615" height="132.103127" fill="white" stroke="#111" stroke-width="2"/><line x1="45" y1="20.000036" x2="45" y2="166.799975" fill="none" stroke="black" stroke-width="1"/><rect x="23.4" y="130.09999" width="43.2" height="36.699985" fill="none" stroke="black" stroke-width="1"/><path d="M 34.2 130.09999 L 34.2 166.799975 M 55.8 130.09999 L 55.8 166.799975" fill="none" stroke="black" stroke-width="1"/><ellipse cx="44.999965" cy="9.99998" rx="10.000004" ry="9.99998" fill="none" stroke="black" stroke-width="0.999998"/><path d="M 41.249964 14.99997 L 41.249964 4.99999 L 44.999965 9.99998 L 48.749967 4.99999 L 48.749967 14.99997" fill="none" stroke="black" stroke-width="0.999998"/></symbol>
     <symbol id="sym_separator_s70x130" viewBox="0 0 70 130" overflow="visible"><path d="M 0 9.75 A 35 9.75 0 0 1 35 0 A 35 9.75 0 0 1 70 9.75 L 70 120.25 A 35 9.75 0 0 1 35 130 A 35 9.75 0 0 1 0 120.25 Z" fill="white" stroke="#111" stroke-width="1.999941"/></symbol>
-    <symbol id="sym_tank_flat_roof_cb6edb27b_s80x170" viewBox="0 0 80 170" overflow="visible"><rect x="0" y="30.000014" width="80" height="139.999986" fill="white" stroke="#111" stroke-width="2"/><line x1="40" y1="20.000048" x2="40" y2="158.333101" fill="none" stroke="black" stroke-width="0.999999"/><rect x="20.8" y="123.749838" width="38.4" height="34.583263" fill="none" stroke="black" stroke-width="0.999999"/><path d="M 30.4 123.749838 L 30.4 158.333101 M 49.6 123.749838 L 49.6 158.333101" fill="none" stroke="black" stroke-width="0.999999"/><ellipse cx="40" cy="9.999989" rx="10" ry="9.999989" fill="none" stroke="black" stroke-width="1.000001"/><path d="M 36.25 14.999984 L 36.25 4.999995 L 40 9.999989 L 43.75 4.999995 L 43.75 14.999984" fill="none" stroke="black" stroke-width="1.000001"/></symbol>
     <symbol id="sym_tee" viewBox="0 0 12.0 12.0" overflow="visible"><path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
@@ -794,7 +794,7 @@
     <use href="#sym_mill" x="520" y="340" width="100.0" height="60.0" />
     <use href="#sym_hex_straight_tubes_s150x45" x="760" y="457.5" width="150" height="45" />
     <use href="#sym_hex_straight_tubes_s150x45" x="1010" y="457.5" width="150" height="45" />
-    <use href="#sym_tank_flat_roof_cb6edb27b_s80x170" x="1260" y="321.67" width="80" height="170" />
+    <use href="#sym_reactor_c6090194f_s80x170" x="1260" y="380" width="80" height="170" />
     <use href="#sym_pump" x="1400" y="590" width="70.0" height="67.0" />
     <use href="#sym_hex_straight_tubes_s150x45" x="1580" y="577.5" width="150" height="45" />
     <use href="#sym_reactor_jacketed_c7d2777c4_s90x210" x="1860" y="480" width="90" height="210" />
@@ -825,7 +825,7 @@
     <path d="M 570.0,400.0 L 570,480.0 L 760.0,480.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 910.0,480.0 L 1010.0,480.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1160.0,480.0 L 1260.0,480.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1300.0,491.66668218954095 L 1300.0,620 L 1400.0,620.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1300.0,550.0000235294062 L 1300.0,620 L 1400.0,620.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1470.0,600.0 L 1580.0,600.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1730.0,600.0 L 1860.0,600.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1905.0,690.0000359464291 L 1905.0,740 L 2080.0,740.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -851,8 +851,8 @@
     <text x="960.0" y="480.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-906</text>
     <rect x="1193.7" y="473.5" width="32.7" height="13.0" fill="white" />
     <text x="1210.0" y="480.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-907</text>
-    <rect x="1293.5" y="539.5" width="13.0" height="32.7" fill="white" />
-    <text x="1300.0" y="555.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1300.0, 555.8)">S-908</text>
+    <rect x="1333.7" y="613.5" width="32.7" height="13.0" fill="white" />
+    <text x="1350.0" y="620.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-908</text>
     <rect x="1508.7" y="593.5" width="32.7" height="13.0" fill="white" />
     <text x="1525.0" y="600.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-909</text>
     <rect x="1778.7" y="593.5" width="32.7" height="13.0" fill="white" />
@@ -887,8 +887,8 @@
     <text x="835.0" y="447.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-901</text>
     <rect x="1065.0" y="435.5" width="40.0" height="15.0" fill="white" />
     <text x="1085.0" y="447.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-902</text>
-    <rect x="1350.0" y="399.2" width="47.3" height="15.0" fill="white" />
-    <text x="1350.0" y="406.66668218954095" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">TK-901</text>
+    <rect x="1276.3" y="358.0" width="47.3" height="15.0" fill="white" />
+    <text x="1300.0" y="370.00002352940623" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">TK-901</text>
     <rect x="1415.0" y="568.0" width="40.0" height="15.0" fill="white" />
     <text x="1435.0" y="580.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">P-901</text>
     <rect x="1635.0" y="555.5" width="40.0" height="15.0" fill="white" />

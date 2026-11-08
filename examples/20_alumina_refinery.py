@@ -26,6 +26,7 @@ from pandid import (
     Mill,
     Product,
     Pump,
+    Reactor,
     RotaryDrumFilter,
     Separator,
     ShellAndTubeExchanger,
@@ -144,8 +145,9 @@ def digestion():
     interchanger_2 = fs.add(ShellAndTubeExchanger(
         "E-902", variant="straight_tubes", width=150, height=45,
         description="Digestion Heat Interchanger No. 2"))
-    desilication = fs.add(Tank(
-        "TK-901", variant="flat_roof", agitator="turbine", width=80, height=170,
+    # A ``Reactor`` draws the stirred tank's agitator.
+    desilication = fs.add(Reactor(
+        "TK-901", agitator="turbine", width=80, height=170,
         description="Desilication Tank"))
     charge_pump = fs.add(Pump("P-901", description="Digester Charge Pump"))
     steam_heater = fs.add(ShellAndTubeExchanger(
@@ -191,7 +193,7 @@ def digestion():
 
     interchanger_1.pin(port="tube_in", x=760, y=slurry_y)
     interchanger_2.pin(port="tube_in", x=1010, y=slurry_y)
-    desilication.pin(port="inlet", x=1260, y=slurry_y)
+    desilication.pin(port="feed", x=1260, y=slurry_y)
     charge_pump.pin(port="suction", x=1400, y=620)
     steam_heater.pin(port="tube_in", x=1580, y=digest_y)
     digester.pin(port="feed", x=1860, y=digest_y)
@@ -227,7 +229,7 @@ def digestion():
     fs.connect(mill.discharge, interchanger_1.tube_in, name="S-905").via(
         [(570, slurry_y)])
     fs.connect(interchanger_1.tube_out, interchanger_2.tube_in, name="S-906")
-    fs.connect(interchanger_2.tube_out, desilication.inlet, name="S-907")
+    fs.connect(interchanger_2.tube_out, desilication.feed, name="S-907")
     fs.connect(desilication.outlet, charge_pump.suction, name="S-908").via(
         [(desil_draw_x, 620)])
     fs.connect(charge_pump.discharge, steam_heater.tube_in, name="S-909")
@@ -393,11 +395,12 @@ def precipitation():
     # The pregnant liquor arrives from PFD-902.
     pregnant_liquor = fs.add(Feed(PREGNANT_LIQUOR, reference=CLARIFICATION))
     seed_tee = fs.add(Tee(branch="inlet"))
-    precipitator_1 = fs.add(Tank(
-        "PR-901", variant="flat_roof", agitator="turbine", width=85, height=180,
+    # Sized in the symbol's proportions so the drive motor stays round.
+    precipitator_1 = fs.add(Reactor(
+        "PR-901", agitator="turbine", width=85, height=180,
         description="Precipitator No. 1"))
-    precipitator_2 = fs.add(Tank(
-        "PR-902", variant="flat_roof", agitator="turbine", width=85, height=180,
+    precipitator_2 = fs.add(Reactor(
+        "PR-902", agitator="turbine", width=85, height=180,
         description="Precipitator No. 2"))
 
     # --- Classification -----------------------------------------------
@@ -464,8 +467,8 @@ def precipitation():
 
     pregnant_liquor.pin(port="outlet", x=1100, y=settle_y)
     seed_tee.pin(port="inlet", x=1180, y=settle_y)
-    precipitator_1.pin(port="inlet", x=1280, y=settle_y)
-    precipitator_2.pin(port="inlet", x=1460, y=1270)
+    precipitator_1.pin(port="feed", x=1280, y=settle_y)
+    precipitator_2.pin(port="feed", x=1460, y=1270)
     classifier_1.pin(port="feed", x=1660, y=1400)
     classifier_2.pin(port="feed", x=1920, y=1180)
 
@@ -517,8 +520,8 @@ def precipitation():
     fs.connect(classifier_2.port("underflow"), seed_tee.branch,
                name="S-933").via([(classifier_2_axis_x, lane_seed_y),
                                   (pinned_x(seed_tee) + TEE_W / 2, lane_seed_y)])
-    fs.connect(seed_tee.outlet, precipitator_1.inlet, name="S-934")
-    fs.connect(precipitator_1.outlet, precipitator_2.inlet, name="S-935").via(
+    fs.connect(seed_tee.outlet, precipitator_1.feed, name="S-934")
+    fs.connect(precipitator_1.outlet, precipitator_2.feed, name="S-935").via(
         [(pinned_x(precipitator_1, "outlet"),
           1270)])
     fs.connect(precipitator_2.outlet, classifier_1.feed, name="S-936").via(
