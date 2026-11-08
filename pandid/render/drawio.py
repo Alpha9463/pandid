@@ -1428,7 +1428,7 @@ class DrawioRenderer:
 
     @staticmethod
     def _shell(u) -> "Symbol | None":
-        """Return the shell a vessel built to size is drawn on.
+        """Return the body a vessel or a stirred tank is drawn in place on.
 
         Parameters
         ----------
@@ -1438,11 +1438,12 @@ class DrawioRenderer:
         Returns
         -------
         Symbol or None
-            The shell, or ``None`` for a unit drawn at its symbol's size.
+            A vessel's shell built to size, or a stirred tank's body
+            under its motor; ``None`` for any other unit.
         """
         from pandid.units import _built_to_size, _drawn_parts
 
-        if not _built_to_size(u):
+        if not (_built_to_size(u) or (u.kind == "tank" and getattr(u, "agitator", None))):
             return None
         return _drawn_parts(u, tuple(getattr(u, "overlays", ()) or ()))[0]
 

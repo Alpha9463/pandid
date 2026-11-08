@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Tank(variant="flat_roof")` and `Tank(variant="open_top")` draw the closed
+  and the open rectangular tank of ISO 10628-2. `Tank` and `Vessel` take
+  `agitator="turbine"` and the other stirrers a `Reactor` takes, drawn with
+  the motor above the roof and its `drive`.
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,

@@ -2021,6 +2021,66 @@ _VESSEL_EXTENT = 0.7
 _SUPPORT_CLEARANCE = {"inlet": ARROWHEAD / 2 + MIN_HEAD_CLEARANCE, "outlet": MIN_HEAD_CLEARANCE}
 
 
+def stirred(body: Symbol) -> Symbol:
+    """Return a tank or vessel with its roof left to an agitator's motor.
+
+    The vent moves to the top of the east wall's band and the relief to
+    the top of the west wall's. No inlet or outlet is offered the roof;
+    one drawn there moves to the first wall its menu offers.
+
+    Parameters
+    ----------
+    body : Symbol
+        Upright tank or vessel.
+
+    Returns
+    -------
+    Symbol
+        The body with its nozzles moved.
+    """
+    w, h = body.width, body.height
+    ports = dict(body.ports)
+    menus = {name: {face: xy for face, xy in menu.items() if face != "N" or name not in
+                    ("inlet", "outlet")} for name, menu in body.port_faces.items()}
+    families = {role: {face: xy for face, xy in menu.items() if face != "N"}
+                for role, menu in body.family_faces.items()}
+    for role in ("inlet", "outlet"):
+        if role in ports and outward_dir(*ports[role], w, h) == "N":
+            ports[role] = next(iter(menus[role].values()))
+    # Each wall's x, from where the inlets and outlets meet it.
+    walls = {outward_dir(x, y, w, h): x
+             for menu in (*menus.values(), *families.values()) for x, y in menu.values()}
+    for name, face in (("vent", "E"), ("relief", "W")):
+        if name in ports:
+            ports[name] = (walls[face], body.bands[face][0])
+            menus.pop(name)
+    return replace(body, ports=ports, port_faces=menus, family_faces=families,
+                   bands={face: band for face, band in body.bands.items() if face != "N"})
+
+
+def carrying(kind: str, body: Symbol, overlays: "tuple[Overlay, ...]") -> Symbol:
+    """Return a body as it carries its parts: stirred under a motor.
+
+    Parameters
+    ----------
+    kind : str
+        Body kind.
+    body : Symbol
+        The body.
+    overlays : tuple[Overlay, ...]
+        Parts drawn on it.
+
+    Returns
+    -------
+    Symbol
+        :func:`stirred` for a tank or vessel with a motor over it, else
+        ``body``.
+    """
+    if kind in ("tank", "vessel") and any(o.group == 20 for o in overlays):
+        return stirred(body)
+    return body
+
+
 @lru_cache(maxsize=None)
 def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
                  ports: "tuple[tuple[str, tuple[float, float]], ...]",
@@ -2054,7 +2114,8 @@ def _vessel_base(kind: str, variant: str, overlays: "tuple[Overlay, ...]",
         body = default_registry.get(kind, variant)
     else:
         body = vessel_shell(variant, *size)
-        drawn = replace(body, ports={**body.ports, **dict(ports)}) if ports else body
+        drawn = carrying(kind, body, overlays)
+        drawn = replace(drawn, ports={**drawn.ports, **dict(ports)}) if ports else drawn
         base = compose(drawn, [(o, default_registry.part(o.group, o.name)) for o in overlays])
     boxes = overlay_boxes(body, overlays)
     oy = -min([0.0, *(o.y * body.height for o in overlays)])
@@ -4525,7 +4586,7 @@ class SymbolRegistry:
             return self.get(kind, variant)
         key = (kind, variant, tuple(overlays), tuple(ports))
         if key not in self._composed:
-            body = self.get(kind, variant)
+            body = carrying(kind, self.get(kind, variant), overlays)
             if ports:
                 body = replace(body, ports={**body.ports, **dict(ports)})
             self._composed[key] = compose(

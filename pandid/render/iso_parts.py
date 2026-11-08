@@ -589,12 +589,22 @@ def _part(group: int, name: str, registry=None):
 # crown as a fraction of body height (item 1.27 X8006).
 _MOTOR_WIDTH, _MOTOR_GAP = 1 / 3, 1 / 9
 
+#: Motor diameter, and its gap above the body, on a body drawn to size
+#: (item 1.27 X8006).
+MOTOR_D, MOTOR_GAP = 2 * M, M
+
 # Stirrer x, width and foot as fractions of the body (item 1.27).
 _AGITATOR_X, _AGITATOR_W, _AGITATOR_FOOT = 0.26, 0.48, 0.76
 
 
-def agitator_overlays(name: str, kind: str, variant: str) -> tuple:
+def agitator_overlays(name: str, kind: str, variant: str,
+                      drawn: "tuple[float, float] | None" = None) -> tuple:
     """Return an agitator and its motor placed on a vertical body.
+
+    The stirrer is drawn in proportion to the body. On a body drawn
+    at ``drawn``, the motor is :data:`MOTOR_D` across and
+    :data:`MOTOR_GAP` above it; otherwise it is a third of the body's
+    width.
 
     Parameters
     ----------
@@ -604,6 +614,8 @@ def agitator_overlays(name: str, kind: str, variant: str) -> tuple:
         Body kind.
     variant : str
         Body variant.
+    drawn : tuple[float, float], optional
+        Width and height the body is drawn at.
 
     Returns
     -------
@@ -621,15 +633,16 @@ def agitator_overlays(name: str, kind: str, variant: str) -> tuple:
     _part(28, name)
     _part(20, "motor")
     body = default_registry.get(kind, variant)
-    # The height that keeps the motor round on this body.
-    height = _MOTOR_WIDTH * body.width / body.height
+    if drawn is None:
+        # The height that keeps the motor round on this body.
+        width, height, gap = _MOTOR_WIDTH, _MOTOR_WIDTH * body.width / body.height, _MOTOR_GAP
+    else:
+        width, height, gap = MOTOR_D / drawn[0], MOTOR_D / drawn[1], MOTOR_GAP / drawn[1]
     return (
         # The shaft reaches up to the motor.
-        Overlay(28, name, _AGITATOR_X, -_MOTOR_GAP, _AGITATOR_W,
-                _AGITATOR_FOOT + _MOTOR_GAP),
+        Overlay(28, name, _AGITATOR_X, -gap, _AGITATOR_W, _AGITATOR_FOOT + gap),
         # The motor, centred above the head.
-        Overlay(20, "motor", (1 - _MOTOR_WIDTH) / 2, -(_MOTOR_GAP + height),
-                _MOTOR_WIDTH, height),
+        Overlay(20, "motor", (1 - width) / 2, -(gap + height), width, height),
     )
 
 
