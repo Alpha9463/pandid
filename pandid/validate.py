@@ -324,8 +324,8 @@ def _crowded_marks(fs) -> list["Issue"]:
     list[Issue]
         ``line-mark-crowded`` for each traced, insulated or jacketed line
         with no straight run long enough for its marks clear of units,
-        other lines, tap lines, hatches, placed annotations and other
-        lines' marks.
+        other lines, tap lines, hatches, placed annotations, line markers
+        and other lines' marks.
     """
     from pandid.render.pipe_marks import MARK_END_CLEAR, MARK_GAP, MARK_LENGTH, crowded_marks
 

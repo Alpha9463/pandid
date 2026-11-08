@@ -439,3 +439,31 @@ def test_a_docked_note_keeps_off_a_limit_above_its_line() -> None:
             top + float(child.get("height", "nan")),
         )
         assert not _overlap((nx, ny, nx + nw, ny + nh), box), cell.get("id")
+
+
+def test_an_insulation_mark_keeps_clear_of_a_tie_in_on_its_line() -> None:
+    """Draw a line's insulation mark off the tie-in marked at its middle."""
+    from pandid.layout.conflicts import segment_crosses_box
+
+    fs = Flowsheet("Marked and treated")
+    feed, product = fs.add(Feed("F")), fs.add(Product("P"))
+    feed.pin(x=100, y=100)
+    product.pin(x=400, y=100)
+    line = fs.connect(feed.outlet, product.inlet, insulated=True)
+    line.mark("tie-in", at=0.5, number="TI-101")
+    svg = fs.to_svg(diagram="p&id")
+    body = svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
+    hexagon = re.search(r'<polygon points="([^"]+)" fill="white"', body)
+    assert hexagon is not None
+    xs, ys = zip(*(map(float, p.split(",")) for p in hexagon.group(1).split()))
+    box = (min(xs), min(ys), max(xs), max(ys))
+    strokes = [
+        tuple(map(float, m.groups()))
+        for m in re.finditer(
+            r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"', body
+        )
+    ]
+    # The 25.9 mark: two band edges and three hatch strokes.
+    assert len(strokes) == 5
+    assert not any(segment_crosses_box((a, b), (c, d), box) for a, b, c, d in strokes)
+    assert [i.code for i in fs.validate() if "crowded" in i.code] == []

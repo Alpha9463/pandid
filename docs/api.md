@@ -294,8 +294,8 @@ marker. Signal lines take none.
 `insulated=True` for an insulated one (25.9; 25.8 when traced too) and
 `jacketed=True` for a jacketed one (25.7). `insulation=` is only the line
 number's code and draws nothing. A line carries its marks once, together on
-its longest straight run with room for them clear of every unit, other line and
-note; its own segments come first, then its valve stations' pipework. Tags and
+its longest straight run with room for them clear of every unit, other line,
+marker and note; its own segments come first, then its valve stations' pipework. Tags and
 line numbers keep off the marks. Where no run has room the marks are not drawn,
 and `validate()` reports `line-mark-crowded`. Set on a split line's handle, a
 treatment applies to the whole run; signal lines take none.
