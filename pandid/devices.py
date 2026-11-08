@@ -1500,6 +1500,12 @@ class FlowElement(Fitting):
         "target",
         "pitot",
         "averaging_pitot",
+        "orifice",
+        "magnetic",
+        "ultrasonic_clamp_on",
+        "thermal_mass",
+        "flume",
+        "weir",
     )
     VARIANT_ALIASES = {"default": "venturi"}
 

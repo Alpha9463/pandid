@@ -500,10 +500,10 @@ def register_vendored(registry):
     ), 'hose')
 
     registry.register('fitting', Symbol(
-        svg='<g id="sym_fitting_orifice"><g transform="scale(0.25)"><path d="M 0.0 30.0 L 15.0 30.0 M 15.0 0.0 L 15.0 60.0 M 25.0 10.0 L 25.0 50.0 M 35.0 0.0 L 35.0 60.0 M 35.0 30.0 L 50.0 30.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=12.5, height=15.0,
-        ports={'inlet': (0.0, 7.5), 'outlet': (12.5, 7.5)},
-        drawio_shape='mxgraph.pid.valves.orifice',
+        svg='<g id="sym_fitting_orifice"><g transform="scale(0.25)"><ellipse cx="20.0" cy="20.0" rx="20.0" ry="20.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 20.0 40.0 L 20.0 140.0" fill="none" stroke="#111" stroke-width="8.0"/><ellipse cx="20.0" cy="20.0" rx="4.0" ry="4.0" fill="#111" stroke="#111" stroke-width="8.0"/></g></g>',
+        width=10.0, height=35.0,
+        ports={'inlet': (0.0, 5.0), 'outlet': (10.0, 5.0)},
+        drawio_shape='mxgraph.pid.fittings.orifice_plate',
         trim=True,
     ), 'orifice')
 
@@ -619,6 +619,14 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.flow_sensors.averging_pitot_tube',
         trim=True,
     ), 'averaging_pitot')
+
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_weir"><g transform="scale(0.5)"><path d="M 0.0 0.0 L 0.0 50.0 L 50.0 50.0 L 50.0 0.0 L 25.0 15.0 Z" fill="white" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+        drawio_shape='mxgraph.pid.flow_sensors.weir',
+        trim=True,
+    ), 'weir')
 
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting_strainer_y"><g transform="scale(0.5)"><path d="M 0.0 10.0 L 50.0 10.0 M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0 M 25.0 10.0 L 45.0 30.0 M 40.0 34.0 L 50.0 25.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',

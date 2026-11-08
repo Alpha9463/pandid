@@ -400,6 +400,8 @@ OWN_OUTLINE = frozenset({
     ("furnace", "general"), ("furnace", "combustion_chamber"),
     ("pump", "progressive_cavity"), ("pump", "reciprocating"), ("pump", "diaphragm"),
     ("pump", "lobe"), ("pump", "vertical_turbine"),
+    ("fitting", "magnetic"), ("fitting", "ultrasonic_clamp_on"),
+    ("fitting", "thermal_mass"), ("fitting", "flume"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what

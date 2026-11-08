@@ -3024,6 +3024,10 @@ def _rounded(segments) -> list:
         lambda: devices.DiaphragmPump("P-3"),
         lambda: devices.LobePump("P-4"),
         lambda: devices.VerticalTurbinePump("P-5"),
+        lambda: devices.FlowElement("FE-1", variant="magnetic"),
+        lambda: devices.FlowElement("FE-2", variant="ultrasonic_clamp_on"),
+        lambda: devices.FlowElement("FE-3", variant="thermal_mass"),
+        lambda: devices.FlowElement("FE-4", variant="flume"),
     ],
     ids=[
         "silo",
@@ -3043,6 +3047,10 @@ def _rounded(segments) -> list:
         "diaphragm",
         "lobe",
         "vertical_turbine",
+        "magnetic",
+        "ultrasonic_clamp_on",
+        "thermal_mass",
+        "flume",
     ],
 )
 def test_a_drawing_exported_as_its_outline_traces_the_sheets_artwork(build):
