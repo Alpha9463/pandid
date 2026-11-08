@@ -373,14 +373,14 @@ def _codes_beside_a_stacked_tag() -> "tuple[Flowsheet, dict]":
 
 def _hatch_bars(fs) -> "list[tuple[float, float, float, float]]":
     """Return the box of every pneumatic hatch stroke on a sheet."""
-    from pandid.render.svg import HATCH_ALONG, HATCH_ARM, pneumatic_marks, stream_polyline
+    from pandid.render.svg import HATCH_ALONG, HATCH_ARM, signal_marks, stream_polyline
 
     along, across = HATCH_ARM
     out = []
     for s in fs.streams:
         if s.kind != "pneumatic":
             continue
-        for mark in pneumatic_marks(stream_polyline(s)):
+        for mark in signal_marks(stream_polyline(s)):
             for off in HATCH_ALONG:
                 dx, dy = (off - along, off + along), (-across, across)
                 xs, ys = (dx, dy) if mark.horizontal else (dy, dx)

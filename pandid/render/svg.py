@@ -30,10 +30,7 @@ if TYPE_CHECKING:
 # A symbol's own lettering, such as the "M" in a motor operator.
 _SYMBOL_TEXT = re.compile(
     r'<text\b[^>]*?\bx="(-?[\d.]+)"[^>]*?\by="(-?[\d.]+)"[^>]*?>.*?</text>', re.S)
-# Balloon variants with a location bar across the middle that the tag
-# text must clear.
-_BARRED_BALLOONS = {"panel", "aux", "shared"}
-# Balloon variants drawn as a diamond (ISA-5.1 Table 5.1.1 column B).
+# Balloon symbol types drawn as a diamond (ISA-5.1 Table 5.1.1 column B).
 _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 # Balloon variants that stand for a field device.
 _FIELD_BALLOONS = {"default"}
@@ -1765,10 +1762,21 @@ def boundary_flag(u, frame) -> Pennant:
 HATCH_ALONG = (-2.5, 1.5)
 #: Half-reach of each stroke along and across the run.
 HATCH_ARM = (3.0, 5.0)
+#: Length of the foot a hydraulic mark's stroke stands on (ISO 15519-2
+#: A.1.08), drawn along the run from the stroke's first end.
+HYDRAULIC_FOOT = 5.0
+
+#: Signal kinds drawn with marks along the line.
+MARKED_KINDS = frozenset({"pneumatic", "hydraulic"})
+
+#: Length of each half-wave of a wireless line, and its rise off the
+#: route.
+WAVE_PITCH = 8.0
+WAVE_RISE = 3.0
 
 
 class Hatch(NamedTuple):
-    """One double cross-hatch on a pneumatic line.
+    """One mark on a pneumatic or hydraulic line.
 
     Attributes
     ----------
@@ -1785,8 +1793,8 @@ class Hatch(NamedTuple):
     along: float
 
 
-def pneumatic_marks(points) -> "list[Hatch]":
-    """Return the double cross-hatches marking a pneumatic line.
+def signal_marks(points) -> "list[Hatch]":
+    """Return where the marks on a pneumatic or hydraulic line fall.
 
     Each segment gets one mark per whole 45 px of its Manhattan length,
     or one mark if it is 16 px or longer; the marks divide the segment
@@ -1819,11 +1827,17 @@ def pneumatic_marks(points) -> "list[Hatch]":
     return out
 
 
-def _hatch_strokes(points) -> list:
-    """Return the strokes of every double cross-hatch on a pneumatic line.
+def _mark_strokes(kind: str, points) -> list:
+    """Return the strokes of every mark on a pneumatic or hydraulic line.
+
+    A pneumatic mark is two slashes (ISO 15519-2 A.1.09); a hydraulic
+    mark is one slash with a foot along the run from its first end
+    (A.1.08).
 
     Parameters
     ----------
+    kind : str
+        Stream kind; other kinds have no marks.
     points : sequence of tuple[float, float]
         Line polyline.
 
@@ -1834,17 +1848,81 @@ def _hatch_strokes(points) -> list:
     """
     along, across = HATCH_ARM
     out = []
-    for mx, my, horiz, _at in pneumatic_marks(points):
-        for off in HATCH_ALONG:
+    for mx, my, horiz, _at in (signal_marks(points) if kind in MARKED_KINDS else ()):
+        for off in (HATCH_ALONG if kind == "pneumatic" else (0.0,)):
             if horiz:
                 out.append(((mx + off - along, my + across), (mx + off + along, my - across)))
             else:
                 out.append(((mx - across, my + off - along), (mx + across, my + off + along)))
+        if kind == "hydraulic":
+            (fx, fy), _ = out[-1]
+            out.append(((fx, fy), (fx + HYDRAULIC_FOOT, fy) if horiz
+                        else (fx, fy + HYDRAULIC_FOOT)))
     return out
 
 
+def wave_points(points) -> "list[tuple[float, float]]":
+    """Return the points a wireless line's wave is drawn through.
+
+    Each segment carries a whole number of half-waves of about
+    :data:`WAVE_PITCH`, rising :data:`WAVE_RISE` to alternate sides. The
+    result is the line's two ends with a control point at each
+    half-wave's crest between them; :func:`curved_path` draws it.
+
+    Parameters
+    ----------
+    points : sequence of tuple[float, float]
+        Line polyline.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        First end, crest control points, last end.
+    """
+    out = [tuple(points[0])]
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        span = math.hypot(x2 - x1, y2 - y1)
+        if span == 0:
+            continue
+        n = max(1, round(span / WAVE_PITCH))
+        # A quadratic curve rises half the way to its control point.
+        nx, ny = -(y2 - y1) / span * 2 * WAVE_RISE, (x2 - x1) / span * 2 * WAVE_RISE
+        for k in range(n):
+            t, side = (k + 0.5) / n, 1 if k % 2 == 0 else -1
+            out.append((x1 + (x2 - x1) * t + side * nx, y1 + (y2 - y1) * t + side * ny))
+    out.append(tuple(points[-1]))
+    return out
+
+
+def curved_path(points) -> str:
+    """Return the SVG path draw.io draws for a curved edge through points.
+
+    Each inner point is the control of a quadratic curve to the midpoint
+    of it and the next, and the last inner point the control of the
+    curve to the last end.
+
+    Parameters
+    ----------
+    points : sequence of tuple[float, float]
+        Ends and inner points; at least three.
+
+    Returns
+    -------
+    str
+        Path data of ``M`` and ``Q`` commands.
+    """
+    (x0, y0), last = points[0], len(points) - 1
+    out = [f"M {x0:g},{y0:g}"]
+    for i in range(1, last):
+        (cx, cy), (nx, ny) = points[i], points[i + 1]
+        if i < last - 1:
+            nx, ny = (cx + nx) / 2, (cy + ny) / 2
+        out.append(f"Q {cx:.2f},{cy:.2f} {nx:.2f},{ny:.2f}")
+    return " ".join(out)
+
+
 def hatch_boxes(fs) -> "list[tuple[float, float, float, float]]":
-    """Return the box each pneumatic hatch stroke inks.
+    """Return the boxes the marks and waves on signal lines ink.
 
     Parameters
     ----------
@@ -1854,12 +1932,21 @@ def hatch_boxes(fs) -> "list[tuple[float, float, float, float]]":
     Returns
     -------
     list[tuple[float, float, float, float]]
-        ``(x0, y0, x1, y1)`` of each stroke, grown by its half pen.
+        ``(x0, y0, x1, y1)`` of each mark stroke, grown by its half pen,
+        and of each wireless segment, grown by twice the wave's rise.
     """
     pad = _ink_pad(LineWeight.DETAIL)
-    return [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
-            for s in fs.streams if s.kind == "pneumatic"
-            for (x1, y1), (x2, y2) in _hatch_strokes(stream_polyline(s))]
+    out = [(min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad)
+           for s in fs.streams if s.kind in MARKED_KINDS
+           for (x1, y1), (x2, y2) in _mark_strokes(s.kind, stream_polyline(s))]
+    reach = 2 * WAVE_RISE
+    for s in fs.streams:
+        if s.kind == "wireless":
+            points = stream_polyline(s)
+            out += [(min(x1, x2) - reach, min(y1, y2) - reach,
+                     max(x1, x2) + reach, max(y1, y2) + reach)
+                    for (x1, y1), (x2, y2) in zip(points, points[1:])]
+    return out
 
 
 #: Joint markings where lines meet what they serve.
@@ -4220,9 +4307,12 @@ class SvgRenderer:
         tag = getattr(u, "tag", "") or u.name
         top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
-        if variant in _DIAMOND_BALLOONS:
-            # The number goes in the lower half of the diamond.
-            return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
+        display = getattr(u, "display", "field")
+        if getattr(u, "symbol_type", variant) in _DIAMOND_BALLOONS:
+            # The number goes in the lower half of the diamond, under the
+            # bars of a subsidiary display.
+            dy = 8 if display == "subsidiary" else 7
+            return [f'    <text x="{cx}" y="{cy + dy}" font-family="sans-serif" '
                     f'font-size="11" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top.upper())}</text>']
         if not top:
@@ -4230,7 +4320,7 @@ class SvgRenderer:
                     f'font-size="{_TAG_TYPE:g}" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top)}</text>']
         # Letters above a location bar and the number below it.
-        letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
+        letters_dy, number_dy = (-10, 11) if display != "field" else (-4, 10)
         out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
                f'font-size="{_TAG_TYPE:g}" font-weight="bold" text-anchor="middle" '
                f'dominant-baseline="middle">{escaped(top.upper())}</text>']
@@ -4617,6 +4707,11 @@ class SvgRenderer:
                             f"{cross}{hop.x + foot:g},{y1}"])
                 d_parts.append(f"L {x2},{y2}")
             d_str = " ".join(d_parts)
+            wave = wave_points(points) if s.kind == "wireless" else []
+            if len(wave) > 2:
+                # A wireless line is a wave along its route, unbroken where
+                # it crosses (ISA-5.1).
+                d_str = curved_path(wave)
 
             marker = (f' marker-end="url(#{marker_id})"'
                       if arrows and wears_arrowhead(s, default_registry) else "")
@@ -4648,12 +4743,11 @@ class SvgRenderer:
                                  f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
                                  f'stroke-width="{weight.width:g}" />')
 
-            if s.kind == "pneumatic":
-                # Pneumatic hatching (ISO 15519-2 Annex A.1.09).
-                for (x1, y1), (x2, y2) in _hatch_strokes(points):
-                    lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
-                                 f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
-                                 f'stroke-width="{LineWeight.DETAIL.width:g}" />')
+            # Pneumatic and hydraulic marks (ISO 15519-2 A.1.08, A.1.09).
+            for (x1, y1), (x2, y2) in _mark_strokes(s.kind, points):
+                lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
+                             f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
+                             f'stroke-width="{LineWeight.DETAIL.width:g}" />')
 
         # Final pass: stream numbers on white halos.
         placed: list[tuple[float, float, float, float]] = [

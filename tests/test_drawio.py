@@ -41,7 +41,7 @@ from pandid.render.svg import (
     boundary_flag,
     drawing_bounds,
     impulse_tap,
-    pneumatic_marks,
+    signal_marks,
     sheet_connections,
     stream_hops,
     stream_polyline,
@@ -50,7 +50,7 @@ from pandid.render.svg import (
 )
 from pandid.render.symbols import _GROUP, Symbol, default_registry, expander, overlay_boxes
 from pandid.render.weights import LineWeight
-from pandid.units import _drawn_parts
+from pandid.units import _BALLOON_SYMBOLS, _drawn_parts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -224,8 +224,8 @@ def test_the_export_reports_a_title_block_cell_it_had_to_abbreviate():
 # A sheet carrying one of everything.
 
 
-#: Registered ``(kind, variant)`` pairs selected by ``display=``.
-_BY_DISPLAY = {("instrument", "panel"): "central", ("instrument", "aux"): "subsidiary"}
+#: Registered balloon variants, and the symbol type and display that draw each.
+_BY_DISPLAY = {drawn: pair for pair, drawn in _BALLOON_SYMBOLS.items()}
 
 
 @pytest.fixture(scope="module")
@@ -238,8 +238,9 @@ def every_symbol_sheet() -> Flowsheet:
         for variant in default_registry.variants(cls.kind):
             tag = f"{cls.kind[:3].upper()}-{n}"
             # Location bars are selected by display rather than by symbol kind.
-            if (cls.kind, variant) in _BY_DISPLAY:
-                unit = cls(tag, display=_BY_DISPLAY[cls.kind, variant])
+            if cls is units.Instrument and variant in _BY_DISPLAY:
+                shape, display = _BY_DISPLAY[variant]
+                unit = cls(tag, variant=shape, display=display)
             else:
                 # A Separator's characteristic drawings are asked for by characteristic=.
                 how = (
@@ -554,7 +555,7 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
     fs = _pneumatic_sheet()
     root = _model(fs, check=False)
     cells = {c.get("id"): c for c in root.findall("mxCell")}
-    marks = pneumatic_marks(stream_polyline(fs.streams[0]))
+    marks = signal_marks(stream_polyline(fs.streams[0]))
     assert marks, "the fixture stopped exercising the hatch"
     hatches = [c for c in cells.values() if c.get("parent") == "s0"]
     # Two strokes per mark, in the same places the sheet strokes them.
@@ -832,6 +833,43 @@ def test_a_balloon_carries_its_letters_over_its_number():
     assert style["shape"] == "ellipse"
     # Opaque, so the line a balloon is drawn over does not run through its tag.
     assert style["fillColor"] == "#ffffff"
+
+
+@pytest.mark.parametrize("variant", ["default", "shared", "computer", "sis", "logic", "interlock"])
+@pytest.mark.parametrize("display", ["central", "subsidiary"])
+def test_a_barred_balloon_exports_its_location_bars(variant, display):
+    """Draw each location bar as a level line across the stand-in, and the tag off it."""
+    fs = Flowsheet("bars")
+    inst = fs.add_instrument("LIC", 101, variant=variant, display=display).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, check=False)
+    assert "drawio-approximated" not in [w.code for w in fs.warnings]
+    box = cells["u0"].find("mxGeometry")
+    assert box is not None
+    w, h = float(box.get("width", 0)), float(box.get("height", 0))
+    sym = default_registry.get("instrument", inst.variant)
+    want = [float(y) / sym.height for y in re.findall(r'<line x1="[\d.]+" y1="([\d.]+)"', sym.svg)]
+    assert len(want) == (1 if display == "central" else 2)
+
+    bars = [c for cid, c in cells.items() if cid.startswith("u0-s")]
+    assert [_style(c)["shape"] for c in bars] == ["line"] * len(want)
+    geometry = [g for c in bars if (g := c.find("mxGeometry")) is not None]
+    got = [(float(g.get("y", 0)) + float(g.get("height", 0)) / 2) / h for g in geometry]
+    assert got == pytest.approx(want, abs=1e-3)
+    # Side to side, but for the narrowing of a diamond away from its waist.
+    assert (
+        min(float(g.get("width", 0)) for g in geometry)
+        >= (0.75 if variant == "interlock" else 0.9) * w
+    )
+
+    tag = cells["u0"]
+    offset = tag.find("mxGeometry/mxPoint[@as='offset']")
+    if variant in ("sis", "logic", "interlock"):
+        # The number alone, moved down under the bars.
+        assert offset is not None and float(offset.get("y", 0)) >= 7 * h / sym.height
+    else:
+        # Letters and number spread to clear the bars between them.
+        assert "line-height" in (tag.get("value") or "")
 
 
 def test_only_the_balloons_are_drawn_opaque():
@@ -3019,6 +3057,15 @@ def _rounded(segments) -> list:
         lambda: devices.CombustionChamber("FH-1"),
         lambda: units.MixerSettler("MS-1"),
         lambda: units.Deaerator("DA-1"),
+        lambda: devices.ProgressiveCavityPump("P-1"),
+        lambda: devices.ReciprocatingPump("P-2"),
+        lambda: devices.DiaphragmPump("P-3"),
+        lambda: devices.LobePump("P-4"),
+        lambda: devices.VerticalTurbinePump("P-5"),
+        lambda: devices.FlowElement("FE-1", variant="magnetic"),
+        lambda: devices.FlowElement("FE-2", variant="ultrasonic_clamp_on"),
+        lambda: devices.FlowElement("FE-3", variant="thermal_mass"),
+        lambda: devices.FlowElement("FE-4", variant="flume"),
     ],
     ids=[
         "silo",
@@ -3033,6 +3080,15 @@ def _rounded(segments) -> list:
         "combustion_chamber",
         "mixer_settler",
         "deaerator",
+        "progressive_cavity",
+        "reciprocating",
+        "diaphragm",
+        "lobe",
+        "vertical_turbine",
+        "magnetic",
+        "ultrasonic_clamp_on",
+        "thermal_mass",
+        "flume",
     ],
 )
 def test_a_drawing_exported_as_its_outline_traces_the_sheets_artwork(build):

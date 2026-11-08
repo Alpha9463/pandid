@@ -301,7 +301,9 @@ with its committed `docs/gallery/<sheet>.svg`, apart from the fenced
 provenance, which names the package version. After an intentional rendering
 change, regenerate the gallery with `python scripts/gallery.py`, inspect
 `git diff docs/gallery/`, and explain every drawing change in the commit or PR
-description.
+description. It also compares the two draw.io samples in `drawio-samples/` with
+their examples' export; after a draw.io change, regenerate them with
+`python scripts/drawio_samples.py`.
 
 ## 4. Port geometry goes through `pandid/portgeom.py`
 
