@@ -245,7 +245,7 @@ def _loop() -> Flowsheet:
     """Build two process lines and the pneumatic signal that strokes their valve."""
     fs = Flowsheet("loop")
     feed = fs.add(U.Feed("F"))
-    fv = fs.add(U.Valve("FV-1", variant="control"))
+    fv = fs.add(U.Valve("FV-1", actuator="diaphragm"))
     prod = fs.add(U.Product("P"))
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)

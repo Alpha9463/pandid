@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A valve draws any actuator on any body with a stem, the piston cylinder
+  included: `Valve("XV-101", variant="ball", actuator="piston")`, where
+  `actuator=` is `"diaphragm"`, `"piston"`, `"motor"`, `"solenoid"`,
+  `"hydraulic"` or `"handwheel"`.
+
 - `fs.to_dict()` on a drawn sheet also writes `layout:`, where each unit,
   balloon and line is drawn, and `Flowsheet.from_dict()` starts from it: the
   sheet read back draws as it was drawn, a line frozen with `via()` included,
@@ -81,6 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A valve with a diaphragm actuator refuses `normal_position="closed"` on any
+  body, as `variant="control"` did; give it `fail="closed"`.
 - `Blower()` draws the ISO 10628-2 fan instead of a compressor.
 - `connect()` no longer needs `kind=` for a signal line: a line to a valve
   with a diaphragm actuator, or none drawn, is pneumatic and any other is
@@ -104,6 +111,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 These are removed in 0.4.0.
 
+- The valve variants that drew a body and its actuator together,
+  `"control"`, `"butterfly_pneumatic"`, `"motor"`, `"solenoid"`, `"hydraulic"`
+  and `"manual"`, are deprecated: name the body with `variant=` and the
+  actuator with `actuator=`, as in `Valve(variant="butterfly",
+  actuator="diaphragm")`.
 - `pandid.document.equipment_list()`, the drawn box, and the spec box
   `type: equipment_list`. Use `equipment_table()` and `type: equipment_table`.
 - `duty` on `Reactor(variant="jacketed")`, which now draws `jacket_in`. Use

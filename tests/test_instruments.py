@@ -18,7 +18,7 @@ def _line(**kw):
     """Return a level run through a control valve pinned by its nozzle, with FT-101 on it."""
     fs = Flowsheet("tap")
     feed = fs.add(U.Feed("Feed")).pin(x=110, y=195)
-    fv = fs.add(U.Valve("FV-101", variant="control"))
+    fv = fs.add(U.Valve("FV-101", actuator="diaphragm"))
     fv.pin(x=300, port="inlet", y=195)  # the run is at y=195
     prod = fs.add(U.Product("Product")).pin(x=520, y=195)
     s = fs.connect(feed.outlet, fv.inlet)
@@ -815,7 +815,7 @@ def test_link_style_follows_the_host_not_only_its_balloon(host, style):
     line = fs.connect(feed.outlet, drum.inlet)
     hosts = {"stream": lambda: (line, {"at": 0.5}), "vessel": lambda: (drum, {"face": "S"})}
     if host == "valve":
-        valve = fs.add(U.Valve("XV-1", variant="solenoid")).pin(x=200, y=300)
+        valve = fs.add(U.Valve("XV-1", actuator="solenoid")).pin(x=200, y=300)
         hosts["valve"] = lambda: (valve, {"face": "S"})
     elif host in ("instrument", "signal"):
         lt = fs.add_instrument("LT", 101, sensing=drum, face="E", offset=70)
@@ -833,7 +833,7 @@ def test_the_trip_square_on_a_valve_is_drawn_as_the_signal_it_is():
     """Check that a trip square on a valve is dashed while a gauge on it stays solid."""
     fs = Flowsheet("one function, five drawings")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
-    xv = fs.add(U.Valve("XV-301", variant="solenoid")).pin(x=250, port="inlet", y=195)
+    xv = fs.add(U.Valve("XV-301", actuator="solenoid")).pin(x=250, port="inlet", y=195)
     prod = fs.add(U.Product("Product")).pin(x=520, y=170)
     fs.connect(feed.outlet, xv.inlet)
     fs.connect(xv.outlet, prod.inlet)
@@ -930,7 +930,7 @@ def test_every_shared_display_balloon_carries_a_location_bar():
 def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     """Check that a short pneumatic run still gets its cross-hatch."""
     fs = Flowsheet("short-pneumatic")
-    valve = fs.add(U.Valve("LV-101", variant="control")).pin(x=300, y=300)
+    valve = fs.add(U.Valve("LV-101", actuator="diaphragm")).pin(x=300, y=300)
     ly = fs.add_instrument("LY", 101, near=valve, face="N", offset=58)
     ly.nozzle("sig_out", "S")
     fs.connect(ly.sig_out, valve.actuator, kind="pneumatic")
@@ -958,7 +958,7 @@ def _interlocked(n=4):
     fs = Flowsheet("interlock")
     pairs = []
     for i in range(n):
-        valve = fs.add(U.Valve(f"XV-{i + 1}", variant="control")).pin(x=200 + 260 * i, y=400)
+        valve = fs.add(U.Valve(f"XV-{i + 1}", actuator="diaphragm")).pin(x=200 + 260 * i, y=400)
         square = fs.add(U.Instrument("I", 1, variant="logic")).pin(x=210 + 260 * i, y=250)
         fs.connect(square.sig_out, valve.actuator, kind="electric")
         pairs.append((square, valve))
@@ -1009,7 +1009,7 @@ def test_naming_the_units_draws_the_signal_line():
     fs = Flowsheet("units")
     ft = fs.add(U.Instrument("FT-305"))
     fic = fs.add(U.Instrument("FIC-305", variant="shared"))
-    cv = fs.add(U.Valve("CV-305", variant="control"))
+    cv = fs.add(U.Valve("CV-305", actuator="diaphragm"))
     a = fs.connect(ft, fic, kind="electric")
     b = fs.connect(fic, cv, kind="pneumatic")
     assert (a.source.name, a.dest.name) == ("sig_out", "sig_in")
@@ -1020,8 +1020,8 @@ def test_naming_the_units_mints_a_second_output():
     """Check that naming a controller twice mints its second output."""
     fs = Flowsheet("units split")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
-    cv1 = fs.add(U.Valve("CV-301-1", variant="control"))
-    cv2 = fs.add(U.Valve("CV-301-2", variant="control"))
+    cv1 = fs.add(U.Valve("CV-301-1", actuator="diaphragm"))
+    cv2 = fs.add(U.Valve("CV-301-2", actuator="diaphragm"))
     fs.connect(pic, cv1, kind="pneumatic")
     fs.connect(pic, cv2, kind="pneumatic")
     assert list(pic.ports) == ["pv", "sig_in", "sig_out", "sig_out_2"]
@@ -1049,7 +1049,7 @@ def test_a_unit_with_several_signal_connections_is_not_guessed_at():
     """Check that naming a unit with two signal ports outside a pool is refused."""
     fs = Flowsheet("ambiguous")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
-    station = fs.add(U.Valve("CV-301", variant="control"))
+    station = fs.add(U.Valve("CV-301", actuator="diaphragm"))
     station._add_port("sig_spare", "inlet", "signal")
     with pytest.raises(ValueError, match="2 signal connections"):
         fs.connect(pic, station, kind="pneumatic")
@@ -1059,7 +1059,7 @@ def test_a_refused_connection_mints_nothing():
     """Check that a refused connection mints no port."""
     fs = Flowsheet("refused")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
-    cv = fs.add(U.Valve("CV-301-1", variant="control"))
+    cv = fs.add(U.Valve("CV-301-1", actuator="diaphragm"))
     fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")
     with pytest.raises(ValueError, match="already connected"):
         fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")  # same valve twice
@@ -1076,7 +1076,7 @@ def _crowded(variant: str, outputs: int) -> tuple[Flowsheet, U.Instrument]:
     pt = fs.add(U.Instrument("PT-301")).pin(x=100, y=400)
     fs.connect(pt.sig_out, pic.sig_in, kind="electric")
     for i in range(outputs):
-        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100 + 180 * i, y=700)
+        cv = fs.add(U.Valve(f"CV-{i}", actuator="diaphragm")).pin(x=100 + 180 * i, y=700)
         fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")
     fs.route()
     return fs, pic
@@ -1110,7 +1110,7 @@ def test_lines_sharing_a_face_of_a_wide_balloon_meet_its_circle():
     fs = Flowsheet("wide")
     pic = fs.add(U.Instrument("PIC-1", width=200, height=44)).pin(x=400, y=400)
     for i in range(6):
-        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100 + 180 * i, y=700)
+        cv = fs.add(U.Valve(f"CV-{i}", actuator="diaphragm")).pin(x=100 + 180 * i, y=700)
         pic.nozzle(fs.connect(pic, cv.actuator, kind="pneumatic").source.name, "S")
     fs.route()
     frame = frame_of(pic)
@@ -1127,7 +1127,7 @@ def test_a_balloon_pinned_by_its_output_draws_that_output_on_the_pin(outputs: in
     pic = fs.add(U.Instrument("PIC-1")).pin(port="sig_out", x=600, y=400)
     for i in range(outputs):
         feed = fs.add(U.Feed(f"F-{i}"))
-        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=1000, y=200 + 80 * i)
+        cv = fs.add(U.Valve(f"CV-{i}", actuator="diaphragm")).pin(x=1000, y=200 + 80 * i)
         fs.connect(feed.outlet, cv.inlet)
         fs.connect(cv.outlet, fs.add(U.Product(f"P-{i}")).inlet)
         fs.connect(pic, cv.actuator, kind="pneumatic")
@@ -1147,7 +1147,7 @@ def test_outputs_past_four_share_the_face_toward_their_valves_in_their_order():
     pt = fs.add(U.Instrument("PT-301")).pin(x=900, y=400)
     fs.connect(pt.sig_out, pic.sig_in, kind="electric")
     for i in range(6):
-        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100, y=650 - 100 * i)
+        cv = fs.add(U.Valve(f"CV-{i}", actuator="diaphragm")).pin(x=100, y=650 - 100 * i)
         fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")
     fs.route()
     ends = {
@@ -1365,7 +1365,7 @@ def test_a_balloon_is_placed_against_one_thing():
     """Check that naming two relation keywords is refused with both named."""
     fs = Flowsheet("two anchors")
     drum = fs.add(U.Vessel("V-101"))
-    valve = fs.add(U.Valve("FV-101", variant="control"))
+    valve = fs.add(U.Valve("FV-101", actuator="diaphragm"))
     with pytest.raises(ValueError) as excinfo:
         fs.add_instrument("LX", 101, sensing=drum, near=valve)
     message = str(excinfo.value)
@@ -1885,7 +1885,7 @@ def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
     line = fs.connect(feed.outlet, prod.inlet)
     tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=35, angle=0)
     fs.add_instrument("TIC", 1, near=tt, face="S", offset=70, angle=0)
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=100, orientation=270)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=400, y=100, orientation=270)
     lic = fs.add_instrument("LIC", 99)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()
@@ -1952,7 +1952,7 @@ def test_an_unsettled_hang_is_not_kept():
     prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=200)
     line = fs.connect(feed.outlet, prod.inlet)
     tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=35, angle=30)
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=500, orientation=180)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=400, y=500, orientation=180)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()
@@ -1977,7 +1977,7 @@ def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
     prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=100)
     line = fs.connect(feed.outlet, prod.inlet)
     tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=35, angle=30)
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=500, y=300, orientation=270)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=500, y=300, orientation=270)
     lic = fs.add_instrument("LIC", 1)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()
@@ -2005,7 +2005,7 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
     fs.add_instrument("TIC", 1, near=tt1, face="W", offset=50, angle=0)
     tt2 = fs.add_instrument("TT", 2, sensing=line, at=0.3, offset=70, angle=270)
     fs.add_instrument("TIC", 2, near=tt2, face="W", offset=70, angle=0)
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=400, orientation=270)
+    valve = fs.add(U.Valve("V", actuator="diaphragm")).pin(x=400, y=400, orientation=270)
     lic = fs.add_instrument("LIC", 99)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()

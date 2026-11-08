@@ -5,13 +5,12 @@ from __future__ import annotations
 import pytest
 
 from pandid import Flowsheet, spec, units
-from pandid.render.symbols import FAIL_ACTUATED, FAIL_POSITIONS, fail_marking
+from pandid.render.symbols import ACTUATORS, FAIL_POSITIONS, POWERED_ACTUATORS, fail_marking
 from pandid.render.symbols import default_registry as registry
 from test_normally_closed import _line
 
-# Every valve variant the package draws, split by whether it has an actuator.
+# Every valve body the package draws.
 ALL_VARIANTS = sorted({v for k, v in registry._symbols if k == "valve"})
-UNACTUATED = sorted(set(ALL_VARIANTS) - FAIL_ACTUATED)
 
 
 # --------------------------------------------------------------------- the API
@@ -19,7 +18,7 @@ UNACTUATED = sorted(set(ALL_VARIANTS) - FAIL_ACTUATED)
 
 def test_a_valve_declares_no_fail_position_by_default():
     """Check that a valve declares no fail position by default."""
-    valve = units.Valve("FV-1", variant="control")
+    valve = units.Valve("FV-1", actuator="diaphragm")
     assert valve.fail == ""
     assert fail_marking(valve) == ""
     assert ">FC</text>" not in _line(valve)
@@ -27,7 +26,7 @@ def test_a_valve_declares_no_fail_position_by_default():
 
 def test_a_position_that_is_not_one_is_refused_by_name():
     with pytest.raises(ValueError) as excinfo:
-        units.Valve("FV-1", variant="control", fail="shut")
+        units.Valve("FV-1", actuator="diaphragm", fail="shut")
     message = str(excinfo.value)
     for name in FAIL_POSITIONS:
         assert repr(name) in message, "the message lists the positions there are"
@@ -36,7 +35,7 @@ def test_a_position_that_is_not_one_is_refused_by_name():
 
 def test_the_position_can_be_set_and_cleared_after_construction():
     """Check that the position can be set and cleared after construction."""
-    valve = units.Valve("FV-1", variant="control")
+    valve = units.Valve("FV-1", actuator="diaphragm")
     valve.fail = "closed"
     assert fail_marking(valve) == "FC"
     valve.fail = ""
@@ -50,7 +49,7 @@ def test_the_position_can_be_set_and_cleared_after_construction():
 @pytest.mark.parametrize("position,letters", sorted(FAIL_POSITIONS.items()))
 def test_each_position_draws_its_own_letters(position, letters):
     """Check that each position draws its own letters (ISA-5.1 Table 5.4.4)."""
-    valve = units.Valve("FV-1", variant="control", fail=position)
+    valve = units.Valve("FV-1", actuator="diaphragm", fail=position)
     assert fail_marking(valve) == letters
     assert f">{letters}</text>" in _line(valve)
 
@@ -68,9 +67,9 @@ def test_the_six_letter_codes_are_the_ones_the_standards_write():
 
 def test_the_letters_are_the_whole_of_the_mark():
     """Check that the letters are the whole of the mark."""
-    for variant in sorted(FAIL_ACTUATED):
-        plain = registry.for_unit(units.Valve("FV-1", variant=variant))
-        failing = registry.for_unit(units.Valve("FV-2", variant=variant, fail="closed"))
+    for actuator in sorted(POWERED_ACTUATORS):
+        plain = registry.for_unit(units.Valve("FV-1", actuator=actuator))
+        failing = registry.for_unit(units.Valve("FV-2", actuator=actuator, fail="closed"))
         assert failing is plain
         assert failing.ports == plain.ports
         assert (failing.width, failing.height) == (plain.width, plain.height)
@@ -79,37 +78,39 @@ def test_the_letters_are_the_whole_of_the_mark():
 # ------------------------------------------------------- valves with no actuator
 
 
-@pytest.mark.parametrize("variant", UNACTUATED)
+@pytest.mark.parametrize("variant", ALL_VARIANTS)
 def test_a_valve_with_no_actuator_is_refused(variant):
     """Check that a valve with no actuator is refused (ISA-5.1 note 5.3.4(10))."""
     with pytest.raises(ValueError) as excinfo:
         units.Valve("HV-1", variant=variant, fail="closed")
     message = str(excinfo.value)
     assert "no actuator" in message
-    assert variant in message
+    assert "actuator=" in message, "the message names the keyword that gives it one"
     assert "normal_position" in message, "the message names the neighbouring attribute"
 
 
-def test_the_hand_operated_and_the_self_acting_valves_are_both_refused():
-    """Check that the hand-operated and the self-acting valves are both refused."""
-    for variant in ("manual", "knife", "regulator", "relief", "psv"):
-        assert variant not in FAIL_ACTUATED
-        with pytest.raises(ValueError, match="no actuator"):
-            units.Valve("HV-1", variant=variant, fail="open")
+def test_a_handwheel_is_refused_too():
+    """Check that a hand-operated valve has no fail position either."""
+    assert "handwheel" not in POWERED_ACTUATORS
+    with pytest.raises(ValueError, match="a handwheel, so it has no fail position"):
+        units.Valve("HV-1", actuator="handwheel", fail="open")
 
 
-@pytest.mark.parametrize("variant", sorted(FAIL_ACTUATED))
-def test_every_actuated_variant_takes_one(variant):
-    assert units.Valve("FV-1", variant=variant, fail="last").fail == "last"
+@pytest.mark.parametrize("actuator", sorted(POWERED_ACTUATORS))
+def test_every_powered_actuator_takes_one(actuator):
+    assert units.Valve("FV-1", variant="ball", actuator=actuator, fail="last").fail == "last"
 
 
-def test_a_valve_retyped_after_it_declared_one_stops_the_sheet():
-    """Check that a valve retyped after it declared one stops the sheet."""
-    valve = units.Valve("FV-1", variant="control", fail="closed")
-    with pytest.warns(DeprecationWarning, match="variant"):
-        valve.variant = "gate"
-    with pytest.raises(ValueError, match="no actuator"):
-        fail_marking(valve)
+def test_the_powered_actuators_are_every_actuator_but_the_handwheel():
+    assert POWERED_ACTUATORS == set(ACTUATORS) - {"handwheel"}
+
+
+def test_a_valve_retyped_onto_a_body_with_no_stem_is_refused_and_kept():
+    """Check that retyping an actuated valve onto a body that takes no actuator is refused."""
+    valve = units.Valve("FV-1", actuator="diaphragm", fail="closed")
+    with pytest.raises(ValueError, match="takes no actuator"):
+        valve.variant = "check"
+    assert (valve.variant, valve.actuator_type, valve.fail) == ("default", "diaphragm", "closed")
 
 
 # ------------------------------------------------- composing with normal_position
@@ -117,14 +118,14 @@ def test_a_valve_retyped_after_it_declared_one_stops_the_sheet():
 
 def test_the_two_positions_are_independent():
     """Check that the two positions are independent."""
-    valve = units.Valve("FV-1", variant="control", fail="closed")
+    valve = units.Valve("FV-1", actuator="diaphragm", fail="closed")
     assert valve.normal_position == "open", "the default, not a consequence of failing shut"
     assert units.Valve("HV-1", variant="gate", normal_position="closed").fail == ""
 
 
 def test_a_darkened_valve_can_also_say_where_it_fails():
     """Check that a darkened valve can also say where it fails."""
-    valve = units.Valve("XV-1", variant="solenoid", normal_position="closed", fail="open")
+    valve = units.Valve("XV-1", actuator="solenoid", normal_position="closed", fail="open")
     svg = _line(valve)
     assert 'fill="#111"' in svg, "the darkened body states the normal position"
     assert ">FO</text>" in svg, "and the letters state the fail position"
@@ -135,7 +136,7 @@ def test_the_nc_letters_and_the_fail_letters_do_not_collide():
     from pandid.render.svg import SvgRenderer, _unit_label_box
 
     valve = units.Valve(
-        "XV-101", variant="butterfly_pneumatic", normal_position="closed", fail="closed"
+        "XV-101", variant="butterfly", actuator="piston", normal_position="closed", fail="closed"
     )
     svg = _line(valve)
     assert ">NC</text>" in svg
@@ -163,7 +164,7 @@ def test_the_letters_go_below_a_valve_on_a_horizontal_run():
     """Check that the letters go below a valve on a horizontal run (PIP PIC001 4.2.4.6(1))."""
     from pandid.render.svg import SvgRenderer
 
-    valve = units.Valve("FV-1", variant="control", fail="closed")
+    valve = units.Valve("FV-1", actuator="diaphragm", fail="closed")
     _line(valve)
     frame = valve.frame
     lx, ly, anchor, _, lpos, text = SvgRenderer()._fail_label_item(
@@ -178,8 +179,8 @@ def test_the_letters_go_to_the_right_of_a_valve_on_a_riser():
     """Check that the letters go to the right of a valve on a riser (PIP PIC001 4.2.4.6(1))."""
     from pandid.render.svg import SvgRenderer
 
-    flat = units.Valve("FV-1", variant="control", fail="closed")
-    upright = units.Valve("FV-2", variant="control", fail="closed")
+    flat = units.Valve("FV-1", actuator="diaphragm", fail="closed")
+    upright = units.Valve("FV-2", actuator="diaphragm", fail="closed")
     fs = Flowsheet("fail placement")
     feed = fs.add(units.Feed("FEED"))
     fs.add(flat)
@@ -203,7 +204,7 @@ def test_the_letters_step_past_a_tag_already_on_that_side():
     """Check that the letters step past a tag already on that side."""
     from pandid.render.svg import SvgRenderer, _unit_label_box
 
-    valve = units.Valve("FV-101", variant="control", fail="closed", label_pos="bottom")
+    valve = units.Valve("FV-101", actuator="diaphragm", fail="closed", label_pos="bottom")
     _line(valve)
 
     renderer = SvgRenderer()
@@ -219,7 +220,7 @@ def test_the_letters_step_past_a_tag_on_the_riser_side_too():
     """Check that the letters step past a tag on the riser side too."""
     from pandid.render.svg import SvgRenderer, _unit_label_box
 
-    valve = units.Valve("FV-102", variant="control", fail="closed", label_pos="right")
+    valve = units.Valve("FV-102", actuator="diaphragm", fail="closed", label_pos="right")
     fs = Flowsheet("fail placement on a riser")
     feed = fs.add(units.Feed("FEED"))
     fs.add(valve).pin(orientation=90)
@@ -249,7 +250,7 @@ def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
 
     fs = Flowsheet("a trip square below a failing valve")
     feed = fs.add(units.Feed("FEED"))
-    valve = fs.add(units.Valve("XV-601", variant="solenoid", fail="closed"))
+    valve = fs.add(units.Valve("XV-601", actuator="solenoid", fail="closed"))
     product = fs.add(units.Product("PROD"))
     fs.connect(feed.outlet, valve.inlet)
     fs.connect(valve.outlet, product.inlet)
@@ -280,9 +281,9 @@ def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
 
 def test_the_position_round_trips_through_a_spec():
     fs = Flowsheet("round trip")
-    fs.add(units.Valve("FV-1", variant="control", fail="closed"))
+    fs.add(units.Valve("FV-1", actuator="diaphragm", fail="closed"))
     fs.add(units.Valve("FV-2", variant="butterfly", actuator="diaphragm", fail="drift_open"))
-    fs.add(units.Valve("FV-3", variant="control"))
+    fs.add(units.Valve("FV-3", actuator="diaphragm"))
 
     written = spec.to_dict(fs)
     entries = {u["name"]: u for u in written["units"]}
@@ -302,7 +303,7 @@ def test_the_position_round_trips_through_a_spec():
 def test_both_positions_round_trip_together():
     """Check that both positions round trip together."""
     fs = Flowsheet("round trip")
-    fs.add(units.Valve("XV-1", variant="solenoid", normal_position="closed", fail="open"))
+    fs.add(units.Valve("XV-1", actuator="solenoid", normal_position="closed", fail="open"))
 
     written = spec.to_dict(fs)
     entry = written["units"][0]
@@ -330,6 +331,6 @@ def test_a_spec_position_that_is_not_one_names_the_entry():
         Flowsheet.from_dict(
             {
                 "name": "bad",
-                "units": [{"kind": "Valve", "name": "FV-1", "variant": "control", "fail": "shut"}],
+                "units": [{"kind": "Valve", "name": "FV-1", "actuator": "diaphragm", "fail": "shut"}],
             }
         )

@@ -100,11 +100,8 @@ __all__ = [
     "RotaryDrumScreen",
     "ReelScreen",
     "ThreeWayValve",
-    "ControlValve",
-    "SolenoidValve",
     "ReliefValve",
     "PressureRegulator",
-    "MotorOperatedValve",
     "CheckValve",
     "SpectacleBlind",
     "SteamTrap",
@@ -112,6 +109,9 @@ __all__ = [
     "StirredTankReactor",
     "JacketedReactor",
     "GasHolder",
+    "ControlValve",
+    "SolenoidValve",
+    "MotorOperatedValve",
 ]
 
 
@@ -1239,51 +1239,6 @@ class ThreeWayValve(Valve):
     branch: Port
 
 
-class ControlValve(Valve):
-    """Control valve: the valve a controller modulates.
-
-    Drawn as the general body with a diaphragm actuator (ISO 15519-2
-    A.3.41); ``butterfly_pneumatic`` draws a butterfly body. The
-    ``default`` body raises on ``normal_position="closed"``; use
-    ``fail="closed"``.
-
-    Parameters are those of :class:`~pandid.units.Valve`.
-    """
-
-    VARIANTS = ("default", "butterfly_pneumatic", "control")
-    VARIANT_ALIASES = {"default": "control"}
-    PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-        ("actuator", "inlet", "signal"),
-    ]
-
-    inlet: Port
-    outlet: Port
-    actuator: Port
-
-
-class SolenoidValve(Valve):
-    """Solenoid valve: an electrically operated on/off valve.
-
-    It takes a ``fail`` position and may be shown normally closed.
-
-    Parameters are those of :class:`~pandid.units.Valve`.
-    """
-
-    VARIANTS = ("default", "solenoid")
-    VARIANT_ALIASES = {"default": "solenoid"}
-    PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-        ("actuator", "inlet", "signal"),
-    ]
-
-    inlet: Port
-    outlet: Port
-    actuator: Port
-
-
 class ReliefValve(Valve):
     """Pressure relief valve: opens itself at the set pressure.
 
@@ -1318,27 +1273,6 @@ class PressureRegulator(Valve):
 
     VARIANTS = ("default", "regulator")
     VARIANT_ALIASES = {"default": "regulator"}
-    PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-        ("actuator", "inlet", "signal"),
-    ]
-
-    inlet: Port
-    outlet: Port
-    actuator: Port
-
-
-class MotorOperatedValve(Valve):
-    """Motor-operated valve: a block valve on an electric actuator.
-
-    It takes a ``fail`` position and may be shown normally closed.
-
-    Parameters are those of :class:`~pandid.units.Valve`.
-    """
-
-    VARIANTS = ("default", "motor")
-    VARIANT_ALIASES = {"default": "motor"}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -1488,3 +1422,104 @@ class GasHolder(Tank):
     vent: Port
     relief: Port
     drain: Port
+
+
+class ControlValve(Valve):
+    """Control valve: the valve a controller modulates.
+
+    A diaphragm actuator (ISO 15519-2 A.3.41) on the body ``variant=``
+    names. It raises on ``normal_position="closed"``; use
+    ``fail="closed"``.
+
+    Parameters are those of :class:`~pandid.units.Valve`.
+    """
+
+    VARIANTS = (
+        "default",
+        "gate",
+        "angle",
+        "globe",
+        "ball",
+        "plug",
+        "saunders",
+        "butterfly",
+        "needle",
+        "pinch",
+        "knife",
+    )
+    ACTUATOR = "diaphragm"
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    actuator: Port
+
+
+class SolenoidValve(Valve):
+    """Solenoid valve: an electrically operated on/off valve.
+
+    It takes a ``fail`` position and may be shown normally closed.
+
+    Parameters are those of :class:`~pandid.units.Valve`.
+    """
+
+    VARIANTS = (
+        "default",
+        "gate",
+        "angle",
+        "globe",
+        "ball",
+        "plug",
+        "saunders",
+        "butterfly",
+        "needle",
+        "pinch",
+        "knife",
+    )
+    ACTUATOR = "solenoid"
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    actuator: Port
+
+
+class MotorOperatedValve(Valve):
+    """Motor-operated valve: a block valve on an electric actuator.
+
+    It takes a ``fail`` position and may be shown normally closed.
+
+    Parameters are those of :class:`~pandid.units.Valve`.
+    """
+
+    VARIANTS = (
+        "default",
+        "gate",
+        "angle",
+        "globe",
+        "ball",
+        "plug",
+        "saunders",
+        "butterfly",
+        "needle",
+        "pinch",
+        "knife",
+    )
+    ACTUATOR = "motor"
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    actuator: Port

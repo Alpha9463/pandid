@@ -75,10 +75,13 @@ Traps:
   it. Use the named class (Cyclone, ControlValve, GearPump), else the base
   class with variant=: Valve("HV-101", variant="gate").
   python -m pandid symbols --kind valve lists a kind's drawings.
+- A valve's body is variant= and what strokes it is actuator=, one of
+  diaphragm, piston, motor, solenoid, hydraulic or handwheel:
+  Valve("XV-101", variant="ball", actuator="piston").
 - connect() infers a line's kind. A signal line is pneumatic to a valve
-  with a diaphragm actuator or none drawn, else electric; a process line is
-  material, or energy between two energy or utility ports. Pass kind= for
-  another, such as data, capillary or software:
+  with a diaphragm or piston actuator or none drawn, else electric; a
+  process line is material, or energy between two energy or utility
+  ports. Pass kind= for another, such as data, capillary or software:
   fs.connect(ft, fic, kind="data").
 - face= is a side of a unit, "N", "S", "E" or "W"; at= is a fraction
   along a line, 0..1 for an instrument and strictly between for a valve

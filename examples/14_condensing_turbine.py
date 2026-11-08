@@ -43,7 +43,7 @@ def main():
                          description="MP Steam Isolation Valve"))
     t701 = fs.add(SteamTrap("T-701", description="HP Separator Drain Trap"))
     condensate = fs.add(Product("Condensate Header", reference="P&ID-800"))
-    tv701 = fs.add(Valve("TV-701", variant="hydraulic", fail="closed",
+    tv701 = fs.add(Valve("TV-701", actuator="hydraulic", fail="closed",
                          description="Turbine Trip and Throttle Valve"))
     st701 = fs.add(Turbine("ST-701", description="Condensing Steam Turbine"))
     e701 = fs.add(AirCooledExchanger("E-701", description="Air-Cooled Condenser"))
@@ -60,7 +60,7 @@ def main():
     level = fs.add_loop("L", 701)
     lv701 = fs.add(ControlValve(level.tag("LV"), fail="open",
                                 description="Receiver Level Control Valve"))
-    xv701 = fs.add(Valve("XV-701", variant="butterfly_pneumatic", fail="closed",
+    xv701 = fs.add(Valve("XV-701", variant="butterfly", actuator="diaphragm", fail="closed",
                          description="Low-Level Trip Valve"))
     deaerator = fs.add(Product("To Deaerator", reference="P&ID-800"))
 

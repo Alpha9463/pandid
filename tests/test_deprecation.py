@@ -259,9 +259,15 @@ def test_the_package_declares_only_the_announced_deprecations():
     from pandid.streams import _LINE_COMPONENTS
     from pandid.units import (
         _AT_FACE,
+        _BUTTERFLY_PNEUMATIC_VARIANT,
+        _CONTROL_VARIANT,
         _DEFAULT_FACES,
+        _HYDRAULIC_VARIANT,
         _JACKET_DUTY,
+        _MANUAL_VARIANT,
+        _MOTOR_VARIANT,
         _PLACEMENT_HINTS,
+        _SOLENOID_VARIANT,
         _VARIANT_REASSIGNED,
     )
 
@@ -273,8 +279,14 @@ def test_the_package_declares_only_the_announced_deprecations():
         "pandid.spec._EQUIPMENT_LIST_TYPE": _EQUIPMENT_LIST_TYPE,
         "pandid.streams._LINE_COMPONENTS": _LINE_COMPONENTS,
         "pandid.units._AT_FACE": _AT_FACE,
+        "pandid.units._BUTTERFLY_PNEUMATIC_VARIANT": _BUTTERFLY_PNEUMATIC_VARIANT,
+        "pandid.units._CONTROL_VARIANT": _CONTROL_VARIANT,
         "pandid.units._DEFAULT_FACES": _DEFAULT_FACES,
+        "pandid.units._HYDRAULIC_VARIANT": _HYDRAULIC_VARIANT,
         "pandid.units._JACKET_DUTY": _JACKET_DUTY,
+        "pandid.units._MANUAL_VARIANT": _MANUAL_VARIANT,
+        "pandid.units._MOTOR_VARIANT": _MOTOR_VARIANT,
         "pandid.units._PLACEMENT_HINTS": _PLACEMENT_HINTS,
+        "pandid.units._SOLENOID_VARIANT": _SOLENOID_VARIANT,
         "pandid.units._VARIANT_REASSIGNED": _VARIANT_REASSIGNED,
     }

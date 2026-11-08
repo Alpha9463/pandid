@@ -56,7 +56,7 @@ def main():
     ix803 = fs.add(IonExchanger("IX-803", description="Mixed Bed Polisher"))
     t802 = fs.add(Tank("T-802", variant="conical",
                        description="Demineralised Water Tank"))
-    hv801 = fs.add(Valve("HV-801", variant="manual",
+    hv801 = fs.add(Valve("HV-801", actuator="handwheel",
                          description="Demin Water Outlet Valve"))
     header = fs.add(Product("To Demin Water Header", reference="PFD-200"))
 

@@ -1347,22 +1347,89 @@ class _NormallyPositioned(Unit):
         """Accept a closed position; a subclass may refuse it."""
 
 
+#: Deprecations of the variants that drew a body and its actuator as one
+#: drawing.
+_CONTROL_VARIANT = Deprecation(
+    what="variant='control'", instead="actuator='diaphragm'", removed_in="0.4.0")
+_BUTTERFLY_PNEUMATIC_VARIANT = Deprecation(
+    what="variant='butterfly_pneumatic'",
+    instead="variant='butterfly', actuator='diaphragm'",
+    removed_in="0.4.0",
+    note="the body drawn is the butterfly valve's own",
+)
+_MOTOR_VARIANT = Deprecation(
+    what="variant='motor'", instead="actuator='motor'", removed_in="0.4.0")
+_SOLENOID_VARIANT = Deprecation(
+    what="variant='solenoid'", instead="actuator='solenoid'", removed_in="0.4.0")
+_HYDRAULIC_VARIANT = Deprecation(
+    what="variant='hydraulic'", instead="actuator='hydraulic'", removed_in="0.4.0")
+_MANUAL_VARIANT = Deprecation(
+    what="variant='manual'", instead="actuator='handwheel'", removed_in="0.4.0")
+
+#: Retired variants: the body and the actuator each drew, and its
+#: deprecation.
+_FUSED: dict[str, tuple[str, str, Deprecation]] = {
+    "control": ("default", "diaphragm", _CONTROL_VARIANT),
+    "butterfly_pneumatic": ("butterfly", "diaphragm", _BUTTERFLY_PNEUMATIC_VARIANT),
+    "motor": ("default", "motor", _MOTOR_VARIANT),
+    "solenoid": ("default", "solenoid", _SOLENOID_VARIANT),
+    "hydraulic": ("default", "hydraulic", _HYDRAULIC_VARIANT),
+    "manual": ("default", "handwheel", _MANUAL_VARIANT),
+}
+
+
+def _check_stem(name: str, variant: str, actuator: str) -> None:
+    """Refuse an actuator on a valve body that cannot carry it.
+
+    Parameters
+    ----------
+    name : str
+        Tag, for messages.
+    variant : str
+        Body variant.
+    actuator : str
+        Actuator, or ``""``.
+
+    Raises
+    ------
+    ValueError
+        If the body is unregistered, takes no actuator, or draws its own
+        handwheel.
+    """
+    from pandid.render.symbols import STEM_FOOT, default_registry
+
+    if (variant, actuator) == ("knife", "handwheel"):
+        raise ValueError(
+            f"{name}: the knife body draws its own handwheel on its stem; build "
+            f"Valve({name!r}, variant='knife')."
+        )
+    if actuator and variant not in STEM_FOOT:
+        # Raise the registry's own error for an unregistered variant.
+        default_registry.get("valve", variant)
+        raise ValueError(
+            f"{name}: variant {variant!r} takes no actuator: a check, relief, psv or "
+            f"regulator valve is worked by the process, and a bleed valve is drawn "
+            f"with no stem. Bodies that take one: {', '.join(STEM_FOOT)}."
+        )
+
+
 class Valve(_NormallyPositioned):
     """Valve: a body, optionally stroked by an actuator.
 
-    Only the pairings in :data:`pandid.render.symbols.ACTUATED` are
-    drawn, and the resolved variant is stored. ``variant="three_way"``
-    adds a ``branch`` outlet, reached with ``port("branch")``.
+    The actuator is drawn on the body's stem at its own size.
+    ``variant="three_way"`` adds a ``branch`` outlet, reached with
+    ``port("branch")``.
 
     Parameters
     ----------
     name : str
         Tag.
     variant : str, default="default"
-        Body or body-and-actuator variant, such as ``"globe"``.
-    actuator : str, default=""
-        ``"diaphragm"``, ``"motor"``, ``"solenoid"``, ``"hydraulic"``,
-        ``"handwheel"`` or empty.
+        Body, such as ``"globe"``.
+    actuator : str or None, optional
+        ``"diaphragm"``, ``"piston"``, ``"motor"``, ``"solenoid"``,
+        ``"hydraulic"``, ``"handwheel"`` or ``""`` for none; the
+        class's :attr:`ACTUATOR` when omitted.
     normal_position : str, default="open"
         ``"open"`` or ``"closed"``.
     fail : str, default=""
@@ -1371,14 +1438,24 @@ class Valve(_NormallyPositioned):
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
 
+    Attributes
+    ----------
+    ACTUATOR : str
+        Actuator the class draws; a class that sets one draws no other.
+
     Raises
     ------
     ValueError
-        If the actuator is unknown or contradicts the variant, the
-        pairing is not drawn, ``normal_position`` is invalid or
-        ``"closed"`` on a control, regulator, relief or psv variant,
-        or ``fail`` is invalid or set on a variant outside
-        :data:`~pandid.render.symbols.FAIL_ACTUATED`.
+        If the actuator is unknown, not the class's, or on a body that
+        takes none; ``normal_position`` is invalid or ``"closed"`` on a
+        regulator, relief or psv body or a diaphragm actuator; or
+        ``fail`` is invalid or set without a powered actuator.
+
+    Warns
+    -----
+    DeprecationWarning
+        If ``variant`` names a body and its actuator together, such as
+        ``"control"``.
     """
 
     inlet: Port
@@ -1386,6 +1463,7 @@ class Valve(_NormallyPositioned):
     actuator: Port
 
     kind = "valve"
+    ACTUATOR = ""
     # __init__ adds the ports from _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     #: Ports of every variant except ``three_way``.
@@ -1403,67 +1481,99 @@ class Valve(_NormallyPositioned):
         name: str,
         variant: str = "default",
         *,
-        actuator: str = "",
+        actuator: str | None = None,
         normal_position: str = "open",
         fail: str = "",
         **options: Unpack[_UnitOptions],
     ):
-        variant = self._resolve(name, variant, actuator)
+        variant, self._actuator, retired = self._resolve(name, variant, actuator)
         super().__init__(name, variant=variant, normal_position=normal_position, **options)
         # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
         self._fail = ""
         self.fail = fail
+        if retired is not None:
+            retired.warn(self, where=name)
 
-    def _resolve(self, name: str, variant: str, actuator: str) -> str:
-        """Return the variant that draws a body with an actuator.
+    def _resolve(self, name: str, variant: str,
+                 actuator: str | None) -> "tuple[str, str, Deprecation | None]":
+        """Return the body, the actuator and a retired spelling's deprecation.
 
         Parameters
         ----------
         name : str
             Tag, for messages.
         variant : str
-            Body or pairing variant.
-        actuator : str
-            Actuator, or empty.
+            Body, or a retired body-and-actuator variant.
+        actuator : str or None
+            Actuator, ``""`` for none, or ``None`` for :attr:`ACTUATOR`.
 
         Returns
         -------
-        str
-            Resolved variant.
+        tuple[str, str, Deprecation or None]
+            Body variant, actuator, and the deprecation to warn.
 
         Raises
         ------
         ValueError
-            If the actuator is unknown or contradicts the variant, or
-            the pairing is not drawn.
+            If the actuator is unknown, contradicts the variant or the
+            class, or sits on a body that takes none.
         """
-        from pandid.render.symbols import ACTUATORS, actuated_variant, variant_actuator
+        from pandid.render.symbols import ACTUATORS
 
-        if not actuator:
-            return variant
-        if actuator not in ACTUATORS:
+        retired = None
+        if variant in _FUSED:
+            body, fitted, retired = _FUSED[variant]
+            if actuator not in (None, fitted):
+                raise ValueError(
+                    f"{name}: variant {variant!r} draws a {fitted!r} actuator, so it "
+                    f"cannot also take actuator={actuator!r} -- one valve, two "
+                    f"actuators. Name the body and its actuator: variant={body!r}, "
+                    f"actuator={actuator!r}."
+                )
+            variant, actuator = body, fitted
+        if actuator is None:
+            actuator = self.ACTUATOR
+        if actuator and actuator not in ACTUATORS:
             raise ValueError(
                 f"{name}: actuator is one of "
                 f"{', '.join(repr(a) for a in ACTUATORS)}, got {actuator!r}. It is "
                 f"what strokes the valve; what the valve *is* -- the body -- is "
                 f"variant."
             )
-        # A variant with a built-in actuator accepts only that one.
-        fitted = variant_actuator(variant)
-        if fitted:
-            if actuator == fitted:
-                return variant
+        if self.ACTUATOR and actuator != self.ACTUATOR:
+            wanted = f"a {actuator!r} actuator" if actuator else "no actuator"
             raise ValueError(
-                f"{name}: variant {variant!r} already draws a valve with a "
-                f"{fitted!r} operator on it, so it "
-                f"cannot also take actuator={actuator!r} -- one drawing, two "
-                f"operators. Name the body and the actuator (variant='gate', "
-                f"actuator={actuator!r}), or the pairing on its own "
-                f"(variant={variant!r})."
+                f"{name}: {type(self).__name__} draws a {self.ACTUATOR!r} actuator. "
+                f"For {wanted}, build Valve({name!r}, actuator={actuator!r})."
             )
-        return actuated_variant(variant, actuator)
+        if self.VARIANTS and variant not in self.VARIANTS:
+            raise self._unknown_variant(name, variant)
+        variant = self.VARIANT_ALIASES.get(variant, variant)
+        _check_stem(name, variant, actuator)
+        return variant, actuator, retired
+
+    def _check_parts(self) -> None:
+        """Refuse an actuator the variant cannot carry.
+
+        Raises
+        ------
+        ValueError
+            If the body takes no actuator, or draws its own handwheel.
+        """
+        _check_stem(self.name, self.variant, self._actuator)
+
+    @property
+    def actuator_type(self) -> str:
+        """Return the actuator drawn on the valve.
+
+        Returns
+        -------
+        str
+            One of :data:`~pandid.render.symbols.ACTUATORS`, or ``""``.
+        """
+        return self._actuator
 
     @property
     def fail(self) -> str:
@@ -1492,10 +1602,10 @@ class Valve(_NormallyPositioned):
         Raises
         ------
         ValueError
-            If ``value`` is not a fail position, or the variant is
-            not in :data:`pandid.render.symbols.FAIL_ACTUATED`.
+            If ``value`` is not a fail position, or the actuator is not
+            in :data:`pandid.render.symbols.POWERED_ACTUATORS`.
         """
-        from pandid.render.symbols import FAIL_ACTUATED, FAIL_POSITIONS
+        from pandid.render.symbols import FAIL_POSITIONS, POWERED_ACTUATORS
 
         if not value:
             self._fail = ""
@@ -1507,15 +1617,17 @@ class Valve(_NormallyPositioned):
                 f"It is where the valve goes when its actuating energy is lost. "
                 f"Where it sits in normal operation is normal_position."
             )
-        if self.variant not in FAIL_ACTUATED:
+        if self._actuator not in POWERED_ACTUATORS:
+            fitted = f"a {self._actuator}" if self._actuator else "no actuator"
             raise ValueError(
-                f"{self.name}: variant {self.variant!r} has no actuator, so it has "
-                f"no fail position. ANSI/ISA-5.1 note 5.3.4(10) scopes the failure "
-                f"symbols to control valves and actuators: a handwheel loses no air, "
-                f"and a regulator or a relief valve is worked by the process itself. "
-                f"The variants that take one are: "
-                f"{', '.join(sorted(FAIL_ACTUATED))}. If you meant where the valve "
-                f"sits with the plant running, that is normal_position."
+                f"{self.name}: it has {fitted}, so it has no fail position. "
+                f"ANSI/ISA-5.1 note 5.3.4(10) scopes the failure symbols to control "
+                f"valves and actuators: a handwheel loses no air, and a regulator or a "
+                f"relief valve is worked by the process itself. Give it a powered "
+                f"actuator, actuator= one of "
+                f"{', '.join(repr(a) for a in sorted(POWERED_ACTUATORS))}. If you "
+                f"meant where the valve sits with the plant running, that is "
+                f"normal_position."
             )
         self._fail = value
 
@@ -1526,19 +1638,25 @@ class Valve(_NormallyPositioned):
         ------
         ValueError
             If the variant is in
-            :data:`pandid.render.symbols.NC_FORBIDDEN`.
+            :data:`pandid.render.symbols.NC_FORBIDDEN` or the actuator
+            in :data:`pandid.render.symbols.NC_FORBIDDEN_ACTUATORS`.
         """
-        from pandid.render.symbols import NC_FORBIDDEN
+        from pandid.render.symbols import NC_FORBIDDEN, NC_FORBIDDEN_ACTUATORS
 
-        if self.variant in NC_FORBIDDEN:
-            raise ValueError(
-                f"{self.name}: PIP PIC001 clause 4.2.2.10 bars a control valve and "
-                f"a relief valve from being shown NC, and variant "
-                f"{self.variant!r} draws one. A darkened control valve on an issued "
-                f"sheet reads as a block valve someone has closed. Say where the "
-                f"valve fails instead (fail='closed'), or put the normally closed "
-                f"mark on the hand valve that actually isolates the line."
-            )
+        if self._actuator in NC_FORBIDDEN_ACTUATORS:
+            drawn = f"a {self._actuator} actuator"
+        elif self.variant in NC_FORBIDDEN:
+            drawn = f"variant {self.variant!r}"
+        else:
+            return
+        raise ValueError(
+            f"{self.name}: PIP PIC001 clause 4.2.2.10 bars a control valve and "
+            f"a relief valve from being shown NC, and {drawn} draws one. A "
+            f"darkened control valve on an issued sheet reads as a block valve "
+            f"someone has closed. Say where the valve fails instead "
+            f"(fail='closed'), or put the normally closed mark on the hand valve "
+            f"that actually isolates the line."
+        )
 
 
 #: One composition part, ``(keyword, value, place)``; ``place(value,
@@ -1650,7 +1768,7 @@ def _recompose(unit: "Unit", old: str) -> None:
     ValueError
         If the overlays no longer begin with the parts the unit was
         built with, or the new variant cannot carry the parts, the
-        added overlays, the manholes or the sockets.
+        added overlays, the manholes, the sockets or the actuator.
 
     Warns
     -----
@@ -1684,6 +1802,8 @@ def _recompose(unit: "Unit", old: str) -> None:
                 _on_walls(unit, keyword, placed)
             if any(walls):
                 default_registry.for_unit(unit)
+        else:
+            unit._check_parts()
         if unit._VARIANT_BUILDS:
             _VARIANT_REASSIGNED.warn(unit, where=unit.name, stacklevel=4)
     except BaseException:

@@ -100,7 +100,12 @@ The names depend on the class and variant. Common patterns are:
 
 - `Feed.outlet` connects to a unit's inlet; `Product.inlet` receives its output.
 - Pumps, compressors and fans use `suction` and `discharge`; valves use
-  `inlet`, `outlet` and a signal `actuator`.
+  `inlet`, `outlet` and a signal `actuator`. A valve's `variant=` is its body
+  and `actuator=` what strokes it: `"diaphragm"`, `"piston"`, `"motor"`,
+  `"solenoid"`, `"hydraulic"` or `"handwheel"`, drawn on the body's stem, as in
+  `Valve("XV-101", variant="ball", actuator="piston")`. `ControlValve`,
+  `SolenoidValve` and `MotorOperatedValve` draw their own actuator on the body
+  `variant=` names.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`
@@ -249,8 +254,8 @@ Validation reports `gravity-turned` when one is rotated away from it.
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
 units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
 `software` or `capillary`. When omitted, a signal line to a valve with a
-diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
-electric; two energy/utility ports make an energy stream; other process ports
+diaphragm or piston actuator, or with none drawn, is pneumatic and any other
+signal line is electric; two energy/utility ports make an energy stream; other process ports
 make a material stream. `add_control_loop()` infers its output line the same way
 unless `output_kind=` is given. On a PFD, `validate()` reports
 `energy-carrier-missing` until the label drawn on an energy line names its
@@ -310,8 +315,9 @@ Signal streams connect instrument terminals to a valve's `actuator`.
 
 `fs.add_valve_station("CV-101", isolation=True, reducers=True, bypass=True,
 drains=2)` builds a station and returns a `ValveStation` with `inlet`, `outlet`,
-`control` and `members`. Pass `on=` to put one in an existing line, as for a
-device. The station's tag scheme can be set on the flowsheet or for one
+`control` and `members`. Its control valve is a diaphragm valve on the body
+`variant=` names; `actuator=` gives it another. Pass `on=` to put one in an
+existing line, as for a device. The station's tag scheme can be set on the flowsheet or for one
 station.
 
 ## Package units

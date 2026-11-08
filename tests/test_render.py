@@ -154,7 +154,7 @@ def _transfer_sheet():
     """Build two short runs carrying line numbers far wider than the runs themselves."""
     fs = Flowsheet("Line Numbers")
     feed = fs.add(U.Feed("Raw Feed")).pin(x=60, y=100)
-    valve = fs.add(U.Valve("FV-101", variant="control")).pin(x=180, y=110)
+    valve = fs.add(U.Valve("FV-101", actuator="diaphragm")).pin(x=180, y=110)
     prod = fs.add(U.Product("To Unit 200")).pin(x=280, y=100)
     valve.new_line_number = True  # a spec break, so each side is its own line
     fs.connect(feed.outlet, valve.inlet, size='8"', service="P", spec="A1A")
@@ -340,9 +340,11 @@ def test_a_hop_has_room_for_its_own_arc(drawn, name):
                 if mnx < x1 < mxx and min(y1, y2) + HOP_R < hy < max(y1, y2) - HOP_R
             )
 
+    # Count arcs on the lines, not in the symbol definitions.
+    lines = re.sub(r"<defs>.*?</defs>", "", svg, flags=re.S)
     drawn_arcs = sum(
         d.count(f"A {HOP_R:g} {HOP_R:g} ")
-        for d in re.findall(r'<path d="(M [^"]*)"', svg)
+        for d in re.findall(r'<path d="(M [^"]*)"', lines)
         if " A " in d
     )
     assert drawn_arcs == expected, (

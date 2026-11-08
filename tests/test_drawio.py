@@ -297,7 +297,7 @@ def sample() -> Flowsheet:
     fs = Flowsheet("sample")
     feed = fs.add(units.Feed("FEED", reference="P-01"))
     pump = fs.add(units.Pump("P-101"))
-    valve = fs.add(units.Valve("FV-101", variant="control"))
+    valve = fs.add(units.Valve("FV-101", actuator="diaphragm"))
     tank = fs.add(units.Tank("T-101"))
     product = fs.add(units.Product("PROD"))
     fs.connect(feed.outlet, pump.suction)
@@ -323,8 +323,11 @@ def test_every_drawn_cell_is_parented_and_uniquely_identified(sample):
     root = _model(sample)
     ids = [cell.get("id") for cell in root.findall("mxCell")]
     assert len(ids) == len(set(ids)), "two cells under one id"
+    vertices = {cell.get("id") for cell in root.findall("mxCell") if cell.get("vertex") == "1"}
     for cell in root.findall("mxCell")[2:]:
-        assert cell.get("parent") == "1", f"cell {cell.get('id')} is parented nowhere"
+        assert cell.get("parent") == "1" or cell.get("parent") in vertices, (
+            f"cell {cell.get('id')} is parented nowhere"
+        )
         assert (cell.get("vertex") == "1") != (cell.get("edge") == "1"), (
             f"cell {cell.get('id')} is neither a vertex nor an edge, or is both"
         )
@@ -540,7 +543,7 @@ def test_a_tee_draws_no_ink_of_its_own():
 def _pneumatic_sheet() -> Flowsheet:
     """Return a routed sheet with one pneumatic signal line."""
     fs = Flowsheet("pneumatic")
-    valve = fs.add(units.Valve("FV-101", variant="control"))
+    valve = fs.add(units.Valve("FV-101", actuator="diaphragm"))
     valve.pin(x=400, y=300)
     pic = fs.add_instrument("PIC", 101, display="central")
     pic.pin(x=100, y=100)
@@ -2405,7 +2408,7 @@ def test_a_stacked_tag_kept_off_a_label_on_the_sheet_keeps_off_labels_in_draw_io
         for tag, x in valves:
             if tag.startswith("FV"):
                 fail = "closed" if tag == "FV-1000" else "open"
-                valve = units.Valve(tag, variant="control", fail=fail)
+                valve = units.Valve(tag, actuator="diaphragm", fail=fail)
             else:
                 valve = units.Valve(tag, normal_position="closed")
             fs.add(valve).pin(port="inlet", x=x, y=y)
@@ -2440,8 +2443,8 @@ def test_a_line_number_keeps_off_a_tag_stacked_with_its_letters():
     for row, (y, valves) in enumerate(rows):
         before = fs.add(units.Feed(f"F{row}")).pin(port="outlet", x=100, y=y).outlet
         for i, (tag, x, normal, fail) in enumerate(valves):
-            variant = "control" if fail else "default"
-            valve = units.Valve(tag, variant, normal_position=normal, fail=fail)
+            actuator = "diaphragm" if fail else ""
+            valve = units.Valve(tag, actuator=actuator, normal_position=normal, fail=fail)
             fs.add(valve).pin(port="inlet", x=x, y=y)
             fs.connect(before, valve.inlet, name=f"50-P-{row}{i}01-CS")
             before = valve.outlet

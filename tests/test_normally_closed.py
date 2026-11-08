@@ -161,14 +161,14 @@ def test_a_control_or_relief_valve_refuses_the_mark(variant):
 
 def test_a_control_valve_may_still_be_declared_open():
     """Check that a control valve may still be declared open."""
-    valve = units.Valve("FV-1", variant="control", normal_position="open")
+    valve = units.Valve("FV-1", actuator="diaphragm", normal_position="open")
     assert valve.normal_position == "open"
 
 
 # ------------------------------------------------------- the NC text fallback
 
 
-@pytest.mark.parametrize("variant", ["butterfly", "butterfly_pneumatic", "check", "knife"])
+@pytest.mark.parametrize("variant", ["butterfly", "check", "knife", "saunders"])
 def test_a_body_that_cannot_be_darkened_says_so_in_letters(variant):
     """Check that a body that cannot be darkened says so in letters (ISO 15519-1 §11.4.5)."""
     assert variant not in NC_DARKENS
@@ -403,7 +403,7 @@ def test_a_spec_may_not_close_a_control_valve():
                     {
                         "kind": "Valve",
                         "name": "FV-1",
-                        "variant": "control",
+                        "actuator": "diaphragm",
                         "normal_position": "closed",
                     }
                 ],

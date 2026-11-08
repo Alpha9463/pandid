@@ -121,7 +121,7 @@ def _loop():
     return (
         fs,
         fs.add(U.Feed("F-101")),
-        fs.add(U.Valve("FV-101", variant="control")),
+        fs.add(U.Valve("FV-101", actuator="diaphragm")),
         fs.add(U.Instrument("FIC", 101)),
         fs.add(U.Instrument("FT", 101)),
     )

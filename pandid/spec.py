@@ -720,7 +720,8 @@ _COMPONENT_KEYS = {"name", "formula"}
 _KIND_READERS: dict[str, Callable[[Any, str], Any]] = {
     "n_inlets": _integer, "n_outlets": _integer, "n_feeds": _integer, "n_draws": _integer,
     "length": _number, "diameter": _number,
-    "normal_position": _text, "fail": _text, "branch": _text, "large_end": _text,
+    "normal_position": _text, "fail": _text, "actuator": _text, "branch": _text,
+    "large_end": _text,
     "header": _flag, "inputs": _faces, "outputs": _faces,
     "feed_stages": _stages, "draw_stages": _stages,
     "manholes": _walls, "sockets": _walls,
@@ -3195,6 +3196,9 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         if unit.diameter != unit.default_diameter():
             entry["diameter"] = unit.diameter
     elif isinstance(unit, unit_types._NormallyPositioned):
+        actuator = getattr(unit, "actuator_type", "")
+        if actuator != getattr(unit, "ACTUATOR", ""):
+            entry["actuator"] = actuator
         if unit.normal_position != "open":
             entry["normal_position"] = unit.normal_position
         fail = getattr(unit, "fail", "")

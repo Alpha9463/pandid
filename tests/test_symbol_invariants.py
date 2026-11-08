@@ -1982,11 +1982,6 @@ _OFF_THE_MODULE = {
         (15.0, 22.125),
         "The relief-valve stencil requires scaling to the family width.",
     ),
-    "butterfly_pneumatic": (
-        (60.0, 80.0),
-        (24.5, 30.0),
-        "The pneumatic butterfly requires non-uniform scaling.",
-    ),
 }
 
 _ON_THE_MODULE_BY_FOLDING = {
@@ -2038,18 +2033,6 @@ def test_exactly_the_valves_named_above_are_drawn_off_the_stencils_module():
     reasons = [entry[2] for entry in _OFF_THE_MODULE.values()]
     reasons += [*_ON_THE_MODULE_BY_FOLDING.values(), *_STILL_UNDERSIZED.values()]
     assert all(reasons), "an exception without a reason is a list of names"
-
-
-def test_the_pneumatic_butterfly_is_back_on_the_run_because_it_is_rescaled():
-    """Verify the rescaled pneumatic butterfly preserves run height."""
-    vendor = _script("vendor_symbols")
-    assert vendor.scale_for("valve", "butterfly_pneumatic") == (24.5 / 60, 15.0 / 40)
-    sym = default_registry.get("valve", "butterfly_pneumatic")
-    plain = default_registry.get("valve", "gate")
-    assert (sym.width, sym.height / 2) == (plain.width, plain.height)
-    assert "butterfly_pneumatic" not in _OFF_THE_RUN
-    assert sym.height - sym.ports["inlet"][1] == _VALVE_RUN_HEIGHT
-    assert _ink_below_the_run(sym) == pytest.approx(_ink_below_the_run(plain))
 
 
 # General rendering and placement invariants
@@ -2154,7 +2137,7 @@ def test_every_vendored_kind_is_named_in_the_module_docstring():
 
     fresh = default_registry.__class__.__new__(default_registry.__class__)
     fresh._symbols, fresh._darkened, fresh._closed = {}, {}, {}
-    fresh._expanders, fresh._parts, fresh._composed = {}, {}, {}
+    fresh._expanders, fresh._parts, fresh._composed, fresh._actuated = {}, {}, {}, {}
     register_vendored(fresh)
     vendored_kinds = {kind for kind, _variant in fresh._symbols}
 

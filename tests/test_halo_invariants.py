@@ -566,7 +566,7 @@ def test_a_tag_may_pass_over_a_label_still_to_move_on_its_way_clear():
         before = fs.add(U.Feed(f"F{y}")).pin(port="outlet", x=100, y=y).outlet
         for tag, x, normal, fail in valves:
             valve = U.Valve(
-                tag, "control" if fail else "default", normal_position=normal, fail=fail
+                tag, actuator="diaphragm" if fail else "", normal_position=normal, fail=fail
             )
             fs.add(valve).pin(port="inlet", x=x, y=y)
             fs.connect(before, valve.inlet)
