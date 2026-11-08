@@ -108,7 +108,9 @@ The names depend on the class and variant. Common patterns are:
   `variant=` names. A `CheckValve` has `inlet` and `outlet` only, and
   `variant=` picks its form: `"lift"`, `"swing"`, `"swing_form_2"`, `"ball"`,
   `"dual_plate"`, `"stop"` or `"foot"`, the foot valve drawn upright over its
-  strainer.
+  strainer. A valve's `lock="LO"`, `"LC"`, `"CSO"` or `"CSC"` locks or
+  car-seals it in the position the letters name, drawn under it as a fail
+  position is.
 - A machine that takes a driver has a `drive`: pumps, compressors, fans,
   conveyors, crushers, mills and feeders. A `Motor` (`variant="ac"` or `"dc"`
   for ISO items 20.7 and 20.8) turns it through its `shaft`:

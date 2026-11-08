@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BallMill`, `RodMill`, `SAGMill` and `AGMill` draw tumbling mills on a
   trunnion at each end, and `Stockpile` draws the open bulk storage of
   ISO 10628-2, stacked at `feed` and reclaimed at `reclaim`.
+- A valve takes `lock="LO"`, `"LC"`, `"CSO"` or `"CSC"`, locked or car-sealed
+  open or closed, lettered where its fail position would go, in place of NC,
+  and written to a spec: `Valve("HV-101", lock="CSO")`.
 - A balloon takes a function block, drawn touching it at a clear corner, in SVG
   and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
   or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6

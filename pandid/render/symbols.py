@@ -2821,6 +2821,9 @@ FAIL_POSITIONS: dict[str, str] = {
     "indeterminate": "FI",
 }
 
+#: Locks and car seals, each to the position it holds the valve in.
+LOCKS: dict[str, str] = {"LO": "open", "LC": "closed", "CSO": "open", "CSC": "closed"}
+
 
 def fail_marking(unit) -> str:
     """Return the fail-position letters for a valve, or ``""``.
