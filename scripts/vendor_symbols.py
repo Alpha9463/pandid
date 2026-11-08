@@ -243,8 +243,10 @@ KIND_MAP = {
     ("fitting", "clamped_coupling"): ("fittings", "Clamped Flange Coupling",
                                       {"inlet": "W", "outlet": "E"}),
     ("fitting", "hose"):           ("fittings", "Hose", {"inlet": "W", "outlet": "E"}),
-    # Restriction orifice, from valves.xml; fittings.xml's "Orifice Plate" has no flow path.
-    ("fitting", "orifice"):        ("valves", "Orifice", {"inlet": "W", "outlet": "E"}),
+    # Orifice plate, ISO 10628-2 item 24.8: the run passes through the disc
+    # at y = 20, above its handle. Metering and restriction orifices share it.
+    ("fitting", "orifice"):        ("fittings", "Orifice Plate",
+                                    {"inlet": ("W", 20.0), "outlet": ("E", 20.0)}),
     ("fitting", "rotameter"):      ("valves", "Rotameter", {"inlet": "W", "outlet": "E"}),
     ("fitting", "static_mixer"):   ("mixers", "In-Line Static Mixer",
                                     {"inlet": "W", "outlet": "E"}),
@@ -279,6 +281,8 @@ KIND_MAP = {
                                     {"inlet": "W", "outlet": "E"}),
     ("fitting", "averaging_pitot"): ("flow_sensors", "Averging Pitot Tube",
                                      {"inlet": "W", "outlet": "E"}),
+    # V-notch weir plate: the run meets the plate's sides.
+    ("fitting", "weir"):           ("flow_sensors", "Weir", {"inlet": "W", "outlet": "E"}),
 
     # --- In-line piping devices (piping.xml), on the flow elements' module ---
     # These strainers lie in the run; "strainer" and "strainer_cone" stand across it.
@@ -766,7 +770,7 @@ HALF_SCALE_FITTINGS = (
     # flow_sensors.xml: the primary elements
     "venturi", "flow_nozzle", "coriolis", "vortex", "ultrasonic",
     "turbine_meter", "positive_displacement", "v_cone", "wedge", "target",
-    "pitot", "averaging_pitot",
+    "pitot", "averaging_pitot", "weir",
     # piping.xml: the in-line devices
     "strainer_y", "strainer_basket", "strainer_duplex",
     "bellows", "damper", "spool",
