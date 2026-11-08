@@ -383,3 +383,15 @@ def test_two_taps_on_a_stirred_vessels_side_are_fractions_of_the_shell():
     assert flat == pytest.approx(
         [x0 + _SHELL_W / 2, y0, x0 + _SHELL_W, top + 20.0, x0 + _SHELL_W, top + 70.0]
     )
+
+
+def test_a_tap_off_the_placed_wall_is_an_error():
+    """Refuse to draw a tap that a short shell puts on its head."""
+    fs = Flowsheet("short")
+    drum = fs.add(units.Vessel("D", height=60)).pin(x=200, y=200)
+    fs.add_instrument("LG", 1, sensing=drum, face="E", taps=(0.2, 0.7))
+    with pytest.raises(
+        ValueError, match=r"\[error\] tap-off-wall: LG-1: taps= puts 0\.2 off"
+    ) as caught:
+        fs.to_svg(diagram="p&id")
+    assert "0.3 to 0.7" in str(caught.value)

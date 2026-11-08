@@ -209,6 +209,48 @@ def _move_cure(u) -> str:
     return f"Move {u.name} clear of it: {_pin_call(u)}"
 
 
+def _taps_off_wall(fs) -> list["Issue"]:
+    """Return an error for each balloon whose ``taps=`` leave the placed wall.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[Issue]
+        ``tap-off-wall`` errors.
+    """
+    from pandid.layout.attach import tap_points
+    from pandid.portgeom import body_box, face_wall
+
+    out = []
+    for inst in fs.units:
+        points = tap_points(inst) if getattr(inst, "taps", None) else []
+        if not points:
+            continue
+        host, face = inst.host, inst.face or "E"
+        wall = face_wall(host, host.frame, face)
+        x0, y0, x1, y1 = body_box(host, host.frame, bare=True)
+        along = 1 if face in ("W", "E") else 0
+        start, span = (y0, y1 - y0) if along else (x0, x1 - x0)
+        off = [t for t, point in zip(inst.taps, points)
+               if wall is None or not wall[0] - 0.5 <= point[along] <= wall[1] + 0.5]
+        if not off:
+            continue
+        has = ("no straight wall" if wall is None else
+               f"a straight wall from {math.ceil((wall[0] - start) / span * 100) / 100:g} to "
+               f"{math.floor((wall[1] - start) / span * 100) / 100:g} of the way "
+               f"{'down' if along else 'across'}")
+        out.append(Issue(
+            "error", "tap-off-wall",
+            f"{inst.name}: taps= puts {', '.join(f'{t:g}' for t in off)} off "
+            f"{host.name}'s {face} face as drawn, which has {has}; give taps= in that "
+            f"range, or draw {host.name} taller"))
+    return out
+
+
 def _over_notes(fs) -> list["Issue"]:
     """Return a warning for each thing drawn over a placed note or table.
 
@@ -1612,6 +1654,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True,
                         f"{inst.name}'s tap line is drawn through {u.name}. "
                         f"{_move_cure(inst)}"))
                     break
+
+        # Hard: a process tap off the straight wall it is drawn on.
+        errors += _taps_off_wall(fs)
 
         # Soft: a unit, line or label drawn over a note or table placed by
         # position.
