@@ -720,7 +720,7 @@ _COMPONENT_KEYS = {"name", "formula"}
 _KIND_READERS: dict[str, Callable[[Any, str], Any]] = {
     "n_inlets": _integer, "n_outlets": _integer, "n_feeds": _integer, "n_draws": _integer,
     "length": _number, "diameter": _number,
-    "normal_position": _text, "fail": _text, "branch": _text, "large_end": _text,
+    "normal_position": _text, "fail": _text, "lock": _text, "branch": _text, "large_end": _text,
     "header": _flag, "inputs": _faces, "outputs": _faces,
     "feed_stages": _stages, "draw_stages": _stages,
     "manholes": _walls, "sockets": _walls,
@@ -3201,6 +3201,9 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         fail = getattr(unit, "fail", "")
         if fail:
             entry["fail"] = fail
+        lock = getattr(unit, "lock", "")
+        if lock:
+            entry["lock"] = lock
     elif isinstance(unit, _Boundary):
         if unit.header:
             entry["header"] = True

@@ -1374,7 +1374,7 @@ class DrawioRenderer:
                             box=unit_box(u, u.frame))], (0.0, 0.0)
         if closed_marking(u, default_registry) == "NC":
             lines.append("NC")
-        letters = fail_marking(u)
+        letters = fail_marking(u) or getattr(u, "lock", "")
         if letters:
             lines.append(letters)
         side, dx, dy, near = tags.at.get(id(u), (

@@ -100,7 +100,9 @@ The names depend on the class and variant. Common patterns are:
 
 - `Feed.outlet` connects to a unit's inlet; `Product.inlet` receives its output.
 - Pumps, compressors and fans use `suction` and `discharge`; valves use
-  `inlet`, `outlet` and a signal `actuator`.
+  `inlet`, `outlet` and a signal `actuator`. A valve's `lock="LO"`, `"LC"`,
+  `"CSO"` or `"CSC"` locks or car-seals it in the position the letters name,
+  drawn under it as a fail position is.
 - Separators expose `feed` and either `vapor`/`liquid` or
   `overflow`/`underflow`.
 - A `Crystallizer` uses `feed`, `vapor`, `overflow` and `product`; `agitator=`

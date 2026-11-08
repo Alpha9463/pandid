@@ -3250,8 +3250,9 @@ def unit_tags(fs, joints: "str | None", direction: str) -> list:
                     # NC marking (ISO 15519-1 11.4.5).
                     if closed_marking(u, default_registry) == "NC":
                         items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
-                    # Fail position (ISA-5.1 Table 5.4.4).
-                    letters = fail_marking(u)
+                    # Fail position (ISA-5.1 Table 5.4.4), or a lock in
+                    # its place.
+                    letters = fail_marking(u) or getattr(u, "lock", "")
                     if letters:
                         items.append(sheet._fail_label_item(u, f, x, y, w, h, letters,
                                                             tag_box, ink, symbols))

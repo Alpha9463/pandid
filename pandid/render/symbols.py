@@ -2698,6 +2698,9 @@ FAIL_POSITIONS: dict[str, str] = {
     "indeterminate": "FI",
 }
 
+#: Locks and car seals, each to the position it holds the valve in.
+LOCKS: dict[str, str] = {"LO": "open", "LC": "closed", "CSO": "open", "CSC": "closed"}
+
 #: Valve variants with a powered actuator, which take a fail position.
 FAIL_ACTUATED = frozenset({
     "control", "butterfly_pneumatic", "solenoid", "motor", "hydraulic",

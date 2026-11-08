@@ -1342,10 +1342,20 @@ class _NormallyPositioned(Unit):
             )
         if value == "closed":
             self._refuse_closed()
+        self._check_held(value)
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
         """Accept a closed position; a subclass may refuse it."""
+
+    def _check_held(self, value: str) -> None:
+        """Accept any position; a subclass may hold the device in one.
+
+        Parameters
+        ----------
+        value : str
+            ``"open"`` or ``"closed"``.
+        """
 
 
 class Valve(_NormallyPositioned):
@@ -1364,10 +1374,13 @@ class Valve(_NormallyPositioned):
     actuator : str, default=""
         ``"diaphragm"``, ``"motor"``, ``"solenoid"``, ``"hydraulic"``,
         ``"handwheel"`` or empty.
-    normal_position : str, default="open"
-        ``"open"`` or ``"closed"``.
+    normal_position : str or None, optional
+        ``"open"`` or ``"closed"``; the position ``lock`` holds when
+        omitted, else ``"open"``.
     fail : str, default=""
         Position on loss of actuating energy; see :attr:`fail`.
+    lock : str, default=""
+        ``"LO"``, ``"LC"``, ``"CSO"`` or ``"CSC"``; see :attr:`lock`.
     **options
         ``width``, ``height``, ``label_pos``, ``description`` or
         ``reference``, as for :class:`Unit`.
@@ -1376,10 +1389,11 @@ class Valve(_NormallyPositioned):
     ------
     ValueError
         If the actuator is unknown or contradicts the variant, the
-        pairing is not drawn, ``normal_position`` is invalid or
-        ``"closed"`` on a control, regulator, relief or psv variant,
-        or ``fail`` is invalid or set on a variant outside
-        :data:`~pandid.render.symbols.FAIL_ACTUATED`.
+        pairing is not drawn, ``normal_position`` is invalid,
+        ``"closed"`` on a control, regulator, relief or psv variant or
+        not the position ``lock`` holds, ``fail`` is invalid, set on a
+        variant outside :data:`~pandid.render.symbols.FAIL_ACTUATED`
+        or set with a lock, or ``lock`` is not a lock.
     """
 
     inlet: Port
@@ -1405,11 +1419,22 @@ class Valve(_NormallyPositioned):
         variant: str = "default",
         *,
         actuator: str = "",
-        normal_position: str = "open",
+        normal_position: str | None = None,
         fail: str = "",
+        lock: str = "",
         **options: Unpack[_UnitOptions],
     ):
+        from pandid.render.symbols import LOCKS
+
         variant = self._resolve(name, variant, actuator)
+        if lock and lock not in LOCKS:
+            raise ValueError(
+                f"{name}: lock is one of {', '.join(repr(k) for k in LOCKS)}, got "
+                f"{lock!r}: locked open or closed, or car-sealed open or closed."
+            )
+        self._lock = lock
+        if normal_position is None:
+            normal_position = LOCKS.get(lock, "open")
         super().__init__(name, variant=variant, normal_position=normal_position, **options)
         # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
@@ -1501,6 +1526,12 @@ class Valve(_NormallyPositioned):
         if not value:
             self._fail = ""
             return
+        if self._lock:
+            raise ValueError(
+                f"{self.name}: lock={self._lock!r} holds it {self.normal_position}, so it "
+                f"does not move when its actuating energy is lost and has no fail "
+                f"position. Drop fail= or the lock."
+            )
         if value not in FAIL_POSITIONS:
             raise ValueError(
                 f"{self.name}: fail is one of "
@@ -1519,6 +1550,43 @@ class Valve(_NormallyPositioned):
                 f"sits with the plant running, that is normal_position."
             )
         self._fail = value
+
+    @property
+    def lock(self) -> str:
+        """Return the lock or car seal holding the valve in its position.
+
+        ``"LO"`` and ``"LC"`` lock it open or closed, and ``"CSO"`` and
+        ``"CSC"`` car-seal it open or closed. The letters are drawn
+        where the fail-position letters go.
+
+        Returns
+        -------
+        str
+            Lock, or ``""`` when unset.
+        """
+        return self._lock
+
+    def _check_held(self, value: str) -> None:
+        """Refuse a normal position the valve's lock does not hold.
+
+        Parameters
+        ----------
+        value : str
+            ``"open"`` or ``"closed"``.
+
+        Raises
+        ------
+        ValueError
+            If the lock holds the valve in the other position.
+        """
+        from pandid.render.symbols import LOCKS
+
+        held = LOCKS.get(self._lock, value)
+        if held != value:
+            raise ValueError(
+                f"{self.name}: lock={self._lock!r} holds it {held}, so its "
+                f"normal_position is {held!r}, not {value!r}."
+            )
 
     def _refuse_closed(self) -> None:
         """Refuse a closed control, regulator or relief valve.
