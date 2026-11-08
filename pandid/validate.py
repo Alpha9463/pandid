@@ -888,7 +888,16 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True,
         if min(w, h, nat_w, nat_h) <= 0:
             continue
         across, down = w / nat_w, h / nat_h
-        out_of_shape = max(across, down) / min(across, down) - 1.0
+        # Each mark as drawn: its share of the body, the body's of the box.
+        own_w, own_h = (h, w) if int(getattr(placed, "orientation", 0) or 0) in (90, 270) else (w, h)
+        reach_x = max(1.0, *(o.x + o.w for o in sym.overlays)) - min(0.0, *(o.x for o in sym.overlays))
+        reach_y = max(1.0, *(o.y + o.h for o in sym.overlays)) - min(0.0, *(o.y for o in sym.overlays))
+        shapes = []
+        for ov in marks:
+            part = default_registry.part(ov.group, ov.name)
+            drawn = (ov.w * own_w / reach_x) / (ov.h * own_h / reach_y) * part.height / part.width
+            shapes.append(max(drawn, 1.0 / drawn) - 1.0)
+        out_of_shape = max(shapes)
         if out_of_shape <= _ASPECT_TOL:
             continue
         # Suggest the width that fits the current height.

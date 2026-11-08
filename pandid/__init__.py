@@ -78,7 +78,7 @@ Traps:
 - connect() infers a line's kind. A signal line is pneumatic to a valve
   with a diaphragm actuator or none drawn, else electric; a process line is
   material, or energy between two energy or utility ports. Pass kind= for
-  another, such as data, capillary or software:
+  another, such as hydraulic, wireless, data, capillary or software:
   fs.connect(ft, fic, kind="data").
 - line.mark("battery limit", at=0.5, before="ISBL", after="OSBL") marks a
   point of a line; also "limit of supply", "tie-in" (number=) and

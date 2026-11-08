@@ -119,6 +119,11 @@ The names depend on the class and variant. Common patterns are:
   reflux, boilup and duty ports.
 - Reactors use `feed`, `outlet`, `vent` and `duty`. A `JacketedReactor` has
   `jacket_in` low on the jacket and `jacket_out` high on it in place of `duty`.
+- Tanks and vessels use `inlet`, `outlet`, `vent`, `relief` and `drain`; an
+  open-top tank, `Tank(variant="open_top")`, has no `vent` or `relief`.
+  `agitator=` hangs a stirrer from the roof with its motor above it, which
+  carries `drive`, and moves the vent and relief to the top of the east and
+  west walls: `Tank("TK-101", variant="flat_roof", agitator="turbine")`.
 - Multi-feed equipment exposes `feed_1`, `feed_2`, and so on when configured.
 
 ### Equipment classes
@@ -217,8 +222,11 @@ sheet has fewer bends or crossings and no new finding. The faces on offer:
 | Unit | Inlets | Outlets |
 |---|---|---|
 | `Block` | `"W"`, `"E"`, `"N"`, `"S"` | `"W"`, `"E"`, `"N"`, `"S"` |
-| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"`, `"E"` | `"S"`; `"default"`, `"conical"` and `"floating_roof"` also `"W"`, `"E"` low on the wall; `"gas_holder"`: `"E"`, `"W"` |
+| `Tank` | `"W"`, `"E"`, `"N"`; `"floating_roof"`, `"open_top"` and `"sphere"`: `"W"`, `"E"`; `"gas_holder"`: `"W"`, `"E"` | `"S"`; `"default"`, `"conical"`, `"flat_roof"`, `"floating_roof"` and `"open_top"` also `"W"`, `"E"` low on the wall; `"gas_holder"`: `"E"`, `"W"` |
 | `Vessel` | `"W"`, `"E"`, `"N"` (the top head); `"dome"`: `"W"`, `"E"`; `"electrical_heating"`: `"W"`, `"N"`; `"horizontal"`: `"W"`, `"N"`, `"E"` | `"E"`, `"W"`; `"horizontal"`: `"S"` |
+
+With an `agitator=`, a `Tank` or `Vessel` offers its inlets no `"N"`: the roof
+carries the motor.
 
 An inlet and an outlet on one wall are spread apart along it, the inlet
 above. A head, roof or cone drawn to a point takes one connection. Fix a face with a
@@ -247,8 +255,10 @@ Validation reports `gravity-turned` when one is rotated away from it.
 
 `connect()` requires both endpoints to be on the sheet. Process streams join an
 outlet to an inlet. Signal connections may use ports or bare instrument/valve
-units. `kind` may be `material`, `energy`, `electric`, `pneumatic`, `data`,
-`software` or `capillary`. When omitted, a signal line to a valve with a
+units. `kind` may be `material`, `energy`, `electric`, `pneumatic`,
+`hydraulic`, `wireless`, `data`, `software` or `capillary`. A hydraulic line
+carries a footed stroke at each mark (ISO 15519-2 A.1.08) and a wireless line is
+drawn as a wave. When omitted, a signal line to a valve with a
 diaphragm actuator, or with none drawn, is pneumatic and any other signal line is
 electric; two energy/utility ports make an energy stream; other process ports
 make a material stream. `add_control_loop()` infers its output line the same way
@@ -312,8 +322,10 @@ sheet title; `fs.stream_table_sections` adds section headers. Set
 `fs.add_instrument("FT", 101, sensing=stream)` adds an instrument with the tag
 `FT-101`. Use `near=`, `offset=` and `angle=` to anchor a balloon to a stream
 or unit: `at=` how far along a line, `face=` which side of a unit. `display=`
-selects field, central or subsidiary presentation; `variant=` selects the
-symbol. `fs.add_balloon(element)` gives a primary fitting its balloon.
+selects field, central or subsidiary presentation, drawn as no bar, one bar or
+two across every symbol; `variant=` selects the symbol: `"default"`,
+`"shared"`, `"computer"`, `"sis"`, `"logic"` or `"interlock"`.
+`fs.add_balloon(element)` gives a primary fitting its balloon.
 
 ### Control loops
 

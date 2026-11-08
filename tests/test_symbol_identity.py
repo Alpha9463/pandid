@@ -73,7 +73,11 @@ def _artwork(symbol: Symbol) -> str:
 
 
 #: The registered drawings that are only their own box.
-BARE_BOX_BY_DESIGN = {("block", "default")}
+BARE_BOX_BY_DESIGN = {
+    ("block", "default"),
+    # ISO 10628-2 item 1.1, 301, is a rectangle.
+    ("tank", "flat_roof"),
+}
 
 
 def _is_bare_box(symbol: Symbol) -> bool:

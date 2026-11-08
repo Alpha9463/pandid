@@ -1051,11 +1051,17 @@ _NUMBERED_WHOLE_DRAWINGS = {
     # Group 1, VESSELS AND TANKS.
     "silo/bunker": "2064",
     "silo/default": "X2062",
+    "tank/flat_roof": "301",
+    "tank/open_top": "2061",
     "boiler/default": "2532",
     "furnace/general": "2533",
     "furnace/combustion_chamber": "X8106",
     "stack/default": "2041",
     "flare/default": "2591",
+    # Group 15, LIQUID PUMPS.
+    "pump/progressive_cavity": "X8093",
+    "pump/reciprocating": "X8094",
+    "pump/diaphragm": "X8095",
     # Group 17, BLOWERS, FANS.
     "blower/general": "X8164",
     # Group 10, DRIER.
@@ -1200,6 +1206,7 @@ _COMPOSING = [
         units.MixerSettler,
         units.Column,
         units.Reactor,
+        units.Tank,
     )
     for keyword in cls.COMPOSITION
     if keyword in _PART_KEYWORDS
@@ -1241,8 +1248,24 @@ def test_a_body_and_part_either_draw_or_are_refused_when_built(cls, keyword, var
             "R-301: Reactor variant 'tubular' cannot carry agitator='anchor'; "
             "variants that can: default, jacketed",
         ),
+        (
+            lambda: units.Tank("TK-301", variant="floating_roof", agitator="turbine"),
+            "TK-301: Tank variant 'floating_roof' cannot carry agitator='turbine'; "
+            "variants that can: default, conical, conical_bottom, conical_ends, "
+            "dished_roof_conical_bottom, flat_roof, open_top",
+        ),
+        (
+            lambda: units.Vessel("D-303", variant="horizontal", agitator="anchor"),
+            "D-303: Vessel variant 'horizontal' cannot carry agitator='anchor'; "
+            "variants that can: default, dished, electrical_heating, insulated, jacketed",
+        ),
     ],
-    ids=["ring-on-a-drum", "stirrer-in-a-tube"],
+    ids=[
+        "ring-on-a-drum",
+        "stirrer-in-a-tube",
+        "stirrer-under-a-floating-roof",
+        "stirrer-in-a-drum",
+    ],
 )
 def test_a_part_the_body_cannot_carry_is_refused_by_name(build, message):
     """Check that a part the body cannot carry is refused, naming the bodies that can."""
@@ -1260,13 +1283,15 @@ def test_the_agitator_default_is_the_same_answer_wherever_it_is_asked_for():
 
 
 def test_a_class_with_one_composition_keyword_has_nothing_to_suppress():
-    """Check that only a reactor composes two parts, and the others draw their one part."""
+    """Check that only a reactor and a vessel compose two parts, and each draws what it names."""
     two_parts = {
         cls.__name__
         for cls in (units.Reactor, units.Column, units.Vessel, units.Separator)
         if len([key for key in cls.COMPOSITION if key != "trays"]) > 1
     }
-    assert two_parts == {"Reactor"}
+    assert two_parts == {"Reactor", "Vessel"}
+    stirred = units.Vessel("D-302", supports="skirt", agitator="anchor")
+    assert drawn(stirred) == [(26, "skirt"), (28, "anchor"), (20, "motor")]
     assert drawn(units.Column("T-104", internals="packing", trays=2)) == [(27, "packing")] * 2
     assert drawn(units.Vessel("D-301", supports="skirt")) == [(26, "skirt")]
     assert drawn(units.Separator("V-201", characteristic="gravity")) == [(29, "gravity")]
