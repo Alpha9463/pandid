@@ -10,7 +10,7 @@ The equipment is pinned; each instrument is placed against its host.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import ControlValve, Feed, Fitting, Flowsheet, Product, ReliefValve, Vessel
+from pandid import ControlValve, Feed, FlowElement, Flowsheet, Product, ReliefValve, Vessel
 from pandid.portgeom import port_offset
 
 
@@ -28,8 +28,8 @@ def main():
         x=270, port="inlet", y=run_y)
     drum = fs.add(Vessel("V-101", description="Surge Drum")).pin(
         x=420, port="inlet", y=run_y)
-    fe = fs.add(Fitting(flow.element("FE"), variant="orifice",
-                        description="Feed Orifice Plate")).pin(
+    fe = fs.add(FlowElement(flow.element("FE"), variant="orifice",
+                            description="Feed Orifice Plate")).pin(
         x=180, port="inlet", y=run_y)
     # Flipped so the actuator faces the controller under the drum.
     lv = fs.add(ControlValve(level.tag("LV"))).pin(

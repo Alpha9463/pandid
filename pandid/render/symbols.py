@@ -3756,6 +3756,175 @@ _STEAM_TRAP = Symbol(
 )
 
 
+# Primary flow elements drawn in a box on the run, the size of the
+# vendored ones.
+
+#: Side of a flow element's box.
+FE_BOX = 25.0
+
+_FE_FRAME = f'<rect x="0" y="0" width="{FE_BOX:g}" height="{FE_BOX:g}" {_OUTLINE}/>'
+_FE_PORTS = {"inlet": (0.0, FE_BOX / 2), "outlet": (FE_BOX, FE_BOX / 2)}
+
+#: Radius of one turn of a magnetic flowmeter's field coil.
+MAG_TURN_R = 1.5
+
+#: Turns in each field coil.
+MAG_TURNS = 4
+
+#: Field coil's inset from the box's top and bottom.
+MAG_INSET = 4.0
+
+
+def _field_coil(y: float, sweep: int) -> str:
+    """Return a field coil centred across the box.
+
+    Parameters
+    ----------
+    y : float
+        Height of the coil's ends.
+    sweep : int
+        SVG arc sweep flag: 0 bulges the turns down, 1 up.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    x = FE_BOX / 2 - MAG_TURNS * MAG_TURN_R
+    turns = "".join(
+        f" A {MAG_TURN_R:g} {MAG_TURN_R:g} 0 0 {sweep} "
+        f"{x + 2 * MAG_TURN_R * (k + 1):g} {y:g}"
+        for k in range(MAG_TURNS))
+    return f'<path d="M {x:g} {y:g}{turns}" {_INK}/>'
+
+
+# ISO 15519-2 A.4.48, the magnetic flowmeter: a field coil above and
+# below the run, each turned towards it.
+_FE_MAGNETIC = Symbol(
+    svg='<g id="sym_fitting_magnetic">' + _FE_FRAME
+        + _field_coil(MAG_INSET, 0) + _field_coil(FE_BOX - MAG_INSET, 1) + '</g>',
+    width=FE_BOX, height=FE_BOX,
+    ports=dict(_FE_PORTS),
+    trim=True,
+)
+
+#: Radii of the two wave arcs at each clamp-on transducer.
+CLAMP_WAVE_R = (4.0, 7.0)
+
+# The clamp-on meter's box, down to the run's ink under its bottom edge.
+_CLAMP_H = FE_BOX + LineWeight.MAIN_FLOW.width / 2
+
+
+def _transducer(cx: float, cy: float, start: "tuple[float, float]",
+                end: "tuple[float, float]") -> str:
+    """Return the wave arcs of one transducer, centred on a box corner.
+
+    Parameters
+    ----------
+    cx, cy : float
+        The corner.
+    start, end : tuple[float, float]
+        Unit directions from the corner to each arc's ends, taken
+        counter-clockwise.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    d = "".join(
+        f"M {cx + r * start[0]:g} {cy + r * start[1]:g} A {r:g} {r:g} 0 0 0 "
+        f"{cx + r * end[0]:g} {cy + r * end[1]:g} "
+        for r in CLAMP_WAVE_R)
+    return f'<path d="{d.strip()}" {_INK}/>'
+
+
+# ISO 15519-2 A.4.47, the clamp-on ultrasonic flowmeter: the box sits on
+# the pipe, whose run passes along its bottom edge, with a transducer in
+# two opposite corners.
+_FE_CLAMP_ON = Symbol(
+    svg='<g id="sym_fitting_ultrasonic_clamp_on">' + _FE_FRAME
+        + _transducer(FE_BOX, 0.0, (-1.0, 0.0), (0.0, 1.0))
+        + _transducer(0.0, FE_BOX, (1.0, 0.0), (0.0, -1.0)) + '</g>',
+    width=FE_BOX, height=_CLAMP_H,
+    ports={"inlet": (0.0, FE_BOX), "outlet": (FE_BOX, FE_BOX)},
+    trim=True,
+)
+
+#: Where the two thermal probes stand across the box.
+THERMAL_PROBE_X = (9.0, 16.0)
+
+#: Length of a thermal probe's stem from the box's top.
+THERMAL_STEM = 10.0
+
+#: Radius of a thermal probe's sensing tip.
+THERMAL_TIP_R = 2.0
+
+# The thermal mass flowmeter: twin probes, heated and reference, hung
+# into the run.
+_FE_THERMAL_MASS = Symbol(
+    svg='<g id="sym_fitting_thermal_mass">' + _FE_FRAME
+        + "".join(
+            f'<line x1="{x:g}" y1="0" x2="{x:g}" y2="{THERMAL_STEM:g}" {_INK}/>'
+            f'<circle cx="{x:g}" cy="{THERMAL_STEM + THERMAL_TIP_R:g}" '
+            f'r="{THERMAL_TIP_R:g}" {_INK}/>'
+            for x in THERMAL_PROBE_X)
+        + '</g>',
+    width=FE_BOX, height=FE_BOX,
+    ports=dict(_FE_PORTS),
+    trim=True,
+)
+
+#: Width of a flume's open mouth at each end.
+FLUME_MOUTH = 19.0
+
+#: Width of a flume's throat.
+FLUME_THROAT = 9.0
+
+#: Length of the converging and diverging walls.
+FLUME_TAPER = 10.0
+
+#: Length of the throat.
+FLUME_THROAT_L = 5.0
+
+_FLUME_W = 2 * FLUME_TAPER + FLUME_THROAT_L
+_FLUME_H = FLUME_MOUTH
+
+
+def _flume_wall(y_mouth: float, y_throat: float) -> str:
+    """Return one wall of a flume in plan.
+
+    Parameters
+    ----------
+    y_mouth : float
+        Height of the wall at both mouths.
+    y_throat : float
+        Height of the wall along the throat.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
+    return (f'<path d="M 0 {y_mouth:g} L {FLUME_TAPER:g} {y_throat:g} '
+            f'L {FLUME_TAPER + FLUME_THROAT_L:g} {y_throat:g} '
+            f'L {_FLUME_W:g} {y_mouth:g}" {_INK}/>')
+
+
+# A flume in plan: the walls close in to a throat and open out again,
+# and the run passes along its axis.
+_FE_FLUME = Symbol(
+    svg='<g id="sym_fitting_flume">'
+        + _flume_wall(0.0, (FLUME_MOUTH - FLUME_THROAT) / 2)
+        + _flume_wall(FLUME_MOUTH, (FLUME_MOUTH + FLUME_THROAT) / 2)
+        + f'<line x1="0" y1="{_FLUME_H / 2:g}" x2="{_FLUME_W:g}" y2="{_FLUME_H / 2:g}" '
+          f'{_INK}/></g>',
+    width=_FLUME_W, height=_FLUME_H,
+    ports={"inlet": (0.0, _FLUME_H / 2), "outlet": (_FLUME_W, _FLUME_H / 2)},
+    trim=True,
+)
+
+
 # ISO 10628-2 group 7: screening devices, sieves and rakes.
 
 # Group-7 outline, from item 7.1 (all items but 7.7).
@@ -4909,6 +5078,7 @@ class SymbolRegistry:
         self.register("deaerator", _DEAERATOR)
         self._register_kilns()
         self._register_steam_trap()
+        self._register_flow_elements()
         self._register_fans()
 
     def _register_fans(self):
@@ -4920,6 +5090,13 @@ class SymbolRegistry:
     def _register_steam_trap(self):
         """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""
         self.register("fitting", _STEAM_TRAP, "steam_trap")
+
+    def _register_flow_elements(self):
+        """Register the hand-drawn primary flow elements."""
+        self.register("fitting", _FE_MAGNETIC, "magnetic")
+        self.register("fitting", _FE_CLAMP_ON, "ultrasonic_clamp_on")
+        self.register("fitting", _FE_THERMAL_MASS, "thermal_mass")
+        self.register("fitting", _FE_FLUME, "flume")
 
     def _register_composed(self):
         """Register the three composed group-8 separators."""
