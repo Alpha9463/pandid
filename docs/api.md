@@ -309,6 +309,14 @@ selects field, central or subsidiary presentation, drawn as no bar, one bar or
 two across every symbol; `variant=` selects the symbol: `"default"`,
 `"shared"`, `"computer"`, `"sis"`, `"logic"` or `"interlock"`.
 `fs.add_balloon(element)` gives a primary fitting its balloon.
+`function=` draws a function block touching the balloon at a clear corner,
+upper right first: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`.
+It takes a symbol of ISO 15519-2 A.6 or ISA-5.1, typed as drawn or as a word:
+`"sum"` (Σ), `"average"` (Σ/n), `"difference"` (Δ), `"multiply"` (×),
+`"divide"` (÷), `"sqrt"` (√), `"derivative"` (dx/dt), `"integral"` (∫),
+`"characterize"` (f(x)), `"bias"` (±), `"gain"` (K), `"lag"` (Pt1),
+`"high select"` (>), `"low select"` (<), `"max"`, `"min"`, or a signal
+conversion such as `"I/P"` or `"E/P"`.
 
 A level gauge, an external cage or a DP level transmitter takes two process
 taps on the face it senses, as fractions along it from its top or left end, and

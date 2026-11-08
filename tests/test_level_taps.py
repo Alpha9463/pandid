@@ -350,3 +350,17 @@ def test_a_tap_on_a_stirred_vessels_top_stays_on_its_motor():
     _x0, y0, _x1, _y1 = _box(rx)
     (line,) = _polylines(_taps_group(fs.to_svg(check=False)))
     assert line[0][1] == pytest.approx(y0)
+
+
+@pytest.mark.parametrize("key,value", [("element", "radar"), ("taps", [0.3, 0.7])])
+def test_a_primary_elements_balloon_in_a_spec_refuses_taps_and_element(key, value):
+    """Refuse taps: and element: on a balloon_of entry, which reads neither."""
+    from pandid.spec import SpecError
+
+    spec = {
+        "name": "x",
+        "units": [{"kind": "FlowElement", "name": "FE-1"}],
+        "instruments": [{"balloon_of": "FE-1", key: value}],
+    }
+    with pytest.raises(SpecError, match=f"unknown key '{key}'"):
+        Flowsheet.from_dict(spec)

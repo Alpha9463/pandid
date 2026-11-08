@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A balloon takes a function block, drawn touching it at a clear corner, in SVG
+  and draw.io: `fs.add_instrument("FY", 101, acting_on=fv, function="I/P")`,
+  or `function="sqrt"`, `"sum"`, `"high select"` and the other ISO 15519-2 A.6
+  and ISA-5.1 symbols.
 - A balloon takes two process taps on the face it senses and draws an impulse
   line from each, for a level gauge, cage or DP transmitter:
   `fs.add_instrument("LG", 101, sensing=drum, face="E", taps=(0.3, 0.7))`.
@@ -103,6 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ShellAndTubeExchanger` draws a floating-head and a coil-tube exchanger,
   `variant="floating_head"` and `variant="coil_tube"`, and `ElectricHeater`
   draws the ISO 10628-2 electric heater, powered at `utility_in`.
+- `ScrewCompressor` draws the ISO 10628-2 screw compressor, and
+  `RotaryCompressor` stays the two-rotor lobe machine.
 
 ### Changed
 

@@ -373,7 +373,7 @@ def find_path(
                 f"suspect a coordinate that does not compare, or a cost that "
                 f"keeps falling."
             )
-        f, g, _, current, cur_dir, path = heapq.heappop(queue)
+        _, g, _, current, cur_dir, path = heapq.heappop(queue)
 
         if current == goal:
             return path
@@ -389,9 +389,8 @@ def find_path(
             if cur_dir and ndir == OPPOSITE[cur_dir]:
                 continue
 
-            if neighbor == goal and goal_dir:
-                if ndir == goal_dir:
-                    continue
+            if neighbor == goal and goal_dir and ndir == goal_dir:
+                continue
 
             dist = abs(neighbor[0] - current[0]) + abs(neighbor[1] - current[1])
             cost = g + dist + edge_penalties.get((current, neighbor), 0.0)
