@@ -55,6 +55,24 @@ DEVICES = {
 
     For a liquid-ring machine, use :class:`LiquidRingCompressor`.
 """),
+    ("pump", "progressive_cavity"): ("ProgressiveCavityPump", """Progressive-cavity pump: a helical rotor in a stator.
+
+    ISO 10628-2 item 15.5, X8093.
+"""),
+    ("pump", "reciprocating"): ("ReciprocatingPump", """Reciprocating pump: a piston in a cylinder.
+
+    ISO 10628-2 item 15.6, X8094.
+"""),
+    ("pump", "diaphragm"): ("DiaphragmPump", """Diaphragm pump, such as an air-operated double-diaphragm pump.
+
+    ISO 10628-2 item 15.7, X8095.
+"""),
+    ("pump", "lobe"): ("LobePump", """Rotary lobe pump: two lobed rotors, positive displacement."""),
+    ("pump", "vertical_turbine"): ("VerticalTurbinePump", """Vertical turbine pump: a bowl hung on a column below its head.
+
+    ``suction`` is the bowl's bell underneath; ``discharge`` is the
+    head's side outlet.
+"""),
 
     # --- Compressors --------------------------------------------------
     ("compressor", "default"): ("CentrifugalCompressor", """Centrifugal compressor: dynamic compression for large gas flows."""),

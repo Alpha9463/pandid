@@ -80,6 +80,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feeds and draws on either wall at their stage height, and an upright
   `Separator` its feeds on either wall: `Reactor("R-1").nozzle("feed", "N")`.
   Layout moves one there toward its peer where that draws fewer bends.
+- `ProgressiveCavityPump`, `ReciprocatingPump` and `DiaphragmPump` draw the ISO
+  10628-2 pumps of those types, and `LobePump` and `VerticalTurbinePump` draw a
+  rotary lobe pump and a vertical turbine pump.
 
 ### Changed
 

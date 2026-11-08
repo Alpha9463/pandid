@@ -398,6 +398,8 @@ OWN_OUTLINE = frozenset({
     ("crystallizer", "default"), ("flotation_cell", "default"),
     ("blower", "general"), ("blower", "centrifugal"), ("blower", "axial"),
     ("furnace", "general"), ("furnace", "combustion_chamber"),
+    ("pump", "progressive_cavity"), ("pump", "reciprocating"), ("pump", "diaphragm"),
+    ("pump", "lobe"), ("pump", "vertical_turbine"),
 })
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
